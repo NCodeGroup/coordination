@@ -115,7 +115,9 @@ public sealed class KeySegmentTests
     {
         KeySegment segment = "cell-1";
 
-        Assert.Equal(KeySegment.FromString("cell-1"), segment);
+        var expected = KeySegment.FromString("cell-1");
+
+        Assert.Equal(expected, segment);
     }
 
     [Fact]
@@ -123,7 +125,9 @@ public sealed class KeySegmentTests
     {
         KeySegment segment = 7L;
 
-        Assert.Equal(KeySegment.FromInt64(7L), segment);
+        var expected = KeySegment.FromInt64(7L);
+
+        Assert.Equal(expected, segment);
     }
 
     [Fact]
@@ -131,12 +135,14 @@ public sealed class KeySegmentTests
     {
         KeySegment segment = Sample;
 
-        Assert.Equal(KeySegment.FromGuid(Sample), segment);
+        var expected = KeySegment.FromGuid(Sample);
+
+        Assert.Equal(expected, segment);
     }
 
     #endregion
 
-    #region Equality Tests
+    #region Equals Tests
 
     [Fact]
     public void Equals_WhenTextAndNumberLookAlike_AreDifferent()
@@ -150,21 +156,26 @@ public sealed class KeySegmentTests
     [Fact]
     public void Equals_WhenSegmentsHoldTheSameValue_AreEqualWithEqualHashCodes()
     {
-        Assert.Equal(KeySegment.FromString("a"), KeySegment.FromString("a"));
-        Assert.Equal(
-            KeySegment.FromString("a").GetHashCode(),
-            KeySegment.FromString("a").GetHashCode()
-        );
-        Assert.Equal(KeySegment.FromInt64(5L), KeySegment.FromInt64(5L));
-        Assert.Equal(
-            KeySegment.FromInt64(5L).GetHashCode(),
-            KeySegment.FromInt64(5L).GetHashCode()
-        );
-        Assert.Equal(KeySegment.FromGuid(Sample), KeySegment.FromGuid(Sample));
-        Assert.Equal(
-            KeySegment.FromGuid(Sample).GetHashCode(),
-            KeySegment.FromGuid(Sample).GetHashCode()
-        );
+        var firstText = KeySegment.FromString("a");
+        var secondText = KeySegment.FromString("a");
+        var firstNumber = KeySegment.FromInt64(5L);
+        var secondNumber = KeySegment.FromInt64(5L);
+        var firstUuid = KeySegment.FromGuid(Sample);
+        var secondUuid = KeySegment.FromGuid(Sample);
+
+        var firstTextHash = firstText.GetHashCode();
+        var secondTextHash = secondText.GetHashCode();
+        var firstNumberHash = firstNumber.GetHashCode();
+        var secondNumberHash = secondNumber.GetHashCode();
+        var firstUuidHash = firstUuid.GetHashCode();
+        var secondUuidHash = secondUuid.GetHashCode();
+
+        Assert.Equal(firstText, secondText);
+        Assert.Equal(firstTextHash, secondTextHash);
+        Assert.Equal(firstNumber, secondNumber);
+        Assert.Equal(firstNumberHash, secondNumberHash);
+        Assert.Equal(firstUuid, secondUuid);
+        Assert.Equal(firstUuidHash, secondUuidHash);
     }
 
     #endregion
@@ -174,22 +185,31 @@ public sealed class KeySegmentTests
     [Fact]
     public void ToString_WhenKindIsText_ReturnsText()
     {
-        Assert.Equal("cell-1", KeySegment.FromString("cell-1").ToString());
+        var segment = KeySegment.FromString("cell-1");
+
+        var text = segment.ToString();
+
+        Assert.Equal("cell-1", text);
     }
 
     [Fact]
     public void ToString_WhenKindIsNumber_ReturnsInvariantNumber()
     {
-        Assert.Equal("-42", KeySegment.FromInt64(-42L).ToString());
+        var segment = KeySegment.FromInt64(-42L);
+
+        var text = segment.ToString();
+
+        Assert.Equal("-42", text);
     }
 
     [Fact]
     public void ToString_WhenKindIsUuid_ReturnsHyphenatedUuid()
     {
-        Assert.Equal(
-            "0f8fad5b-d9cb-469f-a165-70867728950e",
-            KeySegment.FromGuid(Sample).ToString()
-        );
+        var segment = KeySegment.FromGuid(Sample);
+
+        var text = segment.ToString();
+
+        Assert.Equal("0f8fad5b-d9cb-469f-a165-70867728950e", text);
     }
 
     #endregion

@@ -13,12 +13,11 @@ public sealed class CoordinationKeyTests
     public void Constructor_WhenArgumentsAreValid_KeepsValues()
     {
         var key = new CoordinationKey(ProdKeyspace, "refresh", 42L);
+        var refresh = KeySegment.FromString("refresh");
+        var number = KeySegment.FromInt64(42);
 
         Assert.Same(ProdKeyspace, key.Keyspace);
-        Assert.Equal<KeySegment>(
-            [KeySegment.FromString("refresh"), KeySegment.FromInt64(42)],
-            key.Segments
-        );
+        Assert.Equal<KeySegment>([refresh, number], key.Segments);
         Assert.Equal(0, key.PartitionDepth);
     }
 
@@ -88,7 +87,7 @@ public sealed class CoordinationKeyTests
 
     #endregion
 
-    #region PartitionDepth Tests
+    #region PartitionDepth Property Tests
 
     [Fact]
     public void PartitionDepth_WhenEqualToTheSegmentCount_Succeeds()
@@ -145,9 +144,13 @@ public sealed class CoordinationKeyTests
             PartitionDepth = 1,
         };
 
-        Assert.True(first.Equals(second));
+        var equal = first.Equals(second);
+        var firstHash = first.GetHashCode();
+        var secondHash = second.GetHashCode();
+
+        Assert.True(equal);
         Assert.Equal(first, second);
-        Assert.Equal(first.GetHashCode(), second.GetHashCode());
+        Assert.Equal(firstHash, secondHash);
     }
 
     [Fact]
@@ -155,7 +158,9 @@ public sealed class CoordinationKeyTests
     {
         var key = new CoordinationKey(ProdKeyspace, "a");
 
-        Assert.True(key.Equals(key));
+        var equal = key.Equals(key);
+
+        Assert.True(equal);
     }
 
     [Fact]
@@ -163,7 +168,9 @@ public sealed class CoordinationKeyTests
     {
         var key = new CoordinationKey(ProdKeyspace, "a");
 
-        Assert.False(key.Equals(null));
+        var equal = key.Equals(null);
+
+        Assert.False(equal);
     }
 
     [Fact]
@@ -205,7 +212,9 @@ public sealed class CoordinationKeyTests
         var prefix = new CoordinationKey(ProdKeyspace, "a");
         var key = new CoordinationKey(ProdKeyspace, "a", "b");
 
-        Assert.True(prefix.IsPrefixOf(key));
+        var isPrefix = prefix.IsPrefixOf(key);
+
+        Assert.True(isPrefix);
     }
 
     [Fact]
@@ -214,7 +223,9 @@ public sealed class CoordinationKeyTests
         var prefix = new CoordinationKey(ProdKeyspace, "a");
         var key = new CoordinationKey(ProdKeyspace, "a", "b");
 
-        Assert.False(key.IsPrefixOf(prefix));
+        var isPrefix = key.IsPrefixOf(prefix);
+
+        Assert.False(isPrefix);
     }
 
     [Fact]
@@ -222,7 +233,9 @@ public sealed class CoordinationKeyTests
     {
         var key = new CoordinationKey(ProdKeyspace, "a", "b");
 
-        Assert.True(key.IsPrefixOf(key));
+        var isPrefix = key.IsPrefixOf(key);
+
+        Assert.True(isPrefix);
     }
 
     [Fact]
@@ -231,7 +244,9 @@ public sealed class CoordinationKeyTests
         var prefix = new CoordinationKey(ProdKeyspace, "ab");
         var key = new CoordinationKey(ProdKeyspace, "abc");
 
-        Assert.False(prefix.IsPrefixOf(key));
+        var isPrefix = prefix.IsPrefixOf(key);
+
+        Assert.False(isPrefix);
     }
 
     [Fact]
@@ -240,7 +255,9 @@ public sealed class CoordinationKeyTests
         var prefix = new CoordinationKey(new Keyspace("prod"), "a");
         var key = new CoordinationKey(new Keyspace("test"), "a", "b");
 
-        Assert.False(prefix.IsPrefixOf(key));
+        var isPrefix = prefix.IsPrefixOf(key);
+
+        Assert.False(isPrefix);
     }
 
     [Fact]
@@ -249,7 +266,9 @@ public sealed class CoordinationKeyTests
         var prefix = new CoordinationKey(ProdKeyspace, "a");
         var key = new CoordinationKey(ProdKeyspace, "a", "b") { PartitionDepth = 2 };
 
-        Assert.True(prefix.IsPrefixOf(key));
+        var isPrefix = prefix.IsPrefixOf(key);
+
+        Assert.True(isPrefix);
     }
 
     [Fact]
@@ -269,7 +288,9 @@ public sealed class CoordinationKeyTests
     {
         var key = new CoordinationKey(ProdKeyspace, "refresh", 42L);
 
-        Assert.Equal("prod/cell-1:refresh/42", key.ToString());
+        var text = key.ToString();
+
+        Assert.Equal("prod/cell-1:refresh/42", text);
     }
 
     [Fact]
@@ -277,7 +298,9 @@ public sealed class CoordinationKeyTests
     {
         var key = new CoordinationKey(new Keyspace("prod"), "a");
 
-        Assert.Equal("prod:a", key.ToString());
+        var text = key.ToString();
+
+        Assert.Equal("prod:a", text);
     }
 
     #endregion

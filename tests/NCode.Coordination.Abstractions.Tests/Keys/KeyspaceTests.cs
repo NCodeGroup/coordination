@@ -13,12 +13,11 @@ public sealed class KeyspaceTests
         const string cluster = "prod";
 
         var keyspace = new Keyspace(cluster, "cell-1", 42L);
+        var cell = KeySegment.FromString("cell-1");
+        var number = KeySegment.FromInt64(42);
 
         Assert.Equal(cluster, keyspace.Cluster);
-        Assert.Equal<KeySegment>(
-            [KeySegment.FromString("cell-1"), KeySegment.FromInt64(42)],
-            keyspace.Segments
-        );
+        Assert.Equal<KeySegment>([cell, number], keyspace.Segments);
     }
 
     [Fact]
@@ -125,9 +124,13 @@ public sealed class KeyspaceTests
         var first = new Keyspace("prod", "cell-1", 42L);
         var second = new Keyspace("prod", "cell-1", 42L);
 
-        Assert.True(first.Equals(second));
+        var equal = first.Equals(second);
+        var firstHash = first.GetHashCode();
+        var secondHash = second.GetHashCode();
+
+        Assert.True(equal);
         Assert.Equal(first, second);
-        Assert.Equal(first.GetHashCode(), second.GetHashCode());
+        Assert.Equal(firstHash, secondHash);
     }
 
     [Fact]
@@ -135,7 +138,9 @@ public sealed class KeyspaceTests
     {
         var keyspace = new Keyspace("prod", "cell-1");
 
-        Assert.True(keyspace.Equals(keyspace));
+        var equal = keyspace.Equals(keyspace);
+
+        Assert.True(equal);
     }
 
     [Fact]
@@ -143,7 +148,9 @@ public sealed class KeyspaceTests
     {
         var keyspace = new Keyspace("prod");
 
-        Assert.False(keyspace.Equals(null));
+        var equal = keyspace.Equals(null);
+
+        Assert.False(equal);
     }
 
     [Fact]
@@ -182,7 +189,9 @@ public sealed class KeyspaceTests
     {
         var keyspace = new Keyspace("prod", "cell-1", 42L);
 
-        Assert.Equal("prod/cell-1/42", keyspace.ToString());
+        var text = keyspace.ToString();
+
+        Assert.Equal("prod/cell-1/42", text);
     }
 
     [Fact]
@@ -190,7 +199,9 @@ public sealed class KeyspaceTests
     {
         var keyspace = new Keyspace("prod");
 
-        Assert.Equal("prod", keyspace.ToString());
+        var text = keyspace.ToString();
+
+        Assert.Equal("prod", text);
     }
 
     #endregion
