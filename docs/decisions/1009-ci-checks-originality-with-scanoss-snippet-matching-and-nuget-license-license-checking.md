@@ -45,7 +45,7 @@ against an allow list of the licenses ORIGINALITY.md permits.**
    the solution and runs it over every package, transitive and development-only ones included, against
    `build/allowed-licenses.json`: the SPDX identifiers of the licenses ORIGINALITY.md permits. A license is added to the
    list only by a change to ORIGINALITY.md's permitted licenses; a package whose license the tool cannot read fails
-   until a reviewed override names its license.
+   the check too, and its dependency is replaced or an override mechanism is decided in a record of its own.
 4. **Locally too.** Both scripts run from a contributor's checkout; the snippet scan runs in CI only.
 
 ## Options considered
