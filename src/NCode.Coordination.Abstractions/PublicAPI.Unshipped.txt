@@ -16,6 +16,13 @@ NCode.Coordination.CoordinationKey.Keyspace.get -> NCode.Coordination.Keyspace!
 NCode.Coordination.CoordinationKey.PartitionDepth.get -> int
 NCode.Coordination.CoordinationKey.PartitionDepth.init -> void
 NCode.Coordination.CoordinationKey.Segments.get -> System.Collections.Immutable.ImmutableArray<NCode.Coordination.KeySegment!>
+NCode.Coordination.FeatureRequirement
+NCode.Coordination.FeatureRequirement.Feature.get -> string!
+NCode.Coordination.FeatureRequirement.FeatureRequirement(string! feature, NCode.Coordination.Primitive! primitive, params System.Collections.Generic.IEnumerable<NCode.Coordination.Guarantee!>! guarantees) -> void
+NCode.Coordination.FeatureRequirement.Guarantees.get -> System.Collections.Immutable.ImmutableArray<NCode.Coordination.Guarantee!>
+NCode.Coordination.FeatureRequirement.Keyspace.get -> NCode.Coordination.Keyspace?
+NCode.Coordination.FeatureRequirement.Keyspace.init -> void
+NCode.Coordination.FeatureRequirement.Primitive.get -> NCode.Coordination.Primitive!
 NCode.Coordination.Guarantee
 NCode.Coordination.Guarantee.<Clone>$() -> NCode.Coordination.Guarantee!
 NCode.Coordination.Guarantee.Equals(NCode.Coordination.Guarantee? other) -> bool
