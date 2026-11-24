@@ -54,6 +54,11 @@ NCode.Coordination.Primitive.Equals(NCode.Coordination.Primitive? other) -> bool
 NCode.Coordination.Primitive.Name.get -> string!
 NCode.Coordination.Primitive.Primitive(string! name) -> void
 NCode.Coordination.Primitives
+NCode.Coordination.PrimitiveSupport
+NCode.Coordination.PrimitiveSupport.Guarantees.get -> System.Collections.Immutable.ImmutableArray<NCode.Coordination.Guarantee!>
+NCode.Coordination.PrimitiveSupport.IsSupported.get -> bool
+NCode.Coordination.PrimitiveSupport.Primitive.get -> NCode.Coordination.Primitive!
+NCode.Coordination.PrimitiveSupport.UnsupportedReason.get -> string?
 override NCode.Coordination.CoordinationKey.Equals(object? obj) -> bool
 override NCode.Coordination.CoordinationKey.GetHashCode() -> int
 override NCode.Coordination.CoordinationKey.ToString() -> string!
@@ -111,3 +116,5 @@ static NCode.Coordination.Primitives.Sequence.get -> NCode.Coordination.Primitiv
 static NCode.Coordination.Primitives.Session.get -> NCode.Coordination.Primitive!
 static NCode.Coordination.Primitives.Set.get -> NCode.Coordination.Primitive!
 static NCode.Coordination.Primitives.Transaction.get -> NCode.Coordination.Primitive!
+static NCode.Coordination.PrimitiveSupport.Supported(NCode.Coordination.Primitive! primitive, params System.Collections.Generic.IEnumerable<NCode.Coordination.Guarantee!>! guarantees) -> NCode.Coordination.PrimitiveSupport!
+static NCode.Coordination.PrimitiveSupport.Unsupported(NCode.Coordination.Primitive! primitive, string! reason) -> NCode.Coordination.PrimitiveSupport!
