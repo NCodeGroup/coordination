@@ -29,6 +29,7 @@ NCode.Coordination.GuaranteeDefinition.GuaranteeDefinition(NCode.Coordination.Gu
 NCode.Coordination.GuaranteeDefinition.Implies.get -> System.Collections.Immutable.ImmutableArray<NCode.Coordination.Guarantee!>
 NCode.Coordination.GuaranteeDefinition.Implies.init -> void
 NCode.Coordination.GuaranteeDimensions
+NCode.Coordination.Guarantees
 NCode.Coordination.KeySegment
 NCode.Coordination.KeySegment.<Clone>$() -> NCode.Coordination.KeySegment!
 NCode.Coordination.KeySegment.Equals(NCode.Coordination.KeySegment? other) -> bool
@@ -63,6 +64,17 @@ static NCode.Coordination.CoordinationKey.operator !=(NCode.Coordination.Coordin
 static NCode.Coordination.CoordinationKey.operator ==(NCode.Coordination.CoordinationKey? left, NCode.Coordination.CoordinationKey? right) -> bool
 static NCode.Coordination.Guarantee.operator !=(NCode.Coordination.Guarantee? left, NCode.Coordination.Guarantee? right) -> bool
 static NCode.Coordination.Guarantee.operator ==(NCode.Coordination.Guarantee? left, NCode.Coordination.Guarantee? right) -> bool
+static NCode.Coordination.Guarantees.AtMostOnce.get -> NCode.Coordination.Guarantee!
+static NCode.Coordination.Guarantees.AtMostOnceWithGapDetection.get -> NCode.Coordination.Guarantee!
+static NCode.Coordination.Guarantees.CallerClock.get -> NCode.Coordination.Guarantee!
+static NCode.Coordination.Guarantees.Definitions.get -> System.Collections.Immutable.ImmutableArray<NCode.Coordination.GuaranteeDefinition!>
+static NCode.Coordination.Guarantees.Durable.get -> NCode.Coordination.Guarantee!
+static NCode.Coordination.Guarantees.LinearizableAcrossFailover.get -> NCode.Coordination.Guarantee!
+static NCode.Coordination.Guarantees.LinearizableUntilFailover.get -> NCode.Coordination.Guarantee!
+static NCode.Coordination.Guarantees.LinearizableWithinProcess.get -> NCode.Coordination.Guarantee!
+static NCode.Coordination.Guarantees.ReplicatedAsynchronously.get -> NCode.Coordination.Guarantee!
+static NCode.Coordination.Guarantees.ServerClock.get -> NCode.Coordination.Guarantee!
+static NCode.Coordination.Guarantees.Volatile.get -> NCode.Coordination.Guarantee!
 static NCode.Coordination.KeySegment.FromGuid(System.Guid value) -> NCode.Coordination.KeySegment!
 static NCode.Coordination.KeySegment.FromInt64(long value) -> NCode.Coordination.KeySegment!
 static NCode.Coordination.KeySegment.FromString(string! text) -> NCode.Coordination.KeySegment!
