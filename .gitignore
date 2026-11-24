@@ -1,0 +1,45 @@
+# Operating system and editor files
+.DS_Store
+Thumbs.db
+*.swp
+.vs/
+.idea/
+
+# Plan worktrees, for every tool
+.claude/worktrees/
+
+# Claude Code: personal settings
+.claude/settings.local.json
+CLAUDE.local.md
+
+# Leftovers from `copier update --conflict rej`
+*.rej
+
+# The plan in progress: a local working file, never committed
+PLAN.md
+
+# The analysis in progress: a local working file, never committed
+ANALYSIS.md
+
+# The OpenSSF Best Practices prompt /best-practices writes: a local working file, never committed
+best-practices-prompt.txt
+
+# Secrets
+.env
+.env.*
+!.env.example
+/secrets/
+
+# .NET
+bin/
+obj/
+artifacts/
+TestResults/
+*.user
+*.suo
+*.DotSettings.user
+*.nupkg
+*.snupkg
+*.pfx
+*.publishsettings
+coverage/
