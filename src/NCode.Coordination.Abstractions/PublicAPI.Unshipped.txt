@@ -59,6 +59,14 @@ NCode.Coordination.PrimitiveSupport.Guarantees.get -> System.Collections.Immutab
 NCode.Coordination.PrimitiveSupport.IsSupported.get -> bool
 NCode.Coordination.PrimitiveSupport.Primitive.get -> NCode.Coordination.Primitive!
 NCode.Coordination.PrimitiveSupport.UnsupportedReason.get -> string?
+NCode.Coordination.ProviderDeclaration
+NCode.Coordination.ProviderDeclaration.Definitions.get -> System.Collections.Immutable.ImmutableArray<NCode.Coordination.GuaranteeDefinition!>
+NCode.Coordination.ProviderDeclaration.Definitions.init -> void
+NCode.Coordination.ProviderDeclaration.Primitives.get -> System.Collections.Immutable.ImmutableArray<NCode.Coordination.PrimitiveSupport!>
+NCode.Coordination.ProviderDeclaration.Profile.get -> string?
+NCode.Coordination.ProviderDeclaration.Profile.init -> void
+NCode.Coordination.ProviderDeclaration.Provider.get -> string!
+NCode.Coordination.ProviderDeclaration.ProviderDeclaration(string! provider, params System.Collections.Generic.IEnumerable<NCode.Coordination.PrimitiveSupport!>! primitives) -> void
 override NCode.Coordination.CoordinationKey.Equals(object? obj) -> bool
 override NCode.Coordination.CoordinationKey.GetHashCode() -> int
 override NCode.Coordination.CoordinationKey.ToString() -> string!
