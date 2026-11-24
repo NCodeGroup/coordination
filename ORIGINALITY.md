@@ -40,9 +40,9 @@ Copyright protects expression, not ideas. The product takes ideas freely and tak
 
 A dependency is used, not derived from:
 
-- **Permissive licenses only**: MIT, Apache-2.0, the BSD licenses, the PostgreSQL License, or an equivalent. No
-  dependency under the GPL, LGPL, AGPL, SSPL, a source-available license or any license whose terms reach the code
-  that uses it.
+- **Permissive licenses only**: MIT, Apache-2.0, the BSD licenses, the PostgreSQL License, or an equivalent;
+  `build/allowed-licenses.json` lists their SPDX identifiers. No dependency under the GPL, LGPL, AGPL, SSPL, a
+  source-available license or any license whose terms reach the code that uses it.
 - **Through its public API and documentation.** Its source is not read, and none of its files are copied or vendored
   into this repository.
 - **A server is not a dependency.** A provider talks to a server over its protocol; the server's license does not
@@ -53,11 +53,15 @@ A dependency is used, not derived from:
 - **Review** looks for code, tests or prose that resemble another project's beyond what a shared protocol or idea
   requires, and for any file whose origin is not this repository.
 - **Snippet scanning** in CI compares the repository's code against a database of public open-source code and fails
-  on a match that the protocol does not explain.
-- **License checking** in CI fails on a dependency outside the permitted licenses.
+  on a match that the protocol does not explain. A match that review finds explained is recorded in `scanoss.json`, one
+  entry per file with the matched component and the reason, never in bulk.
+- **License checking** in CI fails on a dependency, transitive ones included, whose license is not on the permitted
+  list.
 
-The repository has no code or dependencies before the design's Model phase, which adds both CI checks with its first
-package.
+Both run in `.github/workflows/originality.yml` on every pull request
+([ADR-1009](docs/decisions/1009-ci-checks-originality-with-scanoss-snippet-matching-and-nuget-license-license-checking.md));
+`./build/Test-Licenses.ps1` runs the license check and `./build/Test-SnippetReviews.ps1` checks the record of reviewed
+matches from a checkout.
 
 ## Limits
 
