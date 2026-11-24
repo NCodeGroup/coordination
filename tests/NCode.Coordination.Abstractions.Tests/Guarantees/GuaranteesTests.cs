@@ -30,13 +30,16 @@ public sealed class GuaranteesTests
     private static GuaranteeDefinition DefinitionOf(Guarantee guarantee) =>
         Assert.Single(Guarantees.Definitions, definition => definition.Guarantee == guarantee);
 
-    #region Definitions Tests
+    #region Definitions Property Tests
 
     [Fact]
     public void Definitions_Always_HoldsEachBuiltInGuaranteeOnceInOrder()
     {
-        Assert.Equal<Guarantee>(All, [.. Guarantees.Definitions.Select(d => d.Guarantee)]);
-        Assert.Equal(All.Length, All.Distinct().Count());
+        Guarantee[] actual = [.. Guarantees.Definitions.Select(d => d.Guarantee)];
+        var distinct = All.Distinct().Count();
+
+        Assert.Equal<Guarantee>(All, actual);
+        Assert.Equal(All.Length, distinct);
     }
 
     [Fact]
@@ -65,9 +68,12 @@ public sealed class GuaranteesTests
     [Fact]
     public void Definitions_Always_HasADescriptionForEachGuarantee()
     {
-        Assert.All(Guarantees.Definitions, definition =>
-            Assert.False(string.IsNullOrWhiteSpace(definition.Description))
-        );
+        foreach (var definition in Guarantees.Definitions)
+        {
+            var hasDescription = !string.IsNullOrWhiteSpace(definition.Description);
+
+            Assert.True(hasDescription);
+        }
     }
 
     [Fact]
@@ -82,71 +88,70 @@ public sealed class GuaranteesTests
     [Fact]
     public void Definitions_WhenLinearizableAcrossFailover_ImpliesLinearizableUntilFailover()
     {
-        Assert.Equal<Guarantee>(
-            [Guarantees.LinearizableUntilFailover],
-            DefinitionOf(Guarantees.LinearizableAcrossFailover).Implies
-        );
+        var implies = DefinitionOf(Guarantees.LinearizableAcrossFailover).Implies;
+
+        Assert.Equal<Guarantee>([Guarantees.LinearizableUntilFailover], implies);
     }
 
     [Fact]
     public void Definitions_WhenLinearizableUntilFailover_ImpliesLinearizableWithinProcess()
     {
-        Assert.Equal<Guarantee>(
-            [Guarantees.LinearizableWithinProcess],
-            DefinitionOf(Guarantees.LinearizableUntilFailover).Implies
-        );
+        var implies = DefinitionOf(Guarantees.LinearizableUntilFailover).Implies;
+
+        Assert.Equal<Guarantee>([Guarantees.LinearizableWithinProcess], implies);
     }
 
     [Fact]
     public void Definitions_WhenDurable_ImpliesVolatile()
     {
-        Assert.Equal<Guarantee>([Guarantees.Volatile], DefinitionOf(Guarantees.Durable).Implies);
+        var implies = DefinitionOf(Guarantees.Durable).Implies;
+
+        Assert.Equal<Guarantee>([Guarantees.Volatile], implies);
     }
 
     [Fact]
     public void Definitions_WhenReplicatedAsynchronously_ImpliesVolatile()
     {
-        Assert.Equal<Guarantee>(
-            [Guarantees.Volatile],
-            DefinitionOf(Guarantees.ReplicatedAsynchronously).Implies
-        );
+        var implies = DefinitionOf(Guarantees.ReplicatedAsynchronously).Implies;
+
+        Assert.Equal<Guarantee>([Guarantees.Volatile], implies);
     }
 
     [Fact]
     public void Definitions_WhenServerClock_ImpliesCallerClock()
     {
-        Assert.Equal<Guarantee>(
-            [Guarantees.CallerClock],
-            DefinitionOf(Guarantees.ServerClock).Implies
-        );
+        var implies = DefinitionOf(Guarantees.ServerClock).Implies;
+
+        Assert.Equal<Guarantee>([Guarantees.CallerClock], implies);
     }
 
     [Fact]
     public void Definitions_WhenAtMostOnceWithGapDetection_ImpliesAtMostOnce()
     {
-        Assert.Equal<Guarantee>(
-            [Guarantees.AtMostOnce],
-            DefinitionOf(Guarantees.AtMostOnceWithGapDetection).Implies
-        );
+        var implies = DefinitionOf(Guarantees.AtMostOnceWithGapDetection).Implies;
+
+        Assert.Equal<Guarantee>([Guarantees.AtMostOnce], implies);
     }
 
     [Fact]
     public void Definitions_WhenGuaranteeIsWeakest_ImpliesNothing()
     {
-        Assert.All(Weakest, guarantee => Assert.Empty(DefinitionOf(guarantee).Implies));
+        foreach (var guarantee in Weakest)
+        {
+            var implies = DefinitionOf(guarantee).Implies;
+
+            Assert.Empty(implies);
+        }
     }
 
     [Fact]
     public void Definitions_WhenDurableAndReplicatedAsynchronously_AreIncomparable()
     {
-        Assert.DoesNotContain(
-            Guarantees.ReplicatedAsynchronously,
-            DefinitionOf(Guarantees.Durable).Implies
-        );
-        Assert.DoesNotContain(
-            Guarantees.Durable,
-            DefinitionOf(Guarantees.ReplicatedAsynchronously).Implies
-        );
+        var durableImplies = DefinitionOf(Guarantees.Durable).Implies;
+        var replicatedImplies = DefinitionOf(Guarantees.ReplicatedAsynchronously).Implies;
+
+        Assert.DoesNotContain(Guarantees.ReplicatedAsynchronously, durableImplies);
+        Assert.DoesNotContain(Guarantees.Durable, replicatedImplies);
     }
 
     #endregion

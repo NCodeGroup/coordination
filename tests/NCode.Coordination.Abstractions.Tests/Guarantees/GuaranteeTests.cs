@@ -43,8 +43,11 @@ public sealed class GuaranteeTests
         var first = new Guarantee("durable");
         var second = new Guarantee("durable");
 
+        var firstHashCode = first.GetHashCode();
+        var secondHashCode = second.GetHashCode();
+
         Assert.Equal(first, second);
-        Assert.Equal(first.GetHashCode(), second.GetHashCode());
+        Assert.Equal(firstHashCode, secondHashCode);
     }
 
     [Fact]
@@ -65,7 +68,9 @@ public sealed class GuaranteeTests
     {
         var guarantee = new Guarantee("durable");
 
-        Assert.Equal("durable", guarantee.ToString());
+        var text = guarantee.ToString();
+
+        Assert.Equal("durable", text);
     }
 
     #endregion
