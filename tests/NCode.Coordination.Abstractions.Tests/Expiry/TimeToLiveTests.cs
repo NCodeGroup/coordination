@@ -75,7 +75,9 @@ public sealed class TimeToLiveTests
 
         Assert.True(created);
         Assert.NotNull(timeToLive);
-        Assert.Equal(TimeSpan.FromMinutes(11), timeToLive.Duration);
+        var expected = TimeSpan.FromMinutes(11);
+
+        Assert.Equal(expected, timeToLive.Duration);
     }
 
     [Fact]
@@ -92,7 +94,9 @@ public sealed class TimeToLiveTests
 
         Assert.True(created);
         Assert.NotNull(timeToLive);
-        Assert.Equal(TimeSpan.FromSeconds(30), timeToLive.Duration);
+        var expected = TimeSpan.FromSeconds(30);
+
+        Assert.Equal(expected, timeToLive.Duration);
     }
 
     [Fact]
@@ -171,12 +175,14 @@ public sealed class TimeToLiveTests
     {
         var timeToLive = new TimeToLive(TimeSpan.FromMinutes(5));
 
-        Assert.Equal("00:05:00", timeToLive.ToString());
+        var text = timeToLive.ToString();
+
+        Assert.Equal("00:05:00", text);
     }
 
     #endregion
 
-    #region Equality Tests
+    #region Equals Tests
 
     [Fact]
     public void Equals_WhenDurationsAreEqual_ReturnsTrue()
@@ -184,8 +190,11 @@ public sealed class TimeToLiveTests
         var first = new TimeToLive(TimeSpan.FromMinutes(5));
         var second = new TimeToLive(TimeSpan.FromMinutes(5));
 
+        var firstHashCode = first.GetHashCode();
+        var secondHashCode = second.GetHashCode();
+
         Assert.Equal(first, second);
-        Assert.Equal(first.GetHashCode(), second.GetHashCode());
+        Assert.Equal(firstHashCode, secondHashCode);
     }
 
     [Fact]

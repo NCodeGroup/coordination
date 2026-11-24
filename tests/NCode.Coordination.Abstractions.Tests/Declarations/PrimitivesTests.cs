@@ -23,13 +23,16 @@ public sealed class PrimitivesTests
         "notification",
     ];
 
-    #region All Tests
+    #region All Property Tests
 
     [Fact]
     public void All_Always_HoldsEachBuiltInPrimitiveOnceInOrder()
     {
-        Assert.Equal(Names, Primitives.All.Select(primitive => primitive.Name));
-        Assert.Equal(Names.Length, Primitives.All.Distinct().Count());
+        var names = Primitives.All.Select(primitive => primitive.Name);
+        var distinct = Primitives.All.Distinct().Count();
+
+        Assert.Equal(Names, names);
+        Assert.Equal(Names.Length, distinct);
     }
 
     [Fact]

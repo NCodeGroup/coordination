@@ -43,8 +43,11 @@ public sealed class PrimitiveTests
         var first = new Primitive("lease");
         var second = new Primitive("lease");
 
+        var firstHashCode = first.GetHashCode();
+        var secondHashCode = second.GetHashCode();
+
         Assert.Equal(first, second);
-        Assert.Equal(first.GetHashCode(), second.GetHashCode());
+        Assert.Equal(firstHashCode, secondHashCode);
     }
 
     [Fact]
@@ -65,7 +68,9 @@ public sealed class PrimitiveTests
     {
         var primitive = new Primitive("lease");
 
-        Assert.Equal("lease", primitive.ToString());
+        var text = primitive.ToString();
+
+        Assert.Equal("lease", text);
     }
 
     #endregion
