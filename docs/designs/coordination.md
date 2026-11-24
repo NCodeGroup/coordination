@@ -10,7 +10,7 @@
 NCode.Coordination is a general-purpose .NET library that gives the nodes of a cluster the agreement they need on
 liveness, ownership, one-time events, change and usage, through one programming model over interchangeable providers.
 Each provider speaks a standard protocol, declares the guarantees it keeps, and proves them against one conformance
-kit. The central decisions are the product's scope ([D1](#d1-scope)), its clean-room sourcing ([D2](#d2-clean-room)),
+kit. The central decisions are the product's scope ([D1](#d1-scope)), its originality ([D2](#d2-originality)),
 declared guarantees ([D3](#d3-guarantees)), protocol-named providers ([D4](#d4-providers)), sessions with fencing
 tokens ([D5](#d5-sessions-and-fencing)), sequenced notifications without brokering ([D6](#d6-notifications)) and one
 conformance kit ([D7](#d7-conformance)).
@@ -28,8 +28,9 @@ conformance kit ([D7](#d7-conformance)).
   a host with one node needs none.
 - **G4.** A feature bound to a provider that cannot keep its required guarantee fails at startup, never in production.
 - **G5.** Every guarantee a provider declares is verified against a real server, under concurrency and injected faults.
-- **G6.** Every design is traceable to published specifications, papers or documentation, and no other project's source
-  is read.
+- **G6.** No part of the product is a derivative work of another project: every design is traceable to published
+  specifications, papers or documentation, and every dependency is permissively licensed and used through its public
+  API.
 
 **Non-goals**
 
@@ -160,7 +161,7 @@ plug in through a configurator of their own, an in-process provider, and one tes
 | `NCode.Coordination.Testing`      | The conformance kit, fault injection and the history checker                   |
 
 The core depends on the `Microsoft.Extensions` abstractions only. A provider depends on its protocol's client library,
-consumed as a package through its public API.
+consumed as a permissively licensed package through its public API.
 
 ## Security Analysis
 
@@ -189,11 +190,11 @@ consumed as a package through its public API.
 NCode.Coordination is a general coordination library for the nodes of a cluster, with its first consumer as a floor,
 not a ceiling. [ADR-1000](../decisions/1000-ncode-coordination-is-a-general-coordination-library-for-the-nodes-of-a-cluster.md)
 
-### D2. Clean room
+### D2. Originality
 
-Designs come from specifications, papers and documentation, and no other project's source is read.
-[ADR-1001](../decisions/1001-designs-come-from-specifications-papers-and-documentation-and-no-other-projects-source-is-read.md),
-[CLEAN-ROOM.md](../../CLEAN-ROOM.md)
+The product is an original work, and a clean-room method keeps it free of derivative work.
+[ADR-1001](../decisions/1001-the-product-is-an-original-work-and-a-clean-room-method-keeps-it-free-of-derivative-work.md),
+[ORIGINALITY.md](../../ORIGINALITY.md)
 
 ### D3. Guarantees
 
@@ -224,16 +225,18 @@ Every provider passes one conformance kit that checks recorded histories against
 
 - **Q1.** How NCode.Identity consumes the packages while both repositories change together: prerelease packages from a
   feed, or a source dependency.
-- **Q2.** Whether the etcd provider takes a published .NET client package or generates its own client from the etcd
-  API's published interface definitions, and how that sits with the clean-room policy.
+- **Q2.** Whether the etcd provider takes a permissively licensed .NET client package or writes its own gRPC message
+  definitions from the etcd API reference; copying etcd's own `.proto` files is ruled out, because they are another
+  project's files.
 - **Q3.** Which capabilities beyond NCode.Identity's needs the first stable release carries, and which follow it.
 - **Q4.** Whether expiry is evaluated on the server's clock for every provider that can, or on the caller's where a
   feature needs an absolute instant.
 
 ## Rollout and Phases
 
-1. **Foundation.** The repository, this design, the clean-room policy and the founding decisions.
-2. **Model.** The abstractions, the in-process provider and the conformance kit with its history checker.
+1. **Foundation.** The repository, this design, the originality policy and the founding decisions.
+2. **Model.** The abstractions, the in-process provider and the conformance kit with its history checker, and the
+   snippet-scanning and license checks [ORIGINALITY.md](../../ORIGINALITY.md) requires in CI.
 3. **RESP.** The RESP provider with Valkey and Garnet profiles, covering every NCode.Identity need, with gap-detecting
    notifications.
 4. **PostgreSQL.** A provider that needs no infrastructure beyond the database a service already runs.

@@ -21,9 +21,8 @@ the nodes of one deployment must agree on, and leaves durable data to a database
 | Counters              | How much was used in a window, checked against limits            | Rate limiters                               |
 | Notifications         | What changed, with an explicit signal when a node missed it      | etcd watches, ZooKeeper watches             |
 
-The design is in [docs/designs/coordination.md](docs/designs/coordination.md), and every design here is sourced as
-[CLEAN-ROOM.md](CLEAN-ROOM.md) says: from specifications, papers and public documentation, never another project's
-source code.
+The design is in [docs/designs/coordination.md](docs/designs/coordination.md). NCode.Coordination is an original
+work, derived from no other project; [ORIGINALITY.md](ORIGINALITY.md) says how it stays one.
 
 [//]: # "Badges: to show the CI status, add this line below, with the repository's owner and name:"
 [//]: # "[![CI](https://github.com/OWNER/REPO/actions/workflows/ci.yml/badge.svg)](https://github.com/OWNER/REPO/actions/workflows/ci.yml)"

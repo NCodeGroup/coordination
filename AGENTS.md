@@ -12,9 +12,11 @@ This file belongs to the project: template updates never change it. Keep it unde
 - `.github/instructions/csharp.instructions.md` — C# conventions, from the project template; read it before editing `.cs` files.
 - `.github/instructions/csharp-tests.instructions.md` — C# test conventions, from the project template; read it too before editing a test project's `.cs` files.
 - `docs/decisions/` — this project's architecture decision records, and in `project-template/` the template's; read the ones a change touches before deciding otherwise.
-- @CLEAN-ROOM.md — what may and may not be consulted for this product, and how sources are recorded. It binds every
-  agent and every instruction an agent gives a subagent, workflow or other session: never fetch or open another
-  project's source code, and add what you read to `docs/provenance.md`.
+- @ORIGINALITY.md — the hard requirement that no part of this product is a derivative work of another project, and the
+  method that meets it. It binds every agent and every instruction an agent gives a subagent, workflow or other
+  session: never fetch or open another project's source code, never port or translate another project's code, copy
+  no file from another project, add only permissively licensed dependencies, and add what you read to
+  `docs/provenance.md`.
 - `docs/designs/coordination.md` — the product's design: its scope, primitives, guarantees, packages and phases; read
   it before planning any change.
 - Project instruction files: add one line for each, `@<path> — what it covers`.

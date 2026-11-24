@@ -1,7 +1,7 @@
 # Provenance
 
-Sources consulted outside a decision record, as [`CLEAN-ROOM.md`](../CLEAN-ROOM.md) requires: what was read, when, and
-what it informed. Each entry is documentation; no source file was opened.
+Sources consulted outside a decision record, as [`ORIGINALITY.md`](../ORIGINALITY.md) requires: what was read, when,
+and what it informed. Each entry is documentation; no source file was opened.
 
 | Date       | Source                                                                                  | Read                                                                    | Informed                                                     |
 | ---------- | --------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------ |
