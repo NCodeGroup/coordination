@@ -47,6 +47,27 @@ public sealed class ElementListTests
         Assert.Contains("null element", exception.Message, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Copy_WhenItemsIsABoxedDefaultArray_Throws()
+    {
+        IEnumerable<string> items = default(ImmutableArray<string>);
+
+        var exception = Assert.Throws<ArgumentException>(() => ElementList.Copy(items, "items"));
+
+        Assert.Equal("items", exception.ParamName);
+        Assert.Contains("default ImmutableArray", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Copy_WhenItemsIsAnImmutableArray_ReturnsItsElements()
+    {
+        IEnumerable<string> items = ImmutableArray.Create("a", "b");
+
+        var copy = ElementList.Copy(items, "items");
+
+        Assert.Equal<string>(["a", "b"], copy);
+    }
+
     #endregion
 
     #region Check Tests

@@ -22,6 +22,11 @@ internal static class ElementList
     {
         ArgumentNullException.ThrowIfNull(items, paramName);
 
+        if (items is ImmutableArray<T> array)
+        {
+            return Check(array, paramName);
+        }
+
         var copy = items.ToImmutableArray();
         ThrowIfNullElement(copy, paramName);
 
