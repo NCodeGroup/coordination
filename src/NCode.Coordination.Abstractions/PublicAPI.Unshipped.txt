@@ -1,7 +1,17 @@
 #nullable enable
+const NCode.Coordination.CoordinationKey.MaxSegments = 16 -> int
 const NCode.Coordination.KeySegment.MaxTextLength = 256 -> int
 const NCode.Coordination.Keyspace.MaxClusterLength = 63 -> int
 const NCode.Coordination.Keyspace.MaxSegments = 8 -> int
+NCode.Coordination.CoordinationKey
+NCode.Coordination.CoordinationKey.<Clone>$() -> NCode.Coordination.CoordinationKey!
+NCode.Coordination.CoordinationKey.CoordinationKey(NCode.Coordination.Keyspace! keyspace, params System.Collections.Generic.IEnumerable<NCode.Coordination.KeySegment!>! segments) -> void
+NCode.Coordination.CoordinationKey.Equals(NCode.Coordination.CoordinationKey? other) -> bool
+NCode.Coordination.CoordinationKey.IsPrefixOf(NCode.Coordination.CoordinationKey! other) -> bool
+NCode.Coordination.CoordinationKey.Keyspace.get -> NCode.Coordination.Keyspace!
+NCode.Coordination.CoordinationKey.PartitionDepth.get -> int
+NCode.Coordination.CoordinationKey.PartitionDepth.init -> void
+NCode.Coordination.CoordinationKey.Segments.get -> System.Collections.Immutable.ImmutableArray<NCode.Coordination.KeySegment!>
 NCode.Coordination.KeySegment
 NCode.Coordination.KeySegment.<Clone>$() -> NCode.Coordination.KeySegment!
 NCode.Coordination.KeySegment.Equals(NCode.Coordination.KeySegment? other) -> bool
@@ -16,15 +26,21 @@ NCode.Coordination.KeySegmentKind.Uuid = 2 -> NCode.Coordination.KeySegmentKind
 NCode.Coordination.Keyspace
 NCode.Coordination.Keyspace.<Clone>$() -> NCode.Coordination.Keyspace!
 NCode.Coordination.Keyspace.Cluster.get -> string!
+NCode.Coordination.Keyspace.CreateKey(params System.Collections.Generic.IEnumerable<NCode.Coordination.KeySegment!>! segments) -> NCode.Coordination.CoordinationKey!
 NCode.Coordination.Keyspace.Equals(NCode.Coordination.Keyspace? other) -> bool
 NCode.Coordination.Keyspace.Keyspace(string! cluster, params System.Collections.Generic.IEnumerable<NCode.Coordination.KeySegment!>! segments) -> void
 NCode.Coordination.Keyspace.Segments.get -> System.Collections.Immutable.ImmutableArray<NCode.Coordination.KeySegment!>
+override NCode.Coordination.CoordinationKey.Equals(object? obj) -> bool
+override NCode.Coordination.CoordinationKey.GetHashCode() -> int
+override NCode.Coordination.CoordinationKey.ToString() -> string!
 override NCode.Coordination.KeySegment.Equals(object? obj) -> bool
 override NCode.Coordination.KeySegment.GetHashCode() -> int
 override NCode.Coordination.KeySegment.ToString() -> string!
 override NCode.Coordination.Keyspace.Equals(object? obj) -> bool
 override NCode.Coordination.Keyspace.GetHashCode() -> int
 override NCode.Coordination.Keyspace.ToString() -> string!
+static NCode.Coordination.CoordinationKey.operator !=(NCode.Coordination.CoordinationKey? left, NCode.Coordination.CoordinationKey? right) -> bool
+static NCode.Coordination.CoordinationKey.operator ==(NCode.Coordination.CoordinationKey? left, NCode.Coordination.CoordinationKey? right) -> bool
 static NCode.Coordination.KeySegment.FromGuid(System.Guid value) -> NCode.Coordination.KeySegment!
 static NCode.Coordination.KeySegment.FromInt64(long value) -> NCode.Coordination.KeySegment!
 static NCode.Coordination.KeySegment.FromString(string! text) -> NCode.Coordination.KeySegment!

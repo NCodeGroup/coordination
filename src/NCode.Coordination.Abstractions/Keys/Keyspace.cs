@@ -79,6 +79,20 @@ public sealed partial record Keyspace
     private static partial Regex ClusterPattern();
 
     /// <summary>
+    /// Creates a key in this keyspace.
+    /// </summary>
+    /// <param name="segments">
+    /// The segments after the keyspace: at least one, at most <see cref="CoordinationKey.MaxSegments"/>, none null.
+    /// </param>
+    /// <returns>The key, with a partition depth of 0.</returns>
+    /// <exception cref="ArgumentNullException">The segments are null.</exception>
+    /// <exception cref="ArgumentException">
+    /// A segment is null, or there are no segments or more than <see cref="CoordinationKey.MaxSegments"/> of them.
+    /// </exception>
+    public CoordinationKey CreateKey(params IEnumerable<KeySegment> segments) =>
+        new(this, segments);
+
+    /// <summary>
     /// Determines whether another keyspace has the same cluster and the same segments in the same order.
     /// </summary>
     /// <param name="other">The keyspace to compare with.</param>
