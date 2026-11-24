@@ -109,8 +109,11 @@ public sealed partial record Keyspace
             return true;
         }
 
+        var segments = Segments.AsSpan();
+        var otherSegments = other.Segments.AsSpan();
+
         return string.Equals(Cluster, other.Cluster, StringComparison.Ordinal)
-            && Segments.AsSpan().SequenceEqual(other.Segments.AsSpan());
+            && segments.SequenceEqual(otherSegments);
     }
 
     /// <summary>
@@ -140,7 +143,8 @@ public sealed partial record Keyspace
 
         foreach (var segment in Segments)
         {
-            builder.Append('/').Append(segment.ToString());
+            var text = segment.ToString();
+            builder.Append('/').Append(text);
         }
 
         return builder.ToString();

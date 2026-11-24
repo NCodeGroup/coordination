@@ -94,9 +94,15 @@ public sealed record CoordinationKey
     {
         ArgumentNullException.ThrowIfNull(other);
 
-        return Keyspace.Equals(other.Keyspace)
-            && other.Segments.Length >= Segments.Length
-            && Segments.AsSpan().SequenceEqual(other.Segments.AsSpan()[..Segments.Length]);
+        if (!Keyspace.Equals(other.Keyspace) || other.Segments.Length < Segments.Length)
+        {
+            return false;
+        }
+
+        var own = Segments.AsSpan();
+        var leading = other.Segments.AsSpan(0, Segments.Length);
+
+        return own.SequenceEqual(leading);
     }
 
     /// <summary>
@@ -116,9 +122,15 @@ public sealed record CoordinationKey
             return true;
         }
 
-        return Keyspace.Equals(other.Keyspace)
-            && PartitionDepth == other.PartitionDepth
-            && Segments.AsSpan().SequenceEqual(other.Segments.AsSpan());
+        if (!Keyspace.Equals(other.Keyspace) || PartitionDepth != other.PartitionDepth)
+        {
+            return false;
+        }
+
+        var own = Segments.AsSpan();
+        var otherSegments = other.Segments.AsSpan();
+
+        return own.SequenceEqual(otherSegments);
     }
 
     /// <summary>
@@ -145,7 +157,8 @@ public sealed record CoordinationKey
     /// <returns>The key as text.</returns>
     public override string ToString()
     {
-        var builder = new StringBuilder(Keyspace.ToString()).Append(':');
+        var keyspace = Keyspace.ToString();
+        var builder = new StringBuilder(keyspace).Append(':');
 
         for (var i = 0; i < Segments.Length; i++)
         {
@@ -154,7 +167,8 @@ public sealed record CoordinationKey
                 builder.Append('/');
             }
 
-            builder.Append(Segments[i].ToString());
+            var text = Segments[i].ToString();
+            builder.Append(text);
         }
 
         return builder.ToString();
