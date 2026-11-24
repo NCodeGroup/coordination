@@ -17,5 +17,10 @@
     <PackageVersion Include="Nerdbank.GitVersioning" Version="3.10.94" />
   </ItemGroup>
 
-  <ItemGroup></ItemGroup>
+  <!-- Test projects: xunit.v3 without Microsoft.Testing.Platform, because the .NET 10 SDK's VSTest-mode dotnet test, which build/dod.ps1 runs, refuses it. -->
+  <ItemGroup>
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.12.0" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="4.0.1" />
+    <PackageVersion Include="xunit.v3.mtp-off" Version="4.0.3" />
+  </ItemGroup>
 </Project>
