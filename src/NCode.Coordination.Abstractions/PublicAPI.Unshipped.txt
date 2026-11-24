@@ -1,5 +1,7 @@
 #nullable enable
 const NCode.Coordination.KeySegment.MaxTextLength = 256 -> int
+const NCode.Coordination.Keyspace.MaxClusterLength = 63 -> int
+const NCode.Coordination.Keyspace.MaxSegments = 8 -> int
 NCode.Coordination.KeySegment
 NCode.Coordination.KeySegment.<Clone>$() -> NCode.Coordination.KeySegment!
 NCode.Coordination.KeySegment.Equals(NCode.Coordination.KeySegment? other) -> bool
@@ -11,9 +13,18 @@ NCode.Coordination.KeySegmentKind
 NCode.Coordination.KeySegmentKind.Number = 1 -> NCode.Coordination.KeySegmentKind
 NCode.Coordination.KeySegmentKind.Text = 0 -> NCode.Coordination.KeySegmentKind
 NCode.Coordination.KeySegmentKind.Uuid = 2 -> NCode.Coordination.KeySegmentKind
+NCode.Coordination.Keyspace
+NCode.Coordination.Keyspace.<Clone>$() -> NCode.Coordination.Keyspace!
+NCode.Coordination.Keyspace.Cluster.get -> string!
+NCode.Coordination.Keyspace.Equals(NCode.Coordination.Keyspace? other) -> bool
+NCode.Coordination.Keyspace.Keyspace(string! cluster, params System.Collections.Generic.IEnumerable<NCode.Coordination.KeySegment!>! segments) -> void
+NCode.Coordination.Keyspace.Segments.get -> System.Collections.Immutable.ImmutableArray<NCode.Coordination.KeySegment!>
 override NCode.Coordination.KeySegment.Equals(object? obj) -> bool
 override NCode.Coordination.KeySegment.GetHashCode() -> int
 override NCode.Coordination.KeySegment.ToString() -> string!
+override NCode.Coordination.Keyspace.Equals(object? obj) -> bool
+override NCode.Coordination.Keyspace.GetHashCode() -> int
+override NCode.Coordination.Keyspace.ToString() -> string!
 static NCode.Coordination.KeySegment.FromGuid(System.Guid value) -> NCode.Coordination.KeySegment!
 static NCode.Coordination.KeySegment.FromInt64(long value) -> NCode.Coordination.KeySegment!
 static NCode.Coordination.KeySegment.FromString(string! text) -> NCode.Coordination.KeySegment!
@@ -22,3 +33,5 @@ static NCode.Coordination.KeySegment.implicit operator NCode.Coordination.KeySeg
 static NCode.Coordination.KeySegment.implicit operator NCode.Coordination.KeySegment!(System.Guid value) -> NCode.Coordination.KeySegment!
 static NCode.Coordination.KeySegment.operator !=(NCode.Coordination.KeySegment? left, NCode.Coordination.KeySegment? right) -> bool
 static NCode.Coordination.KeySegment.operator ==(NCode.Coordination.KeySegment? left, NCode.Coordination.KeySegment? right) -> bool
+static NCode.Coordination.Keyspace.operator !=(NCode.Coordination.Keyspace? left, NCode.Coordination.Keyspace? right) -> bool
+static NCode.Coordination.Keyspace.operator ==(NCode.Coordination.Keyspace? left, NCode.Coordination.Keyspace? right) -> bool
