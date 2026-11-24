@@ -1,0 +1,5 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/NCode.Coordination.Abstractions/NCode.Coordination.Abstractions.csproj" />
+  </Folder>
+</Solution>
