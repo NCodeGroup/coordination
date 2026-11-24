@@ -1,0 +1,65 @@
+name: Originality
+
+# The checks ORIGINALITY.md requires: every dependency's license against the permitted list, and the code against a
+# database of public open-source code.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened]
+  # A required check must also report in a merge queue.
+  merge_group:
+    types: [checks_requested]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A newer push to a pull request or a topic branch cancels the run it supersedes. A run for a default-branch commit or
+# a merge queue entry is never cancelled: its group holds its commit SHA, because cancel-in-progress: false alone still
+# lets a newer run in the same group cancel a pending one, which would leave that commit without a verdict.
+concurrency:
+  group: originality-${{ github.ref }}-${{ (github.ref == format('refs/heads/{0}', github.event.repository.default_branch) || github.event_name == 'merge_group') && github.sha || 'latest' }}
+  cancel-in-progress: ${{ github.ref != format('refs/heads/{0}', github.event.repository.default_branch) && github.event_name != 'merge_group' }}
+
+jobs:
+  licenses:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/install-dotnet
+      - name: Check the dependencies' licenses
+        run: ./build/Test-Licenses.ps1
+
+  snippets:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # The scan annotates the pull request, so it needs to write pull-request comments and checks, never the repository's
+    # contents.
+    permissions:
+      contents: read
+      pull-requests: write
+      checks: write
+      actions: read
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Check the reviewed matches
+        run: ./build/Test-SnippetReviews.ps1
+      - name: Scan for code that matches public open-source code
+        uses: scanoss/gha-code-scan@d3c8f659544885761c8e3b96743ea14b830474aa # v1.7.0
+        with:
+          policies: undeclared
+          policies.halt_on_failure: true
+          settingsFilepath: scanoss.json
