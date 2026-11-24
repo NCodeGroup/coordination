@@ -1,1 +1,24 @@
 #nullable enable
+const NCode.Coordination.KeySegment.MaxTextLength = 256 -> int
+NCode.Coordination.KeySegment
+NCode.Coordination.KeySegment.<Clone>$() -> NCode.Coordination.KeySegment!
+NCode.Coordination.KeySegment.Equals(NCode.Coordination.KeySegment? other) -> bool
+NCode.Coordination.KeySegment.Kind.get -> NCode.Coordination.KeySegmentKind
+NCode.Coordination.KeySegment.Number.get -> long?
+NCode.Coordination.KeySegment.Text.get -> string?
+NCode.Coordination.KeySegment.Uuid.get -> System.Guid?
+NCode.Coordination.KeySegmentKind
+NCode.Coordination.KeySegmentKind.Number = 1 -> NCode.Coordination.KeySegmentKind
+NCode.Coordination.KeySegmentKind.Text = 0 -> NCode.Coordination.KeySegmentKind
+NCode.Coordination.KeySegmentKind.Uuid = 2 -> NCode.Coordination.KeySegmentKind
+override NCode.Coordination.KeySegment.Equals(object? obj) -> bool
+override NCode.Coordination.KeySegment.GetHashCode() -> int
+override NCode.Coordination.KeySegment.ToString() -> string!
+static NCode.Coordination.KeySegment.FromGuid(System.Guid value) -> NCode.Coordination.KeySegment!
+static NCode.Coordination.KeySegment.FromInt64(long value) -> NCode.Coordination.KeySegment!
+static NCode.Coordination.KeySegment.FromString(string! text) -> NCode.Coordination.KeySegment!
+static NCode.Coordination.KeySegment.implicit operator NCode.Coordination.KeySegment!(long value) -> NCode.Coordination.KeySegment!
+static NCode.Coordination.KeySegment.implicit operator NCode.Coordination.KeySegment!(string! text) -> NCode.Coordination.KeySegment!
+static NCode.Coordination.KeySegment.implicit operator NCode.Coordination.KeySegment!(System.Guid value) -> NCode.Coordination.KeySegment!
+static NCode.Coordination.KeySegment.operator !=(NCode.Coordination.KeySegment? left, NCode.Coordination.KeySegment? right) -> bool
+static NCode.Coordination.KeySegment.operator ==(NCode.Coordination.KeySegment? left, NCode.Coordination.KeySegment? right) -> bool
