@@ -1,5 +1,9 @@
 #nullable enable
 const NCode.Coordination.CoordinationKey.MaxSegments = 16 -> int
+const NCode.Coordination.GuaranteeDimensions.Consistency = "consistency" -> string!
+const NCode.Coordination.GuaranteeDimensions.Delivery = "delivery" -> string!
+const NCode.Coordination.GuaranteeDimensions.Durability = "durability" -> string!
+const NCode.Coordination.GuaranteeDimensions.Expiry = "expiry" -> string!
 const NCode.Coordination.KeySegment.MaxTextLength = 256 -> int
 const NCode.Coordination.Keyspace.MaxClusterLength = 63 -> int
 const NCode.Coordination.Keyspace.MaxSegments = 8 -> int
@@ -12,6 +16,19 @@ NCode.Coordination.CoordinationKey.Keyspace.get -> NCode.Coordination.Keyspace!
 NCode.Coordination.CoordinationKey.PartitionDepth.get -> int
 NCode.Coordination.CoordinationKey.PartitionDepth.init -> void
 NCode.Coordination.CoordinationKey.Segments.get -> System.Collections.Immutable.ImmutableArray<NCode.Coordination.KeySegment!>
+NCode.Coordination.Guarantee
+NCode.Coordination.Guarantee.<Clone>$() -> NCode.Coordination.Guarantee!
+NCode.Coordination.Guarantee.Equals(NCode.Coordination.Guarantee? other) -> bool
+NCode.Coordination.Guarantee.Guarantee(string! name) -> void
+NCode.Coordination.Guarantee.Name.get -> string!
+NCode.Coordination.GuaranteeDefinition
+NCode.Coordination.GuaranteeDefinition.Description.get -> string!
+NCode.Coordination.GuaranteeDefinition.Dimension.get -> string!
+NCode.Coordination.GuaranteeDefinition.Guarantee.get -> NCode.Coordination.Guarantee!
+NCode.Coordination.GuaranteeDefinition.GuaranteeDefinition(NCode.Coordination.Guarantee! guarantee, string! dimension, string! description) -> void
+NCode.Coordination.GuaranteeDefinition.Implies.get -> System.Collections.Immutable.ImmutableArray<NCode.Coordination.Guarantee!>
+NCode.Coordination.GuaranteeDefinition.Implies.init -> void
+NCode.Coordination.GuaranteeDimensions
 NCode.Coordination.KeySegment
 NCode.Coordination.KeySegment.<Clone>$() -> NCode.Coordination.KeySegment!
 NCode.Coordination.KeySegment.Equals(NCode.Coordination.KeySegment? other) -> bool
@@ -33,6 +50,9 @@ NCode.Coordination.Keyspace.Segments.get -> System.Collections.Immutable.Immutab
 override NCode.Coordination.CoordinationKey.Equals(object? obj) -> bool
 override NCode.Coordination.CoordinationKey.GetHashCode() -> int
 override NCode.Coordination.CoordinationKey.ToString() -> string!
+override NCode.Coordination.Guarantee.Equals(object? obj) -> bool
+override NCode.Coordination.Guarantee.GetHashCode() -> int
+override NCode.Coordination.Guarantee.ToString() -> string!
 override NCode.Coordination.KeySegment.Equals(object? obj) -> bool
 override NCode.Coordination.KeySegment.GetHashCode() -> int
 override NCode.Coordination.KeySegment.ToString() -> string!
@@ -41,6 +61,8 @@ override NCode.Coordination.Keyspace.GetHashCode() -> int
 override NCode.Coordination.Keyspace.ToString() -> string!
 static NCode.Coordination.CoordinationKey.operator !=(NCode.Coordination.CoordinationKey? left, NCode.Coordination.CoordinationKey? right) -> bool
 static NCode.Coordination.CoordinationKey.operator ==(NCode.Coordination.CoordinationKey? left, NCode.Coordination.CoordinationKey? right) -> bool
+static NCode.Coordination.Guarantee.operator !=(NCode.Coordination.Guarantee? left, NCode.Coordination.Guarantee? right) -> bool
+static NCode.Coordination.Guarantee.operator ==(NCode.Coordination.Guarantee? left, NCode.Coordination.Guarantee? right) -> bool
 static NCode.Coordination.KeySegment.FromGuid(System.Guid value) -> NCode.Coordination.KeySegment!
 static NCode.Coordination.KeySegment.FromInt64(long value) -> NCode.Coordination.KeySegment!
 static NCode.Coordination.KeySegment.FromString(string! text) -> NCode.Coordination.KeySegment!
