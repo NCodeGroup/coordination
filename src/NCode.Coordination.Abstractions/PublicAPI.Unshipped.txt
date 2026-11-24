@@ -48,6 +48,12 @@ NCode.Coordination.Keyspace.CreateKey(params System.Collections.Generic.IEnumera
 NCode.Coordination.Keyspace.Equals(NCode.Coordination.Keyspace? other) -> bool
 NCode.Coordination.Keyspace.Keyspace(string! cluster, params System.Collections.Generic.IEnumerable<NCode.Coordination.KeySegment!>! segments) -> void
 NCode.Coordination.Keyspace.Segments.get -> System.Collections.Immutable.ImmutableArray<NCode.Coordination.KeySegment!>
+NCode.Coordination.Primitive
+NCode.Coordination.Primitive.<Clone>$() -> NCode.Coordination.Primitive!
+NCode.Coordination.Primitive.Equals(NCode.Coordination.Primitive? other) -> bool
+NCode.Coordination.Primitive.Name.get -> string!
+NCode.Coordination.Primitive.Primitive(string! name) -> void
+NCode.Coordination.Primitives
 override NCode.Coordination.CoordinationKey.Equals(object? obj) -> bool
 override NCode.Coordination.CoordinationKey.GetHashCode() -> int
 override NCode.Coordination.CoordinationKey.ToString() -> string!
@@ -60,6 +66,9 @@ override NCode.Coordination.KeySegment.ToString() -> string!
 override NCode.Coordination.Keyspace.Equals(object? obj) -> bool
 override NCode.Coordination.Keyspace.GetHashCode() -> int
 override NCode.Coordination.Keyspace.ToString() -> string!
+override NCode.Coordination.Primitive.Equals(object? obj) -> bool
+override NCode.Coordination.Primitive.GetHashCode() -> int
+override NCode.Coordination.Primitive.ToString() -> string!
 static NCode.Coordination.CoordinationKey.operator !=(NCode.Coordination.CoordinationKey? left, NCode.Coordination.CoordinationKey? right) -> bool
 static NCode.Coordination.CoordinationKey.operator ==(NCode.Coordination.CoordinationKey? left, NCode.Coordination.CoordinationKey? right) -> bool
 static NCode.Coordination.Guarantee.operator !=(NCode.Coordination.Guarantee? left, NCode.Coordination.Guarantee? right) -> bool
@@ -85,3 +94,20 @@ static NCode.Coordination.KeySegment.operator !=(NCode.Coordination.KeySegment? 
 static NCode.Coordination.KeySegment.operator ==(NCode.Coordination.KeySegment? left, NCode.Coordination.KeySegment? right) -> bool
 static NCode.Coordination.Keyspace.operator !=(NCode.Coordination.Keyspace? left, NCode.Coordination.Keyspace? right) -> bool
 static NCode.Coordination.Keyspace.operator ==(NCode.Coordination.Keyspace? left, NCode.Coordination.Keyspace? right) -> bool
+static NCode.Coordination.Primitive.operator !=(NCode.Coordination.Primitive? left, NCode.Coordination.Primitive? right) -> bool
+static NCode.Coordination.Primitive.operator ==(NCode.Coordination.Primitive? left, NCode.Coordination.Primitive? right) -> bool
+static NCode.Coordination.Primitives.All.get -> System.Collections.Immutable.ImmutableArray<NCode.Coordination.Primitive!>
+static NCode.Coordination.Primitives.Claim.get -> NCode.Coordination.Primitive!
+static NCode.Coordination.Primitives.Counter.get -> NCode.Coordination.Primitive!
+static NCode.Coordination.Primitives.Election.get -> NCode.Coordination.Primitive!
+static NCode.Coordination.Primitives.Lease.get -> NCode.Coordination.Primitive!
+static NCode.Coordination.Primitives.Membership.get -> NCode.Coordination.Primitive!
+static NCode.Coordination.Primitives.Notification.get -> NCode.Coordination.Primitive!
+static NCode.Coordination.Primitives.Occurrence.get -> NCode.Coordination.Primitive!
+static NCode.Coordination.Primitives.Record.get -> NCode.Coordination.Primitive!
+static NCode.Coordination.Primitives.RecordWatch.get -> NCode.Coordination.Primitive!
+static NCode.Coordination.Primitives.Semaphore.get -> NCode.Coordination.Primitive!
+static NCode.Coordination.Primitives.Sequence.get -> NCode.Coordination.Primitive!
+static NCode.Coordination.Primitives.Session.get -> NCode.Coordination.Primitive!
+static NCode.Coordination.Primitives.Set.get -> NCode.Coordination.Primitive!
+static NCode.Coordination.Primitives.Transaction.get -> NCode.Coordination.Primitive!
