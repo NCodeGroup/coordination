@@ -2,7 +2,7 @@
 
 - **Status:** Draft
 - **Date:** 2026-11-24
-- **Issue:** _none yet; the founding issue is filed when the repository is published_
+- **Issue:** [#4](https://github.com/NCodeGroup/coordination/issues/4)
 - **Authors:** NCode Group
 
 ## Summary
