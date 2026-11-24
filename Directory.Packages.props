@@ -1,5 +1,4 @@
 <Project>
-
   <!-- Central package management: versions live here, PackageReference items carry no Version. -->
   <PropertyGroup>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
@@ -18,7 +17,5 @@
     <PackageVersion Include="Nerdbank.GitVersioning" Version="3.10.94" />
   </ItemGroup>
 
-  <ItemGroup>
-  </ItemGroup>
-
+  <ItemGroup></ItemGroup>
 </Project>
