@@ -16,6 +16,8 @@ offers. Every document in `docs/` has a line here.
 - [designs/](designs/_template.md): design documents for work bigger than one plan, started from
   [designs/_template.md](designs/_template.md). Each keeps its status current, and its decisions become records in
   `decisions/` as its phases land.
+- [provenance.md](provenance.md): the sources consulted outside a decision record, as
+  [CLEAN-ROOM.md](../CLEAN-ROOM.md) requires.
 - [metrics.md](metrics.md): the metrics and traces catalog, every meter, instrument, attribute, activity source and
   span the project defines, which dashboards and alerts are built against.
 - [api-compatibility.md](api-compatibility.md): how the public API of the published packages evolves and is checked, and how the package validation baseline is kept.

@@ -65,3 +65,10 @@ records are indexed in [project-template/](project-template/README.md).
 
 | ADR | Decision | Status |
 | --- | --- | --- |
+| [1000](1000-ncode-coordination-is-a-general-coordination-library-for-the-nodes-of-a-cluster.md) | NCode.Coordination is a general coordination library for the nodes of a cluster | Proposed |
+| [1001](1001-designs-come-from-specifications-papers-and-documentation-and-no-other-projects-source-is-read.md) | Designs come from specifications, papers and documentation, and no other project's source is read | Proposed |
+| [1002](1002-primitives-declare-guarantees-and-the-composition-refuses-a-requirement-no-provider-meets.md) | Primitives declare guarantees, and the composition refuses a requirement no provider meets | Proposed |
+| [1003](1003-providers-are-named-for-the-protocol-they-speak-and-carry-a-profile-per-vendor.md) | Providers are named for the protocol they speak and carry a profile per vendor | Proposed |
+| [1004](1004-a-node-holds-a-session-that-binds-its-leases-and-membership-and-every-lease-grant-carries-a-fencing-token.md) | A node holds a session that binds its leases and membership, and every lease grant carries a fencing token | Proposed |
+| [1005](1005-notifications-carry-a-sequence-and-tell-a-subscriber-to-resync-and-the-product-brokers-no-messages.md) | Notifications carry a sequence and tell a subscriber to resync, and the product brokers no messages | Proposed |
+| [1006](1006-every-provider-passes-one-conformance-kit-that-checks-recorded-histories-against-each-guarantee.md) | Every provider passes one conformance kit that checks recorded histories against each guarantee | Proposed |

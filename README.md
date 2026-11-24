@@ -1,6 +1,29 @@
 # NCode.Coordination
 
-Coordination for the nodes of a cluster: sessions, leases, records, counters and notifications over interchangeable providers with declared guarantees.
+Coordination for the nodes of a cluster, for .NET: who is alive, who owns what, what happened once, what changed, and
+how much was used. One programming model over interchangeable providers, each speaking a standard protocol, each
+declaring the guarantees it keeps and proving them against one conformance kit.
+
+NCode.Coordination is not a database, a cache or a message broker. It holds the small, often short-lived state that
+the nodes of one deployment must agree on, and leaves durable data to a database and durable messaging to a broker.
+
+| Primitive             | Answers                                                          | Familiar from                               |
+| --------------------- | ---------------------------------------------------------------- | ------------------------------------------- |
+| Sessions & membership | Which nodes are alive, where they are, and what dies with a node | ZooKeeper sessions, Consul catalog, Orleans |
+| Partition ownership   | Which node owns each partition of a workload                     | Akka cluster sharding, rendezvous hashing   |
+| Leases & semaphores   | Who owns a resource now, proven by a fencing token               | Chubby locks, etcd leases                   |
+| Elections & claims    | Which node leads a role, or runs this interval's pass            | Akka cluster singleton, ZooKeeper recipes   |
+| Records               | A small versioned value, changed by compare-and-swap             | etcd revisions, Consul modify index         |
+| Transactions          | Several records changed together, on conditions                  | etcd transactions, ZooKeeper multi          |
+| Sequences             | Unique, increasing numbers across the cluster                    | ZooKeeper sequential nodes                  |
+| Occurrences           | Whether something already happened, at most once                 | Replay caches                               |
+| Sets                  | Which members belong to a key, each with its own expiry          | Secondary indexes                           |
+| Counters              | How much was used in a window, checked against limits            | Rate limiters                               |
+| Notifications         | What changed, with an explicit signal when a node missed it      | etcd watches, ZooKeeper watches             |
+
+The design is in [docs/designs/coordination.md](docs/designs/coordination.md), and every design here is sourced as
+[CLEAN-ROOM.md](CLEAN-ROOM.md) says: from specifications, papers and public documentation, never another project's
+source code.
 
 [//]: # "Badges: to show the CI status, add this line below, with the repository's owner and name:"
 [//]: # "[![CI](https://github.com/OWNER/REPO/actions/workflows/ci.yml/badge.svg)](https://github.com/OWNER/REPO/actions/workflows/ci.yml)"

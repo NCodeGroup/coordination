@@ -1,0 +1,255 @@
+# Design: NCode.Coordination
+
+- **Status:** Draft
+- **Date:** 2026-11-24
+- **Issue:** _none yet; the founding issue is filed when the repository is published_
+- **Authors:** NCode Group
+
+## Summary
+
+NCode.Coordination is a general-purpose .NET library that gives the nodes of a cluster the agreement they need on
+liveness, ownership, one-time events, change and usage, through one programming model over interchangeable providers.
+Each provider speaks a standard protocol, declares the guarantees it keeps, and proves them against one conformance
+kit. The central decisions are the product's scope ([D1](#d1-scope)), its clean-room sourcing ([D2](#d2-clean-room)),
+declared guarantees ([D3](#d3-guarantees)), protocol-named providers ([D4](#d4-providers)), sessions with fencing
+tokens ([D5](#d5-sessions-and-fencing)), sequenced notifications without brokering ([D6](#d6-notifications)) and one
+conformance kit ([D7](#d7-conformance)).
+
+## Goals and Non-Goals
+
+**Goals**
+
+- **G1.** Every coordination need of NCode.Identity, the first consumer, is met by a primitive or a recipe, with the
+  guarantee that need relies on stated and tested ([Context](#context)).
+- **G2.** The coordination problems services commonly meet are covered whether or not the first consumer meets them:
+  semaphores, read-write locks, barriers, partition ownership, a service registry, transactions, sequences, smoother
+  rate limiters, single-flight.
+- **G3.** A host chooses its provider from the servers it already runs — a RESP server, PostgreSQL, etcd, Consul — and
+  a host with one node needs none.
+- **G4.** A feature bound to a provider that cannot keep its required guarantee fails at startup, never in production.
+- **G5.** Every guarantee a provider declares is verified against a real server, under concurrency and injected faults.
+- **G6.** Every design is traceable to published specifications, papers or documentation, and no other project's source
+  is read.
+
+**Non-goals**
+
+- **A general message broker.** Durable queues, routing, consumer groups, retries and sagas belong to a broker or a job
+  dispatcher; notifications here are coordination signals.
+- **A database or a cache.** Records are small and few per key, and coordination state is never the only copy of
+  business data.
+- **Actors, RPC between nodes, DNS service discovery or configuration management.** Orleans, Akka and Pekko inform the
+  membership and singleton concepts; their programming models are not reproduced.
+- **A new storage server.** The product does not reimplement Redis, Valkey, etcd or ZooKeeper; a native server is a
+  late, optional phase taken only for a need no provider meets.
+
+## Context
+
+A service that runs as several nodes must agree on a small amount of state. Getting it wrong is a correctness or
+security defect: a token accepted twice, a refresh token presented twice, a background pass run by two nodes at once, a
+settings change one node never heard about.
+
+**The first consumer.** NCode.Identity, an OpenID Connect and OAuth 2.0 server family, builds these agreements from
+five ports — an expiring key set, value set, index set, counter set and a best-effort broadcaster — with an in-process
+and a Valkey adapter. Its needs are the minimum the first stable release meets:
+
+| Identity need                                                                              | Primitive                  |
+| ------------------------------------------------------------------------------------------ | -------------------------- |
+| DPoP proof and client-assertion `jti` accepted once (RFC 9449, RFC 7523)                    | Occurrences                |
+| Server-issued DPoP nonces recognized by any node                                           | Occurrences                |
+| A login transaction redeemed exactly once                                                  | Records (take)             |
+| A session updated by compare-and-swap, with a sliding expiry                               | Records                    |
+| Sessions found by the provider's `sid` or `sub` for back-channel logout                    | Sets                       |
+| A refresh token presented at most once across nodes                                        | Leases with fencing tokens |
+| Rate limits and daily quotas counted across nodes                                          | Counters                   |
+| A periodic pass (grant pruning, session termination, key rollover) run by one node per interval | Claims                |
+| Tenant, team, platform-settings and master-key changes reaching every node                 | Notifications              |
+| A node that may have missed a change knowing so, and revalidating                          | Notifications (resync)     |
+
+Several of these are built on ports not shaped for them: "one node runs each interval" is a create-only key whose
+lifetime each feature tunes; a refresh lease is a value whose owner token is compared on release; a missed broadcast is
+assumed whenever a connection is restored. Each construction is correct only under conditions the port does not state.
+
+**Beyond the first consumer.** Other services meet problems Identity does not yet:
+
+| Need                                                                              | Primitive or recipe                  |
+| --------------------------------------------------------------------------------- | ------------------------------------ |
+| At most N holders of a resource, such as connections to a fragile system          | Semaphores                           |
+| Many readers or one writer                                                        | Read-write locks                     |
+| Every node of a group reaching a point before any proceeds                        | Barriers                             |
+| Which node owns each partition of a workload, rebalanced as nodes come and go      | Partition ownership                  |
+| Nodes finding each other's addresses and metadata                                 | Membership (service registry)        |
+| Configuration that nodes read and watch under a prefix                            | Records with prefix watches          |
+| Several keys changed together or not at all, on conditions                        | Transactions                         |
+| Unique, increasing numbers across the cluster                                     | Sequences                            |
+| Smoother limits than a fixed window                                               | Sliding-window and token-bucket rate limiters |
+| One fetch of an expensive value while other nodes wait for it                     | Single-flight                        |
+
+**Servers differ in what they keep.** A single-primary server with asynchronous replicas is linearizable until it
+fails over and may then lose acknowledged writes; a consensus store keeps its promises across failover; a
+multi-threaded RESP server may run a script atomically only in a mode it must be started with; a coordination server
+with no replicas loses a member's keys when that member crashes. The design must make these differences visible.
+
+## Design
+
+### Keyspace
+
+Every primitive lives in a keyspace: a cluster name, then structured segments (for Identity, a cell and a tenant). A key
+is a sequence of typed segments, never a string the caller concatenates, so two keys never collide by accident and a
+provider encodes them for its own server. A key may name a partition segment, which a provider uses to keep related
+keys together where atomicity across them needs it.
+
+### Primitives
+
+- **Session.** A node opens a session with a time to live and keeps it alive. When the session ends, by a graceful
+  close or by expiry, everything bound to it ends too.
+- **Membership.** The live sessions of a cluster, each with the node's identity, address and metadata, readable and
+  watchable. Partition ownership is a recipe over it: each partition goes to one live member by a deterministic
+  assignment, and moves only when membership changes.
+- **Lease.** Exclusive ownership of a named resource for a bounded time, held by a session or by an owner token. Every
+  grant carries a fencing token that increases with each grant of that resource.
+- **Semaphore.** A lease with N slots, each slot with its own fencing token.
+- **Election.** A lease on a role, with followers watching it; the leader's term is its fencing token.
+- **Claim.** At most one holder per named window, such as the pass of one interval, expiring with the window.
+- **Record.** A small value under a key, with a revision that changes on every write: create-if-absent, read,
+  compare-and-swap on revision, compare-and-delete, take, and an expiry or a session binding. Records under a prefix
+  can be listed and watched.
+- **Transaction.** Conditions on several records' revisions or values, then one set of writes when they hold and
+  another when they do not, within one partition where the provider requires it.
+- **Occurrence.** A key recorded at most once until it expires: create-if-absent with no value. It is separate from
+  records because it is the hottest path and fails closed when the provider cannot answer.
+- **Set.** Members under a key, each with its own expiry: add, remove, list, clear.
+- **Counter.** A count under a key that spans one window: increment, read, reset, and an ordered batch that stops at
+  the first counter over its limit.
+- **Sequence.** A named counter that hands out unique, strictly increasing numbers and never resets.
+- **Notification.** A message on a topic, delivered to every subscribed node at most once, numbered by a per-topic
+  sequence, and followed by a resync signal whenever a subscriber may have missed one. A watch on records is the same
+  shape, with the records' revision as the sequence.
+
+Recipes over the primitives: locks, read-write locks, barriers, singletons, partition ownership, single-flight, rate
+limiters and cache invalidation.
+
+### Guarantees
+
+Each primitive's operations carry guarantees that a provider declares and the conformance kit verifies:
+
+| Dimension             | Levels                                                                                    |
+| --------------------- | ----------------------------------------------------------------------------------------- |
+| Consistency           | Linearizable across failover; linearizable until failover; local to one process            |
+| Durability            | Volatile; asynchronously replicated; durable on a quorum or disk                          |
+| Expiry authority      | The server's clock; the caller's clock                                                    |
+| Notification delivery | At most once with gap detection; at most once                                             |
+
+A feature declares the guarantees it requires; the composition refuses at startup to bind it to a provider that does
+not declare them. A host may bind different primitives, or keyspaces, to different providers. A provider that cannot
+keep a primitive honestly declares it unsupported. The in-process provider implements every primitive.
+
+### Packages
+
+The shape follows the transport model of messaging libraries such as MassTransit: one programming model, providers that
+plug in through a configurator of their own, an in-process provider, and one test harness.
+
+| Package                           | Holds                                                                          |
+| --------------------------------- | ------------------------------------------------------------------------------ |
+| `NCode.Coordination.Abstractions` | The primitives' contracts, keys, guarantees and requirements                   |
+| `NCode.Coordination`              | Composition, requirement checking, recipes, telemetry, the in-process provider  |
+| `NCode.Coordination.Hosting`      | The session bound to the host's lifetime, graceful leave, health checks        |
+| `NCode.Coordination.Resp`         | The RESP provider, with Valkey, Redis and Garnet profiles                       |
+| `NCode.Coordination.PostgreSql`   | The PostgreSQL provider                                                        |
+| `NCode.Coordination.Etcd`         | The etcd v3 provider                                                           |
+| `NCode.Coordination.Consul`       | The Consul provider                                                            |
+| `NCode.Coordination.Testing`      | The conformance kit, fault injection and the history checker                   |
+
+The core depends on the `Microsoft.Extensions` abstractions only. A provider depends on its protocol's client library,
+consumed as a package through its public API.
+
+## Security Analysis
+
+| Threat | Mitigation | What remains |
+| --- | --- | --- |
+| A replayed one-time value is accepted because the provider lost the occurrence on failover | Occurrences declare their consistency; a feature requires what it needs; values expire with the token they guard | Loss within the declared bound, accepted by the feature that chose the provider |
+| A paused node writes after its lease passed to another | Fencing tokens, checked by the resource that takes the write | A resource that does not check the token |
+| A tenant reads or overwrites another's coordination state on a shared server | Structured keys with the tenant as a segment; provider credentials scoped to the cluster's keyspace | A server shared with untrusted clients holding the same credentials |
+| Coordination traffic is read or altered on the network | Providers require TLS outside local development, and authenticate to the server | Servers configured without TLS by their operator |
+| A value in coordination state discloses a secret | Values are opaque bytes the caller encrypts where they must not be readable | Metadata such as key names and sizes |
+
+## Failure Modes
+
+| Failure | Impact | Detection | Response |
+| --- | --- | --- | --- |
+| The provider is unreachable | Operations throw; occurrences fail closed | Health check, operation metrics | Callers fail their request; the host reports not ready |
+| A node crashes | Its session expires; its leases and ephemeral records end with it | Membership watch | Another node takes the leases once the session's time to live passes |
+| A node pauses past its session's time to live | Its leases pass to others while it believes it holds them | Fencing token refused by the resource | The paused node's writes are refused; it reacquires |
+| A subscriber misses notifications | Its caches may be stale | A gap in the topic's sequence, or a reconnect | The resync signal; the handler rereads what the topic covers |
+| The server fails over and loses acknowledged writes | Occurrences, counters or leases written just before are lost | Declared in the provider's guarantees; verified by the conformance kit | Features that cannot accept it require a provider that keeps its writes across failover |
+
+## Decisions
+
+### D1. Scope
+
+NCode.Coordination is a general coordination library for the nodes of a cluster, with its first consumer as a floor,
+not a ceiling. [ADR-1000](../decisions/1000-ncode-coordination-is-a-general-coordination-library-for-the-nodes-of-a-cluster.md)
+
+### D2. Clean room
+
+Designs come from specifications, papers and documentation, and no other project's source is read.
+[ADR-1001](../decisions/1001-designs-come-from-specifications-papers-and-documentation-and-no-other-projects-source-is-read.md),
+[CLEAN-ROOM.md](../../CLEAN-ROOM.md)
+
+### D3. Guarantees
+
+Primitives declare guarantees, and the composition refuses a requirement no provider meets.
+[ADR-1002](../decisions/1002-primitives-declare-guarantees-and-the-composition-refuses-a-requirement-no-provider-meets.md)
+
+### D4. Providers
+
+Providers are named for the protocol they speak and carry a profile per vendor.
+[ADR-1003](../decisions/1003-providers-are-named-for-the-protocol-they-speak-and-carry-a-profile-per-vendor.md)
+
+### D5. Sessions and fencing
+
+A node holds a session that binds its leases and membership, and every lease grant carries a fencing token.
+[ADR-1004](../decisions/1004-a-node-holds-a-session-that-binds-its-leases-and-membership-and-every-lease-grant-carries-a-fencing-token.md)
+
+### D6. Notifications
+
+Notifications carry a sequence and tell a subscriber to resync, and the product brokers no messages.
+[ADR-1005](../decisions/1005-notifications-carry-a-sequence-and-tell-a-subscriber-to-resync-and-the-product-brokers-no-messages.md)
+
+### D7. Conformance
+
+Every provider passes one conformance kit that checks recorded histories against each guarantee.
+[ADR-1006](../decisions/1006-every-provider-passes-one-conformance-kit-that-checks-recorded-histories-against-each-guarantee.md)
+
+## Open Questions
+
+- **Q1.** How NCode.Identity consumes the packages while both repositories change together: prerelease packages from a
+  feed, or a source dependency.
+- **Q2.** Whether the etcd provider takes a published .NET client package or generates its own client from the etcd
+  API's published interface definitions, and how that sits with the clean-room policy.
+- **Q3.** Which capabilities beyond NCode.Identity's needs the first stable release carries, and which follow it.
+- **Q4.** Whether expiry is evaluated on the server's clock for every provider that can, or on the caller's where a
+  feature needs an absolute instant.
+
+## Rollout and Phases
+
+1. **Foundation.** The repository, this design, the clean-room policy and the founding decisions.
+2. **Model.** The abstractions, the in-process provider and the conformance kit with its history checker.
+3. **RESP.** The RESP provider with Valkey and Garnet profiles, covering every NCode.Identity need, with gap-detecting
+   notifications.
+4. **PostgreSQL.** A provider that needs no infrastructure beyond the database a service already runs.
+5. **First-consumer adoption.** NCode.Identity depends on NCode.Coordination and retires its shared-state packages;
+   its interval passes and refresh lease become claims and fenced leases. This phase is planned and landed in
+   NCode.Identity.
+6. **etcd and Consul.** Providers whose servers keep sessions, leases and watches natively, linearizable across
+   failover.
+7. **Native server, if needed.** A coordination server of the product's own, built from the published consensus
+   literature, only for a need no provider meets.
+
+## References
+
+- Burrows, "The Chubby lock service for loosely-coupled distributed systems", OSDI 2006
+- Hunt, Konar, Junqueira, Reed, "ZooKeeper: Wait-free coordination for Internet-scale systems", USENIX ATC 2010
+- Gray, Cheriton, "Leases: An efficient fault-tolerant mechanism for distributed file cache consistency", SOSP 1989
+- Herlihy, Wing, "Linearizability: A correctness condition for concurrent objects", TOPLAS 1990
+- Kleppmann, "Designing Data-Intensive Applications", O'Reilly 2017
+- [Provenance](../provenance.md): the documentation consulted for this design

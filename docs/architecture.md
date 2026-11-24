@@ -8,7 +8,7 @@ requirements.
 
 ## Components
 
-Not described yet.
+No package is built yet; [the design](designs/coordination.md#packages) names the packages its phases build.
 
 ## Design Rules
 
