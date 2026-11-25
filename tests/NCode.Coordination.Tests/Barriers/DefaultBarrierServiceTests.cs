@@ -165,6 +165,31 @@ public sealed class DefaultBarrierServiceTests
     }
 
     [Fact]
+    public async Task ArriveAndWaitAsync_WhenTheWatchResyncs_RelistsTheArrivals()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var time = InProcessTesting.CreateTime();
+        await using var services = RecipeTesting.Build(time);
+        var records = services.GetRequiredService<IRecordService>();
+        var barrier = CreateBarrier();
+        var arrival = RecipeTesting.Keyspace.CreateKey("barrier", "b");
+        var resyncing = new ResyncingWatches(records, arrival);
+        var barriers = new DefaultBarrierService(records, resyncing);
+        var terms = new BarrierTerms(2, RecordLifetime.Persistent);
+        var party = KeySegment.FromString("a");
+
+        var passed = await barriers.ArriveAndWaitAsync(
+            barrier,
+            party,
+            terms,
+            null,
+            cancellationToken
+        );
+
+        Assert.True(passed);
+    }
+
+    [Fact]
     public async Task ArriveAndWaitAsync_WhenTheStreamEndsWithoutAFailure_Throws()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
@@ -210,6 +235,41 @@ public sealed class DefaultBarrierServiceTests
             await Task.Yield();
 
             yield break;
+        }
+    }
+
+    private sealed class ResyncingWatches(IRecordService records, CoordinationKey arrival)
+        : IRecordWatchService
+    {
+        public async IAsyncEnumerable<RecordChange> WatchKeyAsync(
+            CoordinationKey key,
+            Revision? after,
+            OperationOptions? options,
+            [EnumeratorCancellation] CancellationToken cancellationToken
+        )
+        {
+            await Task.Yield();
+
+            yield break;
+        }
+
+        public async IAsyncEnumerable<RecordChange> WatchPrefixAsync(
+            CoordinationKey prefix,
+            Revision? after,
+            OperationOptions? options,
+            [EnumeratorCancellation] CancellationToken cancellationToken
+        )
+        {
+            var written = await records.CreateAsync(
+                arrival,
+                ReadOnlyMemory<byte>.Empty,
+                RecordLifetime.Persistent,
+                options,
+                cancellationToken
+            );
+            var revision = Assert.IsType<Revision>(written.Revision);
+
+            yield return RecordChange.Resync(revision);
         }
     }
 }

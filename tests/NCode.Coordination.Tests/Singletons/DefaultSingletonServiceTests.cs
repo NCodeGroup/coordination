@@ -98,6 +98,40 @@ public sealed class DefaultSingletonServiceTests
     }
 
     [Fact]
+    public async Task RunAsync_WhenTheWatchFails_CancelsTheWorkAndCampaignsAgain()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var time = InProcessTesting.CreateTime();
+        await using var services = RecipeTesting.Build(time);
+        var elections = services.GetRequiredService<IElectionService>();
+        var failing = new FailingWatchElections(elections);
+        var singletons = new DefaultSingletonService(failing);
+        var role = CreateRole();
+        var session = await RecipeTesting.OpenSessionAsync(services, cancellationToken);
+        var candidate = new SingletonCandidate(session);
+        var calls = new int[1];
+        var firstToken = CancellationToken.None;
+
+        async ValueTask Work(Leadership leadership, CancellationToken token)
+        {
+            if (Interlocked.Increment(ref calls[0]) != 1)
+            {
+                return;
+            }
+
+            firstToken = token;
+            await Task.Delay(Timeout.InfiniteTimeSpan, token);
+        }
+
+        var completed = await singletons.RunAsync(role, candidate, Work, null, cancellationToken);
+        var totalCalls = Volatile.Read(ref calls[0]);
+
+        Assert.True(completed);
+        Assert.Equal(2, totalCalls);
+        Assert.True(firstToken.IsCancellationRequested);
+    }
+
+    [Fact]
     public async Task RunAsync_WhenTheSessionHasEnded_ReturnsFalse()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
@@ -250,6 +284,55 @@ public sealed class DefaultSingletonServiceTests
             await Task.Yield();
 
             yield break;
+        }
+    }
+
+    private sealed class FailingWatchElections(IElectionService inner) : IElectionService
+    {
+        public ValueTask<ElectionResult> TryLeadAsync(
+            CoordinationKey role,
+            ReadOnlyMemory<byte> value,
+            LeaseTerms terms,
+            OperationOptions? options,
+            CancellationToken cancellationToken
+        ) => inner.TryLeadAsync(role, value, terms, options, cancellationToken);
+
+        public ValueTask<bool> RenewAsync(
+            Leadership leadership,
+            TimeToLive timeToLive,
+            OperationOptions? options,
+            CancellationToken cancellationToken
+        ) => inner.RenewAsync(leadership, timeToLive, options, cancellationToken);
+
+        public ValueTask<bool> ResignAsync(
+            Leadership leadership,
+            OperationOptions? options,
+            CancellationToken cancellationToken
+        ) => inner.ResignAsync(leadership, options, cancellationToken);
+
+        public ValueTask<ElectionView> ReadAsync(
+            CoordinationKey role,
+            OperationOptions? options,
+            CancellationToken cancellationToken
+        ) => inner.ReadAsync(role, options, cancellationToken);
+
+        public async IAsyncEnumerable<ElectionView> WatchAsync(
+            CoordinationKey role,
+            OperationOptions? options,
+            [EnumeratorCancellation] CancellationToken cancellationToken
+        )
+        {
+            await Task.Yield();
+
+            throw new CoordinationException(
+                CoordinationErrorCodes.Unavailable,
+                outcomeUnknown: false,
+                "The provider is unreachable."
+            );
+
+#pragma warning disable CS0162 // Unreachable code: the yield makes the method an iterator.
+            yield break;
+#pragma warning restore CS0162
         }
     }
 }
