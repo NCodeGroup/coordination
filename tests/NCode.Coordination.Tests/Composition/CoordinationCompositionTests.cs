@@ -310,6 +310,67 @@ public sealed class CoordinationCompositionTests : IDisposable
     }
 
     [Fact]
+    public async Task DisposeAsync_WhenAProviderDisposalThrows_DisposesTheRestAndRethrows()
+    {
+        var first = new ThrowingProvider(Declare("first"), new InvalidOperationException("first"));
+        var second = new AsyncDisposableProvider(Declare("second"));
+        var third = new AsyncDisposableProvider(Declare("third"));
+        var registrations = Register(
+            first,
+            new ProviderBinding("first") { Keyspace = new Keyspace("app", "first") }
+        );
+        registrations.ProviderFactories.Add(_ => second);
+        registrations.ProviderFactories.Add(_ => third);
+        registrations.Bindings.Add(
+            new ProviderBinding("second") { Keyspace = new Keyspace("app", "second") }
+        );
+        registrations.Bindings.Add(
+            new ProviderBinding("third") { Keyspace = new Keyspace("app", "third") }
+        );
+        var composition = new CoordinationComposition(registrations, Services);
+        Assert.Throws<CoordinationCompositionException>(composition.EnsureComposed);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            composition.DisposeAsync().AsTask()
+        );
+
+        Assert.Equal(1, first.Disposals);
+        Assert.Equal(1, second.Disposals);
+        Assert.Equal(1, third.Disposals);
+    }
+
+    [Fact]
+    public async Task DisposeAsync_WhenSeveralDisposalsThrow_ThrowsAggregate()
+    {
+        var first = new ThrowingProvider(Declare("first"), new InvalidOperationException("first"));
+        var second = new ThrowingProvider(Declare("second"), new ArgumentException("second"));
+        var third = new AsyncDisposableProvider(Declare("third"));
+        var registrations = Register(
+            first,
+            new ProviderBinding("first") { Keyspace = new Keyspace("app", "first") }
+        );
+        registrations.ProviderFactories.Add(_ => second);
+        registrations.ProviderFactories.Add(_ => third);
+        registrations.Bindings.Add(
+            new ProviderBinding("second") { Keyspace = new Keyspace("app", "second") }
+        );
+        registrations.Bindings.Add(
+            new ProviderBinding("third") { Keyspace = new Keyspace("app", "third") }
+        );
+        var composition = new CoordinationComposition(registrations, Services);
+        Assert.Throws<CoordinationCompositionException>(composition.EnsureComposed);
+
+        var aggregate = await Assert.ThrowsAsync<AggregateException>(() =>
+            composition.DisposeAsync().AsTask()
+        );
+
+        Assert.Equal(2, aggregate.InnerExceptions.Count);
+        Assert.IsType<InvalidOperationException>(aggregate.InnerExceptions[0]);
+        Assert.IsType<ArgumentException>(aggregate.InnerExceptions[1]);
+        Assert.Equal(1, third.Disposals);
+    }
+
+    [Fact]
     public void Dispose_DisposesTheDisposableProviders()
     {
         var service = Mocks.Create<IOccurrenceService>().Object;
@@ -358,6 +419,26 @@ public sealed class CoordinationCompositionTests : IDisposable
         public ValueTask ProbeAsync(CancellationToken cancellationToken) => ValueTask.CompletedTask;
 
         public void Dispose() => Disposals++;
+    }
+
+    private sealed class ThrowingProvider(ProviderDeclaration declaration, Exception exception)
+        : ICoordinationProvider,
+            IAsyncDisposable
+    {
+        public int Disposals { get; private set; }
+
+        public ProviderDeclaration Declaration { get; } = declaration;
+
+        public object? GetPrimitiveService(Type serviceType) => null;
+
+        /// <inheritdoc />
+        public ValueTask ProbeAsync(CancellationToken cancellationToken) => ValueTask.CompletedTask;
+
+        public ValueTask DisposeAsync()
+        {
+            Disposals++;
+            return ValueTask.FromException(exception);
+        }
     }
 
     private sealed class AsyncDisposableProvider(ProviderDeclaration declaration)

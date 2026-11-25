@@ -67,7 +67,9 @@ keys.**
    keyspace's segments.
 9. **Provider lifetime.** The composition owns the providers it creates and disposes each one when the host stops,
    asynchronously when it can. It disposes every provider it created, also when the composition failed after creating
-   them, and a failed composition stays failed for the life of the container.
+   them. A provider whose disposal throws doesn't stop the others from being disposed; the exception is rethrown once
+   every provider is disposed, as an `AggregateException` when several throw. A failed composition stays failed for
+   the life of the container.
 10. **Telemetry.** The meter and the activity source are both named `NCode.Coordination`. One histogram,
     `ncode.coordination.operation.duration`, in seconds, records each operation, and one client span,
     `ncode.coordination.operation`, traces it. Their attributes are the provider, the primitive, the operation and the

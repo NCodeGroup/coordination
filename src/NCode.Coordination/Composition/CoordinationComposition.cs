@@ -1,6 +1,8 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using System.Runtime.ExceptionServices;
+
 namespace NCode.Coordination.Composition;
 
 /// <summary>
@@ -90,38 +92,76 @@ internal class CoordinationComposition(
     /// <inheritdoc />
     public async ValueTask DisposeAsync()
     {
+        List<Exception> exceptions = [];
         if (Composed.IsValueCreated)
         {
             foreach (var provider in Composed.Value.Created)
             {
-                if (provider is IAsyncDisposable asyncDisposable)
+                try
                 {
-                    await asyncDisposable.DisposeAsync().ConfigureAwait(false);
+                    if (provider is IAsyncDisposable asyncDisposable)
+                    {
+                        await asyncDisposable.DisposeAsync().ConfigureAwait(false);
+                    }
+                    else if (provider is IDisposable disposable)
+                    {
+                        disposable.Dispose();
+                    }
                 }
-                else if (provider is IDisposable disposable)
+                catch (Exception exception)
                 {
-                    disposable.Dispose();
+                    exceptions.Add(exception);
                 }
             }
         }
 
         GC.SuppressFinalize(this);
+        ThrowCaught(exceptions);
     }
 
     /// <inheritdoc />
     public void Dispose()
     {
+        List<Exception> exceptions = [];
         if (Composed.IsValueCreated)
         {
             foreach (var provider in Composed.Value.Created)
             {
-                if (provider is IDisposable disposable)
+                try
                 {
-                    disposable.Dispose();
+                    if (provider is IDisposable disposable)
+                    {
+                        disposable.Dispose();
+                    }
+                }
+                catch (Exception exception)
+                {
+                    exceptions.Add(exception);
                 }
             }
         }
 
         GC.SuppressFinalize(this);
+        ThrowCaught(exceptions);
+    }
+
+    /// <summary>
+    /// Throws what the disposals threw: nothing when none threw, the exception as it was thrown when one did, and an
+    /// aggregate of them when several did.
+    /// </summary>
+    /// <param name="exceptions">The exceptions the disposals threw.</param>
+    private static void ThrowCaught(List<Exception> exceptions)
+    {
+        if (exceptions.Count == 0)
+        {
+            return;
+        }
+
+        if (exceptions.Count == 1)
+        {
+            ExceptionDispatchInfo.Capture(exceptions[0]).Throw();
+        }
+
+        throw new AggregateException(exceptions);
     }
 }
