@@ -48,6 +48,23 @@ public sealed class CoordinationFixedWindowLimiterTests
     }
 
     [Fact]
+    public async Task AcquireAsync_WhenTheWindowIsTheLongestAllowed_AcquiresThenDenies()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var time = InProcessTesting.CreateTime();
+        await using var services = RecipeTesting.Build(time);
+        var length = TimeSpan.FromDays(180);
+        var limit = new FixedWindowLimit(1, length);
+        using var limiter = CreateLimiter(services, time, limit);
+
+        using var first = await limiter.AcquireAsync(1, cancellationToken);
+        using var second = await limiter.AcquireAsync(1, cancellationToken);
+
+        Assert.True(first.IsAcquired);
+        Assert.False(second.IsAcquired);
+    }
+
+    [Fact]
     public async Task AcquireAsync_WhenTheWindowIsFull_DeniesWithTheTimeToTheWindowEnd()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
