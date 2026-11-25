@@ -89,6 +89,16 @@ NCode.Coordination.Keyspace.CreateKey(params System.Collections.Generic.IEnumera
 NCode.Coordination.Keyspace.Equals(NCode.Coordination.Keyspace? other) -> bool
 NCode.Coordination.Keyspace.Keyspace(string! cluster, params System.Collections.Generic.IEnumerable<NCode.Coordination.KeySegment!>! segments) -> void
 NCode.Coordination.Keyspace.Segments.get -> System.Collections.Immutable.ImmutableArray<NCode.Coordination.KeySegment!>
+NCode.Coordination.Operation
+NCode.Coordination.Operation.<Clone>$() -> NCode.Coordination.Operation!
+NCode.Coordination.Operation.Equals(NCode.Coordination.Operation? other) -> bool
+NCode.Coordination.Operation.Name.get -> string!
+NCode.Coordination.Operation.Operation(string! name) -> void
+NCode.Coordination.OperationDefinition
+NCode.Coordination.OperationDefinition.Dimensions.get -> System.Collections.Immutable.ImmutableArray<string!>
+NCode.Coordination.OperationDefinition.Operation.get -> NCode.Coordination.Operation!
+NCode.Coordination.OperationDefinition.OperationDefinition(NCode.Coordination.Operation! operation, NCode.Coordination.Primitive! primitive, params System.Collections.Generic.IEnumerable<string!>! dimensions) -> void
+NCode.Coordination.OperationDefinition.Primitive.get -> NCode.Coordination.Primitive!
 NCode.Coordination.OperationOptions
 NCode.Coordination.OperationOptions.Extensions.get -> System.Collections.Immutable.ImmutableDictionary<string!, string!>!
 NCode.Coordination.OperationOptions.Extensions.init -> void
@@ -158,6 +168,9 @@ override NCode.Coordination.KeySegment.ToString() -> string!
 override NCode.Coordination.Keyspace.Equals(object? obj) -> bool
 override NCode.Coordination.Keyspace.GetHashCode() -> int
 override NCode.Coordination.Keyspace.ToString() -> string!
+override NCode.Coordination.Operation.Equals(object? obj) -> bool
+override NCode.Coordination.Operation.GetHashCode() -> int
+override NCode.Coordination.Operation.ToString() -> string!
 override NCode.Coordination.OwnerToken.Equals(object? obj) -> bool
 override NCode.Coordination.OwnerToken.GetHashCode() -> int
 override NCode.Coordination.OwnerToken.ToString() -> string!
@@ -209,6 +222,8 @@ static NCode.Coordination.KeySegment.operator !=(NCode.Coordination.KeySegment? 
 static NCode.Coordination.KeySegment.operator ==(NCode.Coordination.KeySegment? left, NCode.Coordination.KeySegment? right) -> bool
 static NCode.Coordination.Keyspace.operator !=(NCode.Coordination.Keyspace? left, NCode.Coordination.Keyspace? right) -> bool
 static NCode.Coordination.Keyspace.operator ==(NCode.Coordination.Keyspace? left, NCode.Coordination.Keyspace? right) -> bool
+static NCode.Coordination.Operation.operator !=(NCode.Coordination.Operation? left, NCode.Coordination.Operation? right) -> bool
+static NCode.Coordination.Operation.operator ==(NCode.Coordination.Operation? left, NCode.Coordination.Operation? right) -> bool
 static NCode.Coordination.OwnerToken.operator !=(NCode.Coordination.OwnerToken? left, NCode.Coordination.OwnerToken? right) -> bool
 static NCode.Coordination.OwnerToken.operator ==(NCode.Coordination.OwnerToken? left, NCode.Coordination.OwnerToken? right) -> bool
 static NCode.Coordination.Primitive.operator !=(NCode.Coordination.Primitive? left, NCode.Coordination.Primitive? right) -> bool
