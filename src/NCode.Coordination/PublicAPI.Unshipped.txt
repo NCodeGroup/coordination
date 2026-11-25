@@ -22,6 +22,12 @@ NCode.Coordination.FixedWindowLimit.PermitLimit.get -> int
 NCode.Coordination.FixedWindowLimit.Window.get -> System.TimeSpan
 NCode.Coordination.IBarrierService
 NCode.Coordination.IBarrierService.ArriveAndWaitAsync(NCode.Coordination.CoordinationKey! barrier, NCode.Coordination.KeySegment! participant, NCode.Coordination.BarrierTerms! terms, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<bool>
+NCode.Coordination.ICacheInvalidationHandler
+NCode.Coordination.ICacheInvalidationHandler.ClearAsync(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
+NCode.Coordination.ICacheInvalidationHandler.InvalidateAsync(System.ReadOnlyMemory<byte> entry, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
+NCode.Coordination.ICacheInvalidationService
+NCode.Coordination.ICacheInvalidationService.InvalidateAsync(NCode.Coordination.CoordinationKey! topic, System.ReadOnlyMemory<byte> entry, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
+NCode.Coordination.ICacheInvalidationService.RunAsync(NCode.Coordination.CoordinationKey! topic, NCode.Coordination.ICacheInvalidationHandler! handler, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
 NCode.Coordination.ILockService
 NCode.Coordination.ILockService.AcquireAsync(NCode.Coordination.CoordinationKey! resource, NCode.Coordination.LeaseTerms! terms, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.LeaseGrant?>
 NCode.Coordination.InProcessCoordinationBuilderExtensions
