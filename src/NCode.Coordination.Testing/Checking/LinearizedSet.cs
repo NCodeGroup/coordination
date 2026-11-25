@@ -40,7 +40,7 @@ internal sealed class LinearizedSet : IEquatable<LinearizedSet>
     /// </summary>
     /// <param name="index">The index of a call.</param>
     /// <returns>True when the set holds the index.</returns>
-    public bool Contains(int index) => (Words[index >> 6] & (1UL << (index & 63))) != 0;
+    public bool Contains(int index) => (Words[index / WordBits] & (1UL << (index % WordBits))) != 0;
 
     /// <summary>
     /// Creates a set that holds this set's indexes and one more, leaving this set as it was.
@@ -50,7 +50,7 @@ internal sealed class LinearizedSet : IEquatable<LinearizedSet>
     public LinearizedSet Add(int index)
     {
         ulong[] words = [.. Words];
-        words[index >> 6] |= 1UL << (index & 63);
+        words[index / WordBits] |= 1UL << (index % WordBits);
 
         return new LinearizedSet(words);
     }
