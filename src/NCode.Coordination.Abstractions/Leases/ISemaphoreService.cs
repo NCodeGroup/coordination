@@ -16,7 +16,8 @@ public interface ISemaphoreService
     /// </summary>
     /// <remarks>
     /// The operation <see cref="Operations.SemaphoreTryAcquire"/>. It never waits: the result is full when every slot
-    /// is held, and a capacity conflict when the holders use another capacity. The capacity is 1 to
+    /// is held, and a capacity conflict when the holders use another capacity.
+    /// Acquiring again with the session of a grant already held returns that grant. The capacity is 1 to
     /// <see cref="CoordinationLimits.MaxSemaphoreCapacity"/>, else <see cref="ArgumentOutOfRangeException"/>. The
     /// fencing token of the slot is greater than every earlier grant's of that slot.
     /// </remarks>
