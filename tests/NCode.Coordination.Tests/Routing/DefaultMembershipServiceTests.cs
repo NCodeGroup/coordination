@@ -19,11 +19,8 @@ public sealed class DefaultMembershipServiceTests : IDisposable
     public async Task JoinAsync_WhenBound_ReturnsTheProvidersResult()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        var member = new Member(
-            new SessionId(TestComposition.Keyspace, "1"),
-            "node-1",
-            "10.0.0.4:5000"
-        );
+        var sessionId = new SessionId(TestComposition.Keyspace, "1");
+        var member = new Member(sessionId, "node-1", "10.0.0.4:5000");
         var mock = Mocks.Create<IMembershipService>();
         mock.Setup(x => x.JoinAsync(TestComposition.Key, member, null, cancellationToken))
             .ReturnsAsync(MembershipJoinStatus.Joined)
@@ -43,11 +40,8 @@ public sealed class DefaultMembershipServiceTests : IDisposable
         var mock = Mocks.Create<IMembershipService>();
         await using var provider = BuildElsewhere(mock.Object);
         var service = provider.GetRequiredService<IMembershipService>();
-        var member = new Member(
-            new SessionId(TestComposition.Keyspace, "1"),
-            "node-1",
-            "10.0.0.4:5000"
-        );
+        var sessionId = new SessionId(TestComposition.Keyspace, "1");
+        var member = new Member(sessionId, "node-1", "10.0.0.4:5000");
 
         var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
             await service.JoinAsync(TestComposition.Key, member, null, cancellationToken)
@@ -83,7 +77,8 @@ public sealed class DefaultMembershipServiceTests : IDisposable
     public async Task ReadAsync_WhenBound_ReturnsTheProvidersResult()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        var expected = new MembershipView(TestComposition.Key, new Revision(5));
+        var revision = new Revision(5);
+        var expected = new MembershipView(TestComposition.Key, revision);
         var mock = Mocks.Create<IMembershipService>();
         mock.Setup(x => x.ReadAsync(TestComposition.Key, null, cancellationToken))
             .ReturnsAsync(expected)
@@ -104,10 +99,12 @@ public sealed class DefaultMembershipServiceTests : IDisposable
     public async Task WatchAsync_WhenBound_ReturnsTheProvidersResult()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        var view = new MembershipView(TestComposition.Key, new Revision(5));
+        var revision = new Revision(5);
+        var view = new MembershipView(TestComposition.Key, revision);
+        var stream = TestComposition.Stream(view);
         var mock = Mocks.Create<IMembershipService>();
         mock.Setup(x => x.WatchAsync(TestComposition.Key, null, cancellationToken))
-            .Returns(TestComposition.Stream(view))
+            .Returns(stream)
             .Verifiable();
         await using var provider = TestComposition.Build(Primitives.Membership, mock.Object);
         var service = provider.GetRequiredService<IMembershipService>();
@@ -118,27 +115,24 @@ public sealed class DefaultMembershipServiceTests : IDisposable
             items.Add(item);
         }
 
-        Assert.Same(view, Assert.Single(items));
+        var single = Assert.Single(items);
+        Assert.Same(view, single);
     }
 
     #endregion
 
     private static ServiceProvider BuildElsewhere(IMembershipService implementation)
     {
-        var declaration = new ProviderDeclaration(
-            TestComposition.ProviderName,
-            PrimitiveSupport.Supported(Primitives.Membership)
-        );
+        var support = PrimitiveSupport.Supported(Primitives.Membership);
+        var declaration = new ProviderDeclaration(TestComposition.ProviderName, support);
+        var binding = new ProviderBinding(TestComposition.ProviderName)
+        {
+            Keyspace = new Keyspace("elsewhere"),
+        };
         var services = new ServiceCollection();
         services.AddMetrics();
         services.AddCoordination(b =>
-            b.AddProvider(_ => new TestProvider(declaration, implementation))
-                .Bind(
-                    new ProviderBinding(TestComposition.ProviderName)
-                    {
-                        Keyspace = new Keyspace("elsewhere"),
-                    }
-                )
+            b.AddProvider(_ => new TestProvider(declaration, implementation)).Bind(binding)
         );
         return services.BuildServiceProvider();
     }

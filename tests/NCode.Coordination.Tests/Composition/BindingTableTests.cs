@@ -34,8 +34,10 @@ public sealed class BindingTableTests
         var entry = Bound("a", Primitives.Lease, null);
         var table = Build(entry);
 
-        Assert.Same(entry, table.Find(Primitives.Lease, Tenant));
-        Assert.Same(entry, table.Find(Primitives.Lease, Other));
+        var foundTenant = table.Find(Primitives.Lease, Tenant);
+        Assert.Same(entry, foundTenant);
+        var foundOther = table.Find(Primitives.Lease, Other);
+        Assert.Same(entry, foundOther);
     }
 
     [Fact]
@@ -44,9 +46,12 @@ public sealed class BindingTableTests
         var entry = Bound("a", Primitives.Lease, Cell);
         var table = Build(entry);
 
-        Assert.Same(entry, table.Find(Primitives.Lease, Cell));
-        Assert.Same(entry, table.Find(Primitives.Lease, Tenant));
-        Assert.Null(table.Find(Primitives.Lease, Prod));
+        var foundCell = table.Find(Primitives.Lease, Cell);
+        Assert.Same(entry, foundCell);
+        var foundTenant = table.Find(Primitives.Lease, Tenant);
+        Assert.Same(entry, foundTenant);
+        var foundProd = table.Find(Primitives.Lease, Prod);
+        Assert.Null(foundProd);
     }
 
     [Fact]
@@ -57,10 +62,14 @@ public sealed class BindingTableTests
         var fallback = Bound("c", Primitives.Lease, null);
         var table = Build(inner, fallback, outer);
 
-        Assert.Same(inner, table.Find(Primitives.Lease, Tenant));
-        Assert.Same(inner, table.Find(Primitives.Lease, Cell));
-        Assert.Same(outer, table.Find(Primitives.Lease, Prod));
-        Assert.Same(fallback, table.Find(Primitives.Lease, Other));
+        var foundTenant = table.Find(Primitives.Lease, Tenant);
+        Assert.Same(inner, foundTenant);
+        var foundCell = table.Find(Primitives.Lease, Cell);
+        Assert.Same(inner, foundCell);
+        var foundProd = table.Find(Primitives.Lease, Prod);
+        Assert.Same(outer, foundProd);
+        var foundOther = table.Find(Primitives.Lease, Other);
+        Assert.Same(fallback, foundOther);
     }
 
     [Fact]
@@ -70,15 +79,18 @@ public sealed class BindingTableTests
         var fallback = Bound("b", Primitives.Lease, null);
         var table = Build(scoped, fallback);
 
-        Assert.Same(fallback, table.Find(Primitives.Lease, Other));
+        var found = table.Find(Primitives.Lease, Other);
+        Assert.Same(fallback, found);
     }
 
     [Fact]
     public void Find_WhenNothingCovers_ReturnsNull()
     {
-        var table = Build(Bound("a", Primitives.Lease, Cell));
+        var entry = Bound("a", Primitives.Lease, Cell);
+        var table = Build(entry);
 
-        Assert.Null(table.Find(Primitives.Lease, Other));
+        var found = table.Find(Primitives.Lease, Other);
+        Assert.Null(found);
     }
 
     [Fact]
@@ -86,19 +98,23 @@ public sealed class BindingTableTests
     {
         var scoped = Bound("a", Primitives.Lease, Prod);
         var scopedOnly = Build(scoped);
-        Assert.Null(scopedOnly.Find(Primitives.Lease, null));
+        var foundInScopedOnly = scopedOnly.Find(Primitives.Lease, null);
+        Assert.Null(foundInScopedOnly);
 
         var fallback = Bound("b", Primitives.Lease, null);
         var table = Build(scoped, fallback);
-        Assert.Same(fallback, table.Find(Primitives.Lease, null));
+        var foundInTable = table.Find(Primitives.Lease, null);
+        Assert.Same(fallback, foundInTable);
     }
 
     [Fact]
     public void Find_WhenThePrimitiveDiffers_ReturnsNull()
     {
-        var table = Build(Bound("a", Primitives.Lease, null));
+        var entry = Bound("a", Primitives.Lease, null);
+        var table = Build(entry);
 
-        Assert.Null(table.Find(Primitives.Record, Prod));
+        var found = table.Find(Primitives.Record, Prod);
+        Assert.Null(found);
     }
 
     #endregion
@@ -110,10 +126,10 @@ public sealed class BindingTableTests
     {
         var failures = new List<string>();
 
-        BindingTable.Create(
-            [Bound("a", Primitives.Lease, null), Bound("b", Primitives.Lease, null)],
-            failures
-        );
+        var first = Bound("a", Primitives.Lease, null);
+        var second = Bound("b", Primitives.Lease, null);
+
+        BindingTable.Create([first, second], failures);
 
         Assert.Equal(
             ["The primitive 'lease' is bound twice by default: to 'a' and to 'b'."],
@@ -126,13 +142,11 @@ public sealed class BindingTableTests
     {
         var failures = new List<string>();
 
-        BindingTable.Create(
-            [
-                Bound("a", Primitives.Lease, Cell),
-                Bound("b", Primitives.Lease, new Keyspace("prod", "cell-1")),
-            ],
-            failures
-        );
+        var sameCell = new Keyspace("prod", "cell-1");
+        var first = Bound("a", Primitives.Lease, Cell);
+        var second = Bound("b", Primitives.Lease, sameCell);
+
+        BindingTable.Create([first, second], failures);
 
         Assert.Equal(
             [
@@ -147,14 +161,11 @@ public sealed class BindingTableTests
     {
         var failures = new List<string>();
 
-        BindingTable.Create(
-            [
-                Bound("a", Primitives.Lease, null),
-                Bound("b", Primitives.Lease, Prod),
-                Bound("c", Primitives.Lease, Cell),
-            ],
-            failures
-        );
+        var first = Bound("a", Primitives.Lease, null);
+        var second = Bound("b", Primitives.Lease, Prod);
+        var third = Bound("c", Primitives.Lease, Cell);
+
+        BindingTable.Create([first, second, third], failures);
 
         Assert.Empty(failures);
     }

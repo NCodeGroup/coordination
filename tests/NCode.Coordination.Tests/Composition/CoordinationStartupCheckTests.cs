@@ -19,15 +19,15 @@ public sealed class CoordinationStartupCheckTests : IDisposable
     private CoordinationStartupCheck Create(string bindingName)
     {
         var service = Mocks.Create<IOccurrenceService>().Object;
-        var declaration = new ProviderDeclaration(
-            "memory",
-            PrimitiveSupport.Supported(Primitives.Occurrence, Guarantees.Durable)
-        );
+        var support = PrimitiveSupport.Supported(Primitives.Occurrence, Guarantees.Durable);
+        var declaration = new ProviderDeclaration("memory", support);
         var provider = new TestProvider(declaration, service);
         var registrations = new CoordinationRegistrations();
         registrations.ProviderFactories.Add(_ => provider);
-        registrations.Bindings.Add(new ProviderBinding(bindingName));
-        return new CoordinationStartupCheck(new CoordinationComposition(registrations, Services));
+        var binding = new ProviderBinding(bindingName);
+        registrations.Bindings.Add(binding);
+        var composition = new CoordinationComposition(registrations, Services);
+        return new CoordinationStartupCheck(composition);
     }
 
     #region StartingAsync Tests

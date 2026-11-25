@@ -19,7 +19,8 @@ public sealed class DefaultCounterServiceTests : IDisposable
     public async Task IncrementAsync_WhenBound_ReturnsTheProvidersResult()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        var timeToLive = new TimeToLive(TimeSpan.FromMinutes(1));
+        var ttl = TimeSpan.FromMinutes(1);
+        var timeToLive = new TimeToLive(ttl);
         var mock = Mocks.Create<ICounterService>();
         mock.Setup(x =>
                 x.IncrementAsync(TestComposition.Key, 2, timeToLive, null, cancellationToken)
@@ -44,7 +45,8 @@ public sealed class DefaultCounterServiceTests : IDisposable
     public async Task IncrementAsync_WhenNoProviderIsBound_ThrowsUnsupported()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        var timeToLive = new TimeToLive(TimeSpan.FromMinutes(1));
+        var ttl = TimeSpan.FromMinutes(1);
+        var timeToLive = new TimeToLive(ttl);
         var mock = Mocks.Create<ICounterService>();
         await using var provider = BuildElsewhere(mock.Object);
         var service = provider.GetRequiredService<ICounterService>();
@@ -108,7 +110,8 @@ public sealed class DefaultCounterServiceTests : IDisposable
     public async Task IncrementBatchAsync_WhenBound_ReturnsTheProvidersResult()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        var timeToLive = new TimeToLive(TimeSpan.FromMinutes(1));
+        var ttl = TimeSpan.FromMinutes(1);
+        var timeToLive = new TimeToLive(ttl);
         IReadOnlyList<CounterIncrement> increments =
         [
             new CounterIncrement(TestComposition.Key, 1, 10, timeToLive),
@@ -145,20 +148,16 @@ public sealed class DefaultCounterServiceTests : IDisposable
 
     private static ServiceProvider BuildElsewhere(ICounterService implementation)
     {
-        var declaration = new ProviderDeclaration(
-            TestComposition.ProviderName,
-            PrimitiveSupport.Supported(Primitives.Counter)
-        );
+        var support = PrimitiveSupport.Supported(Primitives.Counter);
+        var declaration = new ProviderDeclaration(TestComposition.ProviderName, support);
+        var binding = new ProviderBinding(TestComposition.ProviderName)
+        {
+            Keyspace = new Keyspace("elsewhere"),
+        };
         var services = new ServiceCollection();
         services.AddMetrics();
         services.AddCoordination(b =>
-            b.AddProvider(_ => new TestProvider(declaration, implementation))
-                .Bind(
-                    new ProviderBinding(TestComposition.ProviderName)
-                    {
-                        Keyspace = new Keyspace("elsewhere"),
-                    }
-                )
+            b.AddProvider(_ => new TestProvider(declaration, implementation)).Bind(binding)
         );
         return services.BuildServiceProvider();
     }

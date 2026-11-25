@@ -17,9 +17,8 @@ public sealed class DefaultCoordinationBuilderTests
     public void AddProvider_AppendsTheFactoryAndReturnsTheBuilder()
     {
         var builder = CreateBuilder();
-        Func<IServiceProvider, ICoordinationProvider> factory = _ => new TestProvider(
-            new ProviderDeclaration("memory")
-        );
+        var declaration = new ProviderDeclaration("memory");
+        Func<IServiceProvider, ICoordinationProvider> factory = _ => new TestProvider(declaration);
 
         var result = builder.AddProvider(factory);
 
@@ -67,7 +66,8 @@ public sealed class DefaultCoordinationBuilderTests
     public void Require_AppendsTheRequirementAndReturnsTheBuilder()
     {
         var builder = CreateBuilder();
-        var requirement = new FeatureRequirement("replay", new Primitive("occurrence"));
+        var primitive = new Primitive("occurrence");
+        var requirement = new FeatureRequirement("replay", primitive);
 
         var result = builder.Require(requirement);
 
@@ -91,11 +91,8 @@ public sealed class DefaultCoordinationBuilderTests
     public void Define_AppendsTheDefinitionAndReturnsTheBuilder()
     {
         var builder = CreateBuilder();
-        var definition = new GuaranteeDefinition(
-            new Guarantee("custom.strong"),
-            "custom",
-            "A custom guarantee."
-        );
+        var guarantee = new Guarantee("custom.strong");
+        var definition = new GuaranteeDefinition(guarantee, "custom", "A custom guarantee.");
 
         var result = builder.Define(definition);
 

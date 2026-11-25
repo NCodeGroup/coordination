@@ -22,7 +22,9 @@ public sealed class PrimitiveServiceTypesTests
     [Fact]
     public void Find_ForAnUnknownPrimitive_ReturnsNull()
     {
-        var type = PrimitiveServiceTypes.Find(new Primitive("custom"));
+        var custom = new Primitive("custom");
+
+        var type = PrimitiveServiceTypes.Find(custom);
 
         Assert.Null(type);
     }

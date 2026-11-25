@@ -15,8 +15,11 @@ public sealed class CoordinationCompositionTests : IDisposable
 
     public void Dispose() => Mocks.Verify();
 
-    private static ProviderDeclaration Declare(string name) =>
-        new(name, PrimitiveSupport.Supported(Primitives.Occurrence, Guarantees.Durable));
+    private static ProviderDeclaration Declare(string name)
+    {
+        var support = PrimitiveSupport.Supported(Primitives.Occurrence, Guarantees.Durable);
+        return new ProviderDeclaration(name, support);
+    }
 
     private static CoordinationRegistrations Register(
         ICoordinationProvider provider,
@@ -35,16 +38,14 @@ public sealed class CoordinationCompositionTests : IDisposable
     public void Resolve_WhenBound_ReturnsTheProvidersService()
     {
         var service = Mocks.Create<IOccurrenceService>().Object;
-        var provider = new DisposableProvider(Declare("memory"), service);
-        var composition = new CoordinationComposition(
-            Register(provider, new ProviderBinding("memory")),
-            Services
-        );
+        var declaration = Declare("memory");
+        var provider = new DisposableProvider(declaration, service);
+        var binding = new ProviderBinding("memory");
+        var registrations = Register(provider, binding);
+        var composition = new CoordinationComposition(registrations, Services);
+        var keyspace = new Keyspace("app", "tenant");
 
-        var bound = composition.Resolve<IOccurrenceService>(
-            Primitives.Occurrence,
-            new Keyspace("app", "tenant")
-        );
+        var bound = composition.Resolve<IOccurrenceService>(Primitives.Occurrence, keyspace);
 
         Assert.Equal("memory", bound.Provider);
         Assert.Equal(Primitives.Occurrence, bound.Primitive);
@@ -55,11 +56,11 @@ public sealed class CoordinationCompositionTests : IDisposable
     public void Resolve_WhenNoBindingCovers_ThrowsUnsupported()
     {
         var service = Mocks.Create<IOccurrenceService>().Object;
-        var provider = new DisposableProvider(Declare("memory"), service);
-        var composition = new CoordinationComposition(
-            Register(provider, new ProviderBinding("memory") { Keyspace = new Keyspace("bound") }),
-            Services
-        );
+        var declaration = Declare("memory");
+        var provider = new DisposableProvider(declaration, service);
+        var binding = new ProviderBinding("memory") { Keyspace = new Keyspace("bound") };
+        var registrations = Register(provider, binding);
+        var composition = new CoordinationComposition(registrations, Services);
         var keyspace = new Keyspace("other", "secret");
 
         var exception = Assert.Throws<CoordinationException>(() =>
@@ -81,8 +82,10 @@ public sealed class CoordinationCompositionTests : IDisposable
     [Fact]
     public void EnsureComposed_WhenInvalid_Throws()
     {
-        var provider = new DisposableProvider(Declare("memory"));
-        var registrations = Register(provider, new ProviderBinding("missing"));
+        var declaration = Declare("memory");
+        var provider = new DisposableProvider(declaration);
+        var binding = new ProviderBinding("missing");
+        var registrations = Register(provider, binding);
         var composition = new CoordinationComposition(registrations, Services);
 
         Assert.Throws<CoordinationCompositionException>(composition.EnsureComposed);
@@ -92,11 +95,11 @@ public sealed class CoordinationCompositionTests : IDisposable
     public void EnsureComposed_WhenValid_DoesNotThrow()
     {
         var service = Mocks.Create<IOccurrenceService>().Object;
-        var provider = new DisposableProvider(Declare("memory"), service);
-        var composition = new CoordinationComposition(
-            Register(provider, new ProviderBinding("memory")),
-            Services
-        );
+        var declaration = Declare("memory");
+        var provider = new DisposableProvider(declaration, service);
+        var binding = new ProviderBinding("memory");
+        var registrations = Register(provider, binding);
+        var composition = new CoordinationComposition(registrations, Services);
 
         composition.EnsureComposed();
     }
@@ -109,9 +112,12 @@ public sealed class CoordinationCompositionTests : IDisposable
     public async Task DisposeAsync_DisposesEachProvider()
     {
         var service = Mocks.Create<IOccurrenceService>().Object;
-        var sync = new DisposableProvider(Declare("sync"), service);
-        var async = new AsyncDisposableProvider(Declare("async"));
-        var registrations = Register(sync, new ProviderBinding("sync"));
+        var syncDeclaration = Declare("sync");
+        var asyncDeclaration = Declare("async");
+        var sync = new DisposableProvider(syncDeclaration, service);
+        var async = new AsyncDisposableProvider(asyncDeclaration);
+        var binding = new ProviderBinding("sync");
+        var registrations = Register(sync, binding);
         registrations.ProviderFactories.Add(_ => async);
         var composition = new CoordinationComposition(registrations, Services);
         composition.EnsureComposed();
@@ -126,9 +132,12 @@ public sealed class CoordinationCompositionTests : IDisposable
     public void Dispose_DisposesTheDisposableProviders()
     {
         var service = Mocks.Create<IOccurrenceService>().Object;
-        var sync = new DisposableProvider(Declare("sync"), service);
-        var async = new AsyncDisposableProvider(Declare("async"));
-        var registrations = Register(sync, new ProviderBinding("sync"));
+        var syncDeclaration = Declare("sync");
+        var asyncDeclaration = Declare("async");
+        var sync = new DisposableProvider(syncDeclaration, service);
+        var async = new AsyncDisposableProvider(asyncDeclaration);
+        var binding = new ProviderBinding("sync");
+        var registrations = Register(sync, binding);
         registrations.ProviderFactories.Add(_ => async);
         var composition = new CoordinationComposition(registrations, Services);
         composition.EnsureComposed();

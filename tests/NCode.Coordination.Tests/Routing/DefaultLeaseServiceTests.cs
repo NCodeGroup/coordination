@@ -13,11 +13,20 @@ public sealed class DefaultLeaseServiceTests : IDisposable
 
     public void Dispose() => Mocks.Verify();
 
-    private static LeaseTerms Terms() =>
-        LeaseTerms.ForTimeToLive(new TimeToLive(TimeSpan.FromSeconds(30)));
+    private static LeaseTerms Terms()
+    {
+        var ttl = TimeSpan.FromSeconds(30);
+        var timeToLive = new TimeToLive(ttl);
+        return LeaseTerms.ForTimeToLive(timeToLive);
+    }
 
-    private static LeaseGrant Grant() =>
-        new(TestComposition.Key, new FencingToken(5), new OwnerToken("o-1"), Terms());
+    private static LeaseGrant Grant()
+    {
+        var token = new FencingToken(5);
+        var owner = new OwnerToken("o-1");
+        var terms = Terms();
+        return new LeaseGrant(TestComposition.Key, token, owner, terms);
+    }
 
     #region TryAcquireAsync Tests
 
@@ -26,7 +35,8 @@ public sealed class DefaultLeaseServiceTests : IDisposable
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var terms = Terms();
-        var expected = LeaseAcquireResult.Acquired(Grant());
+        var grant = Grant();
+        var expected = LeaseAcquireResult.Acquired(grant);
         var mock = Mocks.Create<ILeaseService>();
         mock.Setup(x => x.TryAcquireAsync(TestComposition.Key, terms, null, cancellationToken))
             .ReturnsAsync(expected)
@@ -48,12 +58,13 @@ public sealed class DefaultLeaseServiceTests : IDisposable
     public async Task TryAcquireAsync_WhenNoProviderIsBound_ThrowsUnsupported()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
+        var terms = Terms();
         var mock = Mocks.Create<ILeaseService>();
         await using var provider = BuildElsewhere(mock.Object);
         var service = provider.GetRequiredService<ILeaseService>();
 
         var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
-            await service.TryAcquireAsync(TestComposition.Key, Terms(), null, cancellationToken)
+            await service.TryAcquireAsync(TestComposition.Key, terms, null, cancellationToken)
         );
 
         Assert.Equal(CoordinationErrorCodes.Unsupported, exception.Code);
@@ -68,7 +79,8 @@ public sealed class DefaultLeaseServiceTests : IDisposable
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var grant = Grant();
-        var timeToLive = new TimeToLive(TimeSpan.FromSeconds(60));
+        var ttl = TimeSpan.FromSeconds(60);
+        var timeToLive = new TimeToLive(ttl);
         var mock = Mocks.Create<ILeaseService>();
         mock.Setup(x => x.RenewAsync(grant, timeToLive, null, cancellationToken))
             .ReturnsAsync(true)
@@ -124,20 +136,16 @@ public sealed class DefaultLeaseServiceTests : IDisposable
 
     private static ServiceProvider BuildElsewhere(ILeaseService implementation)
     {
-        var declaration = new ProviderDeclaration(
-            TestComposition.ProviderName,
-            PrimitiveSupport.Supported(Primitives.Lease)
-        );
+        var support = PrimitiveSupport.Supported(Primitives.Lease);
+        var declaration = new ProviderDeclaration(TestComposition.ProviderName, support);
+        var binding = new ProviderBinding(TestComposition.ProviderName)
+        {
+            Keyspace = new Keyspace("elsewhere"),
+        };
         var services = new ServiceCollection();
         services.AddMetrics();
         services.AddCoordination(b =>
-            b.AddProvider(_ => new TestProvider(declaration, implementation))
-                .Bind(
-                    new ProviderBinding(TestComposition.ProviderName)
-                    {
-                        Keyspace = new Keyspace("elsewhere"),
-                    }
-                )
+            b.AddProvider(_ => new TestProvider(declaration, implementation)).Bind(binding)
         );
         return services.BuildServiceProvider();
     }

@@ -71,20 +71,16 @@ public sealed class DefaultSequenceServiceTests : IDisposable
 
     private static ServiceProvider BuildElsewhere(ISequenceService implementation)
     {
-        var declaration = new ProviderDeclaration(
-            TestComposition.ProviderName,
-            PrimitiveSupport.Supported(Primitives.Sequence)
-        );
+        var support = PrimitiveSupport.Supported(Primitives.Sequence);
+        var declaration = new ProviderDeclaration(TestComposition.ProviderName, support);
+        var binding = new ProviderBinding(TestComposition.ProviderName)
+        {
+            Keyspace = new Keyspace("elsewhere"),
+        };
         var services = new ServiceCollection();
         services.AddMetrics();
         services.AddCoordination(b =>
-            b.AddProvider(_ => new TestProvider(declaration, implementation))
-                .Bind(
-                    new ProviderBinding(TestComposition.ProviderName)
-                    {
-                        Keyspace = new Keyspace("elsewhere"),
-                    }
-                )
+            b.AddProvider(_ => new TestProvider(declaration, implementation)).Bind(binding)
         );
         return services.BuildServiceProvider();
     }

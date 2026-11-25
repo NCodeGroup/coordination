@@ -13,15 +13,22 @@ public sealed class DefaultElectionServiceTests : IDisposable
 
     public void Dispose() => Mocks.Verify();
 
-    private static LeaseTerms Terms() =>
-        LeaseTerms.ForTimeToLive(new TimeToLive(TimeSpan.FromSeconds(30)));
+    private static LeaseTerms Terms()
+    {
+        var ttl = TimeSpan.FromSeconds(30);
+        var timeToLive = new TimeToLive(ttl);
+        return LeaseTerms.ForTimeToLive(timeToLive);
+    }
 
-    private static Leadership Leadership() =>
-        new(
-            new Leader(TestComposition.Key, new FencingToken(5), new byte[] { 1 }),
-            new OwnerToken("o-1"),
-            Terms()
-        );
+    private static Leadership Leadership()
+    {
+        var token = new FencingToken(5);
+        ReadOnlyMemory<byte> value = (byte[])[1];
+        var leader = new Leader(TestComposition.Key, token, value);
+        var owner = new OwnerToken("o-1");
+        var terms = Terms();
+        return new Leadership(leader, owner, terms);
+    }
 
     #region TryLeadAsync Tests
 
@@ -30,8 +37,9 @@ public sealed class DefaultElectionServiceTests : IDisposable
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var terms = Terms();
-        ReadOnlyMemory<byte> value = new byte[] { 1, 2 };
-        var expected = ElectionResult.Elected(Leadership());
+        ReadOnlyMemory<byte> value = (byte[])[1, 2];
+        var leadership = Leadership();
+        var expected = ElectionResult.Elected(leadership);
         var mock = Mocks.Create<IElectionService>();
         mock.Setup(x => x.TryLeadAsync(TestComposition.Key, value, terms, null, cancellationToken))
             .ReturnsAsync(expected)
@@ -54,6 +62,7 @@ public sealed class DefaultElectionServiceTests : IDisposable
     public async Task TryLeadAsync_WhenNoProviderIsBound_ThrowsUnsupported()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
+        var terms = Terms();
         var mock = Mocks.Create<IElectionService>();
         await using var provider = BuildElsewhere(mock.Object);
         var service = provider.GetRequiredService<IElectionService>();
@@ -62,7 +71,7 @@ public sealed class DefaultElectionServiceTests : IDisposable
             await service.TryLeadAsync(
                 TestComposition.Key,
                 ReadOnlyMemory<byte>.Empty,
-                Terms(),
+                terms,
                 null,
                 cancellationToken
             )
@@ -80,7 +89,8 @@ public sealed class DefaultElectionServiceTests : IDisposable
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var leadership = Leadership();
-        var timeToLive = new TimeToLive(TimeSpan.FromSeconds(60));
+        var ttl = TimeSpan.FromSeconds(60);
+        var timeToLive = new TimeToLive(ttl);
         var mock = Mocks.Create<IElectionService>();
         mock.Setup(x => x.RenewAsync(leadership, timeToLive, null, cancellationToken))
             .ReturnsAsync(true)
@@ -144,9 +154,10 @@ public sealed class DefaultElectionServiceTests : IDisposable
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var view = new ElectionView(TestComposition.Key, null);
+        var stream = TestComposition.Stream(view);
         var mock = Mocks.Create<IElectionService>();
         mock.Setup(x => x.WatchAsync(TestComposition.Key, null, cancellationToken))
-            .Returns(TestComposition.Stream(view))
+            .Returns(stream)
             .Verifiable();
         await using var provider = TestComposition.Build(Primitives.Election, mock.Object);
         var service = provider.GetRequiredService<IElectionService>();
@@ -157,27 +168,24 @@ public sealed class DefaultElectionServiceTests : IDisposable
             items.Add(item);
         }
 
-        Assert.Same(view, Assert.Single(items));
+        var single = Assert.Single(items);
+        Assert.Same(view, single);
     }
 
     #endregion
 
     private static ServiceProvider BuildElsewhere(IElectionService implementation)
     {
-        var declaration = new ProviderDeclaration(
-            TestComposition.ProviderName,
-            PrimitiveSupport.Supported(Primitives.Election)
-        );
+        var support = PrimitiveSupport.Supported(Primitives.Election);
+        var declaration = new ProviderDeclaration(TestComposition.ProviderName, support);
+        var binding = new ProviderBinding(TestComposition.ProviderName)
+        {
+            Keyspace = new Keyspace("elsewhere"),
+        };
         var services = new ServiceCollection();
         services.AddMetrics();
         services.AddCoordination(b =>
-            b.AddProvider(_ => new TestProvider(declaration, implementation))
-                .Bind(
-                    new ProviderBinding(TestComposition.ProviderName)
-                    {
-                        Keyspace = new Keyspace("elsewhere"),
-                    }
-                )
+            b.AddProvider(_ => new TestProvider(declaration, implementation)).Bind(binding)
         );
         return services.BuildServiceProvider();
     }

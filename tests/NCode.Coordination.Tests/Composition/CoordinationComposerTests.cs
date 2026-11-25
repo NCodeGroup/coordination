@@ -27,22 +27,33 @@ public sealed class CoordinationComposerTests : IDisposable
         return registrations;
     }
 
-    private TestProvider CreateProvider(ProviderDeclaration declaration) =>
-        new(declaration, Mocks.Create<IOccurrenceService>().Object);
+    private TestProvider CreateProvider(ProviderDeclaration declaration)
+    {
+        var mock = Mocks.Create<IOccurrenceService>();
+        return new TestProvider(declaration, mock.Object);
+    }
 
-    private static ProviderDeclaration Declare(params Guarantee[] guarantees) =>
-        new("memory", PrimitiveSupport.Supported(Primitives.Occurrence, guarantees));
+    private static ProviderDeclaration Declare(params Guarantee[] guarantees)
+    {
+        var support = PrimitiveSupport.Supported(Primitives.Occurrence, guarantees);
+        return new ProviderDeclaration("memory", support);
+    }
 
     #region Compose Tests
 
     [Fact]
     public void Compose_WhenValid_ReturnsTheBindings()
     {
-        var provider = CreateProvider(Declare(Guarantees.Durable));
-        var registrations = Register(provider, new ProviderBinding("memory"));
-        registrations.Requirements.Add(
-            new FeatureRequirement("replay", Primitives.Occurrence, Guarantees.Durable)
+        var declaration = Declare(Guarantees.Durable);
+        var provider = CreateProvider(declaration);
+        var binding = new ProviderBinding("memory");
+        var registrations = Register(provider, binding);
+        var requirement = new FeatureRequirement(
+            "replay",
+            Primitives.Occurrence,
+            Guarantees.Durable
         );
+        registrations.Requirements.Add(requirement);
 
         var composed = CoordinationComposer.Compose(registrations, Services);
 
@@ -55,13 +66,18 @@ public sealed class CoordinationComposerTests : IDisposable
     [Fact]
     public void Compose_WhenSeveralStagesFail_ListsEveryFailureInOrder()
     {
-        var first = CreateProvider(Declare(Guarantees.Durable));
-        var second = CreateProvider(Declare(Guarantees.Durable));
-        var registrations = Register(first, new ProviderBinding("memory"));
+        var declaration = Declare(Guarantees.Durable);
+        var first = CreateProvider(declaration);
+        var second = CreateProvider(declaration);
+        var binding = new ProviderBinding("memory");
+        var registrations = Register(first, binding);
         registrations.ProviderFactories.Add(_ => second);
-        registrations.Requirements.Add(
-            new FeatureRequirement("replay", Primitives.Occurrence, Guarantees.ServerClock)
+        var requirement = new FeatureRequirement(
+            "replay",
+            Primitives.Occurrence,
+            Guarantees.ServerClock
         );
+        registrations.Requirements.Add(requirement);
 
         var exception = Assert.Throws<CoordinationCompositionException>(() =>
             CoordinationComposer.Compose(registrations, Services)
@@ -80,16 +96,19 @@ public sealed class CoordinationComposerTests : IDisposable
     public void Compose_WhenTheApplicationDefinesAGuarantee_ItCanBeDeclaredAndRequired()
     {
         var custom = new Guarantee("custom.strong");
-        var provider = CreateProvider(Declare(custom));
-        var registrations = Register(provider, new ProviderBinding("memory"));
-        registrations.Definitions.Add(new GuaranteeDefinition(custom, "custom", "Strong."));
-        registrations.Requirements.Add(
-            new FeatureRequirement("replay", Primitives.Occurrence, custom)
-        );
+        var declaration = Declare(custom);
+        var provider = CreateProvider(declaration);
+        var binding = new ProviderBinding("memory");
+        var registrations = Register(provider, binding);
+        var definition = new GuaranteeDefinition(custom, "custom", "Strong.");
+        registrations.Definitions.Add(definition);
+        var requirement = new FeatureRequirement("replay", Primitives.Occurrence, custom);
+        registrations.Requirements.Add(requirement);
 
         var composed = CoordinationComposer.Compose(registrations, Services);
 
-        Assert.NotNull(composed.Bindings.Find(Primitives.Occurrence, null));
+        var bound = composed.Bindings.Find(Primitives.Occurrence, null);
+        Assert.NotNull(bound);
     }
 
     [Fact]
@@ -100,29 +119,32 @@ public sealed class CoordinationComposerTests : IDisposable
         {
             Implies = [Guarantees.Durable],
         };
-        var declaration = new ProviderDeclaration(
-            "memory",
-            PrimitiveSupport.Supported(Primitives.Occurrence, custom)
-        )
-        {
-            Definitions = [definition],
-        };
+        var support = PrimitiveSupport.Supported(Primitives.Occurrence, custom);
+        var declaration = new ProviderDeclaration("memory", support) { Definitions = [definition] };
         var provider = CreateProvider(declaration);
-        var registrations = Register(provider, new ProviderBinding("memory"));
-        registrations.Requirements.Add(
-            new FeatureRequirement("replay", Primitives.Occurrence, Guarantees.Durable)
+        var binding = new ProviderBinding("memory");
+        var registrations = Register(provider, binding);
+        var requirement = new FeatureRequirement(
+            "replay",
+            Primitives.Occurrence,
+            Guarantees.Durable
         );
+        registrations.Requirements.Add(requirement);
 
         var composed = CoordinationComposer.Compose(registrations, Services);
 
-        Assert.NotNull(composed.Bindings.Find(Primitives.Occurrence, null));
+        var bound = composed.Bindings.Find(Primitives.Occurrence, null);
+        Assert.NotNull(bound);
     }
 
     [Fact]
     public void Compose_WhenADeclaredGuaranteeIsUndefined_Fails()
     {
-        var provider = CreateProvider(Declare(new Guarantee("custom.unknown")));
-        var registrations = Register(provider, new ProviderBinding("memory"));
+        var unknown = new Guarantee("custom.unknown");
+        var declaration = Declare(unknown);
+        var provider = CreateProvider(declaration);
+        var binding = new ProviderBinding("memory");
+        var registrations = Register(provider, binding);
 
         var exception = Assert.Throws<CoordinationCompositionException>(() =>
             CoordinationComposer.Compose(registrations, Services)

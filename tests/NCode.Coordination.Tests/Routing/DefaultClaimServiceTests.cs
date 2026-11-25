@@ -13,8 +13,12 @@ public sealed class DefaultClaimServiceTests : IDisposable
 
     public void Dispose() => Mocks.Verify();
 
-    private static TimeWindow Window() =>
-        new(new DateTimeOffset(2026, 11, 25, 10, 0, 0, TimeSpan.Zero), TimeSpan.FromHours(1));
+    private static TimeWindow Window()
+    {
+        var start = new DateTimeOffset(2026, 11, 25, 10, 0, 0, TimeSpan.Zero);
+        var length = TimeSpan.FromHours(1);
+        return new TimeWindow(start, length);
+    }
 
     #region TryClaimAsync Tests
 
@@ -23,7 +27,8 @@ public sealed class DefaultClaimServiceTests : IDisposable
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var window = Window();
-        var timeToLive = new TimeToLive(TimeSpan.FromHours(2));
+        var ttl = TimeSpan.FromHours(2);
+        var timeToLive = new TimeToLive(ttl);
         var mock = Mocks.Create<IClaimService>();
         mock.Setup(x =>
                 x.TryClaimAsync(TestComposition.Key, window, timeToLive, null, cancellationToken)
@@ -48,21 +53,20 @@ public sealed class DefaultClaimServiceTests : IDisposable
     public async Task TryClaimAsync_WhenNoProviderIsBound_ThrowsUnsupported()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
+        var window = Window();
+        var ttl = TimeSpan.FromHours(2);
+        var timeToLive = new TimeToLive(ttl);
         var mock = Mocks.Create<IClaimService>();
-        var declaration = new ProviderDeclaration(
-            TestComposition.ProviderName,
-            PrimitiveSupport.Supported(Primitives.Claim)
-        );
+        var support = PrimitiveSupport.Supported(Primitives.Claim);
+        var declaration = new ProviderDeclaration(TestComposition.ProviderName, support);
+        var binding = new ProviderBinding(TestComposition.ProviderName)
+        {
+            Keyspace = new Keyspace("elsewhere"),
+        };
         var services = new ServiceCollection();
         services.AddMetrics();
         services.AddCoordination(b =>
-            b.AddProvider(_ => new TestProvider(declaration, mock.Object))
-                .Bind(
-                    new ProviderBinding(TestComposition.ProviderName)
-                    {
-                        Keyspace = new Keyspace("elsewhere"),
-                    }
-                )
+            b.AddProvider(_ => new TestProvider(declaration, mock.Object)).Bind(binding)
         );
         await using var provider = services.BuildServiceProvider();
         var service = provider.GetRequiredService<IClaimService>();
@@ -70,8 +74,8 @@ public sealed class DefaultClaimServiceTests : IDisposable
         var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
             await service.TryClaimAsync(
                 TestComposition.Key,
-                Window(),
-                new TimeToLive(TimeSpan.FromHours(2)),
+                window,
+                timeToLive,
                 null,
                 cancellationToken
             )

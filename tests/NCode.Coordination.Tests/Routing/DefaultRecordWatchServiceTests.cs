@@ -19,10 +19,12 @@ public sealed class DefaultRecordWatchServiceTests : IDisposable
     public async Task WatchKeyAsync_WhenBound_ReturnsTheProvidersResult()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        var change = RecordChange.Resync(new Revision(5));
+        var revision = new Revision(5);
+        var change = RecordChange.Resync(revision);
+        var stream = TestComposition.Stream(change);
         var mock = Mocks.Create<IRecordWatchService>();
         mock.Setup(x => x.WatchKeyAsync(TestComposition.Key, null, null, cancellationToken))
-            .Returns(TestComposition.Stream(change))
+            .Returns(stream)
             .Verifiable();
         await using var provider = TestComposition.Build(Primitives.RecordWatch, mock.Object);
         var service = provider.GetRequiredService<IRecordWatchService>();
@@ -35,7 +37,8 @@ public sealed class DefaultRecordWatchServiceTests : IDisposable
             items.Add(item);
         }
 
-        Assert.Same(change, Assert.Single(items));
+        var single = Assert.Single(items);
+        Assert.Same(change, single);
     }
 
     [Fact]
@@ -61,10 +64,12 @@ public sealed class DefaultRecordWatchServiceTests : IDisposable
     public async Task WatchPrefixAsync_WhenBound_ReturnsTheProvidersResult()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        var change = RecordChange.Resync(new Revision(5));
+        var revision = new Revision(5);
+        var change = RecordChange.Resync(revision);
+        var stream = TestComposition.Stream(change);
         var mock = Mocks.Create<IRecordWatchService>();
         mock.Setup(x => x.WatchPrefixAsync(TestComposition.Key, null, null, cancellationToken))
-            .Returns(TestComposition.Stream(change))
+            .Returns(stream)
             .Verifiable();
         await using var provider = TestComposition.Build(Primitives.RecordWatch, mock.Object);
         var service = provider.GetRequiredService<IRecordWatchService>();
@@ -77,27 +82,24 @@ public sealed class DefaultRecordWatchServiceTests : IDisposable
             items.Add(item);
         }
 
-        Assert.Same(change, Assert.Single(items));
+        var single = Assert.Single(items);
+        Assert.Same(change, single);
     }
 
     #endregion
 
     private static ServiceProvider BuildElsewhere(IRecordWatchService implementation)
     {
-        var declaration = new ProviderDeclaration(
-            TestComposition.ProviderName,
-            PrimitiveSupport.Supported(Primitives.RecordWatch)
-        );
+        var support = PrimitiveSupport.Supported(Primitives.RecordWatch);
+        var declaration = new ProviderDeclaration(TestComposition.ProviderName, support);
+        var binding = new ProviderBinding(TestComposition.ProviderName)
+        {
+            Keyspace = new Keyspace("elsewhere"),
+        };
         var services = new ServiceCollection();
         services.AddMetrics();
         services.AddCoordination(b =>
-            b.AddProvider(_ => new TestProvider(declaration, implementation))
-                .Bind(
-                    new ProviderBinding(TestComposition.ProviderName)
-                    {
-                        Keyspace = new Keyspace("elsewhere"),
-                    }
-                )
+            b.AddProvider(_ => new TestProvider(declaration, implementation)).Bind(binding)
         );
         return services.BuildServiceProvider();
     }

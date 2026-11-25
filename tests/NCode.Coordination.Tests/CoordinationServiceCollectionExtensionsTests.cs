@@ -17,10 +17,8 @@ public sealed class CoordinationServiceCollectionExtensionsTests : IDisposable
     private TestProvider CreateProvider(params Guarantee[] guarantees)
     {
         var service = Mocks.Create<IOccurrenceService>().Object;
-        var declaration = new ProviderDeclaration(
-            TestComposition.ProviderName,
-            PrimitiveSupport.Supported(Primitives.Occurrence, guarantees)
-        );
+        var support = PrimitiveSupport.Supported(Primitives.Occurrence, guarantees);
+        var declaration = new ProviderDeclaration(TestComposition.ProviderName, support);
         return new TestProvider(declaration, service);
     }
 
@@ -40,10 +38,9 @@ public sealed class CoordinationServiceCollectionExtensionsTests : IDisposable
     public void AddCoordination_ResolvesTheComposition()
     {
         var provider = CreateProvider();
+        var binding = new ProviderBinding(TestComposition.ProviderName);
         var services = new ServiceCollection();
-        services.AddCoordination(b =>
-            b.AddProvider(_ => provider).Bind(new ProviderBinding(TestComposition.ProviderName))
-        );
+        services.AddCoordination(b => b.AddProvider(_ => provider).Bind(binding));
         using var serviceProvider = services.BuildServiceProvider();
 
         var composition = serviceProvider.GetRequiredService<CoordinationComposition>();
@@ -59,13 +56,15 @@ public sealed class CoordinationServiceCollectionExtensionsTests : IDisposable
     public void AddCoordination_WhenCalledTwice_AddsToOneComposition()
     {
         var provider = CreateProvider(Guarantees.Durable);
+        var binding = new ProviderBinding(TestComposition.ProviderName);
+        var requirement = new FeatureRequirement(
+            "replay",
+            Primitives.Occurrence,
+            Guarantees.Durable
+        );
         var services = new ServiceCollection();
-        services.AddCoordination(b =>
-            b.AddProvider(_ => provider).Bind(new ProviderBinding(TestComposition.ProviderName))
-        );
-        services.AddCoordination(b =>
-            b.Require(new FeatureRequirement("replay", Primitives.Occurrence, Guarantees.Durable))
-        );
+        services.AddCoordination(b => b.AddProvider(_ => provider).Bind(binding));
+        services.AddCoordination(b => b.Require(requirement));
         using var serviceProvider = services.BuildServiceProvider();
 
         var composition = serviceProvider.GetRequiredService<CoordinationComposition>();
@@ -124,10 +123,10 @@ public sealed class CoordinationServiceCollectionExtensionsTests : IDisposable
     public async Task HostStart_WhenARequirementIsUnmet_FailsListingIt()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        var builder = Host.CreateEmptyApplicationBuilder(new HostApplicationBuilderSettings());
-        builder.Services.AddCoordination(b =>
-            b.Require(new FeatureRequirement("replay", Primitives.Occurrence))
-        );
+        var settings = new HostApplicationBuilderSettings();
+        var builder = Host.CreateEmptyApplicationBuilder(settings);
+        var requirement = new FeatureRequirement("replay", Primitives.Occurrence);
+        builder.Services.AddCoordination(b => b.Require(requirement));
         using var host = builder.Build();
 
         var exception = await Assert.ThrowsAsync<CoordinationCompositionException>(() =>
@@ -146,10 +145,10 @@ public sealed class CoordinationServiceCollectionExtensionsTests : IDisposable
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var provider = CreateProvider();
-        var builder = Host.CreateEmptyApplicationBuilder(new HostApplicationBuilderSettings());
-        builder.Services.AddCoordination(b =>
-            b.AddProvider(_ => provider).Bind(new ProviderBinding(TestComposition.ProviderName))
-        );
+        var binding = new ProviderBinding(TestComposition.ProviderName);
+        var settings = new HostApplicationBuilderSettings();
+        var builder = Host.CreateEmptyApplicationBuilder(settings);
+        builder.Services.AddCoordination(b => b.AddProvider(_ => provider).Bind(binding));
         using var host = builder.Build();
 
         await host.StartAsync(cancellationToken);

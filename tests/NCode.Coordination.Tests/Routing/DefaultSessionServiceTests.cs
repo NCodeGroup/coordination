@@ -19,8 +19,10 @@ public sealed class DefaultSessionServiceTests : IDisposable
     public async Task OpenAsync_WhenBound_ReturnsTheProvidersResult()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        var timeToLive = new TimeToLive(TimeSpan.FromSeconds(30));
-        var grant = new SessionGrant(new SessionId(TestComposition.Keyspace, "1"), timeToLive);
+        var ttl = TimeSpan.FromSeconds(30);
+        var timeToLive = new TimeToLive(ttl);
+        var sessionId = new SessionId(TestComposition.Keyspace, "1");
+        var grant = new SessionGrant(sessionId, timeToLive);
         var mock = Mocks.Create<ISessionService>();
         mock.Setup(x => x.OpenAsync(TestComposition.Keyspace, timeToLive, null, cancellationToken))
             .ReturnsAsync(grant)
@@ -45,7 +47,8 @@ public sealed class DefaultSessionServiceTests : IDisposable
         var mock = Mocks.Create<ISessionService>();
         await using var provider = BuildElsewhere(mock.Object);
         var service = provider.GetRequiredService<ISessionService>();
-        var timeToLive = new TimeToLive(TimeSpan.FromSeconds(30));
+        var ttl = TimeSpan.FromSeconds(30);
+        var timeToLive = new TimeToLive(ttl);
 
         var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
             await service.OpenAsync(TestComposition.Keyspace, timeToLive, null, cancellationToken)
@@ -63,7 +66,9 @@ public sealed class DefaultSessionServiceTests : IDisposable
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var id = new SessionId(TestComposition.Keyspace, "1");
-        var expected = KeepAliveResult.Renewed(new TimeToLive(TimeSpan.FromSeconds(30)));
+        var ttl = TimeSpan.FromSeconds(30);
+        var timeToLive = new TimeToLive(ttl);
+        var expected = KeepAliveResult.Renewed(timeToLive);
         var mock = Mocks.Create<ISessionService>();
         mock.Setup(x => x.KeepAliveAsync(id, null, cancellationToken))
             .ReturnsAsync(expected)
@@ -118,20 +123,16 @@ public sealed class DefaultSessionServiceTests : IDisposable
 
     private static ServiceProvider BuildElsewhere(ISessionService implementation)
     {
-        var declaration = new ProviderDeclaration(
-            TestComposition.ProviderName,
-            PrimitiveSupport.Supported(Primitives.Session)
-        );
+        var support = PrimitiveSupport.Supported(Primitives.Session);
+        var declaration = new ProviderDeclaration(TestComposition.ProviderName, support);
+        var binding = new ProviderBinding(TestComposition.ProviderName)
+        {
+            Keyspace = new Keyspace("elsewhere"),
+        };
         var services = new ServiceCollection();
         services.AddMetrics();
         services.AddCoordination(b =>
-            b.AddProvider(_ => new TestProvider(declaration, implementation))
-                .Bind(
-                    new ProviderBinding(TestComposition.ProviderName)
-                    {
-                        Keyspace = new Keyspace("elsewhere"),
-                    }
-                )
+            b.AddProvider(_ => new TestProvider(declaration, implementation)).Bind(binding)
         );
         return services.BuildServiceProvider();
     }

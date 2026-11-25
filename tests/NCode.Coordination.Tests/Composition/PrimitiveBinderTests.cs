@@ -28,8 +28,12 @@ public sealed class PrimitiveBinderTests : IDisposable
         return ProviderCatalog.Create(factories, Services, []);
     }
 
-    private TestProvider CreateProvider(string name, params PrimitiveSupport[] primitives) =>
-        new(new ProviderDeclaration(name, primitives), Mocks.Create<IOccurrenceService>().Object);
+    private TestProvider CreateProvider(string name, params PrimitiveSupport[] primitives)
+    {
+        var declaration = new ProviderDeclaration(name, primitives);
+        var mock = Mocks.Create<IOccurrenceService>();
+        return new TestProvider(declaration, mock.Object);
+    }
 
     #region Bind Tests
 
@@ -38,19 +42,15 @@ public sealed class PrimitiveBinderTests : IDisposable
     {
         var failures = new List<string>();
         var custom = new Primitive("custom");
-        var provider = CreateProvider(
-            "memory",
-            PrimitiveSupport.Supported(Primitives.Occurrence),
-            PrimitiveSupport.Unsupported(Primitives.Lease, "Not here."),
-            PrimitiveSupport.Supported(custom)
-        );
+        var occurrence = PrimitiveSupport.Supported(Primitives.Occurrence);
+        var lease = PrimitiveSupport.Unsupported(Primitives.Lease, "Not here.");
+        var customSupport = PrimitiveSupport.Supported(custom);
+        var provider = CreateProvider("memory", occurrence, lease, customSupport);
+        var binding = new ProviderBinding("memory");
+        var catalog = CreateCatalog(provider);
+        var registry = CreateRegistry();
 
-        var bound = PrimitiveBinder.Bind(
-            [new ProviderBinding("memory")],
-            CreateCatalog(provider),
-            CreateRegistry(),
-            failures
-        );
+        var bound = PrimitiveBinder.Bind([binding], catalog, registry, failures);
 
         Assert.Empty(failures);
         Assert.Equal([Primitives.Occurrence, custom], bound.Select(x => x.Primitive));
@@ -61,18 +61,14 @@ public sealed class PrimitiveBinderTests : IDisposable
     {
         var failures = new List<string>();
         var custom = new Primitive("custom");
-        var provider = CreateProvider(
-            "memory",
-            PrimitiveSupport.Supported(Primitives.Occurrence),
-            PrimitiveSupport.Supported(custom)
-        );
+        var occurrence = PrimitiveSupport.Supported(Primitives.Occurrence);
+        var customSupport = PrimitiveSupport.Supported(custom);
+        var provider = CreateProvider("memory", occurrence, customSupport);
+        var binding = new ProviderBinding("memory", custom);
+        var catalog = CreateCatalog(provider);
+        var registry = CreateRegistry();
 
-        var bound = PrimitiveBinder.Bind(
-            [new ProviderBinding("memory", custom)],
-            CreateCatalog(provider),
-            CreateRegistry(),
-            failures
-        );
+        var bound = PrimitiveBinder.Bind([binding], catalog, registry, failures);
 
         Assert.Empty(failures);
         var only = Assert.Single(bound);
@@ -86,14 +82,13 @@ public sealed class PrimitiveBinderTests : IDisposable
     {
         var failures = new List<string>();
         var keyspace = new Keyspace("prod", "cell-1");
-        var provider = CreateProvider("memory", PrimitiveSupport.Supported(Primitives.Occurrence));
+        var occurrence = PrimitiveSupport.Supported(Primitives.Occurrence);
+        var provider = CreateProvider("memory", occurrence);
+        var binding = new ProviderBinding("memory") { Keyspace = keyspace };
+        var catalog = CreateCatalog(provider);
+        var registry = CreateRegistry();
 
-        var bound = PrimitiveBinder.Bind(
-            [new ProviderBinding("memory") { Keyspace = keyspace }],
-            CreateCatalog(provider),
-            CreateRegistry(),
-            failures
-        );
+        var bound = PrimitiveBinder.Bind([binding], catalog, registry, failures);
 
         Assert.Empty(failures);
         var only = Assert.Single(bound);
@@ -105,17 +100,16 @@ public sealed class PrimitiveBinderTests : IDisposable
     public void Bind_ClosesTheDeclaredGuarantees()
     {
         var failures = new List<string>();
-        var provider = CreateProvider(
-            "memory",
-            PrimitiveSupport.Supported(Primitives.Occurrence, Guarantees.LinearizableUntilFailover)
+        var occurrence = PrimitiveSupport.Supported(
+            Primitives.Occurrence,
+            Guarantees.LinearizableUntilFailover
         );
+        var provider = CreateProvider("memory", occurrence);
+        var binding = new ProviderBinding("memory");
+        var catalog = CreateCatalog(provider);
+        var registry = CreateRegistry();
 
-        var bound = PrimitiveBinder.Bind(
-            [new ProviderBinding("memory")],
-            CreateCatalog(provider),
-            CreateRegistry(),
-            failures
-        );
+        var bound = PrimitiveBinder.Bind([binding], catalog, registry, failures);
 
         Assert.Empty(failures);
         var only = Assert.Single(bound);
@@ -127,13 +121,11 @@ public sealed class PrimitiveBinderTests : IDisposable
     public void Bind_WhenTheProviderIsNotRegistered_Fails()
     {
         var failures = new List<string>();
+        var binding = new ProviderBinding("missing");
+        var catalog = CreateCatalog();
+        var registry = CreateRegistry();
 
-        var bound = PrimitiveBinder.Bind(
-            [new ProviderBinding("missing")],
-            CreateCatalog(),
-            CreateRegistry(),
-            failures
-        );
+        var bound = PrimitiveBinder.Bind([binding], catalog, registry, failures);
 
         Assert.Empty(bound);
         Assert.Equal(
@@ -146,14 +138,13 @@ public sealed class PrimitiveBinderTests : IDisposable
     public void Bind_WhenThePrimitiveIsNotListed_Fails()
     {
         var failures = new List<string>();
-        var provider = CreateProvider("memory", PrimitiveSupport.Supported(Primitives.Occurrence));
+        var occurrence = PrimitiveSupport.Supported(Primitives.Occurrence);
+        var provider = CreateProvider("memory", occurrence);
+        var binding = new ProviderBinding("memory", Primitives.Lease);
+        var catalog = CreateCatalog(provider);
+        var registry = CreateRegistry();
 
-        var bound = PrimitiveBinder.Bind(
-            [new ProviderBinding("memory", Primitives.Lease)],
-            CreateCatalog(provider),
-            CreateRegistry(),
-            failures
-        );
+        var bound = PrimitiveBinder.Bind([binding], catalog, registry, failures);
 
         Assert.Empty(bound);
         Assert.Equal(
@@ -166,17 +157,13 @@ public sealed class PrimitiveBinderTests : IDisposable
     public void Bind_WhenThePrimitiveIsUnsupported_FailsWithTheReason()
     {
         var failures = new List<string>();
-        var provider = CreateProvider(
-            "memory",
-            PrimitiveSupport.Unsupported(Primitives.Lease, "Leases need a server.")
-        );
+        var lease = PrimitiveSupport.Unsupported(Primitives.Lease, "Leases need a server.");
+        var provider = CreateProvider("memory", lease);
+        var binding = new ProviderBinding("memory", Primitives.Lease);
+        var catalog = CreateCatalog(provider);
+        var registry = CreateRegistry();
 
-        var bound = PrimitiveBinder.Bind(
-            [new ProviderBinding("memory", Primitives.Lease)],
-            CreateCatalog(provider),
-            CreateRegistry(),
-            failures
-        );
+        var bound = PrimitiveBinder.Bind([binding], catalog, registry, failures);
 
         Assert.Empty(bound);
         Assert.Equal(
@@ -191,16 +178,14 @@ public sealed class PrimitiveBinderTests : IDisposable
     public void Bind_WhenTheProviderServesNoInterface_Fails()
     {
         var failures = new List<string>();
-        var provider = new TestProvider(
-            new ProviderDeclaration("memory", PrimitiveSupport.Supported(Primitives.Occurrence))
-        );
+        var occurrence = PrimitiveSupport.Supported(Primitives.Occurrence);
+        var declaration = new ProviderDeclaration("memory", occurrence);
+        var provider = new TestProvider(declaration);
+        var binding = new ProviderBinding("memory");
+        var catalog = CreateCatalog(provider);
+        var registry = CreateRegistry();
 
-        var bound = PrimitiveBinder.Bind(
-            [new ProviderBinding("memory")],
-            CreateCatalog(provider),
-            CreateRegistry(),
-            failures
-        );
+        var bound = PrimitiveBinder.Bind([binding], catalog, registry, failures);
 
         Assert.Empty(bound);
         Assert.Equal(
@@ -216,16 +201,14 @@ public sealed class PrimitiveBinderTests : IDisposable
     {
         var failures = new List<string>();
         var custom = new Primitive("custom");
-        var provider = new TestProvider(
-            new ProviderDeclaration("memory", PrimitiveSupport.Supported(custom))
-        );
+        var customSupport = PrimitiveSupport.Supported(custom);
+        var declaration = new ProviderDeclaration("memory", customSupport);
+        var provider = new TestProvider(declaration);
+        var binding = new ProviderBinding("memory", custom);
+        var catalog = CreateCatalog(provider);
+        var registry = CreateRegistry();
 
-        var bound = PrimitiveBinder.Bind(
-            [new ProviderBinding("memory", custom)],
-            CreateCatalog(provider),
-            CreateRegistry(),
-            failures
-        );
+        var bound = PrimitiveBinder.Bind([binding], catalog, registry, failures);
 
         Assert.Empty(failures);
         var only = Assert.Single(bound);

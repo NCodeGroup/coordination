@@ -30,13 +30,15 @@ public sealed class OperationInstrumentationTests
         );
 
         Assert.Equal("service!", result);
-        var measurement = Assert.Single(fixture.Collector.GetMeasurementSnapshot());
+        var measurements = fixture.Collector.GetMeasurementSnapshot();
+        var measurement = Assert.Single(measurements);
         Assert.True(measurement.Value >= 0);
         Assert.Equal("memory", measurement.Tags["ncode.coordination.provider"]);
         Assert.Equal("occurrence", measurement.Tags["ncode.coordination.primitive"]);
         Assert.Equal("occurrence.try-record", measurement.Tags["ncode.coordination.operation"]);
         Assert.Equal("success", measurement.Tags["ncode.coordination.outcome"]);
-        Assert.False(measurement.Tags.ContainsKey("error.type"));
+        var hasErrorType = measurement.Tags.ContainsKey("error.type");
+        Assert.False(hasErrorType);
     }
 
     [Fact]
@@ -52,11 +54,16 @@ public sealed class OperationInstrumentationTests
         Assert.Equal("ncode.coordination.operation", span.OperationName);
         Assert.Equal("occurrence.try-record", span.DisplayName);
         Assert.Equal(ActivityKind.Client, span.Kind);
-        Assert.Equal("memory", span.GetTagItem("ncode.coordination.provider"));
-        Assert.Equal("occurrence", span.GetTagItem("ncode.coordination.primitive"));
-        Assert.Equal("occurrence.try-record", span.GetTagItem("ncode.coordination.operation"));
-        Assert.Equal("success", span.GetTagItem("ncode.coordination.outcome"));
-        Assert.Null(span.GetTagItem("error.type"));
+        var provider = span.GetTagItem("ncode.coordination.provider");
+        Assert.Equal("memory", provider);
+        var primitive = span.GetTagItem("ncode.coordination.primitive");
+        Assert.Equal("occurrence", primitive);
+        var operation = span.GetTagItem("ncode.coordination.operation");
+        Assert.Equal("occurrence.try-record", operation);
+        var outcome = span.GetTagItem("ncode.coordination.outcome");
+        Assert.Equal("success", outcome);
+        var errorType = span.GetTagItem("error.type");
+        Assert.Null(errorType);
         Assert.Equal(ActivityStatusCode.Unset, span.Status);
     }
 
@@ -77,14 +84,17 @@ public sealed class OperationInstrumentationTests
         );
 
         Assert.Same(thrown, caught);
-        var measurement = Assert.Single(fixture.Collector.GetMeasurementSnapshot());
+        var measurements = fixture.Collector.GetMeasurementSnapshot();
+        var measurement = Assert.Single(measurements);
         Assert.Equal("failure", measurement.Tags["ncode.coordination.outcome"]);
         Assert.Equal(thrown.Code, measurement.Tags["error.type"]);
         var span = Assert.Single(fixture.Spans);
         Assert.Equal(ActivityStatusCode.Error, span.Status);
         Assert.Null(span.StatusDescription);
-        Assert.Equal("failure", span.GetTagItem("ncode.coordination.outcome"));
-        Assert.Equal(thrown.Code, span.GetTagItem("error.type"));
+        var outcome = span.GetTagItem("ncode.coordination.outcome");
+        Assert.Equal("failure", outcome);
+        var errorType = span.GetTagItem("error.type");
+        Assert.Equal(thrown.Code, errorType);
     }
 
     [Fact]
@@ -92,18 +102,21 @@ public sealed class OperationInstrumentationTests
     {
         using var fixture = new Fixture();
 
+        var thrown = new InvalidOperationException("secret");
         await Assert.ThrowsAsync<InvalidOperationException>(async () =>
             await fixture.Instrumentation.MeasureAsync(Target, Operation, _ =>
-                ValueTask.FromException<string>(new InvalidOperationException("secret"))
+                ValueTask.FromException<string>(thrown)
             )
         );
 
-        var measurement = Assert.Single(fixture.Collector.GetMeasurementSnapshot());
+        var measurements = fixture.Collector.GetMeasurementSnapshot();
+        var measurement = Assert.Single(measurements);
         Assert.Equal("failure", measurement.Tags["ncode.coordination.outcome"]);
         Assert.Equal("System.InvalidOperationException", measurement.Tags["error.type"]);
         var span = Assert.Single(fixture.Spans);
         Assert.Equal(ActivityStatusCode.Error, span.Status);
-        Assert.Equal("System.InvalidOperationException", span.GetTagItem("error.type"));
+        var errorType = span.GetTagItem("error.type");
+        Assert.Equal("System.InvalidOperationException", errorType);
     }
 
     [Fact]
@@ -111,19 +124,24 @@ public sealed class OperationInstrumentationTests
     {
         using var fixture = new Fixture();
 
+        var thrown = new OperationCanceledException();
         await Assert.ThrowsAsync<OperationCanceledException>(async () =>
             await fixture.Instrumentation.MeasureAsync(Target, Operation, _ =>
-                ValueTask.FromException<string>(new OperationCanceledException())
+                ValueTask.FromException<string>(thrown)
             )
         );
 
-        var measurement = Assert.Single(fixture.Collector.GetMeasurementSnapshot());
+        var measurements = fixture.Collector.GetMeasurementSnapshot();
+        var measurement = Assert.Single(measurements);
         Assert.Equal("canceled", measurement.Tags["ncode.coordination.outcome"]);
-        Assert.False(measurement.Tags.ContainsKey("error.type"));
+        var hasErrorType = measurement.Tags.ContainsKey("error.type");
+        Assert.False(hasErrorType);
         var span = Assert.Single(fixture.Spans);
         Assert.Equal(ActivityStatusCode.Unset, span.Status);
-        Assert.Equal("canceled", span.GetTagItem("ncode.coordination.outcome"));
-        Assert.Null(span.GetTagItem("error.type"));
+        var outcome = span.GetTagItem("ncode.coordination.outcome");
+        Assert.Equal("canceled", outcome);
+        var errorType = span.GetTagItem("error.type");
+        Assert.Null(errorType);
     }
 
     [Fact]
@@ -133,10 +151,12 @@ public sealed class OperationInstrumentationTests
 
         await fixture.Instrumentation.MeasureAsync(Target, Operation, _ => ValueTask.CompletedTask);
 
-        var measurement = Assert.Single(fixture.Collector.GetMeasurementSnapshot());
+        var measurements = fixture.Collector.GetMeasurementSnapshot();
+        var measurement = Assert.Single(measurements);
         Assert.Equal("success", measurement.Tags["ncode.coordination.outcome"]);
         var span = Assert.Single(fixture.Spans);
-        Assert.Equal("success", span.GetTagItem("ncode.coordination.outcome"));
+        var outcome = span.GetTagItem("ncode.coordination.outcome");
+        Assert.Equal("success", outcome);
     }
 
     [Fact]
@@ -148,7 +168,9 @@ public sealed class OperationInstrumentationTests
             ValueTask.FromResult(service)
         );
 
-        var measurement = Assert.Single(fixture.Collector.GetMeasurementSnapshot());
+        var measurements = fixture.Collector.GetMeasurementSnapshot();
+        var measurement = Assert.Single(measurements);
+        var keys = measurement.Tags.Keys.Order(StringComparer.Ordinal);
         Assert.Equal(
             [
                 "ncode.coordination.operation",
@@ -156,7 +178,7 @@ public sealed class OperationInstrumentationTests
                 "ncode.coordination.primitive",
                 "ncode.coordination.provider",
             ],
-            measurement.Tags.Keys.Order(StringComparer.Ordinal)
+            keys
         );
     }
 
@@ -184,11 +206,14 @@ public sealed class OperationInstrumentationTests
         }
 
         Assert.Equal(["a", "b"], items);
-        var measurement = Assert.Single(fixture.Collector.GetMeasurementSnapshot());
+        var measurements = fixture.Collector.GetMeasurementSnapshot();
+        var measurement = Assert.Single(measurements);
         Assert.Equal("success", measurement.Tags["ncode.coordination.outcome"]);
-        Assert.False(measurement.Tags.ContainsKey("error.type"));
+        var hasErrorType = measurement.Tags.ContainsKey("error.type");
+        Assert.False(hasErrorType);
         var span = Assert.Single(fixture.Spans);
-        Assert.Equal("success", span.GetTagItem("ncode.coordination.outcome"));
+        var outcome = span.GetTagItem("ncode.coordination.outcome");
+        Assert.Equal("success", outcome);
         Assert.Equal(ActivityStatusCode.Unset, span.Status);
     }
 
@@ -211,7 +236,8 @@ public sealed class OperationInstrumentationTests
             break;
         }
 
-        var measurement = Assert.Single(fixture.Collector.GetMeasurementSnapshot());
+        var measurements = fixture.Collector.GetMeasurementSnapshot();
+        var measurement = Assert.Single(measurements);
         Assert.Equal("success", measurement.Tags["ncode.coordination.outcome"]);
         var span = Assert.Single(fixture.Spans);
         Assert.Equal(ActivityStatusCode.Unset, span.Status);
@@ -246,12 +272,14 @@ public sealed class OperationInstrumentationTests
 
         Assert.Same(thrown, caught);
         Assert.Equal(["a"], items);
-        var measurement = Assert.Single(fixture.Collector.GetMeasurementSnapshot());
+        var measurements = fixture.Collector.GetMeasurementSnapshot();
+        var measurement = Assert.Single(measurements);
         Assert.Equal("failure", measurement.Tags["ncode.coordination.outcome"]);
         Assert.Equal(thrown.Code, measurement.Tags["error.type"]);
         var span = Assert.Single(fixture.Spans);
         Assert.Equal(ActivityStatusCode.Error, span.Status);
-        Assert.Equal(thrown.Code, span.GetTagItem("error.type"));
+        var errorType = span.GetTagItem("error.type");
+        Assert.Equal(thrown.Code, errorType);
     }
 
     [Fact]
@@ -275,7 +303,8 @@ public sealed class OperationInstrumentationTests
             }
         });
 
-        var measurement = Assert.Single(fixture.Collector.GetMeasurementSnapshot());
+        var measurements = fixture.Collector.GetMeasurementSnapshot();
+        var measurement = Assert.Single(measurements);
         Assert.Equal("failure", measurement.Tags["ncode.coordination.outcome"]);
         Assert.Equal("System.InvalidOperationException", measurement.Tags["error.type"]);
         var span = Assert.Single(fixture.Spans);
@@ -295,7 +324,8 @@ public sealed class OperationInstrumentationTests
             cancellationToken
         );
 
-        Assert.Empty(fixture.Collector.GetMeasurementSnapshot());
+        var measurements = fixture.Collector.GetMeasurementSnapshot();
+        Assert.Empty(measurements);
         Assert.Empty(fixture.Spans);
     }
 

@@ -35,15 +35,13 @@ internal static class TestComposition
     public static ServiceProvider Build<TService>(Primitive primitive, TService service)
         where TService : class
     {
-        var declaration = new ProviderDeclaration(
-            ProviderName,
-            PrimitiveSupport.Supported(primitive)
-        );
+        var support = PrimitiveSupport.Supported(primitive);
+        var declaration = new ProviderDeclaration(ProviderName, support);
+        var binding = new ProviderBinding(ProviderName);
         var services = new ServiceCollection();
         services.AddMetrics();
         services.AddCoordination(b =>
-            b.AddProvider(_ => new TestProvider(declaration, service))
-                .Bind(new ProviderBinding(ProviderName))
+            b.AddProvider(_ => new TestProvider(declaration, service)).Bind(binding)
         );
         return services.BuildServiceProvider();
     }

@@ -13,11 +13,20 @@ public sealed class DefaultSemaphoreServiceTests : IDisposable
 
     public void Dispose() => Mocks.Verify();
 
-    private static LeaseTerms Terms() =>
-        LeaseTerms.ForTimeToLive(new TimeToLive(TimeSpan.FromSeconds(30)));
+    private static LeaseTerms Terms()
+    {
+        var ttl = TimeSpan.FromSeconds(30);
+        var timeToLive = new TimeToLive(ttl);
+        return LeaseTerms.ForTimeToLive(timeToLive);
+    }
 
-    private static SemaphoreGrant Grant() =>
-        new(TestComposition.Key, 2, new FencingToken(5), new OwnerToken("o-1"), Terms());
+    private static SemaphoreGrant Grant()
+    {
+        var token = new FencingToken(5);
+        var owner = new OwnerToken("o-1");
+        var terms = Terms();
+        return new SemaphoreGrant(TestComposition.Key, 2, token, owner, terms);
+    }
 
     #region TryAcquireAsync Tests
 
@@ -26,7 +35,8 @@ public sealed class DefaultSemaphoreServiceTests : IDisposable
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var terms = Terms();
-        var expected = SemaphoreAcquireResult.Acquired(Grant());
+        var grant = Grant();
+        var expected = SemaphoreAcquireResult.Acquired(grant);
         var mock = Mocks.Create<ISemaphoreService>();
         mock.Setup(x => x.TryAcquireAsync(TestComposition.Key, 3, terms, null, cancellationToken))
             .ReturnsAsync(expected)
@@ -49,12 +59,13 @@ public sealed class DefaultSemaphoreServiceTests : IDisposable
     public async Task TryAcquireAsync_WhenNoProviderIsBound_ThrowsUnsupported()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
+        var terms = Terms();
         var mock = Mocks.Create<ISemaphoreService>();
         await using var provider = BuildElsewhere(mock.Object);
         var service = provider.GetRequiredService<ISemaphoreService>();
 
         var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
-            await service.TryAcquireAsync(TestComposition.Key, 3, Terms(), null, cancellationToken)
+            await service.TryAcquireAsync(TestComposition.Key, 3, terms, null, cancellationToken)
         );
 
         Assert.Equal(CoordinationErrorCodes.Unsupported, exception.Code);
@@ -69,7 +80,8 @@ public sealed class DefaultSemaphoreServiceTests : IDisposable
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var grant = Grant();
-        var timeToLive = new TimeToLive(TimeSpan.FromSeconds(60));
+        var ttl = TimeSpan.FromSeconds(60);
+        var timeToLive = new TimeToLive(ttl);
         var mock = Mocks.Create<ISemaphoreService>();
         mock.Setup(x => x.RenewAsync(grant, timeToLive, null, cancellationToken))
             .ReturnsAsync(true)
@@ -125,20 +137,16 @@ public sealed class DefaultSemaphoreServiceTests : IDisposable
 
     private static ServiceProvider BuildElsewhere(ISemaphoreService implementation)
     {
-        var declaration = new ProviderDeclaration(
-            TestComposition.ProviderName,
-            PrimitiveSupport.Supported(Primitives.Semaphore)
-        );
+        var support = PrimitiveSupport.Supported(Primitives.Semaphore);
+        var declaration = new ProviderDeclaration(TestComposition.ProviderName, support);
+        var binding = new ProviderBinding(TestComposition.ProviderName)
+        {
+            Keyspace = new Keyspace("elsewhere"),
+        };
         var services = new ServiceCollection();
         services.AddMetrics();
         services.AddCoordination(b =>
-            b.AddProvider(_ => new TestProvider(declaration, implementation))
-                .Bind(
-                    new ProviderBinding(TestComposition.ProviderName)
-                    {
-                        Keyspace = new Keyspace("elsewhere"),
-                    }
-                )
+            b.AddProvider(_ => new TestProvider(declaration, implementation)).Bind(binding)
         );
         return services.BuildServiceProvider();
     }

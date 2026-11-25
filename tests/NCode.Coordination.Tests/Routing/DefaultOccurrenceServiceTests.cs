@@ -19,7 +19,8 @@ public sealed class DefaultOccurrenceServiceTests : IDisposable
     public async Task TryRecordAsync_WhenBound_ReturnsTheProvidersResult()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        var timeToLive = new TimeToLive(TimeSpan.FromMinutes(1));
+        var ttl = TimeSpan.FromMinutes(1);
+        var timeToLive = new TimeToLive(ttl);
         var mock = Mocks.Create<IOccurrenceService>();
         mock.Setup(x => x.TryRecordAsync(TestComposition.Key, timeToLive, null, cancellationToken))
             .ReturnsAsync(OccurrenceStatus.Duplicate)
@@ -41,7 +42,8 @@ public sealed class DefaultOccurrenceServiceTests : IDisposable
     public async Task TryRecordAsync_WhenNoProviderIsBound_ThrowsUnsupported()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        var timeToLive = new TimeToLive(TimeSpan.FromMinutes(1));
+        var ttl = TimeSpan.FromMinutes(1);
+        var timeToLive = new TimeToLive(ttl);
         var mock = Mocks.Create<IOccurrenceService>();
         await using var provider = BuildElsewhere(mock.Object);
         var service = provider.GetRequiredService<IOccurrenceService>();
@@ -57,20 +59,16 @@ public sealed class DefaultOccurrenceServiceTests : IDisposable
 
     private static ServiceProvider BuildElsewhere(IOccurrenceService implementation)
     {
-        var declaration = new ProviderDeclaration(
-            TestComposition.ProviderName,
-            PrimitiveSupport.Supported(Primitives.Occurrence)
-        );
+        var support = PrimitiveSupport.Supported(Primitives.Occurrence);
+        var declaration = new ProviderDeclaration(TestComposition.ProviderName, support);
+        var binding = new ProviderBinding(TestComposition.ProviderName)
+        {
+            Keyspace = new Keyspace("elsewhere"),
+        };
         var services = new ServiceCollection();
         services.AddMetrics();
         services.AddCoordination(b =>
-            b.AddProvider(_ => new TestProvider(declaration, implementation))
-                .Bind(
-                    new ProviderBinding(TestComposition.ProviderName)
-                    {
-                        Keyspace = new Keyspace("elsewhere"),
-                    }
-                )
+            b.AddProvider(_ => new TestProvider(declaration, implementation)).Bind(binding)
         );
         return services.BuildServiceProvider();
     }

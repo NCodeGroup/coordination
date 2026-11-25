@@ -22,9 +22,12 @@ public sealed class GuaranteeRegistryTests
         var registry = GuaranteeRegistry.Create(definitions, failures);
 
         Assert.Empty(failures);
-        Assert.True(registry.IsDefined(A));
-        Assert.True(registry.IsDefined(B));
-        Assert.False(registry.IsDefined(C));
+        var isDefinedA = registry.IsDefined(A);
+        Assert.True(isDefinedA);
+        var isDefinedB = registry.IsDefined(B);
+        Assert.True(isDefinedB);
+        var isDefinedC = registry.IsDefined(C);
+        Assert.False(isDefinedC);
     }
 
     [Fact]
@@ -41,7 +44,8 @@ public sealed class GuaranteeRegistryTests
         var registry = GuaranteeRegistry.Create(definitions, failures);
 
         Assert.Empty(failures);
-        Assert.True(registry.IsDefined(A));
+        var isDefinedA = registry.IsDefined(A);
+        Assert.True(isDefinedA);
     }
 
     [Fact]
@@ -56,7 +60,8 @@ public sealed class GuaranteeRegistryTests
             ["The guarantee 'test.a' is defined twice, with different meanings."],
             failures
         );
-        Assert.True(registry.IsDefined(A));
+        var isDefinedA = registry.IsDefined(A);
+        Assert.True(isDefinedA);
     }
 
     [Fact]
@@ -131,7 +136,9 @@ public sealed class GuaranteeRegistryTests
     public void Close_WhenAGuaranteeIsUndefined_KeepsItAlone()
     {
         var failures = new List<string>();
-        var registry = GuaranteeRegistry.Create([new(A, "test", "a")], failures);
+        GuaranteeDefinition[] definitions = [new(A, "test", "a")];
+
+        var registry = GuaranteeRegistry.Create(definitions, failures);
 
         var closed = registry.Close([C]);
 

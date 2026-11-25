@@ -15,7 +15,11 @@ public sealed class RequirementCheckerTests
         Primitive primitive,
         Keyspace? keyspace,
         params Guarantee[] guarantees
-    ) => new(provider, primitive, keyspace, null, Registry.Close(guarantees));
+    )
+    {
+        var closed = Registry.Close(guarantees);
+        return new BoundPrimitive(provider, primitive, keyspace, null, closed);
+    }
 
     private static BindingTable Build(params BoundPrimitive[] bound) =>
         BindingTable.Create(bound, []);
@@ -36,9 +40,14 @@ public sealed class RequirementCheckerTests
     [Fact]
     public void Check_WhenTheBindingKeepsEveryGuarantee_DoesNotFail()
     {
-        var table = Build(
-            Bound("memory", Primitives.Occurrence, null, Guarantees.Durable, Guarantees.ServerClock)
+        var entry = Bound(
+            "memory",
+            Primitives.Occurrence,
+            null,
+            Guarantees.Durable,
+            Guarantees.ServerClock
         );
+        var table = Build(entry);
         var requirement = new FeatureRequirement(
             "replay",
             Primitives.Occurrence,
@@ -54,9 +63,13 @@ public sealed class RequirementCheckerTests
     [Fact]
     public void Check_WhenAnImpliedGuaranteeIsRequired_DoesNotFail()
     {
-        var table = Build(
-            Bound("memory", Primitives.Occurrence, null, Guarantees.LinearizableAcrossFailover)
+        var entry = Bound(
+            "memory",
+            Primitives.Occurrence,
+            null,
+            Guarantees.LinearizableAcrossFailover
         );
+        var table = Build(entry);
         var requirement = new FeatureRequirement(
             "replay",
             Primitives.Occurrence,
@@ -72,7 +85,8 @@ public sealed class RequirementCheckerTests
     [Fact]
     public void Check_WhenGuaranteesAreMissing_ListsEachWithFeaturePrimitiveAndProvider()
     {
-        var table = Build(Bound("memory", Primitives.Occurrence, null, Guarantees.Volatile));
+        var entry = Bound("memory", Primitives.Occurrence, null, Guarantees.Volatile);
+        var table = Build(entry);
         var requirement = new FeatureRequirement(
             "replay",
             Primitives.Occurrence,
@@ -94,7 +108,8 @@ public sealed class RequirementCheckerTests
     [Fact]
     public void Check_WhenNoBindingServesThePrimitive_Fails()
     {
-        var table = Build(Bound("memory", Primitives.Lease, null));
+        var entry = Bound("memory", Primitives.Lease, null);
+        var table = Build(entry);
         var requirement = new FeatureRequirement("replay", Primitives.Occurrence);
 
         var failures = Check(table, false, requirement);
@@ -109,10 +124,9 @@ public sealed class RequirementCheckerTests
     [Fact]
     public void Check_WhenTheRequirementNamesAKeyspace_UsesItsBinding()
     {
-        var table = Build(
-            Bound("fast", Primitives.Occurrence, null, Guarantees.Durable),
-            Bound("slow", Primitives.Occurrence, Tenant)
-        );
+        var fast = Bound("fast", Primitives.Occurrence, null, Guarantees.Durable);
+        var slow = Bound("slow", Primitives.Occurrence, Tenant);
+        var table = Build(fast, slow);
         var requirement = new FeatureRequirement(
             "replay",
             Primitives.Occurrence,
@@ -134,12 +148,10 @@ public sealed class RequirementCheckerTests
     [Fact]
     public void Check_WhenAGuaranteeIsUndefined_Fails()
     {
-        var table = Build(Bound("memory", Primitives.Occurrence, null));
-        var requirement = new FeatureRequirement(
-            "replay",
-            Primitives.Occurrence,
-            new Guarantee("custom.unknown")
-        );
+        var entry = Bound("memory", Primitives.Occurrence, null);
+        var table = Build(entry);
+        var unknown = new Guarantee("custom.unknown");
+        var requirement = new FeatureRequirement("replay", Primitives.Occurrence, unknown);
 
         var failures = Check(table, false, requirement);
 
@@ -153,9 +165,13 @@ public sealed class RequirementCheckerTests
     [Fact]
     public void Check_WhenSingleNode_AcceptsWithinProcessForLinearizability()
     {
-        var table = Build(
-            Bound("memory", Primitives.Occurrence, null, Guarantees.LinearizableWithinProcess)
+        var entry = Bound(
+            "memory",
+            Primitives.Occurrence,
+            null,
+            Guarantees.LinearizableWithinProcess
         );
+        var table = Build(entry);
         var requirement = new FeatureRequirement(
             "replay",
             Primitives.Occurrence,
@@ -171,9 +187,13 @@ public sealed class RequirementCheckerTests
     [Fact]
     public void Check_WhenNotSingleNode_RefusesWithinProcessForLinearizability()
     {
-        var table = Build(
-            Bound("memory", Primitives.Occurrence, null, Guarantees.LinearizableWithinProcess)
+        var entry = Bound(
+            "memory",
+            Primitives.Occurrence,
+            null,
+            Guarantees.LinearizableWithinProcess
         );
+        var table = Build(entry);
         var requirement = new FeatureRequirement(
             "replay",
             Primitives.Occurrence,
@@ -192,9 +212,13 @@ public sealed class RequirementCheckerTests
     [Fact]
     public void Check_WhenSingleNode_StillRefusesOtherMissingGuarantees()
     {
-        var table = Build(
-            Bound("memory", Primitives.Occurrence, null, Guarantees.LinearizableWithinProcess)
+        var entry = Bound(
+            "memory",
+            Primitives.Occurrence,
+            null,
+            Guarantees.LinearizableWithinProcess
         );
+        var table = Build(entry);
         var requirement = new FeatureRequirement(
             "replay",
             Primitives.Occurrence,
@@ -214,7 +238,8 @@ public sealed class RequirementCheckerTests
     [Fact]
     public void Check_WhenSeveralRequirementsFail_ListsEveryOne()
     {
-        var table = Build(Bound("memory", Primitives.Occurrence, null));
+        var entry = Bound("memory", Primitives.Occurrence, null);
+        var table = Build(entry);
         var first = new FeatureRequirement("replay", Primitives.Occurrence, Guarantees.Durable);
         var second = new FeatureRequirement("locks", Primitives.Lease);
 

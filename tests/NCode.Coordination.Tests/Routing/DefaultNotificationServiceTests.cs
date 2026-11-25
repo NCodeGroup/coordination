@@ -55,9 +55,10 @@ public sealed class DefaultNotificationServiceTests : IDisposable
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var notification = Notification.Message(TestComposition.Key, 1, (byte[])[1, 2, 3]);
+        var stream = TestComposition.Stream(notification);
         var mock = Mocks.Create<INotificationService>();
         mock.Setup(x => x.SubscribeAsync(TestComposition.Key, null, cancellationToken))
-            .Returns(TestComposition.Stream(notification))
+            .Returns(stream)
             .Verifiable();
         await using var provider = TestComposition.Build(Primitives.Notification, mock.Object);
         var service = provider.GetRequiredService<INotificationService>();
@@ -70,27 +71,24 @@ public sealed class DefaultNotificationServiceTests : IDisposable
             items.Add(item);
         }
 
-        Assert.Same(notification, Assert.Single(items));
+        var single = Assert.Single(items);
+        Assert.Same(notification, single);
     }
 
     #endregion
 
     private static ServiceProvider BuildElsewhere(INotificationService implementation)
     {
-        var declaration = new ProviderDeclaration(
-            TestComposition.ProviderName,
-            PrimitiveSupport.Supported(Primitives.Notification)
-        );
+        var support = PrimitiveSupport.Supported(Primitives.Notification);
+        var declaration = new ProviderDeclaration(TestComposition.ProviderName, support);
+        var binding = new ProviderBinding(TestComposition.ProviderName)
+        {
+            Keyspace = new Keyspace("elsewhere"),
+        };
         var services = new ServiceCollection();
         services.AddMetrics();
         services.AddCoordination(b =>
-            b.AddProvider(_ => new TestProvider(declaration, implementation))
-                .Bind(
-                    new ProviderBinding(TestComposition.ProviderName)
-                    {
-                        Keyspace = new Keyspace("elsewhere"),
-                    }
-                )
+            b.AddProvider(_ => new TestProvider(declaration, implementation)).Bind(binding)
         );
         return services.BuildServiceProvider();
     }

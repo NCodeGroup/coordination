@@ -13,11 +13,19 @@ public sealed class DefaultRecordServiceTests : IDisposable
 
     public void Dispose() => Mocks.Verify();
 
-    private static StoredRecord Stored() =>
-        new(TestComposition.Key, new byte[] { 1 }, new Revision(3));
+    private static StoredRecord Stored()
+    {
+        ReadOnlyMemory<byte> value = (byte[])[1];
+        var revision = new Revision(3);
+        return new StoredRecord(TestComposition.Key, value, revision);
+    }
 
-    private static RecordLifetime Lifetime() =>
-        RecordLifetime.ForTimeToLive(new TimeToLive(TimeSpan.FromSeconds(30)));
+    private static RecordLifetime Lifetime()
+    {
+        var ttl = TimeSpan.FromSeconds(30);
+        var timeToLive = new TimeToLive(ttl);
+        return RecordLifetime.ForTimeToLive(timeToLive);
+    }
 
     #region CreateAsync Tests
 
@@ -25,9 +33,10 @@ public sealed class DefaultRecordServiceTests : IDisposable
     public async Task CreateAsync_WhenBound_ReturnsTheProvidersResult()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        ReadOnlyMemory<byte> value = new byte[] { 1, 2 };
+        ReadOnlyMemory<byte> value = (byte[])[1, 2];
         var lifetime = Lifetime();
-        var expected = RecordWriteResult.Written(new Revision(1));
+        var writtenRevision = new Revision(1);
+        var expected = RecordWriteResult.Written(writtenRevision);
         var mock = Mocks.Create<IRecordService>();
         mock.Setup(x =>
                 x.CreateAsync(TestComposition.Key, value, lifetime, null, cancellationToken)
@@ -52,6 +61,7 @@ public sealed class DefaultRecordServiceTests : IDisposable
     public async Task CreateAsync_WhenNoProviderIsBound_ThrowsUnsupported()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
+        var lifetime = Lifetime();
         var mock = Mocks.Create<IRecordService>();
         await using var provider = BuildElsewhere(mock.Object);
         var service = provider.GetRequiredService<IRecordService>();
@@ -60,7 +70,7 @@ public sealed class DefaultRecordServiceTests : IDisposable
             await service.CreateAsync(
                 TestComposition.Key,
                 ReadOnlyMemory<byte>.Empty,
-                Lifetime(),
+                lifetime,
                 null,
                 cancellationToken
             )
@@ -98,9 +108,10 @@ public sealed class DefaultRecordServiceTests : IDisposable
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var expectedRevision = new Revision(1);
-        ReadOnlyMemory<byte> value = new byte[] { 1, 2 };
+        ReadOnlyMemory<byte> value = (byte[])[1, 2];
         var lifetime = Lifetime();
-        var expected = RecordWriteResult.Written(new Revision(2));
+        var writtenRevision = new Revision(2);
+        var expected = RecordWriteResult.Written(writtenRevision);
         var mock = Mocks.Create<IRecordService>();
         mock.Setup(x =>
                 x.CompareAndSwapAsync(
@@ -191,7 +202,9 @@ public sealed class DefaultRecordServiceTests : IDisposable
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var page = new RecordPageRequest(10);
-        var expected = new RecordPage(new Revision(4), Stored());
+        var pageRevision = new Revision(4);
+        var stored = Stored();
+        var expected = new RecordPage(pageRevision, stored);
         var mock = Mocks.Create<IRecordService>();
         mock.Setup(x => x.ListAsync(TestComposition.Key, page, null, cancellationToken))
             .ReturnsAsync(expected)
@@ -208,20 +221,16 @@ public sealed class DefaultRecordServiceTests : IDisposable
 
     private static ServiceProvider BuildElsewhere(IRecordService implementation)
     {
-        var declaration = new ProviderDeclaration(
-            TestComposition.ProviderName,
-            PrimitiveSupport.Supported(Primitives.Record)
-        );
+        var support = PrimitiveSupport.Supported(Primitives.Record);
+        var declaration = new ProviderDeclaration(TestComposition.ProviderName, support);
+        var binding = new ProviderBinding(TestComposition.ProviderName)
+        {
+            Keyspace = new Keyspace("elsewhere"),
+        };
         var services = new ServiceCollection();
         services.AddMetrics();
         services.AddCoordination(b =>
-            b.AddProvider(_ => new TestProvider(declaration, implementation))
-                .Bind(
-                    new ProviderBinding(TestComposition.ProviderName)
-                    {
-                        Keyspace = new Keyspace("elsewhere"),
-                    }
-                )
+            b.AddProvider(_ => new TestProvider(declaration, implementation)).Bind(binding)
         );
         return services.BuildServiceProvider();
     }

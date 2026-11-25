@@ -15,11 +15,8 @@ public sealed class DefaultTransactionServiceTests : IDisposable
 
     private static RecordTransaction Transaction()
     {
-        var write = RecordWrite.Put(
-            TestComposition.Key,
-            new byte[] { 1 },
-            RecordLifetime.Persistent
-        );
+        ReadOnlyMemory<byte> value = (byte[])[1];
+        var write = RecordWrite.Put(TestComposition.Key, value, RecordLifetime.Persistent);
         return new RecordTransaction([], [write]);
     }
 
@@ -30,7 +27,8 @@ public sealed class DefaultTransactionServiceTests : IDisposable
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var transaction = Transaction();
-        var expected = new TransactionResult(true, new Revision(4));
+        var revision = new Revision(4);
+        var expected = new TransactionResult(true, revision);
         var mock = Mocks.Create<ITransactionService>();
         mock.Setup(x => x.ExecuteAsync(transaction, null, cancellationToken))
             .ReturnsAsync(expected)
@@ -63,20 +61,16 @@ public sealed class DefaultTransactionServiceTests : IDisposable
 
     private static ServiceProvider BuildElsewhere(ITransactionService implementation)
     {
-        var declaration = new ProviderDeclaration(
-            TestComposition.ProviderName,
-            PrimitiveSupport.Supported(Primitives.Transaction)
-        );
+        var support = PrimitiveSupport.Supported(Primitives.Transaction);
+        var declaration = new ProviderDeclaration(TestComposition.ProviderName, support);
+        var binding = new ProviderBinding(TestComposition.ProviderName)
+        {
+            Keyspace = new Keyspace("elsewhere"),
+        };
         var services = new ServiceCollection();
         services.AddMetrics();
         services.AddCoordination(b =>
-            b.AddProvider(_ => new TestProvider(declaration, implementation))
-                .Bind(
-                    new ProviderBinding(TestComposition.ProviderName)
-                    {
-                        Keyspace = new Keyspace("elsewhere"),
-                    }
-                )
+            b.AddProvider(_ => new TestProvider(declaration, implementation)).Bind(binding)
         );
         return services.BuildServiceProvider();
     }

@@ -11,8 +11,11 @@ public sealed class ProviderCatalogTests
     private static IServiceProvider Services { get; } =
         new ServiceCollection().BuildServiceProvider();
 
-    private static TestProvider CreateProvider(string name, params PrimitiveSupport[] primitives) =>
-        new(new ProviderDeclaration(name, primitives));
+    private static TestProvider CreateProvider(string name, params PrimitiveSupport[] primitives)
+    {
+        var declaration = new ProviderDeclaration(name, primitives);
+        return new TestProvider(declaration);
+    }
 
     #region Create Tests
 
@@ -52,18 +55,17 @@ public sealed class ProviderCatalogTests
 
         Assert.Equal(["Two providers are named 'memory'."], failures);
         Assert.Equal<ICoordinationProvider>([first], catalog.Providers);
-        Assert.Same(first, catalog.Find("memory"));
+        var found = catalog.Find("memory");
+        Assert.Same(first, found);
     }
 
     [Fact]
     public void Create_WhenADeclarationListsAPrimitiveTwice_Fails()
     {
         var failures = new List<string>();
-        var provider = CreateProvider(
-            "memory",
-            PrimitiveSupport.Supported(Primitives.Lease),
-            PrimitiveSupport.Unsupported(Primitives.Lease, "Not twice.")
-        );
+        var supported = PrimitiveSupport.Supported(Primitives.Lease);
+        var unsupported = PrimitiveSupport.Unsupported(Primitives.Lease, "Not twice.");
+        var provider = CreateProvider("memory", supported, unsupported);
 
         var catalog = ProviderCatalog.Create([_ => provider], Services, failures);
 
@@ -93,7 +95,8 @@ public sealed class ProviderCatalogTests
             failures
         );
 
-        Assert.Same(Services, Assert.Single(received));
+        var single = Assert.Single(received);
+        Assert.Same(Services, single);
     }
 
     #endregion
@@ -116,7 +119,8 @@ public sealed class ProviderCatalogTests
     public void Find_WhenNameIsUnknown_ReturnsNull()
     {
         var failures = new List<string>();
-        var catalog = ProviderCatalog.Create([_ => CreateProvider("memory")], Services, failures);
+        var provider = CreateProvider("memory");
+        var catalog = ProviderCatalog.Create([_ => provider], Services, failures);
 
         var found = catalog.Find("other");
 
