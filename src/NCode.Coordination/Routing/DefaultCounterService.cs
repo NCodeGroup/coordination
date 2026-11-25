@@ -83,7 +83,19 @@ internal class DefaultCounterService(
             );
         }
 
-        var target = Composition.Resolve<ICounterService>(Primitives.Counter, first.Key.Keyspace);
+        var keyspace = first.Key.Keyspace;
+        foreach (var increment in increments)
+        {
+            if (increment is null || !keyspace.Equals(increment.Key.Keyspace))
+            {
+                throw new ArgumentException(
+                    "A batch's increments are all non-null and in one keyspace.",
+                    nameof(increments)
+                );
+            }
+        }
+
+        var target = Composition.Resolve<ICounterService>(Primitives.Counter, keyspace);
         return Instrumentation.MeasureAsync(target, Operations.CounterIncrementBatch, service =>
             service.IncrementBatchAsync(increments, options, cancellationToken)
         );

@@ -144,6 +144,30 @@ public sealed class DefaultCounterServiceTests : IDisposable
         Assert.Equal("increments", exception.ParamName);
     }
 
+    [Fact]
+    public async Task IncrementBatchAsync_WhenIncrementsSpanKeyspaces_Throws()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var ttl = TimeSpan.FromMinutes(1);
+        var timeToLive = new TimeToLive(ttl);
+        var elsewhere = new Keyspace("elsewhere");
+        var otherKey = elsewhere.CreateKey("counter");
+        IReadOnlyList<CounterIncrement> increments =
+        [
+            new CounterIncrement(TestComposition.Key, 1, 10, timeToLive),
+            new CounterIncrement(otherKey, 1, 10, timeToLive),
+        ];
+        var mock = Mocks.Create<ICounterService>();
+        await using var provider = TestComposition.Build(Primitives.Counter, mock.Object);
+        var service = provider.GetRequiredService<ICounterService>();
+
+        var exception = await Assert.ThrowsAsync<ArgumentException>(async () =>
+            await service.IncrementBatchAsync(increments, null, cancellationToken)
+        );
+
+        Assert.Equal("increments", exception.ParamName);
+    }
+
     #endregion
 
     private static ServiceProvider BuildElsewhere(ICounterService implementation)
