@@ -26,6 +26,17 @@ public sealed class SequenceBlockTests
     }
 
     [Fact]
+    public void Constructor_WhenCountIsAtTheBlockLimit_Accepts()
+    {
+        const int count = CoordinationLimits.MaxSequenceBlock;
+
+        var block = new SequenceBlock(1, count);
+
+        Assert.Equal(count, block.Count);
+        Assert.Equal(count, block.Last);
+    }
+
+    [Fact]
     public void Constructor_WhenFirstIsZero_Throws()
     {
         var exception = Assert.Throws<ArgumentOutOfRangeException>(() => new SequenceBlock(0, 1));
@@ -44,8 +55,10 @@ public sealed class SequenceBlockTests
     [Fact]
     public void Constructor_WhenCountIsAboveTheLimit_Throws()
     {
+        const int count = CoordinationLimits.MaxSequenceBlock + 1;
+
         var exception = Assert.Throws<ArgumentOutOfRangeException>(() =>
-            new SequenceBlock(1, 65_537)
+            new SequenceBlock(1, count)
         );
 
         Assert.Equal("count", exception.ParamName);

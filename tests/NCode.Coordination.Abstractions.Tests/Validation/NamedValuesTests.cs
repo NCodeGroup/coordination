@@ -30,6 +30,16 @@ public sealed class NamedValuesTests
     }
 
     [Fact]
+    public void Check_WhenEntryCountEqualsTheMaximum_Accepts()
+    {
+        var values = ImmutableDictionary<string, string>.Empty.Add("a", "x").Add("b", "x");
+
+        var result = NamedValues.Check(values, 2, 5, "values");
+
+        Assert.Equal(2, result.Count);
+    }
+
+    [Fact]
     public void Check_WhenValuesAreNull_Throws()
     {
         var exception = Assert.Throws<ArgumentNullException>(() =>

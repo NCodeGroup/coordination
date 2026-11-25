@@ -31,9 +31,11 @@ public sealed class NotificationTests
     {
         var topic = Topic();
 
-        var notification = Notification.Message(topic, 1, new byte[4_096]);
+        var payload = new byte[CoordinationLimits.MaxPayloadLength];
 
-        Assert.Equal(4_096, notification.Payload.Length);
+        var notification = Notification.Message(topic, 1, payload);
+
+        Assert.Equal(CoordinationLimits.MaxPayloadLength, notification.Payload.Length);
     }
 
     [Fact]
@@ -41,8 +43,10 @@ public sealed class NotificationTests
     {
         var topic = Topic();
 
+        var payload = new byte[CoordinationLimits.MaxPayloadLength + 1];
+
         var exception = Assert.Throws<ArgumentException>(() =>
-            Notification.Message(topic, 1, new byte[4_097])
+            Notification.Message(topic, 1, payload)
         );
 
         Assert.Equal("payload", exception.ParamName);

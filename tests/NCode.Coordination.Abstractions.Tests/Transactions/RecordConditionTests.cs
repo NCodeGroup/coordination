@@ -95,9 +95,11 @@ public sealed class RecordConditionTests
     {
         var key = Key();
 
-        var condition = RecordCondition.ValueEquals(key, new byte[65_536]);
+        var value = new byte[CoordinationLimits.MaxValueLength];
 
-        Assert.Equal(65_536, condition.Value.Length);
+        var condition = RecordCondition.ValueEquals(key, value);
+
+        Assert.Equal(CoordinationLimits.MaxValueLength, condition.Value.Length);
     }
 
     [Fact]
@@ -105,8 +107,10 @@ public sealed class RecordConditionTests
     {
         var key = Key();
 
+        var value = new byte[CoordinationLimits.MaxValueLength + 1];
+
         var exception = Assert.Throws<ArgumentException>(() =>
-            RecordCondition.ValueEquals(key, new byte[65_537])
+            RecordCondition.ValueEquals(key, value)
         );
 
         Assert.Equal("value", exception.ParamName);

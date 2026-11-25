@@ -31,9 +31,11 @@ public sealed class RecordWriteTests
     {
         var key = Key();
 
-        var write = RecordWrite.Put(key, new byte[65_536], RecordLifetime.Persistent);
+        var value = new byte[CoordinationLimits.MaxValueLength];
 
-        Assert.Equal(65_536, write.Value.Length);
+        var write = RecordWrite.Put(key, value, RecordLifetime.Persistent);
+
+        Assert.Equal(CoordinationLimits.MaxValueLength, write.Value.Length);
     }
 
     [Fact]
@@ -41,8 +43,10 @@ public sealed class RecordWriteTests
     {
         var key = Key();
 
+        var value = new byte[CoordinationLimits.MaxValueLength + 1];
+
         var exception = Assert.Throws<ArgumentException>(() =>
-            RecordWrite.Put(key, new byte[65_537], RecordLifetime.Persistent)
+            RecordWrite.Put(key, value, RecordLifetime.Persistent)
         );
 
         Assert.Equal("value", exception.ParamName);

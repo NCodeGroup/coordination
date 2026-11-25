@@ -66,7 +66,8 @@ public sealed class OpaqueTokenTests
     [Theory]
     [InlineData("a b")]
     [InlineData("a\tb")]
-    [InlineData("café")]
+    [InlineData("caf\u00e9")]
+    [InlineData("cafe\u0301")]
     public void Validate_WhenValueHasACharacterOutsideVisibleAscii_Throws(string value)
     {
         var exception = Assert.Throws<ArgumentException>(() =>

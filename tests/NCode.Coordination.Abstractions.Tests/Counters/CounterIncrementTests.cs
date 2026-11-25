@@ -42,6 +42,17 @@ public sealed class CounterIncrementTests
     }
 
     [Fact]
+    public void Constructor_WhenAmountIsOne_Accepts()
+    {
+        var key = Key();
+        var timeToLive = Ttl();
+
+        var increment = new CounterIncrement(key, 1, 10, timeToLive);
+
+        Assert.Equal(1, increment.Amount);
+    }
+
+    [Fact]
     public void Constructor_WhenAmountIsZero_Throws()
     {
         var key = Key();

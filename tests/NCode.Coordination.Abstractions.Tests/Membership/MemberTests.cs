@@ -24,6 +24,17 @@ public sealed class MemberTests
     }
 
     [Fact]
+    public void Constructor_WhenAddressHasTheMaximumLength_Accepts()
+    {
+        var session = NewSession();
+        var address = new string('a', CoordinationLimits.MaxAddressLength);
+
+        var member = new Member(session, "node-1", address);
+
+        Assert.Equal(address, member.Address);
+    }
+
+    [Fact]
     public void Constructor_WhenSessionIsNull_Throws()
     {
         var exception = Assert.Throws<ArgumentNullException>(() =>
@@ -92,6 +103,20 @@ public sealed class MemberTests
         };
 
         Assert.Equal("a", member.Metadata["app.zone"]);
+    }
+
+    [Fact]
+    public void Metadata_WhenThereAreTheMaximumEntries_Accepts()
+    {
+        var values = Enumerable
+            .Range(0, CoordinationLimits.MaxMetadataEntries)
+            .ToImmutableDictionary(i => $"x.n{i}", _ => "v");
+
+        var session = NewSession();
+
+        var member = new Member(session, "node-1", "10.0.0.4:5000") { Metadata = values };
+
+        Assert.Equal(CoordinationLimits.MaxMetadataEntries, member.Metadata.Count);
     }
 
     [Fact]

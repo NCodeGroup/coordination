@@ -62,6 +62,16 @@ public sealed class CounterBatchResultTests
     }
 
     [Fact]
+    public void ExceededIndex_WhenIndexIsOnePastTheLastCount_Throws()
+    {
+        var exception = Assert.Throws<ArgumentOutOfRangeException>(() =>
+            new CounterBatchResult([3, 5]) { ExceededIndex = 2 }
+        );
+
+        Assert.Equal("ExceededIndex", exception.ParamName);
+    }
+
+    [Fact]
     public void ExceededIndex_WhenNegative_Throws()
     {
         var exception = Assert.Throws<ArgumentOutOfRangeException>(() =>

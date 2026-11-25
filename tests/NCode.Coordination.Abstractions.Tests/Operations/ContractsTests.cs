@@ -77,6 +77,14 @@ public sealed class ContractsTests
             Assert.True(parameters.Length >= 2, method.Name);
             Assert.Equal(typeof(OperationOptions), parameters[^2].ParameterType);
             Assert.Equal(typeof(CancellationToken), parameters[^1].ParameterType);
+        }
+    }
+
+    [Fact]
+    public void Contracts_Always_ReturnValueTaskOrAsyncEnumerable()
+    {
+        foreach (var method in Table.SelectMany(row => row.Contract.GetMethods()))
+        {
             var isAllowed = IsAllowedReturnType(method.ReturnType);
 
             Assert.True(isAllowed, method.Name);

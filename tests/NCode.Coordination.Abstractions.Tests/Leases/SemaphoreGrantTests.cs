@@ -57,16 +57,17 @@ public sealed class SemaphoreGrantTests
     {
         var resource = Resource();
         var terms = Terms();
+        const int slot = CoordinationLimits.MaxSemaphoreCapacity - 1;
 
         var grant = new SemaphoreGrant(
             resource,
-            CoordinationLimits.MaxSemaphoreCapacity - 1,
+            slot,
             new FencingToken(5),
             new OwnerToken("o-1"),
             terms
         );
 
-        Assert.Equal(1_023, grant.Slot);
+        Assert.Equal(slot, grant.Slot);
     }
 
     [Fact]
@@ -99,9 +100,10 @@ public sealed class SemaphoreGrantTests
     {
         var resource = Resource();
         var terms = Terms();
+        const int slot = CoordinationLimits.MaxSemaphoreCapacity;
 
         var exception = Assert.Throws<ArgumentOutOfRangeException>(() =>
-            new SemaphoreGrant(resource, 1_024, new FencingToken(5), new OwnerToken("o-1"), terms)
+            new SemaphoreGrant(resource, slot, new FencingToken(5), new OwnerToken("o-1"), terms)
         );
 
         Assert.Equal("slot", exception.ParamName);

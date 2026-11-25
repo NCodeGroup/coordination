@@ -29,6 +29,29 @@ public sealed class OperationOptionsTests
     }
 
     [Fact]
+    public void Extensions_WhenThereAreTheMaximum_Accepts()
+    {
+        var values = Enumerable
+            .Range(0, CoordinationLimits.MaxExtensions)
+            .ToImmutableDictionary(i => $"x.n{i}", _ => "v");
+
+        var options = new OperationOptions { Extensions = values };
+
+        Assert.Equal(CoordinationLimits.MaxExtensions, options.Extensions.Count);
+    }
+
+    [Fact]
+    public void Extensions_WhenAValueHasTheMaximumLength_Accepts()
+    {
+        var value = new string('a', CoordinationLimits.MaxExtensionValueLength);
+        var values = ImmutableDictionary<string, string>.Empty.Add("x.y", value);
+
+        var options = new OperationOptions { Extensions = values };
+
+        Assert.Equal(value, options.Extensions["x.y"]);
+    }
+
+    [Fact]
     public void Extensions_WhenNull_Throws()
     {
         var exception = Assert.Throws<ArgumentNullException>(() =>

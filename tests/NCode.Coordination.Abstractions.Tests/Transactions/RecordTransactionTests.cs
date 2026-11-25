@@ -53,13 +53,19 @@ public sealed class RecordTransactionTests
     [Fact]
     public void Constructor_WhenThereAreSixtyFourConditionsAndWrites_Accepts()
     {
-        var conditions = Enumerable.Range(0, 64).Select(i => Absent($"c{i}")).ToArray();
-        var writes = Enumerable.Range(0, 64).Select(i => Put($"w{i}")).ToArray();
+        var conditions = Enumerable
+            .Range(0, CoordinationLimits.MaxTransactionConditions)
+            .Select(i => Absent($"c{i}"))
+            .ToArray();
+        var writes = Enumerable
+            .Range(0, CoordinationLimits.MaxTransactionWrites)
+            .Select(i => Put($"w{i}"))
+            .ToArray();
 
         var transaction = new RecordTransaction(conditions, writes);
 
-        Assert.Equal(64, transaction.Conditions.Length);
-        Assert.Equal(64, transaction.OnSuccess.Length);
+        Assert.Equal(CoordinationLimits.MaxTransactionConditions, transaction.Conditions.Length);
+        Assert.Equal(CoordinationLimits.MaxTransactionWrites, transaction.OnSuccess.Length);
     }
 
     [Fact]
@@ -89,7 +95,10 @@ public sealed class RecordTransactionTests
     [Fact]
     public void Constructor_WhenThereAreSixtyFiveConditions_Throws()
     {
-        var conditions = Enumerable.Range(0, 65).Select(i => Absent($"c{i}")).ToArray();
+        var conditions = Enumerable
+            .Range(0, CoordinationLimits.MaxTransactionConditions + 1)
+            .Select(i => Absent($"c{i}"))
+            .ToArray();
         var write = Put("b");
 
         var exception = Assert.Throws<ArgumentException>(() =>
@@ -142,7 +151,10 @@ public sealed class RecordTransactionTests
     [Fact]
     public void Constructor_WhenThereAreSixtyFiveWrites_Throws()
     {
-        var writes = Enumerable.Range(0, 65).Select(i => Put($"w{i}")).ToArray();
+        var writes = Enumerable
+            .Range(0, CoordinationLimits.MaxTransactionWrites + 1)
+            .Select(i => Put($"w{i}"))
+            .ToArray();
 
         var exception = Assert.Throws<ArgumentException>(() => new RecordTransaction([], writes));
 
@@ -240,7 +252,12 @@ public sealed class RecordTransactionTests
     [Fact]
     public void OnFailure_WhenThereAreSixtyFiveWrites_Throws()
     {
-        ImmutableArray<RecordWrite> writes = [.. Enumerable.Range(0, 65).Select(i => Put($"w{i}"))];
+        ImmutableArray<RecordWrite> writes =
+        [
+            .. Enumerable
+                .Range(0, CoordinationLimits.MaxTransactionWrites + 1)
+                .Select(i => Put($"w{i}")),
+        ];
         var success = Put("a");
 
         var exception = Assert.Throws<ArgumentException>(() =>
