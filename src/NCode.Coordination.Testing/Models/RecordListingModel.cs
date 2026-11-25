@@ -85,7 +85,8 @@ internal class RecordListingModel(ImmutableArray<CoordinationKey> keys)
             }
 
             var shown = operation with { Input = read, Output = stored };
-            if (!KeyModel.TryApply(learned.Get(index), shown, out var applied))
+            var current = learned.Get(index);
+            if (!KeyModel.TryApply(current, shown, out var applied))
             {
                 return false;
             }
