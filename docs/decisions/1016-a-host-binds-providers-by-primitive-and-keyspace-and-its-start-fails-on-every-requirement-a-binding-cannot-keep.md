@@ -11,15 +11,15 @@ The composition refuses at startup a requirement no provider meets
 each provider has a configurator of its own
 ([ADR-1003](1003-providers-are-named-for-the-protocol-they-speak-and-carry-a-profile-per-vendor.md)). A provider
 package references only the abstractions
-([ADR-0132](project-template/0132-implementation-packages-depend-only-on-abstractions.md)), and the base abstractions
-stay on the BCL alone
-([ADR-0133](project-template/0133-abstractions-are-framework-free-and-tiered.md)).
+([project-template ADR-0132](project-template/0132-implementation-packages-depend-only-on-abstractions.md)),
+and the base abstractions stay on the BCL alone
+([project-template ADR-0133](project-template/0133-abstractions-are-framework-free-and-tiered.md)).
 
 Keyspaces carry tenant segments, so a span or a metric that recorded one would leak a tenant's identifier. Metrics have
 one owner per signal and bounded dimensions
-([ADR-0113](project-template/0113-metrics-have-one-owner-per-signal-and-bounded-dimensions.md)), and one activity
-source is named like its meter
-([ADR-0114](project-template/0114-one-activity-source-named-like-its-meter.md)).
+([project-template ADR-0113](project-template/0113-metrics-have-one-owner-per-signal-and-bounded-dimensions.md)),
+and one activity source is named like its meter
+([project-template ADR-0114](project-template/0114-one-activity-source-named-like-its-meter.md)).
 
 ## Decision
 
@@ -42,9 +42,10 @@ keys.**
 3. **Requirement keyspace.** A requirement without a keyspace is checked against the binding without a keyspace only,
    the composition's default binding. A requirement with a keyspace is checked against the binding that serves it.
 4. **Duplicate and undefined guarantees.** Two definitions of one guarantee name that agree in dimension, description
-   and implications count as one, so two instances of one provider can be registered. A name defined twice with
-   different meanings fails the start. A guarantee that a declaration, an implication or a requirement names and the
-   registry does not define fails the start with its name.
+   and implications count as one, so two instances of one provider, each registered under a name of its own
+   (such as one per keyspace), can define the same guarantees. A name defined twice with different meanings fails
+   the start. A guarantee that a declaration, an implication or a requirement names and the registry
+   does not define fails the start with its name.
 5. **Single node.** `UseSingleNode()` declares every caller to be in this process, so a binding that keeps
    `consistency.linearizable-within-process` meets a requirement of `consistency.linearizable-until-failover` or
    `consistency.linearizable-across-failover`. No other guarantee is relaxed.
@@ -60,11 +61,11 @@ keys.**
 8. **Primitive services.** Each built-in primitive is an interface
    ([ADR-1012](1012-each-primitive-is-an-interface-whose-operations-are-named-with-the-guarantee-dimensions-they-carry.md)),
    and each has one canonical implementation registered in DI, named `Default<Name>`
-   ([ADR-0105](project-template/0105-the-canonical-implementation-is-named-defaultfoo.md)). It resolves the binding for
-   the key's keyspace and calls the provider's implementation. A provider exposes its implementations only through
-   `ICoordinationProvider.GetPrimitiveService`, never through DI. When no binding covers a key, the call throws a
-   `CoordinationException` coded `unsupported`, whose message names the primitive and the cluster and never the
-   keyspace's segments.
+   ([project-template ADR-0105](project-template/0105-the-canonical-implementation-is-named-defaultfoo.md)).
+   It resolves the binding for the key's keyspace and calls the provider's implementation. A provider exposes its
+   implementations only through `ICoordinationProvider.GetPrimitiveService`, never through DI. When no binding covers a
+   key, the call throws a `CoordinationException` coded `unsupported`, whose message names the primitive and the cluster
+   and never the keyspace's segments.
 9. **Provider lifetime.** The composition owns the providers it creates and disposes each one when the host stops,
    asynchronously when it can. It disposes every provider it created, also when the composition failed after creating
    them. A provider whose disposal throws doesn't stop the others from being disposed; the exception is rethrown once
@@ -76,8 +77,8 @@ keys.**
     outcome (`success`, `failure` or `canceled`), and on a failure `error.type`, which is the exception's code or its
     type's full name. The outcome is `canceled` when the caller's token canceled the operation, and it sets no
     `error.type` and no error status; any other exception, a provider's own timeout included, is a `failure`. A failure
-    sets the span's status to error with no description. No exception message, key, segment, value or payload is recorded. A stream is measured from its
-    first read to its end, and a consumer that stops early counts as a success.
+    sets the span's status to error with no description. No exception message, key, segment, value or payload is
+    recorded. A stream is measured from its first read to its end, and a consumer that stops early counts as a success.
 11. **Dependencies.** `NCode.Coordination` depends on the dependency injection and hosting abstractions packages only.
     It does not register `IMeterFactory`, whose default implementation is not in an abstractions package and which
     every generic host registers; a bare service collection calls `AddMetrics()`. This is a deliberate exception to a
@@ -87,7 +88,7 @@ keys.**
 
 - **A builder that exposes `IServiceCollection` from the abstractions.** Rejected: it would add a dependency injection
   package to the base abstractions
-  ([ADR-0133](project-template/0133-abstractions-are-framework-free-and-tiered.md)).
+  ([project-template ADR-0133](project-template/0133-abstractions-are-framework-free-and-tiered.md)).
 - **Exact keyspace bindings.** Rejected: they need one binding per tenant keyspace.
 - **Refusing nested keyspace bindings.** Rejected: nesting is how a host moves one cell or tenant to another server.
 - **Checking at options validation with `ValidateOnStart`.** Rejected: it needs a package that is not an abstraction,
