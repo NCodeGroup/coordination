@@ -41,6 +41,21 @@ NCode.Coordination.Testing.RecordContractTests.ReadAsync_WhenOptionsCarryAnUnkno
 NCode.Coordination.Testing.RecordContractTests.RecordContractTests() -> void
 NCode.Coordination.Testing.RecordContractTests.TakeAsync_WhenKeyIsAbsent_ReturnsNull() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.RecordContractTests.TakeAsync_WhenKeyIsPresent_ReturnsAndDeletesTheRecord() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.TransactionContractTests
+NCode.Coordination.Testing.TransactionContractTests.ExecuteAsync_WhenAbsentMeetsAnExpiredRecord_Holds() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.TransactionContractTests.ExecuteAsync_WhenAConditionFails_AppliesTheFailureWrites() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.TransactionContractTests.ExecuteAsync_WhenAConditionFailsWithoutFailureWrites_ChangesNothing() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.TransactionContractTests.ExecuteAsync_WhenAPutCarriesATimeToLive_ExpiresTheRecord() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.TransactionContractTests.ExecuteAsync_WhenEveryConditionHolds_AppliesTheSuccessWrites() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.TransactionContractTests.ExecuteAsync_WhenItWrites_GivesALaterRevision() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.TransactionContractTests.ExecuteAsync_WhenKeysSpanPartitionsAndAtomicityAcrossPartitionsIsDeclared_AppliesEveryWrite() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.TransactionContractTests.ExecuteAsync_WhenKeysSpanPartitionsAndOnlyAtomicityWithinPartitionIsDeclared_ThrowsUnsupported() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.TransactionContractTests.ExecuteAsync_WhenNoConditionIsGiven_Succeeds() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.TransactionContractTests.ExecuteAsync_WhenOptionsCarryAnUnknownExtension_ThrowsUnsupported() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.TransactionContractTests.ExecuteAsync_WhenTokenIsCanceled_ThrowsOperationCanceledException() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.TransactionContractTests.ExecuteAsync_WhenValueEqualsDiffers_Fails() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.TransactionContractTests.ExecuteAsync_WhenValueEqualsHolds_Succeeds() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.TransactionContractTests.TransactionContractTests() -> void
 static NCode.Coordination.Testing.ProviderContractTests.LongTimeToLive.get -> NCode.Coordination.TimeToLive!
 static NCode.Coordination.Testing.ProviderContractTests.PastExpiry.get -> System.TimeSpan
 static NCode.Coordination.Testing.ProviderContractTests.ShortDuration.get -> System.TimeSpan
