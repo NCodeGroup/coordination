@@ -13,6 +13,18 @@ namespace NCode.Coordination.RateLimiting;
 internal sealed class CoordinationRateLimitLease : RateLimitLease
 {
     /// <summary>
+    /// Gets the lease of a request whose permits were granted.
+    /// </summary>
+    public static CoordinationRateLimitLease Acquired { get; } =
+        new(isAcquired: true, retryAfter: null);
+
+    /// <summary>
+    /// Gets the lease of a request that was not granted and has no time to wait to report.
+    /// </summary>
+    public static CoordinationRateLimitLease NotAcquired { get; } =
+        new(isAcquired: false, retryAfter: null);
+
+    /// <summary>
     /// Initializes a lease.
     /// </summary>
     /// <param name="isAcquired">Whether the permits were granted.</param>
@@ -27,18 +39,6 @@ internal sealed class CoordinationRateLimitLease : RateLimitLease
     /// Gets how long to wait before trying again, or null when the lease reports no time.
     /// </summary>
     private TimeSpan? RetryAfter { get; }
-
-    /// <summary>
-    /// Gets the lease of a request whose permits were granted.
-    /// </summary>
-    public static CoordinationRateLimitLease Acquired { get; } =
-        new(isAcquired: true, retryAfter: null);
-
-    /// <summary>
-    /// Gets the lease of a request that was not granted and has no time to wait to report.
-    /// </summary>
-    public static CoordinationRateLimitLease NotAcquired { get; } =
-        new(isAcquired: false, retryAfter: null);
 
     /// <summary>
     /// Creates the lease of a request that was denied, which reports how long to wait before trying again.
