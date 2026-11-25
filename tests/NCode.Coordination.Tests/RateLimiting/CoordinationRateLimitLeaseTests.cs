@@ -7,7 +7,7 @@ namespace NCode.Coordination.RateLimiting.Tests;
 
 public sealed class CoordinationRateLimitLeaseTests
 {
-    #region Acquired Tests
+    #region Acquired Property Tests
 
     [Fact]
     public void Acquired_Always_IsAcquiredWithNoMetadata()
@@ -22,7 +22,7 @@ public sealed class CoordinationRateLimitLeaseTests
 
     #endregion
 
-    #region NotAcquired Tests
+    #region NotAcquired Property Tests
 
     [Fact]
     public void NotAcquired_Always_IsNotAcquiredWithNoMetadata()

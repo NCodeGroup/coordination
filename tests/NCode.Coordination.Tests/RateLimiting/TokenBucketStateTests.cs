@@ -5,18 +5,18 @@ namespace NCode.Coordination.RateLimiting.Tests;
 
 public sealed class TokenBucketStateTests
 {
-    private const long S = 1767225600000;
+    private const long NowMilliseconds = 1767225600000;
 
     private static TimeSpan ReplenishmentPeriod { get; } = TimeSpan.FromSeconds(1);
 
     private static TokenBucketLimit Limit { get; } = new(4, 2, ReplenishmentPeriod);
 
-    #region Encode and Decode Tests
+    #region Encode Tests
 
     [Fact]
     public void Encode_WhenTheStateHasValues_WritesTwoBigEndianIntegers()
     {
-        var state = new TokenBucketState(3, S);
+        var state = new TokenBucketState(3, NowMilliseconds);
 
         var value = state.Encode();
 
@@ -43,10 +43,14 @@ public sealed class TokenBucketStateTests
         );
     }
 
+    #endregion
+
+    #region Decode Tests
+
     [Fact]
     public void Decode_WhenTheValueWasEncoded_ReturnsTheState()
     {
-        var state = new TokenBucketState(3, S);
+        var state = new TokenBucketState(3, NowMilliseconds);
 
         var encoded = state.Encode();
 
@@ -66,7 +70,7 @@ public sealed class TokenBucketStateTests
     [Fact]
     public void Decode_WhenTheTokensAreNegative_Throws()
     {
-        var value = new TokenBucketState(-1, S).Encode();
+        var value = new TokenBucketState(-1, NowMilliseconds).Encode();
 
         Assert.Throws<InvalidDataException>(() => TokenBucketState.Decode(value));
     }
@@ -78,31 +82,31 @@ public sealed class TokenBucketStateTests
     [Fact]
     public void Replenish_WhenOnePeriodAndAHalfHavePassed_ReturnsOnePeriodOfTokens()
     {
-        var state = new TokenBucketState(0, S);
+        var state = new TokenBucketState(0, NowMilliseconds);
 
-        var replenished = state.Replenish(Limit, S + 1500);
+        var replenished = state.Replenish(Limit, NowMilliseconds + 1500);
 
-        var expected = new TokenBucketState(2, S + 1000);
+        var expected = new TokenBucketState(2, NowMilliseconds + 1000);
         Assert.Equal(expected, replenished);
     }
 
     [Fact]
     public void Replenish_WhenEnoughPeriodsHavePassedToFill_ReturnsAFullBucketAtTheInstant()
     {
-        var state = new TokenBucketState(0, S);
+        var state = new TokenBucketState(0, NowMilliseconds);
 
-        var replenished = state.Replenish(Limit, S + 2500);
+        var replenished = state.Replenish(Limit, NowMilliseconds + 2500);
 
-        var expected = new TokenBucketState(4, S + 2500);
+        var expected = new TokenBucketState(4, NowMilliseconds + 2500);
         Assert.Equal(expected, replenished);
     }
 
     [Fact]
     public void Replenish_WhenNoWholePeriodHasPassed_ReturnsTheState()
     {
-        var state = new TokenBucketState(1, S);
+        var state = new TokenBucketState(1, NowMilliseconds);
 
-        var replenished = state.Replenish(Limit, S + 999);
+        var replenished = state.Replenish(Limit, NowMilliseconds + 999);
 
         Assert.Equal(state, replenished);
     }
@@ -110,11 +114,11 @@ public sealed class TokenBucketStateTests
     [Fact]
     public void Replenish_WhenTheBucketIsFull_ReturnsAFullBucketAtTheInstant()
     {
-        var state = new TokenBucketState(4, S);
+        var state = new TokenBucketState(4, NowMilliseconds);
 
-        var replenished = state.Replenish(Limit, S + 5000);
+        var replenished = state.Replenish(Limit, NowMilliseconds + 5000);
 
-        var expected = new TokenBucketState(4, S + 5000);
+        var expected = new TokenBucketState(4, NowMilliseconds + 5000);
         Assert.Equal(expected, replenished);
     }
 
@@ -125,9 +129,9 @@ public sealed class TokenBucketStateTests
     [Fact]
     public void GetRetryAfter_WhenTheBucketHoldsTooFewTokens_ReturnsTheTimeUntilThePeriodThatReturnsEnough()
     {
-        var state = new TokenBucketState(1, S);
+        var state = new TokenBucketState(1, NowMilliseconds);
 
-        var retryAfter = state.GetRetryAfter(Limit, 4, S + 200);
+        var retryAfter = state.GetRetryAfter(Limit, 4, NowMilliseconds + 200);
 
         var expected = TimeSpan.FromMilliseconds(1800);
         Assert.Equal(expected, retryAfter);
@@ -136,9 +140,9 @@ public sealed class TokenBucketStateTests
     [Fact]
     public void GetRetryAfter_WhenTheBucketHoldsEnoughTokens_ReturnsZero()
     {
-        var state = new TokenBucketState(3, S);
+        var state = new TokenBucketState(3, NowMilliseconds);
 
-        var retryAfter = state.GetRetryAfter(Limit, 3, S);
+        var retryAfter = state.GetRetryAfter(Limit, 3, NowMilliseconds);
 
         Assert.Equal(TimeSpan.Zero, retryAfter);
     }
@@ -150,7 +154,7 @@ public sealed class TokenBucketStateTests
     [Fact]
     public void GetTimeUntilFull_WhenTheBucketIsMissingTokens_ReturnsTheTimeOfThePeriodsThatReturnThem()
     {
-        var state = new TokenBucketState(1, S);
+        var state = new TokenBucketState(1, NowMilliseconds);
 
         var timeUntilFull = state.GetTimeUntilFull(Limit);
 
@@ -161,7 +165,7 @@ public sealed class TokenBucketStateTests
     [Fact]
     public void GetTimeUntilFull_WhenTheBucketIsFull_ReturnsZero()
     {
-        var state = new TokenBucketState(4, S);
+        var state = new TokenBucketState(4, NowMilliseconds);
 
         var timeUntilFull = state.GetTimeUntilFull(Limit);
 
