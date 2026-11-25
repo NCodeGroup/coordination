@@ -15,6 +15,10 @@ NCode.Coordination.CoordinationServiceCollectionExtensions
 NCode.Coordination.CoordinationServiceCollectionExtensions.extension(Microsoft.Extensions.DependencyInjection.IServiceCollection!)
 NCode.Coordination.CoordinationServiceCollectionExtensions.extension(Microsoft.Extensions.DependencyInjection.IServiceCollection!).AddCoordination(System.Action<NCode.Coordination.ICoordinationBuilder!>! configure) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
 NCode.Coordination.CoordinationTelemetry
+NCode.Coordination.FixedWindowLimit
+NCode.Coordination.FixedWindowLimit.FixedWindowLimit(int permitLimit, System.TimeSpan window) -> void
+NCode.Coordination.FixedWindowLimit.PermitLimit.get -> int
+NCode.Coordination.FixedWindowLimit.Window.get -> System.TimeSpan
 NCode.Coordination.IBarrierService
 NCode.Coordination.IBarrierService.ArriveAndWaitAsync(NCode.Coordination.CoordinationKey! barrier, NCode.Coordination.KeySegment! participant, NCode.Coordination.BarrierTerms! terms, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<bool>
 NCode.Coordination.ILockService
