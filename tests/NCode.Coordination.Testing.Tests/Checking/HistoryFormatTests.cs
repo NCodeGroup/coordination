@@ -245,6 +245,51 @@ public sealed class HistoryFormatTests
     }
 
     [Fact]
+    public void DescribeValue_WhenRecordPage_ReturnsRevisionAndEachRecord()
+    {
+        var other = new CoordinationKey(Space, "other");
+        var page = new RecordPage(
+            new Revision(8),
+            new StoredRecord(Key, HistoryValues.Encode("one"), new Revision(3)),
+            new StoredRecord(other, HistoryValues.Encode("two"), new Revision(6))
+        );
+
+        var text = HistoryFormat.DescribeValue(page);
+
+        Assert.Equal($"page at 8: {Key} 'one' at 3, {other} 'two' at 6", text);
+    }
+
+    [Fact]
+    public void DescribeValue_WhenRecordPageIsEmptyWithContinuation_ReturnsNothingAndMore()
+    {
+        var page = new RecordPage(new Revision(4)) { ContinuationToken = "next" };
+
+        var text = HistoryFormat.DescribeValue(page);
+
+        Assert.Equal("page at 4: nothing and more", text);
+    }
+
+    [Fact]
+    public void DescribeValue_WhenCounterBatchExceeded_ReturnsCountsAndExceededIndex()
+    {
+        var result = new CounterBatchResult([3, 9]) { ExceededIndex = 1 };
+
+        var text = HistoryFormat.DescribeValue(result);
+
+        Assert.Equal("counts 3, 9 exceeded at 1", text);
+    }
+
+    [Fact]
+    public void DescribeValue_WhenCounterBatchNotExceeded_ReturnsCounts()
+    {
+        var result = new CounterBatchResult([3, 5]);
+
+        var text = HistoryFormat.DescribeValue(result);
+
+        Assert.Equal("counts 3, 5", text);
+    }
+
+    [Fact]
     public void DescribeValue_WhenOtherValue_ReturnsItsInvariantText()
     {
         var text = HistoryFormat.DescribeValue(1234.5);
