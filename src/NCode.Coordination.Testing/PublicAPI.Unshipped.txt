@@ -2,6 +2,7 @@
 abstract NCode.Coordination.Testing.ProviderContractTests.CreateTargetAsync(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.Testing.ConformanceTarget!>
 NCode.Coordination.Testing.ClaimContractTests
 NCode.Coordination.Testing.ClaimContractTests.ClaimContractTests() -> void
+NCode.Coordination.Testing.ClaimContractTests.ConcurrentRun_WhenClientsRace_KeepsALinearizableHistory() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.ClaimContractTests.TryClaimAsync_WhenNamesDiffer_ClaimsEach() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.ClaimContractTests.TryClaimAsync_WhenOptionsCarryAnUnknownExtension_ThrowsUnsupported() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.ClaimContractTests.TryClaimAsync_WhenTheWindowIsUnclaimed_ReturnsClaimed() -> System.Threading.Tasks.Task!
