@@ -122,6 +122,19 @@ public sealed class RecordWatchDeliveryCheckerTests
     }
 
     [Fact]
+    public void Check_WhenAResyncIsAtTheFloor_ReportsNothing()
+    {
+        HistoryOperation[] history = [Write(RecordCall.Create, "a", 3)];
+        var written = Written(3, "a", 3);
+        var resync = Resync(4, 3);
+        var changes = Changes(written, resync);
+
+        var violations = RecordWatchDeliveryChecker.Check(history, changes, NoClosing, false);
+
+        Assert.Empty(violations);
+    }
+
+    [Fact]
     public void Check_WhenARevisionDoesNotIncrease_ReportsIt()
     {
         HistoryOperation[] history =
@@ -388,6 +401,40 @@ public sealed class RecordWatchDeliveryCheckerTests
         Assert.Equal<string>(
             [
                 $"The watch received neither the last write to {Name}, at revision 3, nor a resync after it.",
+            ],
+            violations
+        );
+    }
+
+    [Fact]
+    public void Check_WhenOnlyAnotherKeyIsWrittenAtTheClosingRevision_ReportsIt()
+    {
+        var other = new CoordinationKey(Space, "other");
+        var partition = other.ToString();
+        var result = RecordWriteResult.Written(new Revision(2));
+        HistoryOperation[] history =
+        [
+            HistoryTesting.Operation(
+                0,
+                partition,
+                new RecordCall(RecordCall.Create, "b", 0),
+                1,
+                2,
+                result
+            ),
+        ];
+        var encoded = HistoryValues.Encode("b");
+        var record = new StoredRecord(other, encoded, new Revision(2));
+        var change = RecordChange.Written(record);
+        var written = new Delivery<RecordChange>(3, change);
+        var changes = Changes(written);
+        var closing = Closing(2);
+
+        var violations = RecordWatchDeliveryChecker.Check(history, changes, closing, true);
+
+        Assert.Equal<string>(
+            [
+                $"The watch received neither the last write to {Name}, at revision 2, nor a resync after it.",
             ],
             violations
         );
