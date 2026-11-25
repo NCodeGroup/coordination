@@ -1,6 +1,11 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using System.Globalization;
+using NCode.Coordination.Testing.Checking;
+using NCode.Coordination.Testing.Histories;
+using NCode.Coordination.Testing.Models;
+using NCode.Coordination.Testing.Runs;
 using Xunit;
 
 namespace NCode.Coordination.Testing;
@@ -222,6 +227,111 @@ public abstract class NotificationContractTests : ProviderContractTests
         );
 
         Assert.Equal(CoordinationErrorCodes.Unsupported, exception.Code);
+    }
+
+    #endregion
+
+    #region Concurrent Run Tests
+
+    /// <summary>
+    /// Checks that two subscribers receive the messages that clients publish at once as the provider declares.
+    /// </summary>
+    [Fact]
+    public async Task ConcurrentRun_WhenClientsPublish_DeliversAsDeclared() =>
+        await RunDeliveryAsync(null);
+
+    /// <summary>
+    /// Checks that two subscribers receive the messages as the provider declares when its connections drop in the
+    /// middle of the run.
+    /// </summary>
+    [Fact]
+    public async Task ConcurrentRun_WhenConnectionsDrop_DeliversAsDeclared() =>
+        await RunDeliveryAsync(GetDropConnections());
+
+    /// <summary>
+    /// Runs clients that publish to a topic that two subscribers read, with a fault, and asserts that what the
+    /// subscribers received is as the provider declares.
+    /// </summary>
+    /// <param name="fault">The fault to inject once half of the steps are done, or null for none.</param>
+    /// <returns>A task that completes when the deliveries have been checked.</returns>
+    private async Task RunDeliveryAsync(Func<CancellationToken, ValueTask>? fault)
+    {
+        var keepsDelivery = Keeps(Primitives.Notification, Guarantees.AtMostOnce);
+        Assert.SkipUnless(
+            keepsDelivery,
+            "The provider declares no delivery guarantee for notifications."
+        );
+
+        var gapDetection = Keeps(Primitives.Notification, Guarantees.AtMostOnceWithGapDetection);
+        var notifications = Notifications;
+        var topic = CreateKey("run");
+        var partition = topic.ToString();
+        var recorder = new HistoryRecorder();
+
+        await using var first = new RunSubscriber<Notification>(
+            token => notifications.SubscribeAsync(topic, null, token),
+            recorder,
+            TestCancellationToken
+        );
+        await using var second = new RunSubscriber<Notification>(
+            token => notifications.SubscribeAsync(topic, null, token),
+            recorder,
+            TestCancellationToken
+        );
+        Assert.True(await first.WaitForAsync(_ => true, TestCancellationToken));
+        Assert.True(await second.WaitForAsync(_ => true, TestCancellationToken));
+
+        await ConcurrentRun.RunAsync(
+            ConcurrentRun.Steps,
+            async (client, index, cancellationToken) =>
+            {
+                var payload = string.Create(CultureInfo.InvariantCulture, $"{client}-{index}");
+                var bytes = HistoryValues.Encode(payload);
+                await recorder.RecordAsync(
+                    client,
+                    partition,
+                    new NotificationCall(payload),
+                    token => notifications.PublishAsync(topic, bytes, null, token),
+                    cancellationToken
+                );
+            },
+            fault,
+            TestCancellationToken
+        );
+
+        var lastBytes = HistoryValues.Encode(NotificationCall.Last);
+        var last = await recorder.RecordAsync(
+            HistoryOperation.TestClient,
+            partition,
+            new NotificationCall(NotificationCall.Last),
+            token => notifications.PublishAsync(topic, lastBytes, null, token),
+            TestCancellationToken
+        );
+        Assert.Equal(HistoryOutcome.Returned, last.Outcome);
+
+        bool IsLastOrResync(Delivery<Notification> delivery) =>
+            delivery.Item.IsResync
+                ? gapDetection && delivery.Stamp > last.Responded
+                : string.Equals(
+                    HistoryValues.Decode(delivery.Item.Payload),
+                    NotificationCall.Last,
+                    StringComparison.Ordinal
+                );
+
+        var firstDone = await first.WaitForAsync(IsLastOrResync, TestCancellationToken);
+        var secondDone = await second.WaitForAsync(IsLastOrResync, TestCancellationToken);
+        Assert.True(
+            firstDone && secondDone,
+            "A subscriber neither received the last message nor a resync after it."
+        );
+
+        Assert.Empty(
+            NotificationDeliveryChecker.Check(
+                recorder.ToHistory(),
+                [first.Deliveries, second.Deliveries],
+                gapDetection
+            )
+        );
     }
 
     #endregion

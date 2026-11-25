@@ -104,6 +104,8 @@ NCode.Coordination.Testing.MembershipContractTests.WatchAsync_WhenAMemberJoins_Y
 NCode.Coordination.Testing.MembershipContractTests.WatchAsync_WhenAMembersSessionEnds_YieldsAViewWithoutIt() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.MembershipContractTests.WatchAsync_WhenStarted_YieldsTheCurrentViewFirst() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.NotificationContractTests
+NCode.Coordination.Testing.NotificationContractTests.ConcurrentRun_WhenClientsPublish_DeliversAsDeclared() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.NotificationContractTests.ConcurrentRun_WhenConnectionsDrop_DeliversAsDeclared() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.NotificationContractTests.NotificationContractTests() -> void
 NCode.Coordination.Testing.NotificationContractTests.PublishAsync_WhenOptionsCarryAnUnknownExtension_ThrowsUnsupported() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.NotificationContractTests.PublishAsync_WhenPayloadIsAtTheLimit_Publishes() -> System.Threading.Tasks.Task!
