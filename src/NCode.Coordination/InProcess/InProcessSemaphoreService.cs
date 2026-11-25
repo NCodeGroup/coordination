@@ -36,6 +36,14 @@ internal class InProcessSemaphoreService : ISemaphoreService
     /// </summary>
     private Dictionary<CoordinationKey, TaskCompletionSource> Waiters { get; } = [];
 
+    /// <summary>
+    /// Gets the resources and slots whose hold is bound to each session, so a session's end looks up what it holds.
+    /// </summary>
+    private Dictionary<
+        SessionId,
+        HashSet<(CoordinationKey Resource, int Slot)>
+    > SlotsBySession { get; } = [];
+
     /// <inheritdoc />
     public ValueTask<SemaphoreAcquireResult> TryAcquireAsync(
         CoordinationKey resource,
@@ -101,6 +109,10 @@ internal class InProcessSemaphoreService : ISemaphoreService
             if (!terms.IsBoundToSession)
             {
                 created.Deadline = Schedule(resource, slot, owner, terms.TimeToLive);
+            }
+            else
+            {
+                Bind(terms.Session, resource, slot);
             }
 
             semaphore.Slots[slot] = created;
@@ -278,6 +290,44 @@ internal class InProcessSemaphoreService : ISemaphoreService
     }
 
     /// <summary>
+    /// Records that a slot's hold is bound to a session.
+    /// </summary>
+    /// <param name="session">The session the hold is bound to.</param>
+    /// <param name="resource">The resource the semaphore is on.</param>
+    /// <param name="slot">The index of the slot the hold takes.</param>
+    private void Bind(SessionId session, CoordinationKey resource, int slot)
+    {
+        if (!SlotsBySession.TryGetValue(session, out var slots))
+        {
+            slots = [];
+            SlotsBySession[session] = slots;
+        }
+
+        slots.Add((resource, slot));
+    }
+
+    /// <summary>
+    /// Removes the binding of a slot's hold to a session, dropping the session when it holds nothing else.
+    /// </summary>
+    /// <param name="session">The session the hold was bound to.</param>
+    /// <param name="resource">The resource the semaphore is on.</param>
+    /// <param name="slot">The index of the slot the hold took.</param>
+    private void Unbind(SessionId session, CoordinationKey resource, int slot)
+    {
+        if (!SlotsBySession.TryGetValue(session, out var slots))
+        {
+            return;
+        }
+
+        slots.Remove((resource, slot));
+
+        if (slots.Count == 0)
+        {
+            SlotsBySession.Remove(session);
+        }
+    }
+
+    /// <summary>
     /// Frees a slot, removes the semaphore when no slot is held and wakes the tasks that wait for a free slot.
     /// </summary>
     /// <param name="resource">The resource the semaphore is on.</param>
@@ -293,6 +343,11 @@ internal class InProcessSemaphoreService : ISemaphoreService
                 Sessions.Deadlines.Cancel(hold.Deadline);
                 semaphore.Slots[slot] = null;
                 semaphore.Held--;
+
+                if (hold.Terms.IsBoundToSession)
+                {
+                    Unbind(hold.Terms.Session, resource, slot);
+                }
             }
 
             if (semaphore.Held == 0)
@@ -331,18 +386,12 @@ internal class InProcessSemaphoreService : ISemaphoreService
     /// <param name="session">The session that ended.</param>
     private void EndSession(SessionId session)
     {
-        var ended = new List<(CoordinationKey Resource, int Slot)>();
-
-        foreach (var (resource, semaphore) in Semaphores)
+        if (!SlotsBySession.TryGetValue(session, out var slots))
         {
-            for (var slot = 0; slot < semaphore.Slots.Length; slot++)
-            {
-                if (semaphore.Slots[slot] is { } hold && session.Equals(hold.Terms.Session))
-                {
-                    ended.Add((resource, slot));
-                }
-            }
+            return;
         }
+
+        (CoordinationKey Resource, int Slot)[] ended = [.. slots];
 
         foreach (var (resource, slot) in ended)
         {

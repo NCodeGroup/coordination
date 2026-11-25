@@ -39,6 +39,11 @@ internal class InProcessElectionService : IElectionService
     private Dictionary<CoordinationKey, List<InProcessEventQueue<ElectionView>>> Watchers { get; } =
     [];
 
+    /// <summary>
+    /// Gets the roles whose leadership is bound to each session, so a session's end looks up what it leads.
+    /// </summary>
+    private Dictionary<SessionId, HashSet<CoordinationKey>> RolesBySession { get; } = [];
+
     /// <inheritdoc />
     public ValueTask<ElectionResult> TryLeadAsync(
         CoordinationKey role,
@@ -82,6 +87,10 @@ internal class InProcessElectionService : IElectionService
             if (!terms.IsBoundToSession)
             {
                 created.Deadline = Schedule(role, owner, terms.TimeToLive);
+            }
+            else
+            {
+                Bind(terms.Session, role);
             }
 
             Holds[role] = created;
@@ -312,6 +321,42 @@ internal class InProcessElectionService : IElectionService
     }
 
     /// <summary>
+    /// Records that a role's leadership is bound to a session.
+    /// </summary>
+    /// <param name="session">The session the leadership is bound to.</param>
+    /// <param name="role">The role the leadership leads.</param>
+    private void Bind(SessionId session, CoordinationKey role)
+    {
+        if (!RolesBySession.TryGetValue(session, out var roles))
+        {
+            roles = [];
+            RolesBySession[session] = roles;
+        }
+
+        roles.Add(role);
+    }
+
+    /// <summary>
+    /// Removes the binding of a role's leadership to a session, dropping the session when it leads nothing else.
+    /// </summary>
+    /// <param name="session">The session the leadership was bound to.</param>
+    /// <param name="role">The role the leadership led.</param>
+    private void Unbind(SessionId session, CoordinationKey role)
+    {
+        if (!RolesBySession.TryGetValue(session, out var roles))
+        {
+            return;
+        }
+
+        roles.Remove(role);
+
+        if (roles.Count == 0)
+        {
+            RolesBySession.Remove(session);
+        }
+    }
+
+    /// <summary>
     /// Removes a role's leadership and tells the role's watches.
     /// </summary>
     /// <param name="role">The role whose leadership ends.</param>
@@ -320,6 +365,11 @@ internal class InProcessElectionService : IElectionService
         if (Holds.Remove(role, out var hold))
         {
             Sessions.Deadlines.Cancel(hold.Deadline);
+
+            if (hold.Terms.IsBoundToSession)
+            {
+                Unbind(hold.Terms.Session, role);
+            }
         }
 
         Notify(role);
@@ -344,12 +394,14 @@ internal class InProcessElectionService : IElectionService
     /// <param name="session">The session that ended.</param>
     private void EndSession(SessionId session)
     {
-        var roles = Holds
-            .Where(pair => session.Equals(pair.Value.Terms.Session))
-            .Select(pair => pair.Key)
-            .ToArray();
+        if (!RolesBySession.TryGetValue(session, out var roles))
+        {
+            return;
+        }
 
-        foreach (var role in roles)
+        CoordinationKey[] ended = [.. roles];
+
+        foreach (var role in ended)
         {
             Vacate(role);
         }

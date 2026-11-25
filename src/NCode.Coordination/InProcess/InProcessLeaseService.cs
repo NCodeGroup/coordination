@@ -36,6 +36,11 @@ internal class InProcessLeaseService : ILeaseService
     /// </summary>
     private Dictionary<CoordinationKey, TaskCompletionSource> Waiters { get; } = [];
 
+    /// <summary>
+    /// Gets the resources whose hold is bound to each session, so a session's end looks up what it holds.
+    /// </summary>
+    private Dictionary<SessionId, HashSet<CoordinationKey>> ResourcesBySession { get; } = [];
+
     /// <inheritdoc />
     public ValueTask<LeaseAcquireResult> TryAcquireAsync(
         CoordinationKey resource,
@@ -76,6 +81,10 @@ internal class InProcessLeaseService : ILeaseService
             if (!terms.IsBoundToSession)
             {
                 created.Deadline = Schedule(resource, owner, terms.TimeToLive);
+            }
+            else
+            {
+                Bind(terms.Session, resource);
             }
 
             Holds[resource] = created;
@@ -202,6 +211,42 @@ internal class InProcessLeaseService : ILeaseService
     }
 
     /// <summary>
+    /// Records that a resource's hold is bound to a session.
+    /// </summary>
+    /// <param name="session">The session the hold is bound to.</param>
+    /// <param name="resource">The resource the hold leases.</param>
+    private void Bind(SessionId session, CoordinationKey resource)
+    {
+        if (!ResourcesBySession.TryGetValue(session, out var resources))
+        {
+            resources = [];
+            ResourcesBySession[session] = resources;
+        }
+
+        resources.Add(resource);
+    }
+
+    /// <summary>
+    /// Removes the binding of a resource's hold to a session, dropping the session when it holds nothing else.
+    /// </summary>
+    /// <param name="session">The session the hold was bound to.</param>
+    /// <param name="resource">The resource the hold leased.</param>
+    private void Unbind(SessionId session, CoordinationKey resource)
+    {
+        if (!ResourcesBySession.TryGetValue(session, out var resources))
+        {
+            return;
+        }
+
+        resources.Remove(resource);
+
+        if (resources.Count == 0)
+        {
+            ResourcesBySession.Remove(session);
+        }
+    }
+
+    /// <summary>
     /// Removes a resource's hold and wakes the tasks that wait for its release.
     /// </summary>
     /// <param name="resource">The resource whose hold ends.</param>
@@ -210,6 +255,11 @@ internal class InProcessLeaseService : ILeaseService
         if (Holds.Remove(resource, out var hold))
         {
             Sessions.Deadlines.Cancel(hold.Deadline);
+
+            if (hold.Terms.IsBoundToSession)
+            {
+                Unbind(hold.Terms.Session, resource);
+            }
         }
 
         if (Waiters.Remove(resource, out var waiter))
@@ -237,12 +287,14 @@ internal class InProcessLeaseService : ILeaseService
     /// <param name="session">The session that ended.</param>
     private void EndSession(SessionId session)
     {
-        var resources = Holds
-            .Where(pair => session.Equals(pair.Value.Terms.Session))
-            .Select(pair => pair.Key)
-            .ToArray();
+        if (!ResourcesBySession.TryGetValue(session, out var resources))
+        {
+            return;
+        }
 
-        foreach (var resource in resources)
+        CoordinationKey[] ended = [.. resources];
+
+        foreach (var resource in ended)
         {
             Free(resource);
         }
