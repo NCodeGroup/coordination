@@ -1,6 +1,7 @@
 #nullable enable
 const NCode.Coordination.CoordinationTelemetry.ActivitySourceName = "NCode.Coordination" -> string!
 const NCode.Coordination.CoordinationTelemetry.MeterName = "NCode.Coordination" -> string!
+const NCode.Coordination.InProcessCoordinationBuilderExtensions.ProviderName = "in-process" -> string!
 NCode.Coordination.CoordinationCompositionException
 NCode.Coordination.CoordinationCompositionException.CoordinationCompositionException(System.Collections.Generic.IEnumerable<string!>! failures) -> void
 NCode.Coordination.CoordinationCompositionException.Failures.get -> System.Collections.Immutable.ImmutableArray<string!>
@@ -8,4 +9,8 @@ NCode.Coordination.CoordinationServiceCollectionExtensions
 NCode.Coordination.CoordinationServiceCollectionExtensions.extension(Microsoft.Extensions.DependencyInjection.IServiceCollection!)
 NCode.Coordination.CoordinationServiceCollectionExtensions.extension(Microsoft.Extensions.DependencyInjection.IServiceCollection!).AddCoordination(System.Action<NCode.Coordination.ICoordinationBuilder!>! configure) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
 NCode.Coordination.CoordinationTelemetry
+NCode.Coordination.InProcessCoordinationBuilderExtensions
+NCode.Coordination.InProcessCoordinationBuilderExtensions.extension(NCode.Coordination.ICoordinationBuilder!)
+NCode.Coordination.InProcessCoordinationBuilderExtensions.extension(NCode.Coordination.ICoordinationBuilder!).AddInProcessProvider() -> NCode.Coordination.ICoordinationBuilder!
 static NCode.Coordination.CoordinationServiceCollectionExtensions.AddCoordination(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, System.Action<NCode.Coordination.ICoordinationBuilder!>! configure) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static NCode.Coordination.InProcessCoordinationBuilderExtensions.AddInProcessProvider(this NCode.Coordination.ICoordinationBuilder! builder) -> NCode.Coordination.ICoordinationBuilder!
