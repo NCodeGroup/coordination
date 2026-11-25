@@ -55,12 +55,11 @@ internal static class NotificationDeliveryChecker
                 {
                     if (gapDetection && notification.Sequence != last)
                     {
-                        violations.Add(
-                            string.Create(
-                                CultureInfo.InvariantCulture,
-                                $"Subscriber {subscriber} received a resync carrying {notification.Sequence} after message {last}."
-                            )
+                        var message = string.Create(
+                            CultureInfo.InvariantCulture,
+                            $"Subscriber {subscriber} received a resync carrying {notification.Sequence} after message {last}."
                         );
+                        violations.Add(message);
                     }
 
                     resynced = true;
@@ -78,43 +77,39 @@ internal static class NotificationDeliveryChecker
 
                 if (!published)
                 {
-                    violations.Add(
-                        string.Create(
-                            CultureInfo.InvariantCulture,
-                            $"Subscriber {subscriber} received '{payload}', which no call published before it."
-                        )
+                    var message = string.Create(
+                        CultureInfo.InvariantCulture,
+                        $"Subscriber {subscriber} received '{payload}', which no call published before it."
                     );
+                    violations.Add(message);
                 }
 
                 if (sequence <= last)
                 {
-                    violations.Add(
-                        string.Create(
-                            CultureInfo.InvariantCulture,
-                            $"Subscriber {subscriber} received message {sequence} after message {last}."
-                        )
+                    var message = string.Create(
+                        CultureInfo.InvariantCulture,
+                        $"Subscriber {subscriber} received message {sequence} after message {last}."
                     );
+                    violations.Add(message);
                 }
                 else if (gapDetection && !resynced && sequence != last + 1)
                 {
-                    violations.Add(
-                        string.Create(
-                            CultureInfo.InvariantCulture,
-                            $"Subscriber {subscriber} received message {sequence} after message {last} without a resync."
-                        )
+                    var message = string.Create(
+                        CultureInfo.InvariantCulture,
+                        $"Subscriber {subscriber} received message {sequence} after message {last} without a resync."
                     );
+                    violations.Add(message);
                 }
 
                 if (payloadsByNumber.TryGetValue(sequence, out var carried))
                 {
                     if (!string.Equals(carried, payload, StringComparison.Ordinal))
                     {
-                        violations.Add(
-                            string.Create(
-                                CultureInfo.InvariantCulture,
-                                $"Message {sequence} carried '{carried}' and '{payload}'."
-                            )
+                        var message = string.Create(
+                            CultureInfo.InvariantCulture,
+                            $"Message {sequence} carried '{carried}' and '{payload}'."
                         );
+                        violations.Add(message);
                     }
                 }
                 else
@@ -126,12 +121,11 @@ internal static class NotificationDeliveryChecker
                 {
                     if (numbered != sequence)
                     {
-                        violations.Add(
-                            string.Create(
-                                CultureInfo.InvariantCulture,
-                                $"'{payload}' was numbered {numbered} and {sequence}."
-                            )
+                        var message = string.Create(
+                            CultureInfo.InvariantCulture,
+                            $"'{payload}' was numbered {numbered} and {sequence}."
                         );
+                        violations.Add(message);
                     }
                 }
                 else

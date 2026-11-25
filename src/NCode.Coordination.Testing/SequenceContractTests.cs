@@ -209,7 +209,8 @@ public abstract class SequenceContractTests : ProviderContractTests
             TestCancellationToken
         );
 
-        HistoryAssert.Linearizable(new SequenceModel(), recorder.ToHistory());
+        var history = recorder.ToHistory();
+        HistoryAssert.Linearizable(new SequenceModel(), history);
     }
 
     #endregion

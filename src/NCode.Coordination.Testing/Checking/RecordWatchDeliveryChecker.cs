@@ -46,12 +46,11 @@ internal static class RecordWatchDeliveryChecker
             {
                 if (revision < floor)
                 {
-                    violations.Add(
-                        string.Create(
-                            CultureInfo.InvariantCulture,
-                            $"The watch resynced at revision {revision} after revision {floor}."
-                        )
+                    var message = string.Create(
+                        CultureInfo.InvariantCulture,
+                        $"The watch resynced at revision {revision} after revision {floor}."
                     );
+                    violations.Add(message);
                 }
 
                 floor = revision;
@@ -60,12 +59,11 @@ internal static class RecordWatchDeliveryChecker
 
             if (revision <= floor)
             {
-                violations.Add(
-                    string.Create(
-                        CultureInfo.InvariantCulture,
-                        $"The watch received revision {revision} after revision {floor}."
-                    )
+                var message = string.Create(
+                    CultureInfo.InvariantCulture,
+                    $"The watch received revision {revision} after revision {floor}."
                 );
+                violations.Add(message);
             }
 
             var key = change.Key;
@@ -80,22 +78,20 @@ internal static class RecordWatchDeliveryChecker
                     )
                 )
                 {
-                    violations.Add(
-                        string.Create(
-                            CultureInfo.InvariantCulture,
-                            $"The watch received '{value}' at revision {revision} for {key}, which no write produced."
-                        )
+                    var message = string.Create(
+                        CultureInfo.InvariantCulture,
+                        $"The watch received '{value}' at revision {revision} for {key}, which no write produced."
                     );
+                    violations.Add(message);
                 }
             }
             else if (!history.Any(operation => IsDeletion(operation, partition, delivery.Stamp)))
             {
-                violations.Add(
-                    string.Create(
-                        CultureInfo.InvariantCulture,
-                        $"The watch received a deletion of {key} at revision {revision}, which no call made."
-                    )
+                var message = string.Create(
+                    CultureInfo.InvariantCulture,
+                    $"The watch received a deletion of {key} at revision {revision}, which no call made."
                 );
+                violations.Add(message);
             }
 
             floor = revision;
@@ -120,12 +116,11 @@ internal static class RecordWatchDeliveryChecker
 
                 if (!covered)
                 {
-                    violations.Add(
-                        string.Create(
-                            CultureInfo.InvariantCulture,
-                            $"The watch received neither the last write to {key}, at revision {revision}, nor a resync after it."
-                        )
+                    var message = string.Create(
+                        CultureInfo.InvariantCulture,
+                        $"The watch received neither the last write to {key}, at revision {revision}, nor a resync after it."
                     );
+                    violations.Add(message);
                 }
             }
         }

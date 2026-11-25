@@ -41,6 +41,7 @@ internal sealed class RecordRunScript(
         var slot = (client * keys.Length) + k;
         var partition = key.ToString();
         var value = string.Create(CultureInfo.InvariantCulture, $"{client}-{index}");
+        var bytes = HistoryValues.Encode(value);
         var expected = Math.Max(1, Seen[slot]);
 
         switch ((client + index) % 5)
@@ -52,13 +53,7 @@ internal sealed class RecordRunScript(
                     partition,
                     create,
                     token =>
-                        records.CreateAsync(
-                            key,
-                            HistoryValues.Encode(value),
-                            RecordLifetime.Persistent,
-                            null,
-                            token
-                        ),
+                        records.CreateAsync(key, bytes, RecordLifetime.Persistent, null, token),
                     cancellationToken
                 );
                 Remember(slot, created);
@@ -91,7 +86,7 @@ internal sealed class RecordRunScript(
                         records.CompareAndSwapAsync(
                             key,
                             new Revision(expected),
-                            HistoryValues.Encode(value),
+                            bytes,
                             RecordLifetime.Persistent,
                             null,
                             token
@@ -146,6 +141,7 @@ internal sealed class RecordRunScript(
             var key = keys[k];
             var partition = key.ToString();
             var value = string.Create(CultureInfo.InvariantCulture, $"closing-{k}");
+            var bytes = HistoryValues.Encode(value);
 
             var read = await recorder.RecordAsync(
                 HistoryOperation.TestClient,
@@ -163,13 +159,7 @@ internal sealed class RecordRunScript(
                     partition,
                     new RecordCall(RecordCall.Create, value, 0),
                     token =>
-                        records.CreateAsync(
-                            key,
-                            HistoryValues.Encode(value),
-                            RecordLifetime.Persistent,
-                            null,
-                            token
-                        ),
+                        records.CreateAsync(key, bytes, RecordLifetime.Persistent, null, token),
                     cancellationToken
                 )
                 : await recorder.RecordAsync(
@@ -180,7 +170,7 @@ internal sealed class RecordRunScript(
                         records.CompareAndSwapAsync(
                             key,
                             stored.Revision,
-                            HistoryValues.Encode(value),
+                            bytes,
                             RecordLifetime.Persistent,
                             null,
                             token

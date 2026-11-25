@@ -498,7 +498,8 @@ public abstract class CounterContractTests : ProviderContractTests
             TestCancellationToken
         );
 
-        HistoryAssert.Linearizable(new CounterModel(), recorder.ToHistory());
+        var history = recorder.ToHistory();
+        HistoryAssert.Linearizable(new CounterModel(), history);
     }
 
     #endregion

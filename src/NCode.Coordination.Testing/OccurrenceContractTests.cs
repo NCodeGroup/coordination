@@ -223,9 +223,10 @@ public abstract class OccurrenceContractTests : ProviderContractTests
             {
                 var key = keys[(client + index) % keys.Length];
                 var call = new OccurrenceCall(OccurrenceCall.Record);
+                var partition = key.ToString();
                 await recorder.RecordAsync(
                     client,
-                    key.ToString(),
+                    partition,
                     call,
                     token => occurrences.TryRecordAsync(key, LongTimeToLive, null, token),
                     cancellationToken
@@ -234,7 +235,8 @@ public abstract class OccurrenceContractTests : ProviderContractTests
             TestCancellationToken
         );
 
-        HistoryAssert.Linearizable(new OccurrenceModel(), recorder.ToHistory());
+        var history = recorder.ToHistory();
+        HistoryAssert.Linearizable(new OccurrenceModel(), history);
     }
 
     #endregion

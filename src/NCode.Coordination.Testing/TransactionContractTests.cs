@@ -517,13 +517,16 @@ public abstract class TransactionContractTests : ProviderContractTests
                             $"{client}-{index}"
                         );
                         var bytes = HistoryValues.Encode(value);
-                        var condition = expected is null
-                            ? RecordCondition.Absent(first)
-                            : RecordCondition.ValueEquals(first, HistoryValues.Encode(expected));
-                        var transaction = new RecordTransaction(
-                            [condition],
-                            [Put(first, bytes), Put(second, bytes)]
-                        );
+                        var condition = RecordCondition.Absent(first);
+                        if (expected is not null)
+                        {
+                            var expectedBytes = HistoryValues.Encode(expected);
+                            condition = RecordCondition.ValueEquals(first, expectedBytes);
+                        }
+
+                        var putFirst = Put(first, bytes);
+                        var putSecond = Put(second, bytes);
+                        var transaction = new RecordTransaction([condition], [putFirst, putSecond]);
                         var execute = new TransactionCall(
                             TransactionCall.Execute,
                             null,
@@ -543,7 +546,8 @@ public abstract class TransactionContractTests : ProviderContractTests
             TestCancellationToken
         );
 
-        HistoryAssert.Linearizable(new TransactionModel(), recorder.ToHistory());
+        var history = recorder.ToHistory();
+        HistoryAssert.Linearizable(new TransactionModel(), history);
     }
 
     #endregion

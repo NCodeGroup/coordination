@@ -58,35 +58,33 @@ internal static class ConcurrentRun
         for (var client = 0; client < Clients; client++)
         {
             var current = client;
-            tasks.Add(
-                Task.Run(
-                    async () =>
-                        await RunClientAsync(
-                            current,
-                            steps,
-                            step,
-                            gate.Task,
-                            halfway,
-                            remaining,
-                            cancellationToken
-                        ),
-                    CancellationToken.None
-                )
+            var task = Task.Run(
+                async () =>
+                    await RunClientAsync(
+                        current,
+                        steps,
+                        step,
+                        gate.Task,
+                        halfway,
+                        remaining,
+                        cancellationToken
+                    ),
+                CancellationToken.None
             );
+            tasks.Add(task);
         }
 
         if (fault is not null)
         {
-            tasks.Add(
-                Task.Run(
-                    async () =>
-                    {
-                        await halfway.Task;
-                        await fault(cancellationToken);
-                    },
-                    CancellationToken.None
-                )
+            var task = Task.Run(
+                async () =>
+                {
+                    await halfway.Task;
+                    await fault(cancellationToken);
+                },
+                CancellationToken.None
             );
+            tasks.Add(task);
         }
 
         gate.SetResult();

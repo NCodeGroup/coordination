@@ -90,9 +90,10 @@ public abstract class SemaphoreContractTests : ProviderContractTests
         var terms = LeaseTerms.ForTimeToLive(timeToLive);
         var call = new SemaphoreCall(SemaphoreCall.Acquire, 0, null, 0);
 
+        var partition = resource.ToString();
         var operation = await recorder.RecordAsync(
             client,
-            resource.ToString(),
+            partition,
             call,
             token => semaphores.TryAcquireAsync(resource, capacity, terms, null, token),
             cancellationToken
@@ -124,9 +125,10 @@ public abstract class SemaphoreContractTests : ProviderContractTests
             grant.FencingToken.Value
         );
 
+        var partition = grant.Resource.ToString();
         var operation = await recorder.RecordAsync(
             client,
-            grant.Resource.ToString(),
+            partition,
             call,
             token => semaphores.RenewAsync(grant, LongTimeToLive, null, token),
             cancellationToken
@@ -158,9 +160,10 @@ public abstract class SemaphoreContractTests : ProviderContractTests
             grant.FencingToken.Value
         );
 
+        var partition = grant.Resource.ToString();
         var operation = await recorder.RecordAsync(
             client,
-            grant.Resource.ToString(),
+            partition,
             call,
             token => semaphores.ReleaseAsync(grant, null, token),
             cancellationToken
@@ -711,7 +714,8 @@ public abstract class SemaphoreContractTests : ProviderContractTests
             TestCancellationToken
         );
 
-        HistoryAssert.Linearizable(new SemaphoreModel(), recorder.ToHistory());
+        var history = recorder.ToHistory();
+        HistoryAssert.Linearizable(new SemaphoreModel(), history);
     }
 
     #endregion

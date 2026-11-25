@@ -257,9 +257,10 @@ public abstract class ClaimContractTests : ProviderContractTests
             {
                 var key = keys[(client + index) % keys.Length];
                 var call = new ClaimCall(ClaimCall.Claim);
+                var partition = key.ToString();
                 await recorder.RecordAsync(
                     client,
-                    key.ToString(),
+                    partition,
                     call,
                     token => claims.TryClaimAsync(key, FirstWindow, LongTimeToLive, null, token),
                     cancellationToken
@@ -268,7 +269,8 @@ public abstract class ClaimContractTests : ProviderContractTests
             TestCancellationToken
         );
 
-        HistoryAssert.Linearizable(new ClaimModel(), recorder.ToHistory());
+        var history = recorder.ToHistory();
+        HistoryAssert.Linearizable(new ClaimModel(), history);
     }
 
     #endregion

@@ -446,14 +446,13 @@ public abstract class MembershipContractTests : ProviderContractTests
         var builder = ImmutableArray.CreateBuilder<SessionId>(ConcurrentRun.Clients);
         for (var client = 0; client < ConcurrentRun.Clients; client++)
         {
-            builder.Add(
-                await ContractSessions.OpenAsync(
-                    Sessions,
-                    Keyspace,
-                    LongTimeToLive,
-                    TestCancellationToken
-                )
+            var session = await ContractSessions.OpenAsync(
+                Sessions,
+                Keyspace,
+                LongTimeToLive,
+                TestCancellationToken
             );
+            builder.Add(session);
         }
 
         var sessions = builder.ToImmutable();
@@ -500,7 +499,8 @@ public abstract class MembershipContractTests : ProviderContractTests
             TestCancellationToken
         );
 
-        HistoryAssert.Linearizable(new MembershipModel(sessions), recorder.ToHistory());
+        var history = recorder.ToHistory();
+        HistoryAssert.Linearizable(new MembershipModel(sessions), history);
     }
 
     #endregion

@@ -245,8 +245,11 @@ public abstract class NotificationContractTests : ProviderContractTests
     /// middle of the run.
     /// </summary>
     [Fact]
-    public async Task ConcurrentRun_WhenConnectionsDrop_DeliversAsDeclared() =>
-        await RunDeliveryAsync(GetDropConnections());
+    public async Task ConcurrentRun_WhenConnectionsDrop_DeliversAsDeclared()
+    {
+        var fault = GetDropConnections();
+        await RunDeliveryAsync(fault);
+    }
 
     /// <summary>
     /// Runs clients that publish to a topic that two subscribers read, with a fault, and asserts that what the
@@ -278,8 +281,10 @@ public abstract class NotificationContractTests : ProviderContractTests
             recorder,
             TestCancellationToken
         );
-        Assert.True(await first.WaitForAsync(_ => true, TestCancellationToken));
-        Assert.True(await second.WaitForAsync(_ => true, TestCancellationToken));
+        var firstReady = await first.WaitForAsync(_ => true, TestCancellationToken);
+        Assert.True(firstReady);
+        var secondReady = await second.WaitForAsync(_ => true, TestCancellationToken);
+        Assert.True(secondReady);
 
         await ConcurrentRun.RunAsync(
             ConcurrentRun.Steps,
@@ -309,14 +314,16 @@ public abstract class NotificationContractTests : ProviderContractTests
         );
         Assert.Equal(HistoryOutcome.Returned, last.Outcome);
 
-        bool IsLastOrResync(Delivery<Notification> delivery) =>
-            delivery.Item.IsResync
-                ? gapDetection && delivery.Stamp > last.Responded
-                : string.Equals(
-                    HistoryValues.Decode(delivery.Item.Payload),
-                    NotificationCall.Last,
-                    StringComparison.Ordinal
-                );
+        bool IsLastOrResync(Delivery<Notification> delivery)
+        {
+            if (delivery.Item.IsResync)
+            {
+                return gapDetection && delivery.Stamp > last.Responded;
+            }
+
+            var payload = HistoryValues.Decode(delivery.Item.Payload);
+            return string.Equals(payload, NotificationCall.Last, StringComparison.Ordinal);
+        }
 
         var firstDone = await first.WaitForAsync(IsLastOrResync, TestCancellationToken);
         var secondDone = await second.WaitForAsync(IsLastOrResync, TestCancellationToken);
@@ -325,13 +332,13 @@ public abstract class NotificationContractTests : ProviderContractTests
             "A subscriber neither received the last message nor a resync after it."
         );
 
-        Assert.Empty(
-            NotificationDeliveryChecker.Check(
-                recorder.ToHistory(),
-                [first.Deliveries, second.Deliveries],
-                gapDetection
-            )
+        var history = recorder.ToHistory();
+        var violations = NotificationDeliveryChecker.Check(
+            history,
+            [first.Deliveries, second.Deliveries],
+            gapDetection
         );
+        Assert.Empty(violations);
     }
 
     #endregion

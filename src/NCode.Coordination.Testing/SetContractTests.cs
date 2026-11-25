@@ -393,7 +393,8 @@ public abstract class SetContractTests : ProviderContractTests
             TestCancellationToken
         );
 
-        HistoryAssert.Linearizable(new SetModel(members), recorder.ToHistory());
+        var history = recorder.ToHistory();
+        HistoryAssert.Linearizable(new SetModel(members), history);
     }
 
     #endregion

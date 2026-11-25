@@ -145,7 +145,8 @@ internal sealed class RunSubscriber<T> : IAsyncDisposable
                 var item in subscribe(cancellationToken).WithCancellation(cancellationToken)
             )
             {
-                writer.TryWrite(new Delivery<T>(recorder.Stamp(), item));
+                var stamp = recorder.Stamp();
+                writer.TryWrite(new Delivery<T>(stamp, item));
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

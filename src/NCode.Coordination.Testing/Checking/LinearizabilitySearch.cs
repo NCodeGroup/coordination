@@ -39,7 +39,8 @@ internal static class LinearizabilitySearch
         var seen = new HashSet<(LinearizedSet, TState)>();
         var stack =
             new Stack<(LinearizedSet Linearized, int Completed, TState State, int Cursor)>();
-        stack.Push((LinearizedSet.Empty(count), 0, model.Initial, 0));
+        var empty = LinearizedSet.Empty(count);
+        stack.Push((empty, 0, model.Initial, 0));
 
         while (stack.TryPop(out var frame))
         {

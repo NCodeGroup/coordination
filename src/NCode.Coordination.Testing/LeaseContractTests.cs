@@ -85,9 +85,10 @@ public abstract class LeaseContractTests : ProviderContractTests
         var terms = LeaseTerms.ForTimeToLive(timeToLive);
         var call = new LeaseCall(LeaseCall.Acquire, null, 0, timeToLive.Duration);
 
+        var partition = resource.ToString();
         var operation = await recorder.RecordAsync(
             client,
-            resource.ToString(),
+            partition,
             call,
             token => leases.TryAcquireAsync(resource, terms, null, token),
             cancellationToken
@@ -119,9 +120,10 @@ public abstract class LeaseContractTests : ProviderContractTests
             LongTimeToLive.Duration
         );
 
+        var partition = grant.Resource.ToString();
         var operation = await recorder.RecordAsync(
             client,
-            grant.Resource.ToString(),
+            partition,
             call,
             token => leases.RenewAsync(grant, LongTimeToLive, null, token),
             cancellationToken
@@ -153,9 +155,10 @@ public abstract class LeaseContractTests : ProviderContractTests
             TimeSpan.Zero
         );
 
+        var partition = grant.Resource.ToString();
         var operation = await recorder.RecordAsync(
             client,
-            grant.Resource.ToString(),
+            partition,
             call,
             token => leases.ReleaseAsync(grant, null, token),
             cancellationToken
@@ -577,7 +580,8 @@ public abstract class LeaseContractTests : ProviderContractTests
             TestCancellationToken
         );
 
-        HistoryAssert.Linearizable(new LeaseModel(), recorder.ToHistory());
+        var history = recorder.ToHistory();
+        HistoryAssert.Linearizable(new LeaseModel(), history);
     }
 
     /// <summary>
@@ -655,7 +659,8 @@ public abstract class LeaseContractTests : ProviderContractTests
             TestCancellationToken
         );
 
-        HistoryAssert.Linearizable(new LeaseModel(), recorder.ToHistory());
+        var history = recorder.ToHistory();
+        HistoryAssert.Linearizable(new LeaseModel(), history);
     }
 
     #endregion

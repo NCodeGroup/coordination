@@ -510,9 +510,11 @@ public abstract class RecordWatchContractTests : ProviderContractTests
             recorder,
             TestCancellationToken
         );
-        Assert.True(await subscriber.WaitForAsync(_ => true, TestCancellationToken));
+        var ready = await subscriber.WaitForAsync(_ => true, TestCancellationToken);
+        Assert.True(ready);
 
-        var script = new RecordRunScript(Records, recorder, CreateRunKeys());
+        var keys = CreateRunKeys();
+        var script = new RecordRunScript(Records, recorder, keys);
 
         await ConcurrentRun.RunAsync(
             ConcurrentRun.Steps,
@@ -533,14 +535,14 @@ public abstract class RecordWatchContractTests : ProviderContractTests
             "The watch neither received the last write nor a resync after it."
         );
 
-        Assert.Empty(
-            RecordWatchDeliveryChecker.Check(
-                recorder.ToHistory(),
-                subscriber.Deliveries,
-                closing,
-                gapDetection
-            )
+        var history = recorder.ToHistory();
+        var violations = RecordWatchDeliveryChecker.Check(
+            history,
+            subscriber.Deliveries,
+            closing,
+            gapDetection
         );
+        Assert.Empty(violations);
     }
 
     #endregion

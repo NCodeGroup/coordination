@@ -92,9 +92,10 @@ public abstract class ElectionContractTests : ProviderContractTests
         var terms = LeaseTerms.ForTimeToLive(timeToLive);
         var call = new ElectionCall(ElectionCall.Lead, value, null, 0);
 
+        var partition = role.ToString();
         var operation = await recorder.RecordAsync(
             client,
-            role.ToString(),
+            partition,
             call,
             token => elections.TryLeadAsync(role, bytes, terms, null, token),
             cancellationToken
@@ -126,9 +127,10 @@ public abstract class ElectionContractTests : ProviderContractTests
             leadership.Leader.Term.Value
         );
 
+        var partition = leadership.Leader.Role.ToString();
         var operation = await recorder.RecordAsync(
             client,
-            leadership.Leader.Role.ToString(),
+            partition,
             call,
             token => elections.RenewAsync(leadership, LongTimeToLive, null, token),
             cancellationToken
@@ -160,9 +162,10 @@ public abstract class ElectionContractTests : ProviderContractTests
             leadership.Leader.Term.Value
         );
 
+        var partition = leadership.Leader.Role.ToString();
         var operation = await recorder.RecordAsync(
             client,
-            leadership.Leader.Role.ToString(),
+            partition,
             call,
             token => elections.ResignAsync(leadership, null, token),
             cancellationToken
@@ -676,9 +679,10 @@ public abstract class ElectionContractTests : ProviderContractTests
                         break;
                     case 1:
                         var read = new ElectionCall(ElectionCall.Read, null, null, 0);
+                        var partition = role.ToString();
                         await recorder.RecordAsync(
                             client,
-                            role.ToString(),
+                            partition,
                             read,
                             token => elections.ReadAsync(role, null, token),
                             cancellationToken
@@ -709,7 +713,8 @@ public abstract class ElectionContractTests : ProviderContractTests
             TestCancellationToken
         );
 
-        HistoryAssert.Linearizable(new ElectionModel(), recorder.ToHistory());
+        var history = recorder.ToHistory();
+        HistoryAssert.Linearizable(new ElectionModel(), history);
     }
 
     #endregion

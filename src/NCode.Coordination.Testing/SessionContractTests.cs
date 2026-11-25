@@ -363,13 +363,13 @@ public abstract class SessionContractTests : ProviderContractTests
 
         var history = recorder.ToHistory();
 
+        var ids = history
+            .Select(operation => operation.Output)
+            .OfType<SessionGrant>()
+            .Select(grant => grant.Id);
+
         HistoryAssert.Linearizable(new SessionModel(), history);
-        Assert.Distinct(
-            history
-                .Select(operation => operation.Output)
-                .OfType<SessionGrant>()
-                .Select(grant => grant.Id)
-        );
+        Assert.Distinct(ids);
     }
 
     #endregion
