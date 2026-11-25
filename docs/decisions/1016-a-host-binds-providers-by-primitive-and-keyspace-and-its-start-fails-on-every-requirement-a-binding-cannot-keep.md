@@ -1,6 +1,6 @@
 # 1016. A host binds providers by primitive and keyspace, and its start fails on every requirement a binding cannot keep
 
-- **Status:** Proposed
+- **Status:** Proposed (amended by 1020)
 - **Date:** 2026-11-25
 - **Deciders:** NCode Group
 
