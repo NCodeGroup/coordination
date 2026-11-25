@@ -24,10 +24,25 @@ public sealed class InProcessCounterServiceTests
             await service.IncrementAsync(key, 1, ThirtySeconds, null, cancellationToken)
         );
 
-        var count = await service.ReadAsync(key, null, cancellationToken);
-
         Assert.Equal(CoordinationErrorCodes.LimitExceeded, exception.Code);
         Assert.False(exception.OutcomeUnknown);
+    }
+
+    [Fact]
+    public async Task IncrementAsync_WhenTheCountWouldPassTheLargestCount_KeepsTheCount()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var time = InProcessTesting.CreateTime();
+        var service = new InProcessCounterService(time);
+        var key = InProcessTesting.Keyspace.CreateKey("full");
+        await service.IncrementAsync(key, long.MaxValue, ThirtySeconds, null, cancellationToken);
+
+        await Assert.ThrowsAsync<CoordinationException>(async () =>
+            await service.IncrementAsync(key, 1, ThirtySeconds, null, cancellationToken)
+        );
+
+        var count = await service.ReadAsync(key, null, cancellationToken);
+
         Assert.Equal(long.MaxValue, count);
     }
 
@@ -105,6 +120,34 @@ public sealed class InProcessCounterServiceTests
 
         Assert.Equal([2L, 1L], result.Counts);
         Assert.Null(result.ExceededIndex);
+    }
+
+    [Fact]
+    public async Task IncrementBatchAsync_WhenACounterEndsDuringTheBatch_RestartsItWithItsFirstIncrementsTimeToLive()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        // The fake clock moves one second at each read, in the order of the test above: the counter's 2-second life
+        // starts at read 0, the batch loop finds it live at read 1 and the apply finds it ended at read 2.
+        var time = InProcessTesting.CreateTime();
+        time.AutoAdvanceAmount = TimeSpan.FromSeconds(1);
+        var service = new InProcessCounterService(time);
+        var first = InProcessTesting.Keyspace.CreateKey("first");
+        var second = InProcessTesting.Keyspace.CreateKey("second");
+        await service.IncrementAsync(first, 1, TwoSeconds, null, cancellationToken);
+
+        var firstIncrement = new CounterIncrement(first, 1, 10, ThirtySeconds);
+        var secondIncrement = new CounterIncrement(second, 1, 10, TwoSeconds);
+        CounterIncrement[] increments = [firstIncrement, secondIncrement];
+
+        await service.IncrementBatchAsync(increments, null, cancellationToken);
+
+        time.AutoAdvanceAmount = TimeSpan.Zero;
+
+        var count = await service.ReadAsync(first, null, cancellationToken);
+
+        // A counter that stayed live through the apply would keep its 2-second expiry from its creation and read 0 by
+        // now, so the count of 2 shows the apply restarted the counter with the batch's 30-second time to live.
+        Assert.Equal(2, count);
     }
 
     #endregion
