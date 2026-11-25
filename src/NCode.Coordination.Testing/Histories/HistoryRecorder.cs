@@ -12,6 +12,9 @@ namespace NCode.Coordination.Testing.Histories;
 /// <param name="callTimeout">How long a call may take before it is recorded as indeterminate.</param>
 internal sealed class HistoryRecorder(TimeSpan callTimeout)
 {
+    /// <summary>
+    /// The counter that <see cref="Stamp"/> increments atomically, the history's clock.
+    /// </summary>
     private long _clock;
 
     /// <summary>

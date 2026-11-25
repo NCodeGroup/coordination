@@ -8,6 +8,9 @@ namespace NCode.Coordination.Testing.Checking;
 /// </summary>
 internal sealed class LinearizedSet : IEquatable<LinearizedSet>
 {
+    /// <summary>
+    /// The number of indexes that one word of the set holds.
+    /// </summary>
     private const int WordBits = 64;
 
     /// <summary>
