@@ -29,9 +29,9 @@ clock.**
    `xunit.v3.extensibility.core` and `xunit.v3.assert`, and never `NCode.Coordination`
    ([project-template ADR-0132](project-template/0132-implementation-packages-depend-only-on-abstractions.md)).
 2. **Contract classes.** There is one abstract class per primitive: `SessionContractTests`, `MembershipContractTests`,
-   `LeaseContractTests`, `SemaphoreContractTests`, `ElectionContractTests`, `ClaimContractTests`,
-   `RecordContractTests`, `RecordWatchContractTests`, `TransactionContractTests`, `OccurrenceContractTests`,
-   `SetContractTests`, `CounterContractTests`, `SequenceContractTests` and `NotificationContractTests`. Each derives from
+   `LeaseContractTests`, `SemaphoreContractTests`, `ElectionContractTests`, `ClaimContractTests`, `RecordContractTests`,
+   `RecordWatchContractTests`, `TransactionContractTests`, `OccurrenceContractTests`, `SetContractTests`,
+   `CounterContractTests`, `SequenceContractTests` and `NotificationContractTests`. Each derives from
    `ProviderContractTests`. A provider's test project derives a sealed class from each and overrides
    `CreateTargetAsync`, which returns a `ConformanceTarget`: a provider created for that test and, optionally, a
    delegate that advances the provider's clock, by moving a fake clock or by waiting.

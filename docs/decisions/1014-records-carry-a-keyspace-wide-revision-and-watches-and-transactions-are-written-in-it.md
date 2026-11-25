@@ -42,10 +42,10 @@ on the store's state, and a transaction is conditions plus two branches of write
    revision. On a resync the subscriber rereads.
 5. **Transactions.** A transaction has 0 to 64 conditions (absent, revision equals, value equals), 1 to 64 writes when
    they hold and 0 to 64 when they do not (put with a lifetime, delete), all in one keyspace and each key written at
-   most once per branch. Its result says whether the conditions held, or that a write of the chosen branch
-   binds a record to a session that has ended, when nothing is written, and the revision of the outcome. etcd's
-   transactions map onto it directly. Consul's compare no values and have no else branch, so a Consul provider declares
-   transactions unsupported with that reason.
+   most once per branch. Its result says whether the conditions held, or that a write of the chosen branch binds a
+   record to a session that has ended, when nothing is written, and the revision of the outcome. etcd's transactions map
+   onto it directly. Consul's compare no values and have no else branch, so a Consul provider declares transactions
+   unsupported with that reason.
 6. **Partitions.** Two keys share a partition when they have the same partition depth `d` above 0 and equal first `d`
    segments, or are the same key. A provider that keeps `atomicity.within-partition` only refuses a transaction across
    partitions as `unsupported`.
