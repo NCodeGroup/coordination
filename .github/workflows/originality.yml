@@ -1,7 +1,7 @@
 name: Originality
 
-# The checks ORIGINALITY.md requires: every dependency's license against the permitted list, and the code against a
-# database of public open-source code.
+# The check ORIGINALITY.md requires in CI: every dependency's license, transitive ones included, against the
+# permitted list (ADR-1009).
 
 on:
   push:
@@ -38,28 +38,3 @@ jobs:
       - name: Check the dependencies' licenses
         run: ./build/Test-Licenses.ps1
 
-  snippets:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    # The scan annotates the pull request, so it needs to write pull-request comments and checks, never the repository's
-    # contents.
-    permissions:
-      contents: read
-      pull-requests: write
-      checks: write
-      actions: read
-    defaults:
-      run:
-        shell: pwsh
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - name: Check the reviewed matches
-        run: ./build/Test-SnippetReviews.ps1
-      - name: Scan for code that matches public open-source code
-        uses: scanoss/gha-code-scan@d3c8f659544885761c8e3b96743ea14b830474aa # v1.7.0
-        with:
-          policies: undeclared
-          policies.halt_on_failure: true
-          settingsFilepath: scanoss.json
