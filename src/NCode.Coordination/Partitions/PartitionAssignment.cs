@@ -129,11 +129,8 @@ public sealed class PartitionAssignment
             owners.Add(owner);
         }
 
-        return new PartitionAssignment(
-            view.Group,
-            view.Revision,
-            partitionCount,
-            owners.MoveToImmutable()
-        );
+        var assigned = owners.MoveToImmutable();
+
+        return new PartitionAssignment(view.Group, view.Revision, partitionCount, assigned);
     }
 }

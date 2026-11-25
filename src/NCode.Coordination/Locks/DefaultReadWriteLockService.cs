@@ -20,8 +20,11 @@ internal class DefaultReadWriteLockService(
     private static KeySegment WriterSegment { get; } = KeySegment.FromString("writer");
 
     // A reader holds the probe only while it writes its registration, so 30 seconds is far more than it needs.
-    private static LeaseTerms ProbeTerms { get; } =
-        LeaseTerms.ForTimeToLive(new TimeToLive(TimeSpan.FromSeconds(30)));
+    private static TimeSpan ProbeLength { get; } = TimeSpan.FromSeconds(30);
+
+    private static TimeToLive ProbeTimeToLive { get; } = new(ProbeLength);
+
+    private static LeaseTerms ProbeTerms { get; } = LeaseTerms.ForTimeToLive(ProbeTimeToLive);
 
     private ILeaseService Leases { get; } = leases;
 
@@ -59,11 +62,8 @@ internal class DefaultReadWriteLockService(
                 continue;
             }
 
-            var registration = RecipeKeys.Child(
-                resource,
-                KeySegment.FromInt64(probe.Grant.FencingToken.Value),
-                nameof(resource)
-            );
+            var token = KeySegment.FromInt64(probe.Grant.FencingToken.Value);
+            var registration = RecipeKeys.Child(resource, token, nameof(resource));
 
             RecordWriteResult written;
             try

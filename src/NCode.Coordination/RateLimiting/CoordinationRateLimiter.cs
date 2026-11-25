@@ -33,7 +33,14 @@ internal abstract class CoordinationRateLimiter(TimeProvider time, int permitLim
     private int PermitLimit { get; } = permitLimit;
 
     /// <inheritdoc />
-    public override TimeSpan? IdleDuration => Time.GetElapsedTime(Volatile.Read(ref _lastUsed));
+    public override TimeSpan? IdleDuration
+    {
+        get
+        {
+            var lastUsed = Volatile.Read(ref _lastUsed);
+            return Time.GetElapsedTime(lastUsed);
+        }
+    }
 
     /// <inheritdoc />
     public override RateLimiterStatistics? GetStatistics() => null;
@@ -54,7 +61,8 @@ internal abstract class CoordinationRateLimiter(TimeProvider time, int permitLim
     {
         ThrowIfInvalid(permitCount);
 
-        Volatile.Write(ref _lastUsed, Time.GetTimestamp());
+        var timestamp = Time.GetTimestamp();
+        Volatile.Write(ref _lastUsed, timestamp);
 
         return AcquirePermitsAsync(permitCount, cancellationToken);
     }
@@ -80,7 +88,8 @@ internal abstract class CoordinationRateLimiter(TimeProvider time, int permitLim
 
     private void ThrowIfInvalid(int permitCount)
     {
-        ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
+        var disposed = Volatile.Read(ref _disposed) != 0;
+        ObjectDisposedException.ThrowIf(disposed, this);
         ArgumentOutOfRangeException.ThrowIfLessThan(permitCount, 1);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(permitCount, PermitLimit);
     }

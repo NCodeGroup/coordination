@@ -58,7 +58,8 @@ internal readonly record struct TokenBucketState(long Tokens, long ReplenishedAt
     {
         var value = new byte[EncodedLength];
         BinaryPrimitives.WriteInt64BigEndian(value, Tokens);
-        BinaryPrimitives.WriteInt64BigEndian(value.AsSpan(sizeof(long)), ReplenishedAt);
+        var replenishedAtBytes = value.AsSpan(sizeof(long));
+        BinaryPrimitives.WriteInt64BigEndian(replenishedAtBytes, ReplenishedAt);
         return value;
     }
 
@@ -75,7 +76,8 @@ internal readonly record struct TokenBucketState(long Tokens, long ReplenishedAt
     {
         if (Tokens >= limit.TokenLimit)
         {
-            return new TokenBucketState(limit.TokenLimit, Math.Max(ReplenishedAt, now));
+            var replenishedAt = Math.Max(ReplenishedAt, now);
+            return new TokenBucketState(limit.TokenLimit, replenishedAt);
         }
 
         if (now <= ReplenishedAt)
@@ -113,7 +115,8 @@ internal readonly record struct TokenBucketState(long Tokens, long ReplenishedAt
         var missing = permitCount - Tokens;
         var periods = (missing + limit.TokensPerPeriod - 1) / limit.TokensPerPeriod;
         var milliseconds = ReplenishedAt + periods * GetPeriodMilliseconds(limit) - now;
-        return TimeSpan.FromMilliseconds(Math.Max(0, milliseconds));
+        var retryAfterMilliseconds = Math.Max(0, milliseconds);
+        return TimeSpan.FromMilliseconds(retryAfterMilliseconds);
     }
 
     /// <summary>

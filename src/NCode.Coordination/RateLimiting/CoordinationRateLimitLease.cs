@@ -12,13 +12,13 @@ namespace NCode.Coordination.RateLimiting;
 /// </summary>
 internal sealed class CoordinationRateLimitLease : RateLimitLease
 {
-    private readonly TimeSpan? _retryAfter;
-
     private CoordinationRateLimitLease(bool isAcquired, TimeSpan? retryAfter)
     {
         IsAcquired = isAcquired;
-        _retryAfter = retryAfter;
+        RetryAfter = retryAfter;
     }
+
+    private TimeSpan? RetryAfter { get; }
 
     /// <summary>
     /// Gets the lease of a request whose permits were granted.
@@ -45,7 +45,7 @@ internal sealed class CoordinationRateLimitLease : RateLimitLease
 
     /// <inheritdoc />
     public override IEnumerable<string> MetadataNames =>
-        _retryAfter.HasValue ? [MetadataName.RetryAfter.Name] : [];
+        RetryAfter.HasValue ? [MetadataName.RetryAfter.Name] : [];
 
     /// <inheritdoc />
     public override bool TryGetMetadata(
@@ -54,11 +54,11 @@ internal sealed class CoordinationRateLimitLease : RateLimitLease
     )
     {
         if (
-            _retryAfter.HasValue
+            RetryAfter.HasValue
             && string.Equals(metadataName, MetadataName.RetryAfter.Name, StringComparison.Ordinal)
         )
         {
-            metadata = _retryAfter.Value;
+            metadata = RetryAfter.Value;
             return true;
         }
 

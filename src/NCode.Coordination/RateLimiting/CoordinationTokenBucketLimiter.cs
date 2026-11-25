@@ -51,25 +51,25 @@ internal class CoordinationTokenBucketLimiter(
 
             if (state.Tokens < permitCount)
             {
-                return CoordinationRateLimitLease.Denied(
-                    state.GetRetryAfter(Limit, permitCount, nowMs)
-                );
+                var retryAfter = state.GetRetryAfter(Limit, permitCount, nowMs);
+                return CoordinationRateLimitLease.Denied(retryAfter);
             }
 
             var next = state with { Tokens = state.Tokens - permitCount };
-            var lifetime = RecordLifetime.ForTimeToLive(
-                new TimeToLive(next.GetTimeUntilFull(Limit) + SkewAllowance)
-            );
+            var timeUntilFull = next.GetTimeUntilFull(Limit) + SkewAllowance;
+            var timeToLive = new TimeToLive(timeUntilFull);
+            var lifetime = RecordLifetime.ForTimeToLive(timeToLive);
+            var encoded = next.Encode();
 
             var written = stored is null
                 ? await Records
-                    .CreateAsync(Key, next.Encode(), lifetime, null, cancellationToken)
+                    .CreateAsync(Key, encoded, lifetime, null, cancellationToken)
                     .ConfigureAwait(false)
                 : await Records
                     .CompareAndSwapAsync(
                         Key,
                         stored.Revision,
-                        next.Encode(),
+                        encoded,
                         lifetime,
                         null,
                         cancellationToken
