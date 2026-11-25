@@ -1,1 +1,25 @@
 #nullable enable
+abstract NCode.Coordination.Testing.ProviderContractTests.CreateTargetAsync(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.Testing.ConformanceTarget!>
+NCode.Coordination.Testing.ConformanceTarget
+NCode.Coordination.Testing.ConformanceTarget.AdvanceClock.get -> System.Func<System.TimeSpan, System.Threading.CancellationToken, System.Threading.Tasks.ValueTask>?
+NCode.Coordination.Testing.ConformanceTarget.AdvanceClock.init -> void
+NCode.Coordination.Testing.ConformanceTarget.ConformanceTarget(NCode.Coordination.ICoordinationProvider! provider) -> void
+NCode.Coordination.Testing.ConformanceTarget.Provider.get -> NCode.Coordination.ICoordinationProvider!
+NCode.Coordination.Testing.ProviderContractTests
+NCode.Coordination.Testing.ProviderContractTests.AdvanceClockAsync(System.TimeSpan duration) -> System.Threading.Tasks.ValueTask
+NCode.Coordination.Testing.ProviderContractTests.CreateKey(params System.Collections.Generic.IEnumerable<NCode.Coordination.KeySegment!>! segments) -> NCode.Coordination.CoordinationKey!
+NCode.Coordination.Testing.ProviderContractTests.Declares(NCode.Coordination.Primitive! primitive, NCode.Coordination.Guarantee! guarantee) -> bool
+NCode.Coordination.Testing.ProviderContractTests.DisposeAsync() -> System.Threading.Tasks.ValueTask
+NCode.Coordination.Testing.ProviderContractTests.GetService<TService>(NCode.Coordination.Primitive! primitive) -> TService!
+NCode.Coordination.Testing.ProviderContractTests.GetSupport(NCode.Coordination.Primitive! primitive) -> NCode.Coordination.PrimitiveSupport!
+NCode.Coordination.Testing.ProviderContractTests.InitializeAsync() -> System.Threading.Tasks.ValueTask
+NCode.Coordination.Testing.ProviderContractTests.Keyspace.get -> NCode.Coordination.Keyspace!
+NCode.Coordination.Testing.ProviderContractTests.ProviderContractTests() -> void
+NCode.Coordination.Testing.ProviderContractTests.Target.get -> NCode.Coordination.Testing.ConformanceTarget!
+static NCode.Coordination.Testing.ProviderContractTests.LongTimeToLive.get -> NCode.Coordination.TimeToLive!
+static NCode.Coordination.Testing.ProviderContractTests.PastExpiry.get -> System.TimeSpan
+static NCode.Coordination.Testing.ProviderContractTests.ShortDuration.get -> System.TimeSpan
+static NCode.Coordination.Testing.ProviderContractTests.ShortTimeToLive.get -> NCode.Coordination.TimeToLive!
+static NCode.Coordination.Testing.ProviderContractTests.StillAlive.get -> System.TimeSpan
+static NCode.Coordination.Testing.ProviderContractTests.TestCancellationToken.get -> System.Threading.CancellationToken
+static NCode.Coordination.Testing.ProviderContractTests.UnknownExtension.get -> NCode.Coordination.OperationOptions!

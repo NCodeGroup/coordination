@@ -45,6 +45,11 @@ dotnet_diagnostic.IDE0073.severity = warning
 [*.{csproj,slnx}]
 indent_size = 2
 
+# The conformance kit is test code that ships as a package: its tests are named Method_State_Expected and pass inline arrays to assertions, as test projects do (ADR-1017).
+[src/NCode.Coordination.Testing/**.cs]
+dotnet_diagnostic.CA1707.severity = none
+dotnet_diagnostic.CA1861.severity = none
+
 # EF Core migrations are scaffolded by dotnet ef, not written by hand: the analyzers treat them as generated code.
 [**/Migrations/**.cs]
 generated_code = true
