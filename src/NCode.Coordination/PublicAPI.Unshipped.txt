@@ -3,6 +3,7 @@ const NCode.Coordination.CoordinationTelemetry.ActivitySourceName = "NCode.Coord
 const NCode.Coordination.CoordinationTelemetry.MeterName = "NCode.Coordination" -> string!
 const NCode.Coordination.InProcessCoordinationBuilderExtensions.ProviderName = "in-process" -> string!
 const NCode.Coordination.PartitionAssignment.MaxPartitions = 4096 -> int
+const NCode.Coordination.SlidingWindowLimit.MaxSegmentsPerWindow = 16 -> int
 NCode.Coordination.BarrierTerms
 NCode.Coordination.BarrierTerms.BarrierTerms(int parties, NCode.Coordination.RecordLifetime! lifetime) -> void
 NCode.Coordination.BarrierTerms.Lifetime.get -> NCode.Coordination.RecordLifetime!
@@ -71,6 +72,12 @@ NCode.Coordination.SingletonCandidate.Session.get -> NCode.Coordination.SessionI
 NCode.Coordination.SingletonCandidate.SingletonCandidate(NCode.Coordination.SessionId! session) -> void
 NCode.Coordination.SingletonCandidate.Value.get -> System.ReadOnlyMemory<byte>
 NCode.Coordination.SingletonCandidate.Value.init -> void
+NCode.Coordination.SlidingWindowLimit
+NCode.Coordination.SlidingWindowLimit.PermitLimit.get -> int
+NCode.Coordination.SlidingWindowLimit.SegmentLength.get -> System.TimeSpan
+NCode.Coordination.SlidingWindowLimit.SegmentsPerWindow.get -> int
+NCode.Coordination.SlidingWindowLimit.SlidingWindowLimit(int permitLimit, System.TimeSpan window, int segmentsPerWindow) -> void
+NCode.Coordination.SlidingWindowLimit.Window.get -> System.TimeSpan
 override NCode.Coordination.Recipe.ToString() -> string!
 static NCode.Coordination.CoordinationRecipes.All.get -> System.Collections.Immutable.ImmutableArray<NCode.Coordination.Recipe!>
 static NCode.Coordination.CoordinationRecipes.Barrier.get -> NCode.Coordination.Recipe!
