@@ -49,6 +49,21 @@ public sealed class NotificationTests
     }
 
     [Fact]
+    public void Message_WhenSourceChangesAfterward_KeepsItsCopy()
+    {
+        const long sequence = 7;
+        var topic = Topic();
+        byte[] source = [1, 2, 3];
+
+        var notification = Notification.Message(topic, sequence, source);
+
+        source[0] = 9;
+        var kept = notification.Payload.ToArray();
+
+        Assert.Equal<byte>([1, 2, 3], kept);
+    }
+
+    [Fact]
     public void Message_WhenSequenceIsZero_Throws()
     {
         var topic = Topic();

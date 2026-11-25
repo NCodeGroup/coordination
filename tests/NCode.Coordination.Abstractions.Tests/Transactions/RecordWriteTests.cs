@@ -49,6 +49,21 @@ public sealed class RecordWriteTests
     }
 
     [Fact]
+    public void Put_WhenSourceChangesAfterward_KeepsItsCopy()
+    {
+        var key = Key();
+        var lifetime = RecordLifetime.Persistent;
+        byte[] source = [1, 2, 3];
+
+        var write = RecordWrite.Put(key, source, lifetime);
+
+        source[0] = 9;
+        var kept = write.Value.ToArray();
+
+        Assert.Equal<byte>([1, 2, 3], kept);
+    }
+
+    [Fact]
     public void Put_WhenKeyIsNull_Throws()
     {
         var exception = Assert.Throws<ArgumentNullException>(() =>

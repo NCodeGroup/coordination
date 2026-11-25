@@ -1,6 +1,8 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using NCode.Coordination.Validation;
+
 namespace NCode.Coordination;
 
 /// <summary>
@@ -49,7 +51,7 @@ public sealed class RecordWrite
     /// Creates the write that stores a value under a key.
     /// </summary>
     /// <param name="key">The key of the record.</param>
-    /// <param name="value">The value to write.</param>
+    /// <param name="value">The value to write. The type keeps its own copy.</param>
     /// <param name="lifetime">How long the record lasts; it replaces the lifetime of an existing record.</param>
     /// <returns>The write.</returns>
     /// <exception cref="ArgumentNullException">The key or the lifetime is null.</exception>
@@ -63,15 +65,9 @@ public sealed class RecordWrite
         ArgumentNullException.ThrowIfNull(key);
         ArgumentNullException.ThrowIfNull(lifetime);
 
-        if (value.Length > CoordinationLimits.MaxValueLength)
-        {
-            throw new ArgumentException(
-                $"A value has at most {CoordinationLimits.MaxValueLength} bytes.",
-                nameof(value)
-            );
-        }
+        var copy = ByteValue.Copy(value, CoordinationLimits.MaxValueLength, nameof(value));
 
-        return new RecordWrite(RecordWriteKind.Put, key, value, lifetime);
+        return new RecordWrite(RecordWriteKind.Put, key, copy, lifetime);
     }
 
     /// <summary>

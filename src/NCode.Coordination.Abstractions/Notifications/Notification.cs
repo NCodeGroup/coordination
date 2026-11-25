@@ -1,6 +1,8 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using NCode.Coordination.Validation;
+
 namespace NCode.Coordination;
 
 /// <summary>
@@ -58,7 +60,7 @@ public sealed class Notification
     /// </summary>
     /// <param name="topic">The topic the message was published on.</param>
     /// <param name="sequence">The number of the message in its topic, at least 1.</param>
-    /// <param name="payload">The payload, at most <see cref="CoordinationLimits.MaxPayloadLength"/> bytes.</param>
+    /// <param name="payload">The payload, at most <see cref="CoordinationLimits.MaxPayloadLength"/> bytes. The type keeps its own copy.</param>
     /// <returns>The message notification.</returns>
     /// <exception cref="ArgumentNullException">The topic is null.</exception>
     /// <exception cref="ArgumentOutOfRangeException">The sequence is less than 1.</exception>
@@ -72,15 +74,9 @@ public sealed class Notification
         ArgumentNullException.ThrowIfNull(topic);
         ArgumentOutOfRangeException.ThrowIfLessThan(sequence, 1);
 
-        if (payload.Length > CoordinationLimits.MaxPayloadLength)
-        {
-            throw new ArgumentException(
-                $"A payload has at most {CoordinationLimits.MaxPayloadLength} bytes.",
-                nameof(payload)
-            );
-        }
+        var copy = ByteValue.Copy(payload, CoordinationLimits.MaxPayloadLength, nameof(payload));
 
-        return new Notification(NotificationKind.Message, topic, sequence, payload);
+        return new Notification(NotificationKind.Message, topic, sequence, copy);
     }
 
     /// <summary>

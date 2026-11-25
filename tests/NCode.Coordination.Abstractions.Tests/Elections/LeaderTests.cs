@@ -52,6 +52,21 @@ public sealed class LeaderTests
     }
 
     [Fact]
+    public void Constructor_WhenSourceChangesAfterward_KeepsItsCopy()
+    {
+        var role = Role();
+        var term = new FencingToken(7);
+        byte[] source = [1, 2, 3];
+
+        var leader = new Leader(role, term, source);
+
+        source[0] = 9;
+        var kept = leader.Value.ToArray();
+
+        Assert.Equal<byte>([1, 2, 3], kept);
+    }
+
+    [Fact]
     public void Constructor_WhenRoleIsNull_Throws()
     {
         var exception = Assert.Throws<ArgumentNullException>(() =>

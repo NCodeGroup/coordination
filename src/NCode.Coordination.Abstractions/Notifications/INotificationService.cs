@@ -16,7 +16,8 @@ public interface INotificationService
     /// </summary>
     /// <remarks>
     /// The operation <see cref="Operations.NotificationPublish"/>. The payload is at most
-    /// <see cref="CoordinationLimits.MaxPayloadLength"/> bytes and names what changed, never the state itself.
+    /// <see cref="CoordinationLimits.MaxPayloadLength"/> bytes and names what changed, never the state itself. The provider reads the payload before the returned task completes, so the caller may
+    /// reuse its buffer once it does.
     /// </remarks>
     /// <param name="topic">The topic to publish on.</param>
     /// <param name="payload">The payload that names what changed.</param>

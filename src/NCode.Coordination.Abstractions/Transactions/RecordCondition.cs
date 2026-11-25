@@ -1,6 +1,8 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using NCode.Coordination.Validation;
+
 namespace NCode.Coordination;
 
 /// <summary>
@@ -87,7 +89,7 @@ public sealed class RecordCondition
     /// Creates the condition that holds when the record exists with the given value.
     /// </summary>
     /// <param name="key">The key of the record.</param>
-    /// <param name="value">The value the record must have.</param>
+    /// <param name="value">The value the record must have. The type keeps its own copy.</param>
     /// <returns>The condition.</returns>
     /// <exception cref="ArgumentNullException">The key is null.</exception>
     /// <exception cref="ArgumentException">The value is longer than the limit.</exception>
@@ -95,14 +97,8 @@ public sealed class RecordCondition
     {
         ArgumentNullException.ThrowIfNull(key);
 
-        if (value.Length > CoordinationLimits.MaxValueLength)
-        {
-            throw new ArgumentException(
-                $"A value has at most {CoordinationLimits.MaxValueLength} bytes.",
-                nameof(value)
-            );
-        }
+        var copy = ByteValue.Copy(value, CoordinationLimits.MaxValueLength, nameof(value));
 
-        return new RecordCondition(RecordConditionKind.ValueEquals, key, null, value);
+        return new RecordCondition(RecordConditionKind.ValueEquals, key, null, copy);
     }
 }

@@ -113,6 +113,20 @@ public sealed class RecordConditionTests
     }
 
     [Fact]
+    public void ValueEquals_WhenSourceChangesAfterward_KeepsItsCopy()
+    {
+        var key = Key();
+        byte[] source = [1, 2, 3];
+
+        var condition = RecordCondition.ValueEquals(key, source);
+
+        source[0] = 9;
+        var kept = condition.Value.ToArray();
+
+        Assert.Equal<byte>([1, 2, 3], kept);
+    }
+
+    [Fact]
     public void ValueEquals_WhenKeyIsNull_Throws()
     {
         var exception = Assert.Throws<ArgumentNullException>(() =>

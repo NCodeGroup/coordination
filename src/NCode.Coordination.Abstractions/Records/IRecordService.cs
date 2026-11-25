@@ -18,6 +18,8 @@ public interface IRecordService
     /// The operation <see cref="Operations.RecordCreate"/>. It writes only when the key is absent, and otherwise the
     /// result is conflict. A record bound to an ended session is not written: the result is session ended. A value
     /// above <see cref="CoordinationLimits.MaxValueLength"/> bytes throws <see cref="ArgumentException"/>.
+    /// The provider reads the value before the returned task completes, so the caller may reuse its buffer once it
+    /// does.
     /// </remarks>
     /// <param name="key">The key of the record.</param>
     /// <param name="value">The value of the record.</param>
@@ -56,7 +58,8 @@ public interface IRecordService
     /// The operation <see cref="Operations.RecordCompareAndSwap"/>. It writes only when the record's revision is the
     /// expected one: the result is conflict for another revision and not found when the record is absent. The lifetime
     /// replaces the record's, so a sliding expiry is a write. A value above
-    /// <see cref="CoordinationLimits.MaxValueLength"/> bytes throws <see cref="ArgumentException"/>.
+    /// <see cref="CoordinationLimits.MaxValueLength"/> bytes throws <see cref="ArgumentException"/>. The provider reads
+    /// the value before the returned task completes, so the caller may reuse its buffer once it does.
     /// </remarks>
     /// <param name="key">The key of the record.</param>
     /// <param name="expected">The revision the record must have.</param>

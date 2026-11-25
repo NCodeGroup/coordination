@@ -61,6 +61,21 @@ public sealed class StoredRecordTests
     }
 
     [Fact]
+    public void Constructor_WhenSourceChangesAfterward_KeepsItsCopy()
+    {
+        var key = Key();
+        var revision = new Revision(9);
+        byte[] source = [1, 2, 3];
+
+        var record = new StoredRecord(key, source, revision);
+
+        source[0] = 9;
+        var kept = record.Value.ToArray();
+
+        Assert.Equal<byte>([1, 2, 3], kept);
+    }
+
+    [Fact]
     public void Constructor_WhenKeyIsNull_Throws()
     {
         var exception = Assert.Throws<ArgumentNullException>(() =>

@@ -1,6 +1,8 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using NCode.Coordination.Validation;
+
 namespace NCode.Coordination;
 
 /// <summary>
@@ -12,7 +14,7 @@ public sealed class StoredRecord
     /// Creates a stored record.
     /// </summary>
     /// <param name="key">The key of the record.</param>
-    /// <param name="value">The value of the record.</param>
+    /// <param name="value">The value of the record. The type keeps its own copy.</param>
     /// <param name="revision">The revision of the write that produced the record.</param>
     /// <exception cref="ArgumentNullException">The key or the revision is null.</exception>
     /// <exception cref="ArgumentException">The value is longer than the limit.</exception>
@@ -21,16 +23,10 @@ public sealed class StoredRecord
         ArgumentNullException.ThrowIfNull(key);
         ArgumentNullException.ThrowIfNull(revision);
 
-        if (value.Length > CoordinationLimits.MaxValueLength)
-        {
-            throw new ArgumentException(
-                $"A value has at most {CoordinationLimits.MaxValueLength} bytes.",
-                nameof(value)
-            );
-        }
+        var copy = ByteValue.Copy(value, CoordinationLimits.MaxValueLength, nameof(value));
 
         Key = key;
-        Value = value;
+        Value = copy;
         Revision = revision;
     }
 

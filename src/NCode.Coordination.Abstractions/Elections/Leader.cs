@@ -1,6 +1,8 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using NCode.Coordination.Validation;
+
 namespace NCode.Coordination;
 
 /// <summary>
@@ -13,7 +15,7 @@ public sealed class Leader
     /// </summary>
     /// <param name="role">The role the leader leads.</param>
     /// <param name="term">The leader's term, which is its fencing token.</param>
-    /// <param name="value">The value followers read, such as the leader's address.</param>
+    /// <param name="value">The value followers read, such as the leader's address. The type keeps its own copy.</param>
     /// <exception cref="ArgumentNullException">The role or the term is null.</exception>
     /// <exception cref="ArgumentException">The value is longer than the limit.</exception>
     public Leader(CoordinationKey role, FencingToken term, ReadOnlyMemory<byte> value)
@@ -21,17 +23,11 @@ public sealed class Leader
         ArgumentNullException.ThrowIfNull(role);
         ArgumentNullException.ThrowIfNull(term);
 
-        if (value.Length > CoordinationLimits.MaxValueLength)
-        {
-            throw new ArgumentException(
-                $"A value has at most {CoordinationLimits.MaxValueLength} bytes.",
-                nameof(value)
-            );
-        }
+        var copy = ByteValue.Copy(value, CoordinationLimits.MaxValueLength, nameof(value));
 
         Role = role;
         Term = term;
-        Value = value;
+        Value = copy;
     }
 
     /// <summary>

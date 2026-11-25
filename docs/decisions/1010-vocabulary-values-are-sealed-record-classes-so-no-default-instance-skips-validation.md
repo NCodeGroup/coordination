@@ -28,6 +28,9 @@ checks did not accept.**
    and the comparison operators.
 5. **Aggregates are classes.** Definitions, declarations, grants, results, views and transactions, which callers do not
    compare, are sealed classes with reference equality.
+6. **Kept bytes are a copy.** A type that keeps a caller's bytes, such as a record's value or a notification's payload,
+   keeps its own copy, made when it checks the length, and an operation that takes bytes reads them before its task
+   completes, so a caller may reuse or return a pooled buffer once the call returns.
 
 ## Options considered
 
@@ -39,6 +42,7 @@ checks did not accept.**
 
 - Null is the only invalid value, and nullable annotations track it.
 - Each value costs one allocation, small beside an operation's round trip.
+- A value of up to the value limit is copied once when a type keeps it.
 - This record overrides the C# conventions' preference for a `readonly record struct` for these types.
 
 ## References
