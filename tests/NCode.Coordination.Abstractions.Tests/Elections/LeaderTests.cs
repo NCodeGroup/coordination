@@ -30,7 +30,10 @@ public sealed class LeaderTests
     {
         var value = new byte[CoordinationLimits.MaxValueLength];
 
-        var leader = new Leader(Role(), new FencingToken(7), value);
+        var role = Role();
+        var term = new FencingToken(7);
+
+        var leader = new Leader(role, term, value);
 
         Assert.Equal(65_536, leader.Value.Length);
     }
@@ -39,9 +42,10 @@ public sealed class LeaderTests
     public void Constructor_WhenValueIsAboveTheLimit_Throws()
     {
         var value = new byte[CoordinationLimits.MaxValueLength + 1];
+        var role = Role();
 
         var exception = Assert.Throws<ArgumentException>(() =>
-            new Leader(Role(), new FencingToken(7), value)
+            new Leader(role, new FencingToken(7), value)
         );
 
         Assert.Equal("value", exception.ParamName);
@@ -60,8 +64,10 @@ public sealed class LeaderTests
     [Fact]
     public void Constructor_WhenTermIsNull_Throws()
     {
+        var role = Role();
+
         var exception = Assert.Throws<ArgumentNullException>(() =>
-            new Leader(Role(), null!, ReadOnlyMemory<byte>.Empty)
+            new Leader(role, null!, ReadOnlyMemory<byte>.Empty)
         );
 
         Assert.Equal("term", exception.ParamName);

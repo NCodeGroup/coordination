@@ -29,7 +29,9 @@ public sealed class ElectionViewTests
     [Fact]
     public void Constructor_WhenLeaderIsNull_AcceptsAVacantRole()
     {
-        var view = new ElectionView(Role(), null);
+        var role = Role();
+
+        var view = new ElectionView(role, null);
 
         Assert.Null(view.Leader);
     }

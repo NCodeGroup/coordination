@@ -13,7 +13,8 @@ public sealed class RecordChangeTests
     public void Written_WhenRecordIsGiven_TakesKeyAndRevisionFromIt()
     {
         var key = Key();
-        var record = new StoredRecord(key, "payload"u8.ToArray(), new Revision(9));
+        var payload = "payload"u8.ToArray();
+        var record = new StoredRecord(key, payload, new Revision(9));
 
         var change = RecordChange.Written(record);
 

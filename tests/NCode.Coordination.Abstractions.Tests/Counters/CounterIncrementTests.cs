@@ -7,7 +7,12 @@ public sealed class CounterIncrementTests
 {
     private static CoordinationKey Key() => new(new Keyspace("prod"), "rate");
 
-    private static TimeToLive Ttl() => new(TimeSpan.FromMinutes(1));
+    private static TimeToLive Ttl()
+    {
+        var duration = TimeSpan.FromMinutes(1);
+
+        return new TimeToLive(duration);
+    }
 
     #region Constructor Tests
 
@@ -28,7 +33,10 @@ public sealed class CounterIncrementTests
     [Fact]
     public void Constructor_WhenLimitIsZero_Accepts()
     {
-        var increment = new CounterIncrement(Key(), 1, 0, Ttl());
+        var key = Key();
+        var timeToLive = Ttl();
+
+        var increment = new CounterIncrement(key, 1, 0, timeToLive);
 
         Assert.Equal(0, increment.Limit);
     }
@@ -36,8 +44,11 @@ public sealed class CounterIncrementTests
     [Fact]
     public void Constructor_WhenAmountIsZero_Throws()
     {
+        var key = Key();
+        var timeToLive = Ttl();
+
         var exception = Assert.Throws<ArgumentOutOfRangeException>(() =>
-            new CounterIncrement(Key(), 0, 10, Ttl())
+            new CounterIncrement(key, 0, 10, timeToLive)
         );
 
         Assert.Equal("amount", exception.ParamName);
@@ -46,8 +57,11 @@ public sealed class CounterIncrementTests
     [Fact]
     public void Constructor_WhenLimitIsNegative_Throws()
     {
+        var key = Key();
+        var timeToLive = Ttl();
+
         var exception = Assert.Throws<ArgumentOutOfRangeException>(() =>
-            new CounterIncrement(Key(), 1, -1, Ttl())
+            new CounterIncrement(key, 1, -1, timeToLive)
         );
 
         Assert.Equal("limit", exception.ParamName);
@@ -56,8 +70,10 @@ public sealed class CounterIncrementTests
     [Fact]
     public void Constructor_WhenKeyIsNull_Throws()
     {
+        var timeToLive = Ttl();
+
         var exception = Assert.Throws<ArgumentNullException>(() =>
-            new CounterIncrement(null!, 1, 10, Ttl())
+            new CounterIncrement(null!, 1, 10, timeToLive)
         );
 
         Assert.Equal("key", exception.ParamName);
@@ -66,8 +82,10 @@ public sealed class CounterIncrementTests
     [Fact]
     public void Constructor_WhenTimeToLiveIsNull_Throws()
     {
+        var key = Key();
+
         var exception = Assert.Throws<ArgumentNullException>(() =>
-            new CounterIncrement(Key(), 1, 10, null!)
+            new CounterIncrement(key, 1, 10, null!)
         );
 
         Assert.Equal("timeToLive", exception.ParamName);

@@ -29,7 +29,8 @@ public sealed class RecordLifetimeTests
     [Fact]
     public void ForTimeToLive_WhenTimeToLiveIsGiven_KeepsTimeToLiveAndNoSession()
     {
-        var timeToLive = new TimeToLive(TimeSpan.FromSeconds(30));
+        var duration = TimeSpan.FromSeconds(30);
+        var timeToLive = new TimeToLive(duration);
 
         var lifetime = RecordLifetime.ForTimeToLive(timeToLive);
 
@@ -85,7 +86,8 @@ public sealed class RecordLifetimeTests
     [Fact]
     public void IsPersistent_WhenForTimeToLive_ReturnsFalse()
     {
-        var timeToLive = new TimeToLive(TimeSpan.FromSeconds(30));
+        var duration = TimeSpan.FromSeconds(30);
+        var timeToLive = new TimeToLive(duration);
         var lifetime = RecordLifetime.ForTimeToLive(timeToLive);
 
         Assert.False(lifetime.IsPersistent);

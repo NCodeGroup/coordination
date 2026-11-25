@@ -10,7 +10,8 @@ public sealed class KeepAliveResultTests
     [Fact]
     public void Renewed_WhenTimeToLiveIsGiven_HasRenewedStatusAndPayload()
     {
-        var timeToLive = new TimeToLive(TimeSpan.FromSeconds(30));
+        var duration = TimeSpan.FromSeconds(30);
+        var timeToLive = new TimeToLive(duration);
 
         var result = KeepAliveResult.Renewed(timeToLive);
 
@@ -52,7 +53,8 @@ public sealed class KeepAliveResultTests
     [Fact]
     public void IsRenewed_WhenRenewed_ReturnsTrue()
     {
-        var timeToLive = new TimeToLive(TimeSpan.FromSeconds(30));
+        var duration = TimeSpan.FromSeconds(30);
+        var timeToLive = new TimeToLive(duration);
         var result = KeepAliveResult.Renewed(timeToLive);
 
         Assert.True(result.IsRenewed);

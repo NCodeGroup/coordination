@@ -11,7 +11,8 @@ public sealed class SessionGrantTests
     public void Constructor_WhenArgumentsAreValid_KeepsBoth()
     {
         var id = new SessionId(new Keyspace("prod"), "7");
-        var timeToLive = new TimeToLive(TimeSpan.FromSeconds(30));
+        var duration = TimeSpan.FromSeconds(30);
+        var timeToLive = new TimeToLive(duration);
 
         var grant = new SessionGrant(id, timeToLive);
 
@@ -22,8 +23,11 @@ public sealed class SessionGrantTests
     [Fact]
     public void Constructor_WhenIdIsNull_Throws()
     {
+        var duration = TimeSpan.FromSeconds(30);
+        var timeToLive = new TimeToLive(duration);
+
         var exception = Assert.Throws<ArgumentNullException>(() =>
-            new SessionGrant(null!, new TimeToLive(TimeSpan.FromSeconds(30)))
+            new SessionGrant(null!, timeToLive)
         );
 
         Assert.Equal("id", exception.ParamName);

@@ -7,7 +7,8 @@ public sealed class LeaseAcquireResultTests
 {
     private static LeaseGrant Grant()
     {
-        var timeToLive = new TimeToLive(TimeSpan.FromSeconds(30));
+        var duration = TimeSpan.FromSeconds(30);
+        var timeToLive = new TimeToLive(duration);
         var terms = LeaseTerms.ForTimeToLive(timeToLive);
         return new LeaseGrant(
             new CoordinationKey(new Keyspace("prod"), "job"),
@@ -85,7 +86,9 @@ public sealed class LeaseAcquireResultTests
     [Fact]
     public void IsAcquired_WhenAcquired_ReturnsTrue()
     {
-        var result = LeaseAcquireResult.Acquired(Grant());
+        var grant = Grant();
+
+        var result = LeaseAcquireResult.Acquired(grant);
 
         Assert.True(result.IsAcquired);
     }

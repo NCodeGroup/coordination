@@ -12,7 +12,8 @@ public sealed class ElectionResultTests
             new FencingToken(7),
             ReadOnlyMemory<byte>.Empty
         );
-        var timeToLive = new TimeToLive(TimeSpan.FromSeconds(30));
+        var duration = TimeSpan.FromSeconds(30);
+        var timeToLive = new TimeToLive(duration);
         var terms = LeaseTerms.ForTimeToLive(timeToLive);
         return new Leadership(leader, new OwnerToken("o-1"), terms);
     }
@@ -83,7 +84,9 @@ public sealed class ElectionResultTests
     [Fact]
     public void IsElected_WhenElected_ReturnsTrue()
     {
-        var result = ElectionResult.Elected(Leadership());
+        var leadership = Leadership();
+
+        var result = ElectionResult.Elected(leadership);
 
         Assert.True(result.IsElected);
     }

@@ -36,8 +36,10 @@ public sealed class MemberTests
     [Fact]
     public void Constructor_WhenNodeIdIsNotAToken_Throws()
     {
+        var session = NewSession();
+
         var exception = Assert.Throws<ArgumentException>(() =>
-            new Member(NewSession(), "a b", "10.0.0.4:5000")
+            new Member(session, "a b", "10.0.0.4:5000")
         );
 
         Assert.Equal("nodeId", exception.ParamName);
@@ -46,9 +48,9 @@ public sealed class MemberTests
     [Fact]
     public void Constructor_WhenAddressIsWhitespace_Throws()
     {
-        var exception = Assert.Throws<ArgumentException>(() =>
-            new Member(NewSession(), "node-1", " ")
-        );
+        var session = NewSession();
+
+        var exception = Assert.Throws<ArgumentException>(() => new Member(session, "node-1", " "));
 
         Assert.Equal("address", exception.ParamName);
     }
@@ -56,12 +58,10 @@ public sealed class MemberTests
     [Fact]
     public void Constructor_WhenAddressIsTooLong_Throws()
     {
+        var session = NewSession();
+
         var exception = Assert.Throws<ArgumentException>(() =>
-            new Member(
-                NewSession(),
-                "node-1",
-                new string('a', CoordinationLimits.MaxAddressLength + 1)
-            )
+            new Member(session, "node-1", new string('a', CoordinationLimits.MaxAddressLength + 1))
         );
 
         Assert.Equal("address", exception.ParamName);
@@ -74,7 +74,9 @@ public sealed class MemberTests
     [Fact]
     public void Metadata_ByDefault_IsEmpty()
     {
-        var member = new Member(NewSession(), "node-1", "10.0.0.4:5000");
+        var session = NewSession();
+
+        var member = new Member(session, "node-1", "10.0.0.4:5000");
 
         Assert.Empty(member.Metadata);
     }
@@ -82,7 +84,9 @@ public sealed class MemberTests
     [Fact]
     public void Metadata_WhenValid_IsKept()
     {
-        var member = new Member(NewSession(), "node-1", "10.0.0.4:5000")
+        var session = NewSession();
+
+        var member = new Member(session, "node-1", "10.0.0.4:5000")
         {
             Metadata = ImmutableDictionary<string, string>.Empty.Add("app.zone", "a"),
         };
@@ -97,8 +101,10 @@ public sealed class MemberTests
             .Range(0, CoordinationLimits.MaxMetadataEntries + 1)
             .ToImmutableDictionary(i => $"x.n{i}", _ => "v");
 
+        var session = NewSession();
+
         var exception = Assert.Throws<ArgumentException>(() =>
-            new Member(NewSession(), "node-1", "10.0.0.4:5000") { Metadata = values }
+            new Member(session, "node-1", "10.0.0.4:5000") { Metadata = values }
         );
 
         Assert.Equal("Metadata", exception.ParamName);

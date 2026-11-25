@@ -33,7 +33,8 @@ public sealed class LeaseTermsTests
     [Fact]
     public void ForTimeToLive_WhenTimeToLiveIsGiven_KeepsTimeToLiveAndNoSession()
     {
-        var timeToLive = new TimeToLive(TimeSpan.FromSeconds(30));
+        var duration = TimeSpan.FromSeconds(30);
+        var timeToLive = new TimeToLive(duration);
 
         var terms = LeaseTerms.ForTimeToLive(timeToLive);
 
@@ -65,7 +66,8 @@ public sealed class LeaseTermsTests
     [Fact]
     public void IsBoundToSession_WhenForTimeToLive_ReturnsFalse()
     {
-        var timeToLive = new TimeToLive(TimeSpan.FromSeconds(30));
+        var duration = TimeSpan.FromSeconds(30);
+        var timeToLive = new TimeToLive(duration);
         var terms = LeaseTerms.ForTimeToLive(timeToLive);
 
         Assert.False(terms.IsBoundToSession);

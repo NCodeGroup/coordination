@@ -5,8 +5,13 @@ namespace NCode.Coordination.Tests;
 
 public sealed class RecordPageTests
 {
-    private static StoredRecord Record(string name) =>
-        new(new CoordinationKey(new Keyspace("prod"), name), "v"u8.ToArray(), new Revision(3));
+    private static StoredRecord Record(string name)
+    {
+        var key = new CoordinationKey(new Keyspace("prod"), name);
+        var value = "v"u8.ToArray();
+
+        return new StoredRecord(key, value, new Revision(3));
+    }
 
     #region Constructor Tests
 
@@ -53,8 +58,10 @@ public sealed class RecordPageTests
     [Fact]
     public void Constructor_WhenARecordIsNull_Throws()
     {
+        var first = Record("a");
+
         var exception = Assert.Throws<ArgumentException>(() =>
-            new RecordPage(new Revision(9), Record("a"), null!)
+            new RecordPage(new Revision(9), first, null!)
         );
 
         Assert.Equal("records", exception.ParamName);

@@ -11,7 +11,8 @@ public sealed class LeaseGrantTests
 
     private static LeaseTerms Terms()
     {
-        var timeToLive = new TimeToLive(TimeSpan.FromSeconds(30));
+        var duration = TimeSpan.FromSeconds(30);
+        var timeToLive = new TimeToLive(duration);
         return LeaseTerms.ForTimeToLive(timeToLive);
     }
 

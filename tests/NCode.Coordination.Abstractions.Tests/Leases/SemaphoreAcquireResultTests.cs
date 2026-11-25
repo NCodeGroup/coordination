@@ -7,7 +7,8 @@ public sealed class SemaphoreAcquireResultTests
 {
     private static SemaphoreGrant Grant()
     {
-        var timeToLive = new TimeToLive(TimeSpan.FromSeconds(30));
+        var duration = TimeSpan.FromSeconds(30);
+        var timeToLive = new TimeToLive(duration);
         var terms = LeaseTerms.ForTimeToLive(timeToLive);
         return new SemaphoreGrant(
             new CoordinationKey(new Keyspace("prod"), "pool"),
@@ -108,7 +109,9 @@ public sealed class SemaphoreAcquireResultTests
     [Fact]
     public void IsAcquired_WhenAcquired_ReturnsTrue()
     {
-        var result = SemaphoreAcquireResult.Acquired(Grant());
+        var grant = Grant();
+
+        var result = SemaphoreAcquireResult.Acquired(grant);
 
         Assert.True(result.IsAcquired);
     }

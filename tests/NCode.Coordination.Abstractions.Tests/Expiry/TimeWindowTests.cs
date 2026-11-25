@@ -239,7 +239,8 @@ public sealed class TimeWindowTests
     public void Equals_WhenStartAndLengthMatch_IsEqual()
     {
         var left = new TimeWindow(Ten, OneHour);
-        var right = TimeWindow.Containing(Ten.AddMinutes(5), OneHour);
+        var inside = Ten.AddMinutes(5);
+        var right = TimeWindow.Containing(inside, OneHour);
 
         var leftHash = left.GetHashCode();
         var rightHash = right.GetHashCode();
