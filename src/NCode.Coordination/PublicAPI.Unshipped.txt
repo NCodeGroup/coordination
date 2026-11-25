@@ -10,6 +10,8 @@ NCode.Coordination.CoordinationServiceCollectionExtensions
 NCode.Coordination.CoordinationServiceCollectionExtensions.extension(Microsoft.Extensions.DependencyInjection.IServiceCollection!)
 NCode.Coordination.CoordinationServiceCollectionExtensions.extension(Microsoft.Extensions.DependencyInjection.IServiceCollection!).AddCoordination(System.Action<NCode.Coordination.ICoordinationBuilder!>! configure) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
 NCode.Coordination.CoordinationTelemetry
+NCode.Coordination.ILockService
+NCode.Coordination.ILockService.AcquireAsync(NCode.Coordination.CoordinationKey! resource, NCode.Coordination.LeaseTerms! terms, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.LeaseGrant?>
 NCode.Coordination.InProcessCoordinationBuilderExtensions
 NCode.Coordination.InProcessCoordinationBuilderExtensions.extension(NCode.Coordination.ICoordinationBuilder!)
 NCode.Coordination.InProcessCoordinationBuilderExtensions.extension(NCode.Coordination.ICoordinationBuilder!).AddInProcessProvider() -> NCode.Coordination.ICoordinationBuilder!
