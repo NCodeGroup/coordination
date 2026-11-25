@@ -71,6 +71,11 @@ NCode.Coordination.GuaranteeDefinition.Implies.get -> System.Collections.Immutab
 NCode.Coordination.GuaranteeDefinition.Implies.init -> void
 NCode.Coordination.GuaranteeDimensions
 NCode.Coordination.Guarantees
+NCode.Coordination.ILeaseService
+NCode.Coordination.ILeaseService.ReleaseAsync(NCode.Coordination.LeaseGrant! grant, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<bool>
+NCode.Coordination.ILeaseService.RenewAsync(NCode.Coordination.LeaseGrant! grant, NCode.Coordination.TimeToLive! timeToLive, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<bool>
+NCode.Coordination.ILeaseService.TryAcquireAsync(NCode.Coordination.CoordinationKey! resource, NCode.Coordination.LeaseTerms! terms, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.LeaseAcquireResult!>
+NCode.Coordination.ILeaseService.WaitForReleaseAsync(NCode.Coordination.CoordinationKey! resource, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
 NCode.Coordination.IMembershipService
 NCode.Coordination.IMembershipService.JoinAsync(NCode.Coordination.CoordinationKey! group, NCode.Coordination.Member! member, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.MembershipJoinStatus>
 NCode.Coordination.IMembershipService.LeaveAsync(NCode.Coordination.CoordinationKey! group, NCode.Coordination.SessionId! session, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
@@ -106,6 +111,20 @@ NCode.Coordination.Keyspace.CreateKey(params System.Collections.Generic.IEnumera
 NCode.Coordination.Keyspace.Equals(NCode.Coordination.Keyspace? other) -> bool
 NCode.Coordination.Keyspace.Keyspace(string! cluster, params System.Collections.Generic.IEnumerable<NCode.Coordination.KeySegment!>! segments) -> void
 NCode.Coordination.Keyspace.Segments.get -> System.Collections.Immutable.ImmutableArray<NCode.Coordination.KeySegment!>
+NCode.Coordination.LeaseAcquireResult
+NCode.Coordination.LeaseAcquireResult.Grant.get -> NCode.Coordination.LeaseGrant?
+NCode.Coordination.LeaseAcquireResult.IsAcquired.get -> bool
+NCode.Coordination.LeaseAcquireResult.Status.get -> NCode.Coordination.LeaseAcquireStatus
+NCode.Coordination.LeaseAcquireStatus
+NCode.Coordination.LeaseAcquireStatus.Acquired = 0 -> NCode.Coordination.LeaseAcquireStatus
+NCode.Coordination.LeaseAcquireStatus.Held = 1 -> NCode.Coordination.LeaseAcquireStatus
+NCode.Coordination.LeaseAcquireStatus.SessionEnded = 2 -> NCode.Coordination.LeaseAcquireStatus
+NCode.Coordination.LeaseGrant
+NCode.Coordination.LeaseGrant.FencingToken.get -> NCode.Coordination.FencingToken!
+NCode.Coordination.LeaseGrant.LeaseGrant(NCode.Coordination.CoordinationKey! resource, NCode.Coordination.FencingToken! fencingToken, NCode.Coordination.OwnerToken! owner, NCode.Coordination.LeaseTerms! terms) -> void
+NCode.Coordination.LeaseGrant.Owner.get -> NCode.Coordination.OwnerToken!
+NCode.Coordination.LeaseGrant.Resource.get -> NCode.Coordination.CoordinationKey!
+NCode.Coordination.LeaseGrant.Terms.get -> NCode.Coordination.LeaseTerms!
 NCode.Coordination.LeaseTerms
 NCode.Coordination.LeaseTerms.IsBoundToSession.get -> bool
 NCode.Coordination.LeaseTerms.Session.get -> NCode.Coordination.SessionId?
@@ -266,6 +285,9 @@ static NCode.Coordination.KeySegment.operator !=(NCode.Coordination.KeySegment? 
 static NCode.Coordination.KeySegment.operator ==(NCode.Coordination.KeySegment? left, NCode.Coordination.KeySegment? right) -> bool
 static NCode.Coordination.Keyspace.operator !=(NCode.Coordination.Keyspace? left, NCode.Coordination.Keyspace? right) -> bool
 static NCode.Coordination.Keyspace.operator ==(NCode.Coordination.Keyspace? left, NCode.Coordination.Keyspace? right) -> bool
+static NCode.Coordination.LeaseAcquireResult.Acquired(NCode.Coordination.LeaseGrant! grant) -> NCode.Coordination.LeaseAcquireResult!
+static NCode.Coordination.LeaseAcquireResult.Held.get -> NCode.Coordination.LeaseAcquireResult!
+static NCode.Coordination.LeaseAcquireResult.SessionEnded.get -> NCode.Coordination.LeaseAcquireResult!
 static NCode.Coordination.LeaseTerms.ForSession(NCode.Coordination.SessionId! session) -> NCode.Coordination.LeaseTerms!
 static NCode.Coordination.LeaseTerms.ForTimeToLive(NCode.Coordination.TimeToLive! timeToLive) -> NCode.Coordination.LeaseTerms!
 static NCode.Coordination.Operation.operator !=(NCode.Coordination.Operation? left, NCode.Coordination.Operation? right) -> bool
