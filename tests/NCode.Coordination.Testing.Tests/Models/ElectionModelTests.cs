@@ -404,6 +404,20 @@ public sealed class ElectionModelTests
     }
 
     [Fact]
+    public void TryApply_WhenAReadShowsAnotherValueThanAnIndeterminateLead_Rejects()
+    {
+        var model = CreateModel();
+        var indeterminate = HistoryTesting.Indeterminate(Lead);
+        var read = HistoryTesting.Returned(Read, ViewOf(7, "beta"));
+
+        model.TryApply(model.Initial, indeterminate, out var unknown);
+        Assert.NotNull(unknown);
+        var applied = model.TryApply(unknown, read, out _);
+
+        Assert.False(applied);
+    }
+
+    [Fact]
     public void TryApply_WhenRenewByTheLeaderIsIndeterminate_KeepsTheState()
     {
         var model = CreateModel();

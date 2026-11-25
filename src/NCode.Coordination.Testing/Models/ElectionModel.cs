@@ -117,8 +117,8 @@ internal class ElectionModel : ISequentialModel<ElectionState>
                 var leaderTerm = leader.Term.Value;
                 var leaderValue = HistoryValues.Decode(leader.Value);
                 var known =
-                    (leaderValue == state.Value && leaderTerm == state.Term)
-                    || (state.Term == 0 && leaderTerm > state.Floor);
+                    leaderValue == state.Value
+                    && (leaderTerm == state.Term || (state.Term == 0 && leaderTerm > state.Floor));
                 if (!known)
                 {
                     return false;
