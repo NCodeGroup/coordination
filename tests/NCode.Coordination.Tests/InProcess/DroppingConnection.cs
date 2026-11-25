@@ -25,7 +25,7 @@ internal sealed class DroppingConnection
     private int Remaining { get; set; }
 
     /// <summary>
-    /// Gets or sets the number of calls failed so far.
+    /// Gets or sets the number of calls the current outage has failed so far.
     /// </summary>
     private int Failed { get; set; }
 
@@ -47,6 +47,7 @@ internal sealed class DroppingConnection
         using var scope = Gate.EnterScope();
 
         Remaining = FailedCalls;
+        Failed = 0;
 
         foreach (var subscription in Subscriptions)
         {

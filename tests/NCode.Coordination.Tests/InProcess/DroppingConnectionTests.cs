@@ -99,6 +99,35 @@ public sealed class DroppingConnectionTests
         Assert.Equal(2, runs);
     }
 
+    [Fact]
+    public async Task CallAsync_WhenDroppedTwice_RunsOnlyTheSecondCallOfEachOutage()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var connection = new DroppingConnection();
+        var runs = 0;
+        ValueTask<int> Call(CancellationToken token)
+        {
+            runs++;
+            return ValueTask.FromResult(7);
+        }
+        var runsAfterEachCall = new List<int>();
+
+        for (var outage = 0; outage < 2; outage++)
+        {
+            await connection.DropAsync(cancellationToken);
+
+            for (var attempt = 0; attempt < DroppingConnection.FailedCalls; attempt++)
+            {
+                await Assert.ThrowsAsync<CoordinationException>(async () =>
+                    await connection.CallAsync(Call, cancellationToken)
+                );
+                runsAfterEachCall.Add(runs);
+            }
+        }
+
+        Assert.Equal<int>([0, 1, 1, 1, 2, 2], runsAfterEachCall);
+    }
+
     #endregion
 
     #region Subscribe Tests
@@ -117,6 +146,10 @@ public sealed class DroppingConnectionTests
         Assert.True(first);
         Assert.False(second);
     }
+
+    #endregion
+
+    #region Unsubscribe Tests
 
     [Fact]
     public async Task Unsubscribe_WhenDropped_TakesNoDrop()
