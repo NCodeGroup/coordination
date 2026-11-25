@@ -233,7 +233,8 @@ public sealed class LeaseModelTests
         var advance = HistoryTesting.Returned(new ClockAdvance(TimeSpan.FromSeconds(31)), null);
         var renew = HistoryTesting.Returned(Renew, true);
 
-        model.TryApply(HeldState, advance, out var expired);
+        var prepared = model.TryApply(HeldState, advance, out var expired);
+        Assert.True(prepared);
         Assert.NotNull(expired);
         var applied = model.TryApply(expired, renew, out _);
 
@@ -247,7 +248,8 @@ public sealed class LeaseModelTests
         var advance = HistoryTesting.Returned(new ClockAdvance(TimeSpan.FromSeconds(31)), null);
         var renew = HistoryTesting.Returned(Renew, false);
 
-        model.TryApply(HeldState, advance, out var expired);
+        var prepared = model.TryApply(HeldState, advance, out var expired);
+        Assert.True(prepared);
         Assert.NotNull(expired);
         var applied = model.TryApply(expired, renew, out var next);
 

@@ -81,7 +81,8 @@ public sealed class SemaphoreModelTests
         var first = HistoryTesting.Returned(Acquire, firstGrant);
         var second = HistoryTesting.Returned(Acquire, secondGrant);
 
-        model.TryApply(model.Initial, first, out var afterFirst);
+        var prepared = model.TryApply(model.Initial, first, out var afterFirst);
+        Assert.True(prepared);
         Assert.NotNull(afterFirst);
         var applied = model.TryApply(afterFirst, second, out var next);
 
@@ -338,7 +339,8 @@ public sealed class SemaphoreModelTests
         var indeterminate = HistoryTesting.Indeterminate(Acquire);
         var full = HistoryTesting.Returned(Acquire, SemaphoreAcquireResult.Full);
 
-        model.TryApply(FirstHeldState, indeterminate, out var state);
+        var prepared = model.TryApply(FirstHeldState, indeterminate, out var state);
+        Assert.True(prepared);
         Assert.NotNull(state);
         var applied = model.TryApply(state, full, out var next);
 
@@ -354,7 +356,8 @@ public sealed class SemaphoreModelTests
         var result = Acquired(1, 7, Second);
         var acquire = HistoryTesting.Returned(Acquire, result);
 
-        model.TryApply(FirstHeldState, indeterminate, out var state);
+        var prepared = model.TryApply(FirstHeldState, indeterminate, out var state);
+        Assert.True(prepared);
         Assert.NotNull(state);
         var applied = model.TryApply(state, acquire, out _);
 

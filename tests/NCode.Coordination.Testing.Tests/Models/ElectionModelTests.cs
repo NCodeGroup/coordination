@@ -233,7 +233,8 @@ public sealed class ElectionModelTests
         var resign = HistoryTesting.Returned(Resign, true);
         var read = HistoryTesting.Returned(Read, NoLeader);
 
-        model.TryApply(LedState, resign, out var vacated);
+        var prepared = model.TryApply(LedState, resign, out var vacated);
+        Assert.True(prepared);
         Assert.NotNull(vacated);
         var applied = model.TryApply(vacated, read, out var next);
 
@@ -249,7 +250,8 @@ public sealed class ElectionModelTests
         var view = ViewOf(5, Alpha);
         var read = HistoryTesting.Returned(Read, view);
 
-        model.TryApply(LedState, resign, out var vacated);
+        var prepared = model.TryApply(LedState, resign, out var vacated);
+        Assert.True(prepared);
         Assert.NotNull(vacated);
         var applied = model.TryApply(vacated, read, out _);
 
@@ -394,7 +396,8 @@ public sealed class ElectionModelTests
         var view = ViewOf(7, Alpha);
         var read = HistoryTesting.Returned(Read, view);
 
-        model.TryApply(model.Initial, indeterminate, out var unknown);
+        var prepared = model.TryApply(model.Initial, indeterminate, out var unknown);
+        Assert.True(prepared);
         Assert.NotNull(unknown);
         var applied = model.TryApply(unknown, read, out var next);
 
@@ -411,7 +414,8 @@ public sealed class ElectionModelTests
         var read = HistoryTesting.Returned(Read, view);
         var state = model.Initial with { Floor = 5 };
 
-        model.TryApply(state, indeterminate, out var unknown);
+        var prepared = model.TryApply(state, indeterminate, out var unknown);
+        Assert.True(prepared);
         Assert.NotNull(unknown);
         var applied = model.TryApply(unknown, read, out _);
 
@@ -426,7 +430,8 @@ public sealed class ElectionModelTests
         var view = ViewOf(7, "beta");
         var read = HistoryTesting.Returned(Read, view);
 
-        model.TryApply(model.Initial, indeterminate, out var unknown);
+        var prepared = model.TryApply(model.Initial, indeterminate, out var unknown);
+        Assert.True(prepared);
         Assert.NotNull(unknown);
         var applied = model.TryApply(unknown, read, out _);
 

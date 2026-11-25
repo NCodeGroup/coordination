@@ -371,7 +371,8 @@ public sealed class RecordModelTests
         var record = Stored("new", 7);
         var read = HistoryTesting.Returned(Read, record);
 
-        model.TryApply(model.Initial, create, out var unknown);
+        var prepared = model.TryApply(model.Initial, create, out var unknown);
+        Assert.True(prepared);
         Assert.NotNull(unknown);
         var applied = model.TryApply(unknown, read, out var next);
 
@@ -424,7 +425,8 @@ public sealed class RecordModelTests
         var indeterminate = HistoryTesting.Indeterminate(Swap);
         var conflict = HistoryTesting.Returned(Swap, RecordWriteResult.Conflict);
 
-        model.TryApply(PresentState, indeterminate, out var unknown);
+        var prepared = model.TryApply(PresentState, indeterminate, out var unknown);
+        Assert.True(prepared);
         Assert.NotNull(unknown);
         var applied = model.TryApply(unknown, conflict, out var next);
 
