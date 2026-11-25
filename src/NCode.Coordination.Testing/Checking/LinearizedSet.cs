@@ -14,7 +14,7 @@ internal sealed class LinearizedSet : IEquatable<LinearizedSet>
     private const int WordBits = 64;
 
     /// <summary>
-    /// Creates a set over bits that the caller no longer changes.
+    /// Creates a set over bits that the caller leaves unchanged.
     /// </summary>
     /// <param name="words">The bits of the set, which the set takes without copying.</param>
     private LinearizedSet(ulong[] words)
