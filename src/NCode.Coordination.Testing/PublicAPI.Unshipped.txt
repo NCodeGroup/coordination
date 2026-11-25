@@ -16,6 +16,20 @@ NCode.Coordination.Testing.ProviderContractTests.InitializeAsync() -> System.Thr
 NCode.Coordination.Testing.ProviderContractTests.Keyspace.get -> NCode.Coordination.Keyspace!
 NCode.Coordination.Testing.ProviderContractTests.ProviderContractTests() -> void
 NCode.Coordination.Testing.ProviderContractTests.Target.get -> NCode.Coordination.Testing.ConformanceTarget!
+NCode.Coordination.Testing.RecordContractTests
+NCode.Coordination.Testing.RecordContractTests.CompareAndDeleteAsync_WhenKeyIsAbsent_ReturnsNotFound() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.RecordContractTests.CompareAndDeleteAsync_WhenRevisionDiffers_ReturnsConflict() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.RecordContractTests.CompareAndDeleteAsync_WhenRevisionMatches_DeletesTheRecord() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.RecordContractTests.CompareAndSwapAsync_WhenKeyIsAbsent_ReturnsNotFound() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.RecordContractTests.CompareAndSwapAsync_WhenRevisionDiffers_ReturnsConflict() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.RecordContractTests.CompareAndSwapAsync_WhenRevisionMatches_WritesALaterRevision() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.RecordContractTests.CreateAsync_WhenAnotherKeyIsWritten_GivesALaterRevision() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.RecordContractTests.CreateAsync_WhenKeyIsAbsent_WritesTheRecord() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.RecordContractTests.CreateAsync_WhenKeyIsPresent_ReturnsConflict() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.RecordContractTests.CreateAsync_WhenTheRecordWasDeleted_WritesItAgain() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.RecordContractTests.CreateAsync_WhenValueIsTooLong_ThrowsArgumentException() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.RecordContractTests.ReadAsync_WhenKeyIsAbsent_ReturnsNull() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.RecordContractTests.RecordContractTests() -> void
 static NCode.Coordination.Testing.ProviderContractTests.LongTimeToLive.get -> NCode.Coordination.TimeToLive!
 static NCode.Coordination.Testing.ProviderContractTests.PastExpiry.get -> System.TimeSpan
 static NCode.Coordination.Testing.ProviderContractTests.ShortDuration.get -> System.TimeSpan
