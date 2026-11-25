@@ -9,6 +9,7 @@
     <PackageReference Include="Microsoft.Extensions.Diagnostics" />
     <PackageReference Include="Microsoft.Extensions.Diagnostics.Testing" />
     <PackageReference Include="Microsoft.Extensions.Hosting" />
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="Moq" />
     <PackageReference Include="xunit.runner.visualstudio" />
@@ -16,6 +17,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../../src/NCode.Coordination/NCode.Coordination.csproj" />
+    <ProjectReference Include="../../src/NCode.Coordination.Testing/NCode.Coordination.Testing.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Using Include="Xunit" />
