@@ -120,18 +120,20 @@ internal class OperationInstrumentation(IMeterFactory meterFactory, TimeProvider
     /// <param name="target">The bound provider's implementation.</param>
     /// <param name="operation">The operation.</param>
     /// <param name="call">Calls the operation on the implementation.</param>
+    /// <param name="cancellationToken">Cancels the operation.</param>
     /// <returns>The operation's result.</returns>
     public async ValueTask<TResult> MeasureAsync<TService, TResult>(
         BoundService<TService> target,
         Operation operation,
-        Func<TService, ValueTask<TResult>> call
+        Func<TService, CancellationToken, ValueTask<TResult>> call,
+        CancellationToken cancellationToken
     )
         where TService : class
     {
         var measurement = Start(target, operation);
         try
         {
-            var result = await call(target.Service).ConfigureAwait(false);
+            var result = await call(target.Service, cancellationToken).ConfigureAwait(false);
             Complete(measurement, null);
             return result;
         }
@@ -149,18 +151,20 @@ internal class OperationInstrumentation(IMeterFactory meterFactory, TimeProvider
     /// <param name="target">The bound provider's implementation.</param>
     /// <param name="operation">The operation.</param>
     /// <param name="call">Calls the operation on the implementation.</param>
+    /// <param name="cancellationToken">Cancels the operation.</param>
     /// <returns>A task that completes when the operation does.</returns>
     public async ValueTask MeasureAsync<TService>(
         BoundService<TService> target,
         Operation operation,
-        Func<TService, ValueTask> call
+        Func<TService, CancellationToken, ValueTask> call,
+        CancellationToken cancellationToken
     )
         where TService : class
     {
         var measurement = Start(target, operation);
         try
         {
-            await call(target.Service).ConfigureAwait(false);
+            await call(target.Service, cancellationToken).ConfigureAwait(false);
             Complete(measurement, null);
         }
         catch (Exception exception)
@@ -181,11 +185,11 @@ internal class OperationInstrumentation(IMeterFactory meterFactory, TimeProvider
     /// <param name="open">Opens the stream on the implementation.</param>
     /// <param name="cancellationToken">Cancels the stream.</param>
     /// <returns>The stream's items.</returns>
-    public async IAsyncEnumerable<TItem> MeasureStream<TService, TItem>(
+    public async IAsyncEnumerable<TItem> MeasureStreamAsync<TService, TItem>(
         BoundService<TService> target,
         Operation operation,
-        Func<TService, IAsyncEnumerable<TItem>> open,
-        [EnumeratorCancellation] CancellationToken cancellationToken = default
+        Func<TService, CancellationToken, IAsyncEnumerable<TItem>> open,
+        [EnumeratorCancellation] CancellationToken cancellationToken
     )
         where TService : class
     {
@@ -199,7 +203,8 @@ internal class OperationInstrumentation(IMeterFactory meterFactory, TimeProvider
                 TItem item;
                 try
                 {
-                    enumerator ??= open(target.Service).GetAsyncEnumerator(cancellationToken);
+                    enumerator ??= open(target.Service, cancellationToken)
+                        .GetAsyncEnumerator(cancellationToken);
                     if (!await enumerator.MoveNextAsync().ConfigureAwait(false))
                     {
                         yield break;

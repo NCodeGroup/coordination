@@ -39,8 +39,11 @@ internal class DefaultSetService(
         ArgumentNullException.ThrowIfNull(key);
 
         var target = Composition.Resolve<ISetService>(Primitives.Set, key.Keyspace);
-        return Instrumentation.MeasureAsync(target, Operations.SetAdd, service =>
-            service.AddAsync(key, member, timeToLive, options, cancellationToken)
+        return Instrumentation.MeasureAsync(
+            target,
+            Operations.SetAdd,
+            (service, token) => service.AddAsync(key, member, timeToLive, options, token),
+            cancellationToken
         );
     }
 
@@ -55,8 +58,11 @@ internal class DefaultSetService(
         ArgumentNullException.ThrowIfNull(key);
 
         var target = Composition.Resolve<ISetService>(Primitives.Set, key.Keyspace);
-        return Instrumentation.MeasureAsync(target, Operations.SetRemove, service =>
-            service.RemoveAsync(key, member, options, cancellationToken)
+        return Instrumentation.MeasureAsync(
+            target,
+            Operations.SetRemove,
+            (service, token) => service.RemoveAsync(key, member, options, token),
+            cancellationToken
         );
     }
 
@@ -70,8 +76,11 @@ internal class DefaultSetService(
         ArgumentNullException.ThrowIfNull(key);
 
         var target = Composition.Resolve<ISetService>(Primitives.Set, key.Keyspace);
-        return Instrumentation.MeasureAsync(target, Operations.SetList, service =>
-            service.ListAsync(key, options, cancellationToken)
+        return Instrumentation.MeasureAsync(
+            target,
+            Operations.SetList,
+            (service, token) => service.ListAsync(key, options, token),
+            cancellationToken
         );
     }
 
@@ -85,8 +94,11 @@ internal class DefaultSetService(
         ArgumentNullException.ThrowIfNull(key);
 
         var target = Composition.Resolve<ISetService>(Primitives.Set, key.Keyspace);
-        return Instrumentation.MeasureAsync(target, Operations.SetClear, service =>
-            service.ClearAsync(key, options, cancellationToken)
+        return Instrumentation.MeasureAsync(
+            target,
+            Operations.SetClear,
+            (service, token) => service.ClearAsync(key, options, token),
+            cancellationToken
         );
     }
 }

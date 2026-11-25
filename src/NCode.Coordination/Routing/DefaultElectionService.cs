@@ -38,8 +38,11 @@ internal class DefaultElectionService(
         ArgumentNullException.ThrowIfNull(role);
 
         var target = Composition.Resolve<IElectionService>(Primitives.Election, role.Keyspace);
-        return Instrumentation.MeasureAsync(target, Operations.ElectionTryLead, service =>
-            service.TryLeadAsync(role, value, terms, options, cancellationToken)
+        return Instrumentation.MeasureAsync(
+            target,
+            Operations.ElectionTryLead,
+            (service, token) => service.TryLeadAsync(role, value, terms, options, token),
+            cancellationToken
         );
     }
 
@@ -55,8 +58,11 @@ internal class DefaultElectionService(
 
         var role = leadership.Leader.Role;
         var target = Composition.Resolve<IElectionService>(Primitives.Election, role.Keyspace);
-        return Instrumentation.MeasureAsync(target, Operations.ElectionRenew, service =>
-            service.RenewAsync(leadership, timeToLive, options, cancellationToken)
+        return Instrumentation.MeasureAsync(
+            target,
+            Operations.ElectionRenew,
+            (service, token) => service.RenewAsync(leadership, timeToLive, options, token),
+            cancellationToken
         );
     }
 
@@ -71,8 +77,11 @@ internal class DefaultElectionService(
 
         var role = leadership.Leader.Role;
         var target = Composition.Resolve<IElectionService>(Primitives.Election, role.Keyspace);
-        return Instrumentation.MeasureAsync(target, Operations.ElectionResign, service =>
-            service.ResignAsync(leadership, options, cancellationToken)
+        return Instrumentation.MeasureAsync(
+            target,
+            Operations.ElectionResign,
+            (service, token) => service.ResignAsync(leadership, options, token),
+            cancellationToken
         );
     }
 
@@ -86,8 +95,11 @@ internal class DefaultElectionService(
         ArgumentNullException.ThrowIfNull(role);
 
         var target = Composition.Resolve<IElectionService>(Primitives.Election, role.Keyspace);
-        return Instrumentation.MeasureAsync(target, Operations.ElectionRead, service =>
-            service.ReadAsync(role, options, cancellationToken)
+        return Instrumentation.MeasureAsync(
+            target,
+            Operations.ElectionRead,
+            (service, token) => service.ReadAsync(role, options, token),
+            cancellationToken
         );
     }
 
@@ -101,10 +113,10 @@ internal class DefaultElectionService(
         ArgumentNullException.ThrowIfNull(role);
 
         var target = Composition.Resolve<IElectionService>(Primitives.Election, role.Keyspace);
-        return Instrumentation.MeasureStream(
+        return Instrumentation.MeasureStreamAsync(
             target,
             Operations.ElectionWatch,
-            service => service.WatchAsync(role, options, cancellationToken),
+            (service, token) => service.WatchAsync(role, options, token),
             cancellationToken
         );
     }

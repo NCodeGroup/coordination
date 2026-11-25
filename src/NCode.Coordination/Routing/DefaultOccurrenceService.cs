@@ -37,8 +37,11 @@ internal class DefaultOccurrenceService(
         ArgumentNullException.ThrowIfNull(key);
 
         var target = Composition.Resolve<IOccurrenceService>(Primitives.Occurrence, key.Keyspace);
-        return Instrumentation.MeasureAsync(target, Operations.OccurrenceTryRecord, service =>
-            service.TryRecordAsync(key, timeToLive, options, cancellationToken)
+        return Instrumentation.MeasureAsync(
+            target,
+            Operations.OccurrenceTryRecord,
+            (service, token) => service.TryRecordAsync(key, timeToLive, options, token),
+            cancellationToken
         );
     }
 }

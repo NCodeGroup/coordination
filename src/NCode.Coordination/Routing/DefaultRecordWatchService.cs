@@ -37,10 +37,10 @@ internal class DefaultRecordWatchService(
         ArgumentNullException.ThrowIfNull(key);
 
         var target = Composition.Resolve<IRecordWatchService>(Primitives.RecordWatch, key.Keyspace);
-        return Instrumentation.MeasureStream(
+        return Instrumentation.MeasureStreamAsync(
             target,
             Operations.RecordWatchKey,
-            service => service.WatchKeyAsync(key, after, options, cancellationToken),
+            (service, token) => service.WatchKeyAsync(key, after, options, token),
             cancellationToken
         );
     }
@@ -59,10 +59,10 @@ internal class DefaultRecordWatchService(
             Primitives.RecordWatch,
             prefix.Keyspace
         );
-        return Instrumentation.MeasureStream(
+        return Instrumentation.MeasureStreamAsync(
             target,
             Operations.RecordWatchPrefix,
-            service => service.WatchPrefixAsync(prefix, after, options, cancellationToken),
+            (service, token) => service.WatchPrefixAsync(prefix, after, options, token),
             cancellationToken
         );
     }

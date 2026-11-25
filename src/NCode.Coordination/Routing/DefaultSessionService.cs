@@ -37,8 +37,11 @@ internal class DefaultSessionService(
         ArgumentNullException.ThrowIfNull(keyspace);
 
         var target = Composition.Resolve<ISessionService>(Primitives.Session, keyspace);
-        return Instrumentation.MeasureAsync(target, Operations.SessionOpen, service =>
-            service.OpenAsync(keyspace, timeToLive, options, cancellationToken)
+        return Instrumentation.MeasureAsync(
+            target,
+            Operations.SessionOpen,
+            (service, token) => service.OpenAsync(keyspace, timeToLive, options, token),
+            cancellationToken
         );
     }
 
@@ -52,8 +55,11 @@ internal class DefaultSessionService(
         ArgumentNullException.ThrowIfNull(session);
 
         var target = Composition.Resolve<ISessionService>(Primitives.Session, session.Keyspace);
-        return Instrumentation.MeasureAsync(target, Operations.SessionKeepAlive, service =>
-            service.KeepAliveAsync(session, options, cancellationToken)
+        return Instrumentation.MeasureAsync(
+            target,
+            Operations.SessionKeepAlive,
+            (service, token) => service.KeepAliveAsync(session, options, token),
+            cancellationToken
         );
     }
 
@@ -67,8 +73,11 @@ internal class DefaultSessionService(
         ArgumentNullException.ThrowIfNull(session);
 
         var target = Composition.Resolve<ISessionService>(Primitives.Session, session.Keyspace);
-        return Instrumentation.MeasureAsync(target, Operations.SessionClose, service =>
-            service.CloseAsync(session, options, cancellationToken)
+        return Instrumentation.MeasureAsync(
+            target,
+            Operations.SessionClose,
+            (service, token) => service.CloseAsync(session, options, token),
+            cancellationToken
         );
     }
 
@@ -82,8 +91,11 @@ internal class DefaultSessionService(
         ArgumentNullException.ThrowIfNull(session);
 
         var target = Composition.Resolve<ISessionService>(Primitives.Session, session.Keyspace);
-        return Instrumentation.MeasureAsync(target, Operations.SessionWaitForEnd, service =>
-            service.WaitForEndAsync(session, options, cancellationToken)
+        return Instrumentation.MeasureAsync(
+            target,
+            Operations.SessionWaitForEnd,
+            (service, token) => service.WaitForEndAsync(session, options, token),
+            cancellationToken
         );
     }
 }

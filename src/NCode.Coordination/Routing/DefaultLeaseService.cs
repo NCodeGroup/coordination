@@ -37,8 +37,11 @@ internal class DefaultLeaseService(
         ArgumentNullException.ThrowIfNull(resource);
 
         var target = Composition.Resolve<ILeaseService>(Primitives.Lease, resource.Keyspace);
-        return Instrumentation.MeasureAsync(target, Operations.LeaseTryAcquire, service =>
-            service.TryAcquireAsync(resource, terms, options, cancellationToken)
+        return Instrumentation.MeasureAsync(
+            target,
+            Operations.LeaseTryAcquire,
+            (service, token) => service.TryAcquireAsync(resource, terms, options, token),
+            cancellationToken
         );
     }
 
@@ -53,8 +56,11 @@ internal class DefaultLeaseService(
         ArgumentNullException.ThrowIfNull(grant);
 
         var target = Composition.Resolve<ILeaseService>(Primitives.Lease, grant.Resource.Keyspace);
-        return Instrumentation.MeasureAsync(target, Operations.LeaseRenew, service =>
-            service.RenewAsync(grant, timeToLive, options, cancellationToken)
+        return Instrumentation.MeasureAsync(
+            target,
+            Operations.LeaseRenew,
+            (service, token) => service.RenewAsync(grant, timeToLive, options, token),
+            cancellationToken
         );
     }
 
@@ -68,8 +74,11 @@ internal class DefaultLeaseService(
         ArgumentNullException.ThrowIfNull(grant);
 
         var target = Composition.Resolve<ILeaseService>(Primitives.Lease, grant.Resource.Keyspace);
-        return Instrumentation.MeasureAsync(target, Operations.LeaseRelease, service =>
-            service.ReleaseAsync(grant, options, cancellationToken)
+        return Instrumentation.MeasureAsync(
+            target,
+            Operations.LeaseRelease,
+            (service, token) => service.ReleaseAsync(grant, options, token),
+            cancellationToken
         );
     }
 
@@ -83,8 +92,11 @@ internal class DefaultLeaseService(
         ArgumentNullException.ThrowIfNull(resource);
 
         var target = Composition.Resolve<ILeaseService>(Primitives.Lease, resource.Keyspace);
-        return Instrumentation.MeasureAsync(target, Operations.LeaseWaitForRelease, service =>
-            service.WaitForReleaseAsync(resource, options, cancellationToken)
+        return Instrumentation.MeasureAsync(
+            target,
+            Operations.LeaseWaitForRelease,
+            (service, token) => service.WaitForReleaseAsync(resource, options, token),
+            cancellationToken
         );
     }
 }

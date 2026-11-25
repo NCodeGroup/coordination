@@ -37,8 +37,11 @@ internal class DefaultMembershipService(
         ArgumentNullException.ThrowIfNull(group);
 
         var target = Composition.Resolve<IMembershipService>(Primitives.Membership, group.Keyspace);
-        return Instrumentation.MeasureAsync(target, Operations.MembershipJoin, service =>
-            service.JoinAsync(group, member, options, cancellationToken)
+        return Instrumentation.MeasureAsync(
+            target,
+            Operations.MembershipJoin,
+            (service, token) => service.JoinAsync(group, member, options, token),
+            cancellationToken
         );
     }
 
@@ -53,8 +56,11 @@ internal class DefaultMembershipService(
         ArgumentNullException.ThrowIfNull(group);
 
         var target = Composition.Resolve<IMembershipService>(Primitives.Membership, group.Keyspace);
-        return Instrumentation.MeasureAsync(target, Operations.MembershipLeave, service =>
-            service.LeaveAsync(group, session, options, cancellationToken)
+        return Instrumentation.MeasureAsync(
+            target,
+            Operations.MembershipLeave,
+            (service, token) => service.LeaveAsync(group, session, options, token),
+            cancellationToken
         );
     }
 
@@ -68,8 +74,11 @@ internal class DefaultMembershipService(
         ArgumentNullException.ThrowIfNull(group);
 
         var target = Composition.Resolve<IMembershipService>(Primitives.Membership, group.Keyspace);
-        return Instrumentation.MeasureAsync(target, Operations.MembershipRead, service =>
-            service.ReadAsync(group, options, cancellationToken)
+        return Instrumentation.MeasureAsync(
+            target,
+            Operations.MembershipRead,
+            (service, token) => service.ReadAsync(group, options, token),
+            cancellationToken
         );
     }
 
@@ -83,10 +92,10 @@ internal class DefaultMembershipService(
         ArgumentNullException.ThrowIfNull(group);
 
         var target = Composition.Resolve<IMembershipService>(Primitives.Membership, group.Keyspace);
-        return Instrumentation.MeasureStream(
+        return Instrumentation.MeasureStreamAsync(
             target,
             Operations.MembershipWatch,
-            service => service.WatchAsync(group, options, cancellationToken),
+            (service, token) => service.WatchAsync(group, options, token),
             cancellationToken
         );
     }

@@ -40,9 +40,13 @@ public sealed class OperationInstrumentationTests
     public async Task MeasureAsync_WhenTheCallSucceeds_RecordsSuccessWithTheTags()
     {
         using var fixture = new Fixture();
+        var cancellationToken = TestContext.Current.CancellationToken;
 
-        var result = await fixture.Instrumentation.MeasureAsync(Target, Operation, service =>
-            ValueTask.FromResult(service + "!")
+        var result = await fixture.Instrumentation.MeasureAsync(
+            Target,
+            Operation,
+            (service, _) => ValueTask.FromResult(service + "!"),
+            cancellationToken
         );
 
         Assert.Equal("service!", result);
@@ -63,9 +67,13 @@ public sealed class OperationInstrumentationTests
     public async Task MeasureAsync_WhenTheCallSucceeds_RecordsASpan()
     {
         using var fixture = new Fixture();
+        var cancellationToken = TestContext.Current.CancellationToken;
 
-        await fixture.Instrumentation.MeasureAsync(Target, Operation, service =>
-            ValueTask.FromResult(service)
+        await fixture.Instrumentation.MeasureAsync(
+            Target,
+            Operation,
+            (service, _) => ValueTask.FromResult(service),
+            cancellationToken
         );
 
         var span = Assert.Single(fixture.Spans);
@@ -89,6 +97,7 @@ public sealed class OperationInstrumentationTests
     public async Task MeasureAsync_WhenACoordinationExceptionIsThrown_RecordsFailureWithItsCode()
     {
         using var fixture = new Fixture();
+        var cancellationToken = TestContext.Current.CancellationToken;
         var thrown = new CoordinationException(
             CoordinationErrorCodes.Unsupported,
             outcomeUnknown: false,
@@ -96,8 +105,11 @@ public sealed class OperationInstrumentationTests
         );
 
         var caught = await Assert.ThrowsAsync<CoordinationException>(async () =>
-            await fixture.Instrumentation.MeasureAsync(Target, Operation, _ =>
-                ValueTask.FromException<string>(thrown)
+            await fixture.Instrumentation.MeasureAsync(
+                Target,
+                Operation,
+                (_, _) => ValueTask.FromException<string>(thrown),
+                cancellationToken
             )
         );
 
@@ -119,11 +131,15 @@ public sealed class OperationInstrumentationTests
     public async Task MeasureAsync_WhenAnotherExceptionIsThrown_RecordsItsTypeName()
     {
         using var fixture = new Fixture();
+        var cancellationToken = TestContext.Current.CancellationToken;
 
         var thrown = new InvalidOperationException("secret");
         await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await fixture.Instrumentation.MeasureAsync(Target, Operation, _ =>
-                ValueTask.FromException<string>(thrown)
+            await fixture.Instrumentation.MeasureAsync(
+                Target,
+                Operation,
+                (_, _) => ValueTask.FromException<string>(thrown),
+                cancellationToken
             )
         );
 
@@ -141,11 +157,15 @@ public sealed class OperationInstrumentationTests
     public async Task MeasureAsync_WhenCanceled_RecordsCanceledWithoutErrorType()
     {
         using var fixture = new Fixture();
+        var cancellationToken = TestContext.Current.CancellationToken;
 
         var thrown = new OperationCanceledException();
         await Assert.ThrowsAsync<OperationCanceledException>(async () =>
-            await fixture.Instrumentation.MeasureAsync(Target, Operation, _ =>
-                ValueTask.FromException<string>(thrown)
+            await fixture.Instrumentation.MeasureAsync(
+                Target,
+                Operation,
+                (_, _) => ValueTask.FromException<string>(thrown),
+                cancellationToken
             )
         );
 
@@ -166,8 +186,14 @@ public sealed class OperationInstrumentationTests
     public async Task MeasureAsync_WhenTheCallReturnsNoValue_RecordsSuccess()
     {
         using var fixture = new Fixture();
+        var cancellationToken = TestContext.Current.CancellationToken;
 
-        await fixture.Instrumentation.MeasureAsync(Target, Operation, _ => ValueTask.CompletedTask);
+        await fixture.Instrumentation.MeasureAsync(
+            Target,
+            Operation,
+            (_, _) => ValueTask.CompletedTask,
+            cancellationToken
+        );
 
         var measurements = fixture.Collector.GetMeasurementSnapshot();
         var measurement = Assert.Single(measurements);
@@ -181,9 +207,13 @@ public sealed class OperationInstrumentationTests
     public async Task MeasureAsync_RecordsNoKeyOrValue()
     {
         using var fixture = new Fixture();
+        var cancellationToken = TestContext.Current.CancellationToken;
 
-        await fixture.Instrumentation.MeasureAsync(Target, Operation, service =>
-            ValueTask.FromResult(service)
+        await fixture.Instrumentation.MeasureAsync(
+            Target,
+            Operation,
+            (service, _) => ValueTask.FromResult(service),
+            cancellationToken
         );
 
         var measurements = fixture.Collector.GetMeasurementSnapshot();
@@ -202,20 +232,20 @@ public sealed class OperationInstrumentationTests
 
     #endregion
 
-    #region MeasureStream Tests
+    #region MeasureStreamAsync Tests
 
     [Fact]
-    public async Task MeasureStream_WhenTheStreamEnds_YieldsEveryItemAndRecordsSuccess()
+    public async Task MeasureStreamAsync_WhenTheStreamEnds_YieldsEveryItemAndRecordsSuccess()
     {
         using var fixture = new Fixture();
         var cancellationToken = TestContext.Current.CancellationToken;
         List<string> items = [];
 
         await foreach (
-            var item in fixture.Instrumentation.MeasureStream(
+            var item in fixture.Instrumentation.MeasureStreamAsync(
                 Target,
                 Operation,
-                _ => Items(["a", "b"]),
+                (_, _) => Items(["a", "b"]),
                 cancellationToken
             )
         )
@@ -236,16 +266,16 @@ public sealed class OperationInstrumentationTests
     }
 
     [Fact]
-    public async Task MeasureStream_WhenTheConsumerStopsEarly_RecordsSuccess()
+    public async Task MeasureStreamAsync_WhenTheConsumerStopsEarly_RecordsSuccess()
     {
         using var fixture = new Fixture();
         var cancellationToken = TestContext.Current.CancellationToken;
 
         await foreach (
-            var item in fixture.Instrumentation.MeasureStream(
+            var item in fixture.Instrumentation.MeasureStreamAsync(
                 Target,
                 Operation,
-                _ => Items(["a", "b"]),
+                (_, _) => Items(["a", "b"]),
                 cancellationToken
             )
         )
@@ -262,7 +292,7 @@ public sealed class OperationInstrumentationTests
     }
 
     [Fact]
-    public async Task MeasureStream_WhenTheStreamFails_RecordsFailureAndRethrows()
+    public async Task MeasureStreamAsync_WhenTheStreamFails_RecordsFailureAndRethrows()
     {
         using var fixture = new Fixture();
         var cancellationToken = TestContext.Current.CancellationToken;
@@ -276,10 +306,10 @@ public sealed class OperationInstrumentationTests
         var caught = await Assert.ThrowsAsync<CoordinationException>(async () =>
         {
             await foreach (
-                var item in fixture.Instrumentation.MeasureStream(
+                var item in fixture.Instrumentation.MeasureStreamAsync(
                     Target,
                     Operation,
-                    _ => Failing(thrown),
+                    (_, _) => Failing(thrown),
                     cancellationToken
                 )
             )
@@ -301,7 +331,7 @@ public sealed class OperationInstrumentationTests
     }
 
     [Fact]
-    public async Task MeasureStream_WhenOpeningFails_RecordsFailure()
+    public async Task MeasureStreamAsync_WhenOpeningFails_RecordsFailure()
     {
         using var fixture = new Fixture();
         var cancellationToken = TestContext.Current.CancellationToken;
@@ -309,10 +339,10 @@ public sealed class OperationInstrumentationTests
         await Assert.ThrowsAsync<InvalidOperationException>(async () =>
         {
             await foreach (
-                var item in fixture.Instrumentation.MeasureStream<string, string>(
+                var item in fixture.Instrumentation.MeasureStreamAsync<string, string>(
                     Target,
                     Operation,
-                    _ => throw new InvalidOperationException("secret"),
+                    (_, _) => throw new InvalidOperationException("secret"),
                     cancellationToken
                 )
             )
@@ -330,15 +360,15 @@ public sealed class OperationInstrumentationTests
     }
 
     [Fact]
-    public void MeasureStream_BeforeTheFirstRead_RecordsNothing()
+    public void MeasureStreamAsync_BeforeTheFirstRead_RecordsNothing()
     {
         using var fixture = new Fixture();
         var cancellationToken = TestContext.Current.CancellationToken;
 
-        _ = fixture.Instrumentation.MeasureStream(
+        _ = fixture.Instrumentation.MeasureStreamAsync(
             Target,
             Operation,
-            _ => Items(["a"]),
+            (_, _) => Items(["a"]),
             cancellationToken
         );
 

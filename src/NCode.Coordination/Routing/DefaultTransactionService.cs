@@ -39,8 +39,11 @@ internal class DefaultTransactionService(
             Primitives.Transaction,
             transaction.Keyspace
         );
-        return Instrumentation.MeasureAsync(target, Operations.TransactionExecute, service =>
-            service.ExecuteAsync(transaction, options, cancellationToken)
+        return Instrumentation.MeasureAsync(
+            target,
+            Operations.TransactionExecute,
+            (service, token) => service.ExecuteAsync(transaction, options, token),
+            cancellationToken
         );
     }
 }

@@ -38,8 +38,11 @@ internal class DefaultRecordService(
         ArgumentNullException.ThrowIfNull(key);
 
         var target = Composition.Resolve<IRecordService>(Primitives.Record, key.Keyspace);
-        return Instrumentation.MeasureAsync(target, Operations.RecordCreate, service =>
-            service.CreateAsync(key, value, lifetime, options, cancellationToken)
+        return Instrumentation.MeasureAsync(
+            target,
+            Operations.RecordCreate,
+            (service, token) => service.CreateAsync(key, value, lifetime, options, token),
+            cancellationToken
         );
     }
 
@@ -53,8 +56,11 @@ internal class DefaultRecordService(
         ArgumentNullException.ThrowIfNull(key);
 
         var target = Composition.Resolve<IRecordService>(Primitives.Record, key.Keyspace);
-        return Instrumentation.MeasureAsync(target, Operations.RecordRead, service =>
-            service.ReadAsync(key, options, cancellationToken)
+        return Instrumentation.MeasureAsync(
+            target,
+            Operations.RecordRead,
+            (service, token) => service.ReadAsync(key, options, token),
+            cancellationToken
         );
     }
 
@@ -71,8 +77,12 @@ internal class DefaultRecordService(
         ArgumentNullException.ThrowIfNull(key);
 
         var target = Composition.Resolve<IRecordService>(Primitives.Record, key.Keyspace);
-        return Instrumentation.MeasureAsync(target, Operations.RecordCompareAndSwap, service =>
-            service.CompareAndSwapAsync(key, expected, value, lifetime, options, cancellationToken)
+        return Instrumentation.MeasureAsync(
+            target,
+            Operations.RecordCompareAndSwap,
+            (service, token) =>
+                service.CompareAndSwapAsync(key, expected, value, lifetime, options, token),
+            cancellationToken
         );
     }
 
@@ -87,8 +97,11 @@ internal class DefaultRecordService(
         ArgumentNullException.ThrowIfNull(key);
 
         var target = Composition.Resolve<IRecordService>(Primitives.Record, key.Keyspace);
-        return Instrumentation.MeasureAsync(target, Operations.RecordCompareAndDelete, service =>
-            service.CompareAndDeleteAsync(key, expected, options, cancellationToken)
+        return Instrumentation.MeasureAsync(
+            target,
+            Operations.RecordCompareAndDelete,
+            (service, token) => service.CompareAndDeleteAsync(key, expected, options, token),
+            cancellationToken
         );
     }
 
@@ -102,8 +115,11 @@ internal class DefaultRecordService(
         ArgumentNullException.ThrowIfNull(key);
 
         var target = Composition.Resolve<IRecordService>(Primitives.Record, key.Keyspace);
-        return Instrumentation.MeasureAsync(target, Operations.RecordTake, service =>
-            service.TakeAsync(key, options, cancellationToken)
+        return Instrumentation.MeasureAsync(
+            target,
+            Operations.RecordTake,
+            (service, token) => service.TakeAsync(key, options, token),
+            cancellationToken
         );
     }
 
@@ -118,8 +134,11 @@ internal class DefaultRecordService(
         ArgumentNullException.ThrowIfNull(prefix);
 
         var target = Composition.Resolve<IRecordService>(Primitives.Record, prefix.Keyspace);
-        return Instrumentation.MeasureAsync(target, Operations.RecordList, service =>
-            service.ListAsync(prefix, page, options, cancellationToken)
+        return Instrumentation.MeasureAsync(
+            target,
+            Operations.RecordList,
+            (service, token) => service.ListAsync(prefix, page, options, token),
+            cancellationToken
         );
     }
 }

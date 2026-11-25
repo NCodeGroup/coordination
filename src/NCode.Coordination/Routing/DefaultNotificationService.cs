@@ -40,8 +40,11 @@ internal class DefaultNotificationService(
             Primitives.Notification,
             topic.Keyspace
         );
-        return Instrumentation.MeasureAsync(target, Operations.NotificationPublish, service =>
-            service.PublishAsync(topic, payload, options, cancellationToken)
+        return Instrumentation.MeasureAsync(
+            target,
+            Operations.NotificationPublish,
+            (service, token) => service.PublishAsync(topic, payload, options, token),
+            cancellationToken
         );
     }
 
@@ -58,10 +61,10 @@ internal class DefaultNotificationService(
             Primitives.Notification,
             topic.Keyspace
         );
-        return Instrumentation.MeasureStream(
+        return Instrumentation.MeasureStreamAsync(
             target,
             Operations.NotificationSubscribe,
-            service => service.SubscribeAsync(topic, options, cancellationToken),
+            (service, token) => service.SubscribeAsync(topic, options, token),
             cancellationToken
         );
     }

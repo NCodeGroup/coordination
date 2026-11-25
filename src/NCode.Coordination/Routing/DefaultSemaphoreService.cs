@@ -41,8 +41,11 @@ internal class DefaultSemaphoreService(
             Primitives.Semaphore,
             resource.Keyspace
         );
-        return Instrumentation.MeasureAsync(target, Operations.SemaphoreTryAcquire, service =>
-            service.TryAcquireAsync(resource, capacity, terms, options, cancellationToken)
+        return Instrumentation.MeasureAsync(
+            target,
+            Operations.SemaphoreTryAcquire,
+            (service, token) => service.TryAcquireAsync(resource, capacity, terms, options, token),
+            cancellationToken
         );
     }
 
@@ -60,8 +63,11 @@ internal class DefaultSemaphoreService(
             Primitives.Semaphore,
             grant.Resource.Keyspace
         );
-        return Instrumentation.MeasureAsync(target, Operations.SemaphoreRenew, service =>
-            service.RenewAsync(grant, timeToLive, options, cancellationToken)
+        return Instrumentation.MeasureAsync(
+            target,
+            Operations.SemaphoreRenew,
+            (service, token) => service.RenewAsync(grant, timeToLive, options, token),
+            cancellationToken
         );
     }
 
@@ -78,8 +84,11 @@ internal class DefaultSemaphoreService(
             Primitives.Semaphore,
             grant.Resource.Keyspace
         );
-        return Instrumentation.MeasureAsync(target, Operations.SemaphoreRelease, service =>
-            service.ReleaseAsync(grant, options, cancellationToken)
+        return Instrumentation.MeasureAsync(
+            target,
+            Operations.SemaphoreRelease,
+            (service, token) => service.ReleaseAsync(grant, options, token),
+            cancellationToken
         );
     }
 
@@ -96,8 +105,11 @@ internal class DefaultSemaphoreService(
             Primitives.Semaphore,
             resource.Keyspace
         );
-        return Instrumentation.MeasureAsync(target, Operations.SemaphoreWaitForRelease, service =>
-            service.WaitForReleaseAsync(resource, options, cancellationToken)
+        return Instrumentation.MeasureAsync(
+            target,
+            Operations.SemaphoreWaitForRelease,
+            (service, token) => service.WaitForReleaseAsync(resource, options, token),
+            cancellationToken
         );
     }
 }

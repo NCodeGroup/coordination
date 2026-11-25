@@ -36,8 +36,11 @@ internal class DefaultSequenceService(
         ArgumentNullException.ThrowIfNull(key);
 
         var target = Composition.Resolve<ISequenceService>(Primitives.Sequence, key.Keyspace);
-        return Instrumentation.MeasureAsync(target, Operations.SequenceNext, service =>
-            service.NextAsync(key, options, cancellationToken)
+        return Instrumentation.MeasureAsync(
+            target,
+            Operations.SequenceNext,
+            (service, token) => service.NextAsync(key, options, token),
+            cancellationToken
         );
     }
 
@@ -52,8 +55,11 @@ internal class DefaultSequenceService(
         ArgumentNullException.ThrowIfNull(key);
 
         var target = Composition.Resolve<ISequenceService>(Primitives.Sequence, key.Keyspace);
-        return Instrumentation.MeasureAsync(target, Operations.SequenceReserve, service =>
-            service.ReserveAsync(key, count, options, cancellationToken)
+        return Instrumentation.MeasureAsync(
+            target,
+            Operations.SequenceReserve,
+            (service, token) => service.ReserveAsync(key, count, options, token),
+            cancellationToken
         );
     }
 }

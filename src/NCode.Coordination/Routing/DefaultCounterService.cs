@@ -38,8 +38,11 @@ internal class DefaultCounterService(
         ArgumentNullException.ThrowIfNull(key);
 
         var target = Composition.Resolve<ICounterService>(Primitives.Counter, key.Keyspace);
-        return Instrumentation.MeasureAsync(target, Operations.CounterIncrement, service =>
-            service.IncrementAsync(key, amount, timeToLive, options, cancellationToken)
+        return Instrumentation.MeasureAsync(
+            target,
+            Operations.CounterIncrement,
+            (service, token) => service.IncrementAsync(key, amount, timeToLive, options, token),
+            cancellationToken
         );
     }
 
@@ -53,8 +56,11 @@ internal class DefaultCounterService(
         ArgumentNullException.ThrowIfNull(key);
 
         var target = Composition.Resolve<ICounterService>(Primitives.Counter, key.Keyspace);
-        return Instrumentation.MeasureAsync(target, Operations.CounterRead, service =>
-            service.ReadAsync(key, options, cancellationToken)
+        return Instrumentation.MeasureAsync(
+            target,
+            Operations.CounterRead,
+            (service, token) => service.ReadAsync(key, options, token),
+            cancellationToken
         );
     }
 
@@ -68,8 +74,11 @@ internal class DefaultCounterService(
         ArgumentNullException.ThrowIfNull(key);
 
         var target = Composition.Resolve<ICounterService>(Primitives.Counter, key.Keyspace);
-        return Instrumentation.MeasureAsync(target, Operations.CounterReset, service =>
-            service.ResetAsync(key, options, cancellationToken)
+        return Instrumentation.MeasureAsync(
+            target,
+            Operations.CounterReset,
+            (service, token) => service.ResetAsync(key, options, token),
+            cancellationToken
         );
     }
 
@@ -110,8 +119,11 @@ internal class DefaultCounterService(
         }
 
         var target = Composition.Resolve<ICounterService>(Primitives.Counter, keyspace);
-        return Instrumentation.MeasureAsync(target, Operations.CounterIncrementBatch, service =>
-            service.IncrementBatchAsync(increments, options, cancellationToken)
+        return Instrumentation.MeasureAsync(
+            target,
+            Operations.CounterIncrementBatch,
+            (service, token) => service.IncrementBatchAsync(increments, options, token),
+            cancellationToken
         );
     }
 }

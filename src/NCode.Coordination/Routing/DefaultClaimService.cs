@@ -38,8 +38,11 @@ internal class DefaultClaimService(
         ArgumentNullException.ThrowIfNull(name);
 
         var target = Composition.Resolve<IClaimService>(Primitives.Claim, name.Keyspace);
-        return Instrumentation.MeasureAsync(target, Operations.ClaimTryClaim, service =>
-            service.TryClaimAsync(name, window, timeToLive, options, cancellationToken)
+        return Instrumentation.MeasureAsync(
+            target,
+            Operations.ClaimTryClaim,
+            (service, token) => service.TryClaimAsync(name, window, timeToLive, options, token),
+            cancellationToken
         );
     }
 }
