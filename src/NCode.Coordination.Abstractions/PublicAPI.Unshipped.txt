@@ -104,6 +104,8 @@ NCode.Coordination.IMembershipService.JoinAsync(NCode.Coordination.CoordinationK
 NCode.Coordination.IMembershipService.LeaveAsync(NCode.Coordination.CoordinationKey! group, NCode.Coordination.SessionId! session, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
 NCode.Coordination.IMembershipService.ReadAsync(NCode.Coordination.CoordinationKey! group, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.MembershipView!>
 NCode.Coordination.IMembershipService.WatchAsync(NCode.Coordination.CoordinationKey! group, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Collections.Generic.IAsyncEnumerable<NCode.Coordination.MembershipView!>!
+NCode.Coordination.IOccurrenceService
+NCode.Coordination.IOccurrenceService.TryRecordAsync(NCode.Coordination.CoordinationKey! key, NCode.Coordination.TimeToLive! timeToLive, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.OccurrenceStatus>
 NCode.Coordination.IRecordService
 NCode.Coordination.IRecordService.CompareAndDeleteAsync(NCode.Coordination.CoordinationKey! key, NCode.Coordination.Revision! expected, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.RecordDeleteStatus>
 NCode.Coordination.IRecordService.CompareAndSwapAsync(NCode.Coordination.CoordinationKey! key, NCode.Coordination.Revision! expected, System.ReadOnlyMemory<byte> value, NCode.Coordination.RecordLifetime! lifetime, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.RecordWriteResult!>
@@ -124,6 +126,11 @@ NCode.Coordination.ISessionService.CloseAsync(NCode.Coordination.SessionId! sess
 NCode.Coordination.ISessionService.KeepAliveAsync(NCode.Coordination.SessionId! session, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.KeepAliveResult!>
 NCode.Coordination.ISessionService.OpenAsync(NCode.Coordination.Keyspace! keyspace, NCode.Coordination.TimeToLive! timeToLive, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.SessionGrant!>
 NCode.Coordination.ISessionService.WaitForEndAsync(NCode.Coordination.SessionId! session, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
+NCode.Coordination.ISetService
+NCode.Coordination.ISetService.AddAsync(NCode.Coordination.CoordinationKey! key, NCode.Coordination.KeySegment! member, NCode.Coordination.TimeToLive! timeToLive, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<bool>
+NCode.Coordination.ISetService.ClearAsync(NCode.Coordination.CoordinationKey! key, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
+NCode.Coordination.ISetService.ListAsync(NCode.Coordination.CoordinationKey! key, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<System.Collections.Immutable.ImmutableArray<NCode.Coordination.KeySegment!>>
+NCode.Coordination.ISetService.RemoveAsync(NCode.Coordination.CoordinationKey! key, NCode.Coordination.KeySegment! member, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<bool>
 NCode.Coordination.ITransactionService
 NCode.Coordination.ITransactionService.ExecuteAsync(NCode.Coordination.RecordTransaction! transaction, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.TransactionResult!>
 NCode.Coordination.KeepAliveResult
@@ -195,6 +202,9 @@ NCode.Coordination.MembershipView.Group.get -> NCode.Coordination.CoordinationKe
 NCode.Coordination.MembershipView.Members.get -> System.Collections.Immutable.ImmutableArray<NCode.Coordination.Member!>
 NCode.Coordination.MembershipView.MembershipView(NCode.Coordination.CoordinationKey! group, NCode.Coordination.Revision! revision, params System.Collections.Generic.IEnumerable<NCode.Coordination.Member!>! members) -> void
 NCode.Coordination.MembershipView.Revision.get -> NCode.Coordination.Revision!
+NCode.Coordination.OccurrenceStatus
+NCode.Coordination.OccurrenceStatus.Duplicate = 1 -> NCode.Coordination.OccurrenceStatus
+NCode.Coordination.OccurrenceStatus.Recorded = 0 -> NCode.Coordination.OccurrenceStatus
 NCode.Coordination.Operation
 NCode.Coordination.Operation.<Clone>$() -> NCode.Coordination.Operation!
 NCode.Coordination.Operation.Equals(NCode.Coordination.Operation? other) -> bool
