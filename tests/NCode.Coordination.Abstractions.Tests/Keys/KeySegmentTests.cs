@@ -25,13 +25,17 @@ public sealed class KeySegmentTests
     [Fact]
     public void FromString_WhenTextIsNull_Throws()
     {
-        Assert.Throws<ArgumentNullException>(() => KeySegment.FromString(null!));
+        var exception = Assert.Throws<ArgumentNullException>(() => KeySegment.FromString(null!));
+
+        Assert.Equal("text", exception.ParamName);
     }
 
     [Fact]
     public void FromString_WhenTextIsEmpty_Throws()
     {
-        Assert.Throws<ArgumentException>(() => KeySegment.FromString(string.Empty));
+        var exception = Assert.Throws<ArgumentException>(() => KeySegment.FromString(string.Empty));
+
+        Assert.Equal("text", exception.ParamName);
     }
 
     [Fact]

@@ -24,7 +24,9 @@ public sealed class CoordinationKeyTests
     [Fact]
     public void Constructor_WhenKeyspaceIsNull_Throws()
     {
-        Assert.Throws<ArgumentNullException>(() => new CoordinationKey(null!, "a"));
+        var exception = Assert.Throws<ArgumentNullException>(() => new CoordinationKey(null!, "a"));
+
+        Assert.Equal("keyspace", exception.ParamName);
     }
 
     [Fact]
@@ -301,18 +303,6 @@ public sealed class CoordinationKeyTests
         var text = key.ToString();
 
         Assert.Equal("prod:a", text);
-    }
-
-    #endregion
-
-    #region CreateKey Tests
-
-    [Fact]
-    public void CreateKey_WhenCalled_EqualsTheConstructedKey()
-    {
-        var created = ProdKeyspace.CreateKey("refresh", 42L);
-
-        Assert.Equal(new CoordinationKey(ProdKeyspace, "refresh", 42L), created);
     }
 
     #endregion

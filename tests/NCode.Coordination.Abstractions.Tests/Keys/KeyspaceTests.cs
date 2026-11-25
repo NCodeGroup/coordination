@@ -31,7 +31,9 @@ public sealed class KeyspaceTests
     [Fact]
     public void Constructor_WhenClusterIsNull_Throws()
     {
-        Assert.Throws<ArgumentNullException>(() => new Keyspace(null!));
+        var exception = Assert.Throws<ArgumentNullException>(() => new Keyspace(null!));
+
+        Assert.Equal("cluster", exception.ParamName);
     }
 
     [Theory]
@@ -202,6 +204,21 @@ public sealed class KeyspaceTests
         var text = keyspace.ToString();
 
         Assert.Equal("prod", text);
+    }
+
+    #endregion
+
+    #region CreateKey Tests
+
+    [Fact]
+    public void CreateKey_WhenCalled_EqualsTheConstructedKey()
+    {
+        var keyspace = new Keyspace("prod", "cell-1");
+        var expected = new CoordinationKey(keyspace, "refresh", 42L);
+
+        var created = keyspace.CreateKey("refresh", 42L);
+
+        Assert.Equal(expected, created);
     }
 
     #endregion
