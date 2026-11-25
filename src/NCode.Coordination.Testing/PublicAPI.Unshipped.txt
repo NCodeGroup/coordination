@@ -83,6 +83,7 @@ NCode.Coordination.Testing.LeaseContractTests.WaitForReleaseAsync_WhenTheGrantEx
 NCode.Coordination.Testing.LeaseContractTests.WaitForReleaseAsync_WhenTheHolderReleases_Completes() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.LeaseContractTests.WaitForReleaseAsync_WhenTokenIsCanceled_ThrowsOperationCanceledException() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.MembershipContractTests
+NCode.Coordination.Testing.MembershipContractTests.ConcurrentRun_WhenClientsRace_KeepsALinearizableHistory() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.MembershipContractTests.JoinAsync_WhenNodeIdIsHeldByAnotherSession_ReturnsNodeIdTaken() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.MembershipContractTests.JoinAsync_WhenOptionsCarryAnUnknownExtension_ThrowsUnsupported() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.MembershipContractTests.JoinAsync_WhenSessionHasEnded_ReturnsSessionEnded() -> System.Threading.Tasks.Task!
