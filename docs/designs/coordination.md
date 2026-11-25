@@ -293,10 +293,11 @@ for drift before the requested time to live, and treats the ownership as lost on
 ### D19. History checker
 
 Each primitive's suite runs concurrent clients against the provider and records every call and return; a checker then
-searches each key's history for a linearization against the primitive's sequential specification, treating a call whose
-outcome is unknown as possibly applied, and checks notifications and record watches against their declared delivery.
-A failure is reported cut to its shortest failing prefix. A paused-holder run and dropped-connection runs add the
-faults a provider's declared guarantees must survive.
+searches each key's history, or the one history of the keys a listing, a multi-key counter batch or a transaction spans,
+for a linearization against the primitive's sequential specification, treating a call whose outcome is unknown as
+possibly applied, and checks notifications and record watches against their declared delivery. A failure is reported
+cut to its shortest failing prefix. A paused-holder run and dropped-connection runs add the faults a provider's declared
+guarantees must survive.
 [ADR-1019](../decisions/1019-concurrent-runs-record-histories-and-a-checker-searches-each-keys-history-for-a-linearization.md)
 
 ## Open Questions

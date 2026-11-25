@@ -36,12 +36,18 @@ for notifications and record watches.**
    operation with an output is allowed from that state and what the state becomes. A model never rejects what a correct
    provider can return: a token, revision or term that an indeterminate call never returned is unknown, so it is
    accepted and learned from the next result that shows it; an indeterminate semaphore acquire is counted as unknown and
-   not given a slot. Waits, listings, multi-key counter batches, and membership and election watches are not modelled,
-   because they carry no guarantee a history can check; counter batches run on one key.
+   not given a slot. Waits and membership and election watches are not modelled, because they carry no guarantee a
+   history can check. An operation that spans keys, a listing of records or a counter batch over two keys, has a model
+   whose state holds both keys' states: a call on one key applies that key's model; a listing shows each record it
+   lists as a read of its key would, and every present record when it is the last page, at a keyspace revision no older
+   than any revision known for either key, since a page is consistent on its own; and a batch applies its increments in
+   order and stops after the first whose count exceeds its limit.
 3. **The checker.** The checker is Wing and Gong's search over the calls that no other call returned before, with
-   Lowe's cache of configurations that were already searched. It splits the history by key, since linearizability is
-   local (Herlihy and Wing). A call on `"*"`, a clock advance made while nothing is in flight, joins every key. The
-   search gives up after 1,000,000 configurations and fails the test, so a run never hangs.
+   Lowe's cache of configurations that were already searched. It splits the history by partition, since
+   linearizability is local (Herlihy and Wing): a run records each call in its key's partition, or every call in one
+   partition when its operations span keys, as a listing, a multi-key counter batch or a transaction does. A call on
+   `"*"`, a clock advance made while nothing is in flight, joins every key. The search gives up after 1,000,000
+   configurations and fails the test, so a run never hangs.
 4. **The report.** The checker reports the first failing key in ordinal order, cut to its shortest failing prefix by
    binary search, since every prefix of a linearizable history is linearizable. The report describes each call with its
    client, input, output and stamps.
@@ -81,7 +87,8 @@ for notifications and record watches.**
 - The runs that drop connections run in this repository's CI against a test decorator of the in-process provider, whose
   drop fails the next three calls with an unknown outcome, one of them after it applied, and gives each subscription a
   resync in place of its next message; against the in-process provider alone they skip, as it has no connection.
-- Checking by key misses a violation that spans keys.
+- A violation that spans keys is caught only by the runs that keep their keys in one partition: listings, multi-key
+  counter batches and transactions.
 - Durability and expiry authority wait for restart seams and a server clock.
 
 ## References
