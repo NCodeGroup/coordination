@@ -81,6 +81,24 @@ public sealed class DefaultCacheInvalidationServiceTests
         Assert.Equal(["clear", "clear"], entries);
     }
 
+    [Fact]
+    public async Task RunAsync_WhenTheStreamEndsWithoutAFailure_Throws()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var ending = new EndingNotifications();
+        var cache = new DefaultCacheInvalidationService(ending);
+        var topic = CreateTopic();
+        var handler = new RecordingHandler();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            cache.RunAsync(topic, handler, null, cancellationToken).AsTask()
+        );
+        var entries = handler.Entries.ToArray();
+
+        Assert.Equal("The subscription ended without a failure.", exception.Message);
+        Assert.Equal(["clear"], entries);
+    }
+
     #endregion
 
     private sealed class RecordingHandler : ICacheInvalidationHandler
@@ -101,6 +119,27 @@ public sealed class DefaultCacheInvalidationServiceTests
         {
             Entries.Enqueue("clear");
             return ValueTask.CompletedTask;
+        }
+    }
+
+    private sealed class EndingNotifications : INotificationService
+    {
+        public ValueTask PublishAsync(
+            CoordinationKey topic,
+            ReadOnlyMemory<byte> payload,
+            OperationOptions? options,
+            CancellationToken cancellationToken
+        ) => throw new NotSupportedException();
+
+        public async IAsyncEnumerable<Notification> SubscribeAsync(
+            CoordinationKey topic,
+            OperationOptions? options,
+            [EnumeratorCancellation] CancellationToken cancellationToken
+        )
+        {
+            await Task.Yield();
+
+            yield break;
         }
     }
 

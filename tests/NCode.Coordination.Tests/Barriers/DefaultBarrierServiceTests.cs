@@ -1,6 +1,7 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using System.Runtime.CompilerServices;
 using Microsoft.Extensions.DependencyInjection;
 using NCode.Coordination.InProcess.Tests;
 using NCode.Coordination.Recipes.Tests;
@@ -161,5 +162,52 @@ public sealed class DefaultBarrierServiceTests
         Assert.Equal("barrier", exception.ParamName);
     }
 
+    [Fact]
+    public async Task ArriveAndWaitAsync_WhenTheStreamEndsWithoutAFailure_Throws()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var time = InProcessTesting.CreateTime();
+        await using var services = RecipeTesting.Build(time);
+        var records = services.GetRequiredService<IRecordService>();
+        var ending = new EndingWatches();
+        var barriers = new DefaultBarrierService(records, ending);
+        var barrier = CreateBarrier();
+        var terms = new BarrierTerms(2, RecordLifetime.Persistent);
+        var party = KeySegment.FromString("a");
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            barriers.ArriveAndWaitAsync(barrier, party, terms, null, cancellationToken).AsTask()
+        );
+
+        Assert.Equal("The watch ended without a failure.", exception.Message);
+    }
+
     #endregion
+
+    private sealed class EndingWatches : IRecordWatchService
+    {
+        public async IAsyncEnumerable<RecordChange> WatchKeyAsync(
+            CoordinationKey key,
+            Revision? after,
+            OperationOptions? options,
+            [EnumeratorCancellation] CancellationToken cancellationToken
+        )
+        {
+            await Task.Yield();
+
+            yield break;
+        }
+
+        public async IAsyncEnumerable<RecordChange> WatchPrefixAsync(
+            CoordinationKey prefix,
+            Revision? after,
+            OperationOptions? options,
+            [EnumeratorCancellation] CancellationToken cancellationToken
+        )
+        {
+            await Task.Yield();
+
+            yield break;
+        }
+    }
 }

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using System.Collections.Concurrent;
+using System.Runtime.CompilerServices;
 using Microsoft.Extensions.DependencyInjection;
 using NCode.Coordination.InProcess.Tests;
 using NCode.Coordination.Recipes.Tests;
@@ -164,5 +165,91 @@ public sealed class DefaultSingletonServiceTests
         Assert.Null(view.Leader);
     }
 
+    [Fact]
+    public async Task RunAsync_WhenTheStreamEndsWithoutAFailure_Throws()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var time = InProcessTesting.CreateTime();
+        await using var services = RecipeTesting.Build(time);
+        var elections = services.GetRequiredService<IElectionService>();
+        var ending = new EndingElections(elections);
+        var singletons = new DefaultSingletonService(ending);
+        var role = CreateRole();
+        var leaderSession = await RecipeTesting.OpenSessionAsync(services, cancellationToken);
+        var followerSession = await RecipeTesting.OpenSessionAsync(services, cancellationToken);
+        var leaderTerms = LeaseTerms.ForSession(leaderSession);
+        var leading = await elections.TryLeadAsync(
+            role,
+            ReadOnlyMemory<byte>.Empty,
+            leaderTerms,
+            null,
+            cancellationToken
+        );
+        Assert.True(leading.IsElected);
+        var candidate = new SingletonCandidate(followerSession);
+        var calls = new int[1];
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            singletons
+                .RunAsync(
+                    role,
+                    candidate,
+                    (_, _) =>
+                    {
+                        Interlocked.Increment(ref calls[0]);
+                        return ValueTask.CompletedTask;
+                    },
+                    null,
+                    cancellationToken
+                )
+                .AsTask()
+        );
+        var totalCalls = Volatile.Read(ref calls[0]);
+
+        Assert.Equal("The watch ended without a failure.", exception.Message);
+        Assert.Equal(0, totalCalls);
+    }
+
     #endregion
+
+    private sealed class EndingElections(IElectionService inner) : IElectionService
+    {
+        public ValueTask<ElectionResult> TryLeadAsync(
+            CoordinationKey role,
+            ReadOnlyMemory<byte> value,
+            LeaseTerms terms,
+            OperationOptions? options,
+            CancellationToken cancellationToken
+        ) => inner.TryLeadAsync(role, value, terms, options, cancellationToken);
+
+        public ValueTask<bool> RenewAsync(
+            Leadership leadership,
+            TimeToLive timeToLive,
+            OperationOptions? options,
+            CancellationToken cancellationToken
+        ) => inner.RenewAsync(leadership, timeToLive, options, cancellationToken);
+
+        public ValueTask<bool> ResignAsync(
+            Leadership leadership,
+            OperationOptions? options,
+            CancellationToken cancellationToken
+        ) => inner.ResignAsync(leadership, options, cancellationToken);
+
+        public ValueTask<ElectionView> ReadAsync(
+            CoordinationKey role,
+            OperationOptions? options,
+            CancellationToken cancellationToken
+        ) => inner.ReadAsync(role, options, cancellationToken);
+
+        public async IAsyncEnumerable<ElectionView> WatchAsync(
+            CoordinationKey role,
+            OperationOptions? options,
+            [EnumeratorCancellation] CancellationToken cancellationToken
+        )
+        {
+            await Task.Yield();
+
+            yield break;
+        }
+    }
 }
