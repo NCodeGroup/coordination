@@ -1,4 +1,7 @@
 #nullable enable
 const NCode.Coordination.CoordinationTelemetry.ActivitySourceName = "NCode.Coordination" -> string!
 const NCode.Coordination.CoordinationTelemetry.MeterName = "NCode.Coordination" -> string!
+NCode.Coordination.CoordinationCompositionException
+NCode.Coordination.CoordinationCompositionException.CoordinationCompositionException(System.Collections.Generic.IEnumerable<string!>! failures) -> void
+NCode.Coordination.CoordinationCompositionException.Failures.get -> System.Collections.Immutable.ImmutableArray<string!>
 NCode.Coordination.CoordinationTelemetry
