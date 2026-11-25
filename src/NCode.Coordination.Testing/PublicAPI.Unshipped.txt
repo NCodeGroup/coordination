@@ -13,6 +13,8 @@ NCode.Coordination.Testing.ClaimContractTests.TryClaimAsync_WhenWindowsDiffer_Cl
 NCode.Coordination.Testing.ConformanceTarget
 NCode.Coordination.Testing.ConformanceTarget.AdvanceClock.get -> System.Func<System.TimeSpan, System.Threading.CancellationToken, System.Threading.Tasks.ValueTask>?
 NCode.Coordination.Testing.ConformanceTarget.AdvanceClock.init -> void
+NCode.Coordination.Testing.ConformanceTarget.DropConnections.get -> System.Func<System.Threading.CancellationToken, System.Threading.Tasks.ValueTask>?
+NCode.Coordination.Testing.ConformanceTarget.DropConnections.init -> void
 NCode.Coordination.Testing.ConformanceTarget.ConformanceTarget(NCode.Coordination.ICoordinationProvider! provider) -> void
 NCode.Coordination.Testing.ConformanceTarget.Provider.get -> NCode.Coordination.ICoordinationProvider!
 NCode.Coordination.Testing.CounterContractTests
