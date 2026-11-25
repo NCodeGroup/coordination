@@ -12,11 +12,13 @@ public sealed class DefaultBarrierServiceTests
 {
     private static CoordinationKey CreateBarrier() => RecipeTesting.Keyspace.CreateKey("barrier");
 
-    private static DefaultBarrierService CreateBarriers(IServiceProvider services) =>
-        new(
-            services.GetRequiredService<IRecordService>(),
-            services.GetRequiredService<IRecordWatchService>()
-        );
+    private static DefaultBarrierService CreateBarriers(IServiceProvider services)
+    {
+        var records = services.GetRequiredService<IRecordService>();
+        var watches = services.GetRequiredService<IRecordWatchService>();
+
+        return new(records, watches);
+    }
 
     #region ArriveAndWaitAsync Tests
 

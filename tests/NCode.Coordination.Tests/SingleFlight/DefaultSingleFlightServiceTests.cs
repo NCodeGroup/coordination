@@ -26,11 +26,13 @@ public sealed class DefaultSingleFlightServiceTests
 
     private static CoordinationKey CreateKey() => RecipeTesting.Keyspace.CreateKey("flight");
 
-    private static DefaultSingleFlightService CreateService(IServiceProvider services) =>
-        new(
-            services.GetRequiredService<IRecordService>(),
-            services.GetRequiredService<ILeaseService>()
-        );
+    private static DefaultSingleFlightService CreateService(IServiceProvider services)
+    {
+        var records = services.GetRequiredService<IRecordService>();
+        var leases = services.GetRequiredService<ILeaseService>();
+
+        return new(records, leases);
+    }
 
     #region GetOrFetchAsync Tests
 

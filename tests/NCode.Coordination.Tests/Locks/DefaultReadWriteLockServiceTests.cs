@@ -20,12 +20,14 @@ public sealed class DefaultReadWriteLockServiceTests
 
     private static CoordinationKey CreateResource() => RecipeTesting.Keyspace.CreateKey("resource");
 
-    private static DefaultReadWriteLockService CreateLocks(IServiceProvider services) =>
-        new(
-            services.GetRequiredService<ILeaseService>(),
-            services.GetRequiredService<IRecordService>(),
-            services.GetRequiredService<IRecordWatchService>()
-        );
+    private static DefaultReadWriteLockService CreateLocks(IServiceProvider services)
+    {
+        var leases = services.GetRequiredService<ILeaseService>();
+        var records = services.GetRequiredService<IRecordService>();
+        var watches = services.GetRequiredService<IRecordWatchService>();
+
+        return new(leases, records, watches);
+    }
 
     #region AcquireReadAsync Tests
 

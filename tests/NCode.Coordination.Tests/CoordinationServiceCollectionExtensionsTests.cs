@@ -132,26 +132,25 @@ public sealed class CoordinationServiceCollectionExtensionsTests : IDisposable
         services.AddCoordination(_ => { });
         await using var serviceProvider = services.BuildServiceProvider();
 
-        Assert.IsType<DefaultLockService>(serviceProvider.GetRequiredService<ILockService>());
-        Assert.IsType<DefaultReadWriteLockService>(
-            serviceProvider.GetRequiredService<IReadWriteLockService>()
-        );
-        Assert.IsType<DefaultBarrierService>(serviceProvider.GetRequiredService<IBarrierService>());
-        Assert.IsType<DefaultSingletonService>(
-            serviceProvider.GetRequiredService<ISingletonService>()
-        );
-        Assert.IsType<DefaultPartitionOwnershipService>(
-            serviceProvider.GetRequiredService<IPartitionOwnershipService>()
-        );
-        Assert.IsType<DefaultSingleFlightService>(
-            serviceProvider.GetRequiredService<ISingleFlightService>()
-        );
-        Assert.IsType<DefaultRateLimiterFactory>(
-            serviceProvider.GetRequiredService<IRateLimiterFactory>()
-        );
-        Assert.IsType<DefaultCacheInvalidationService>(
-            serviceProvider.GetRequiredService<ICacheInvalidationService>()
-        );
+        var lockService = serviceProvider.GetRequiredService<ILockService>();
+        var readWriteLockService = serviceProvider.GetRequiredService<IReadWriteLockService>();
+        var barrierService = serviceProvider.GetRequiredService<IBarrierService>();
+        var singletonService = serviceProvider.GetRequiredService<ISingletonService>();
+        var partitionOwnershipService =
+            serviceProvider.GetRequiredService<IPartitionOwnershipService>();
+        var singleFlightService = serviceProvider.GetRequiredService<ISingleFlightService>();
+        var rateLimiterFactory = serviceProvider.GetRequiredService<IRateLimiterFactory>();
+        var cacheInvalidationService =
+            serviceProvider.GetRequiredService<ICacheInvalidationService>();
+
+        Assert.IsType<DefaultLockService>(lockService);
+        Assert.IsType<DefaultReadWriteLockService>(readWriteLockService);
+        Assert.IsType<DefaultBarrierService>(barrierService);
+        Assert.IsType<DefaultSingletonService>(singletonService);
+        Assert.IsType<DefaultPartitionOwnershipService>(partitionOwnershipService);
+        Assert.IsType<DefaultSingleFlightService>(singleFlightService);
+        Assert.IsType<DefaultRateLimiterFactory>(rateLimiterFactory);
+        Assert.IsType<DefaultCacheInvalidationService>(cacheInvalidationService);
     }
 
     [Fact]
