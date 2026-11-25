@@ -1,0 +1,68 @@
+// Copyright © NCode Group
+// SPDX-License-Identifier: Apache-2.0
+
+using System.Diagnostics.CodeAnalysis;
+using System.Threading.RateLimiting;
+
+namespace NCode.Coordination.RateLimiting;
+
+/// <summary>
+/// The lease that a coordination rate limiter returns: it holds no resource, and only reports whether the permits were
+/// granted and, when they were not, how long to wait before trying again.
+/// </summary>
+internal sealed class CoordinationRateLimitLease : RateLimitLease
+{
+    private readonly TimeSpan? _retryAfter;
+
+    private CoordinationRateLimitLease(bool isAcquired, TimeSpan? retryAfter)
+    {
+        IsAcquired = isAcquired;
+        _retryAfter = retryAfter;
+    }
+
+    /// <summary>
+    /// Gets the lease of a request whose permits were granted.
+    /// </summary>
+    public static CoordinationRateLimitLease Acquired { get; } =
+        new(isAcquired: true, retryAfter: null);
+
+    /// <summary>
+    /// Gets the lease of a request that was not granted and has no time to wait to report.
+    /// </summary>
+    public static CoordinationRateLimitLease NotAcquired { get; } =
+        new(isAcquired: false, retryAfter: null);
+
+    /// <summary>
+    /// Creates the lease of a request that was denied, which reports how long to wait before trying again.
+    /// </summary>
+    /// <param name="retryAfter">How long to wait before trying again; a negative time counts as zero.</param>
+    /// <returns>The lease of the denied request.</returns>
+    public static CoordinationRateLimitLease Denied(TimeSpan retryAfter) =>
+        new(isAcquired: false, retryAfter: retryAfter < TimeSpan.Zero ? TimeSpan.Zero : retryAfter);
+
+    /// <inheritdoc />
+    public override bool IsAcquired { get; }
+
+    /// <inheritdoc />
+    public override IEnumerable<string> MetadataNames =>
+        _retryAfter.HasValue ? [MetadataName.RetryAfter.Name] : [];
+
+    /// <inheritdoc />
+    public override bool TryGetMetadata(
+        string metadataName,
+        [NotNullWhen(true)] out object? metadata
+    )
+    {
+        if (
+            _retryAfter.HasValue
+            && string.Equals(metadataName, MetadataName.RetryAfter.Name, StringComparison.Ordinal)
+        )
+        {
+            metadata = _retryAfter.Value;
+            return true;
+        }
+
+        metadata = null;
+        return false;
+    }
+}
