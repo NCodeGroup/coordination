@@ -103,7 +103,7 @@ internal class DefaultSingletonService(IElectionService elections) : ISingletonS
     }
 
     /// <summary>
-    /// Watches a role and cancels the source when the leadership no longer leads it.
+    /// Watches a role and cancels the source when the role shows another leader or none.
     /// </summary>
     /// <param name="role">The role to watch.</param>
     /// <param name="leadership">The leadership to vouch for.</param>
