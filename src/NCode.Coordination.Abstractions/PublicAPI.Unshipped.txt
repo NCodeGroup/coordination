@@ -47,6 +47,17 @@ NCode.Coordination.CoordinationKey.PartitionDepth.get -> int
 NCode.Coordination.CoordinationKey.PartitionDepth.init -> void
 NCode.Coordination.CoordinationKey.Segments.get -> System.Collections.Immutable.ImmutableArray<NCode.Coordination.KeySegment!>
 NCode.Coordination.CoordinationLimits
+NCode.Coordination.CounterBatchResult
+NCode.Coordination.CounterBatchResult.CounterBatchResult(System.Collections.Generic.IEnumerable<long>! counts) -> void
+NCode.Coordination.CounterBatchResult.Counts.get -> System.Collections.Immutable.ImmutableArray<long>
+NCode.Coordination.CounterBatchResult.ExceededIndex.get -> int?
+NCode.Coordination.CounterBatchResult.ExceededIndex.init -> void
+NCode.Coordination.CounterIncrement
+NCode.Coordination.CounterIncrement.Amount.get -> long
+NCode.Coordination.CounterIncrement.CounterIncrement(NCode.Coordination.CoordinationKey! key, long amount, long limit, NCode.Coordination.TimeToLive! timeToLive) -> void
+NCode.Coordination.CounterIncrement.Key.get -> NCode.Coordination.CoordinationKey!
+NCode.Coordination.CounterIncrement.Limit.get -> long
+NCode.Coordination.CounterIncrement.TimeToLive.get -> NCode.Coordination.TimeToLive!
 NCode.Coordination.ElectionResult
 NCode.Coordination.ElectionResult.IsElected.get -> bool
 NCode.Coordination.ElectionResult.Leadership.get -> NCode.Coordination.Leadership?
@@ -88,6 +99,11 @@ NCode.Coordination.GuaranteeDimensions
 NCode.Coordination.Guarantees
 NCode.Coordination.IClaimService
 NCode.Coordination.IClaimService.TryClaimAsync(NCode.Coordination.CoordinationKey! name, NCode.Coordination.TimeWindow! window, NCode.Coordination.TimeToLive! timeToLive, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.ClaimStatus>
+NCode.Coordination.ICounterService
+NCode.Coordination.ICounterService.IncrementAsync(NCode.Coordination.CoordinationKey! key, long amount, NCode.Coordination.TimeToLive! timeToLive, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<long>
+NCode.Coordination.ICounterService.IncrementBatchAsync(System.Collections.Generic.IReadOnlyList<NCode.Coordination.CounterIncrement!>! increments, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.CounterBatchResult!>
+NCode.Coordination.ICounterService.ReadAsync(NCode.Coordination.CoordinationKey! key, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<long>
+NCode.Coordination.ICounterService.ResetAsync(NCode.Coordination.CoordinationKey! key, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
 NCode.Coordination.IElectionService
 NCode.Coordination.IElectionService.ReadAsync(NCode.Coordination.CoordinationKey! role, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.ElectionView!>
 NCode.Coordination.IElectionService.RenewAsync(NCode.Coordination.Leadership! leadership, NCode.Coordination.TimeToLive! timeToLive, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<bool>
