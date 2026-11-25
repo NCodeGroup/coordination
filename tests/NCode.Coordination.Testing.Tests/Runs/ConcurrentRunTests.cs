@@ -64,6 +64,54 @@ public sealed class ConcurrentRunTests
     }
 
     [Fact]
+    public async ValueTask RunAsync_WhenFaultGiven_StartsTheSecondHalfAfterTheFaultBegins()
+    {
+        var started = 0;
+        var startedAtFault = 0;
+
+        await ConcurrentRun.RunAsync(
+            ConcurrentRun.Steps,
+            (_, _, _) =>
+            {
+                Interlocked.Increment(ref started);
+                return ValueTask.CompletedTask;
+            },
+            _ =>
+            {
+                startedAtFault = Volatile.Read(ref started);
+                return ValueTask.CompletedTask;
+            },
+            Token
+        );
+
+        Assert.True(
+            startedAtFault
+                <= ConcurrentRun.Clients * ConcurrentRun.Steps / 2 + ConcurrentRun.Clients
+        );
+    }
+
+    [Fact]
+    public async ValueTask RunAsync_WhenFaultThrowsAsItBegins_RunsEveryStepAndPropagates()
+    {
+        var started = 0;
+
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await ConcurrentRun.RunAsync(
+                ConcurrentRun.Steps,
+                (_, _, _) =>
+                {
+                    Interlocked.Increment(ref started);
+                    return ValueTask.CompletedTask;
+                },
+                _ => throw new InvalidOperationException(),
+                Token
+            )
+        );
+
+        Assert.Equal(ConcurrentRun.Clients * ConcurrentRun.Steps, started);
+    }
+
+    [Fact]
     public async ValueTask RunAsync_WhenStepFails_Propagates()
     {
         var faults = 0;

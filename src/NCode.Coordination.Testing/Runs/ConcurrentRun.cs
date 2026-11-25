@@ -36,7 +36,9 @@ internal static class ConcurrentRun
     /// </summary>
     /// <remarks>
     /// Every client waits at a gate that opens when all of them have started, and yields after each step. A client whose
-    /// step throws releases the fault, so a fault never waits for steps that will not run, and rethrows.
+    /// step throws releases the fault, so a fault never waits for steps that will not run, and rethrows. A client that
+    /// finds half of the steps done waits until the fault has begun, so the calls of the second half meet the fault
+    /// however late it is scheduled.
     /// </remarks>
     /// <param name="steps">The number of steps each client runs.</param>
     /// <param name="step">The step to run, given the client, the index of the step and the run's token.</param>
@@ -52,6 +54,12 @@ internal static class ConcurrentRun
     {
         var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var halfway = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var begun = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        if (fault is null)
+        {
+            begun.SetResult();
+        }
+
         var remaining = new StrongBox<int>(Clients * steps / 2);
 
         var tasks = new List<Task>(Clients + 1);
@@ -66,6 +74,7 @@ internal static class ConcurrentRun
                         step,
                         gate.Task,
                         halfway,
+                        begun.Task,
                         remaining,
                         cancellationToken
                     ),
@@ -80,7 +89,20 @@ internal static class ConcurrentRun
                 async () =>
                 {
                     await halfway.Task;
-                    await fault(cancellationToken);
+
+                    // The fault has begun once its delegate returns its task, and one that throws as it begins
+                    // still releases the clients.
+                    ValueTask pending;
+                    try
+                    {
+                        pending = fault(cancellationToken);
+                    }
+                    finally
+                    {
+                        begun.TrySetResult();
+                    }
+
+                    await pending;
                 },
                 CancellationToken.None
             );
@@ -101,6 +123,7 @@ internal static class ConcurrentRun
     /// <param name="step">The step to run, given the client, the index of the step and the run's token.</param>
     /// <param name="gate">The task that completes when every client has started.</param>
     /// <param name="halfway">The source that completes when half of all the steps are done.</param>
+    /// <param name="begun">The task that completes when the fault has begun, or at once when there is none.</param>
     /// <param name="remaining">The number of steps left before half of all the steps are done.</param>
     /// <param name="cancellationToken">A token that cancels the run.</param>
     /// <returns>A task that completes when the client has run every step.</returns>
@@ -110,6 +133,7 @@ internal static class ConcurrentRun
         Func<int, int, CancellationToken, ValueTask> step,
         Task gate,
         TaskCompletionSource halfway,
+        Task begun,
         StrongBox<int> remaining,
         CancellationToken cancellationToken
     )
@@ -120,6 +144,11 @@ internal static class ConcurrentRun
 
             for (var index = 0; index < steps; index++)
             {
+                if (halfway.Task.IsCompleted)
+                {
+                    await begun.WaitAsync(cancellationToken);
+                }
+
                 await step(client, index, cancellationToken);
 
                 if (Interlocked.Decrement(ref remaining.Value) == 0)
