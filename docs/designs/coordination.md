@@ -13,9 +13,10 @@ Each provider speaks a standard protocol, declares the guarantees it keeps, and 
 kit. The central decisions are the product's scope ([D1](#d1-scope)), its originality ([D2](#d2-originality)),
 declared guarantees ([D3](#d3-guarantees)), protocol-named providers ([D4](#d4-providers)), sessions with fencing
 tokens ([D5](#d5-sessions-and-fencing)), sequenced notifications without brokering ([D6](#d6-notifications)), one
-conformance kit ([D7](#d7-conformance)), the first stable release's scope ([D8](#d8-first-stable-release)) and expiry as
-a duration on a declared clock ([D9](#d9-expiry-clock)), and the shapes of the primitives' contracts
-([D10](#d10-contract-values) to [D15](#d15-counting-sequences-and-notifications)).
+conformance kit ([D7](#d7-conformance)), the first stable release's scope ([D8](#d8-first-stable-release)), expiry as a
+duration on a declared clock ([D9](#d9-expiry-clock)), the shapes of the primitives' contracts
+([D10](#d10-contract-values) to [D15](#d15-counting-sequences-and-notifications)), and the composition that binds
+providers and checks requirements when the host starts ([D16](#d16-composition)).
 
 ## Goals and Non-Goals
 
@@ -268,6 +269,12 @@ Records carry a keyspace-wide revision, and watches and transactions are written
 
 Occurrences fail closed, windows align to the epoch, and notifications number each topic's messages.
 [ADR-1015](../decisions/1015-occurrences-fail-closed-windows-align-to-the-epoch-and-notifications-number-each-topics-messages.md)
+
+### D16. Composition
+
+A host registers providers on one builder and binds each to primitives or to keyspaces; its start fails on every
+requirement a binding cannot keep, and every operation is traced and measured without its keys.
+[ADR-1016](../decisions/1016-a-host-binds-providers-by-primitive-and-keyspace-and-its-start-fails-on-every-requirement-a-binding-cannot-keep.md)
 
 ## Open Questions
 
