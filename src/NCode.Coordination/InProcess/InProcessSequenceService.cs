@@ -13,6 +13,19 @@ namespace NCode.Coordination.InProcess;
 internal class InProcessSequenceService : ISequenceService
 {
     /// <summary>
+    /// Creates the exception of a sequence whose numbers are used up.
+    /// </summary>
+    /// <returns>The exception to throw.</returns>
+    private static CoordinationException CreateOverflow()
+    {
+        return new CoordinationException(
+            CoordinationErrorCodes.LimitExceeded,
+            outcomeUnknown: false,
+            "The sequence has handed out its largest number."
+        );
+    }
+
+    /// <summary>
     /// Gets the lock that every operation holds.
     /// </summary>
     private Lock Gate { get; } = new();
@@ -37,11 +50,7 @@ internal class InProcessSequenceService : ISequenceService
             var last = Last.GetValueOrDefault(key);
             if (last == long.MaxValue)
             {
-                throw new CoordinationException(
-                    CoordinationErrorCodes.LimitExceeded,
-                    outcomeUnknown: false,
-                    "The sequence has handed out its largest number."
-                );
+                throw CreateOverflow();
             }
 
             var next = last + 1;
@@ -68,11 +77,7 @@ internal class InProcessSequenceService : ISequenceService
             var last = Last.GetValueOrDefault(key);
             if (last > long.MaxValue - count)
             {
-                throw new CoordinationException(
-                    CoordinationErrorCodes.LimitExceeded,
-                    outcomeUnknown: false,
-                    "The sequence has handed out its largest number."
-                );
+                throw CreateOverflow();
             }
 
             Last[key] = last + count;

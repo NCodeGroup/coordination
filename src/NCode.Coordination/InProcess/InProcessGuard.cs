@@ -26,8 +26,9 @@ internal static class InProcessGuard
             return;
         }
 
-        foreach (var name in options.Extensions.Keys)
+        if (options.Extensions.Count > 0)
         {
+            var name = options.Extensions.Keys.First();
             throw new CoordinationException(
                 CoordinationErrorCodes.Unsupported,
                 outcomeUnknown: false,

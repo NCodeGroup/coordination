@@ -209,11 +209,12 @@ internal class InProcessRecordService(InProcessRecordTable table) : IRecordServi
 
         lock (Table.Gate)
         {
-            var records = new List<StoredRecord>();
+            var live = Table.ListLive(prefix);
+            var records = new List<StoredRecord>(Math.Min(page.Limit, live.Count));
             var more = false;
             long lastSequence = 0;
 
-            foreach (var entry in Table.ListLive(prefix))
+            foreach (var entry in live)
             {
                 if (entry.Sequence <= after)
                 {
@@ -231,12 +232,8 @@ internal class InProcessRecordService(InProcessRecordTable table) : IRecordServi
             }
 
             var revision = Table.Current(prefix.Keyspace);
-            var result = new RecordPage(revision, records)
-            {
-                ContinuationToken = more
-                    ? lastSequence.ToString(CultureInfo.InvariantCulture)
-                    : null,
-            };
+            var token = more ? lastSequence.ToString(CultureInfo.InvariantCulture) : null;
+            var result = new RecordPage(revision, records) { ContinuationToken = token };
 
             return ValueTask.FromResult(result);
         }

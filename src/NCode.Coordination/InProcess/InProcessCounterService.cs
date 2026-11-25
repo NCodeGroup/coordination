@@ -148,8 +148,8 @@ internal class InProcessCounterService(TimeProvider time) : ICounterService
 
         lock (Gate)
         {
-            var pending = new Dictionary<CoordinationKey, long>();
-            var timeToLives = new Dictionary<CoordinationKey, TimeToLive>();
+            var pending = new Dictionary<CoordinationKey, long>(increments.Count);
+            var timeToLives = new Dictionary<CoordinationKey, TimeToLive>(increments.Count);
             var counts = new List<long>(increments.Count);
             int? exceeded = null;
 

@@ -101,10 +101,7 @@ public sealed class InProcessProviderTests
         var support = GetSupport(provider, primitive);
 
         Assert.False(support.IsSupported);
-        Assert.Equal(
-            "The in-process provider does not implement this primitive.",
-            support.UnsupportedReason
-        );
+        Assert.Equal(InProcessProvider.UnsupportedReason, support.UnsupportedReason);
     }
 
     #endregion

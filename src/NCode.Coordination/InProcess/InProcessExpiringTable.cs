@@ -130,7 +130,7 @@ internal class InProcessExpiringTable<TKey, TValue>(TimeProvider time)
     /// Lists the live entries after removing the ended ones.
     /// </summary>
     /// <returns>A snapshot of every live entry, in no particular order.</returns>
-    public List<KeyValuePair<TKey, TValue>> ListLive()
+    public IReadOnlyList<KeyValuePair<TKey, TValue>> ListLive()
     {
         Sweep();
 

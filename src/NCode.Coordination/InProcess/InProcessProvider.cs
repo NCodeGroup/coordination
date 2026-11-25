@@ -11,7 +11,7 @@ internal class InProcessProvider : ICoordinationProvider
     /// <summary>
     /// Why the provider lists a primitive as unsupported.
     /// </summary>
-    private const string UnsupportedReason =
+    internal const string UnsupportedReason =
         "The in-process provider does not implement this primitive.";
 
     /// <summary>

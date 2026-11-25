@@ -99,7 +99,7 @@ internal class InProcessRecordTable(TimeProvider time)
     /// </summary>
     /// <param name="prefix">The prefix of the keys to list.</param>
     /// <returns>The entries whose key the prefix is a prefix of, in the order they were written.</returns>
-    public List<InProcessRecordEntry> ListLive(CoordinationKey prefix)
+    public IReadOnlyList<InProcessRecordEntry> ListLive(CoordinationKey prefix)
     {
         var entries = new List<InProcessRecordEntry>();
         foreach (var (key, entry) in Records.ListLive())
