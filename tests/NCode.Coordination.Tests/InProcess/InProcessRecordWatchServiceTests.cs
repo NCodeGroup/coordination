@@ -20,9 +20,11 @@ public sealed class InProcessRecordWatchServiceTests
         CancellationToken cancellationToken
     )
     {
+        var value = "a"u8.ToArray();
+
         var result = await records.CreateAsync(
             key,
-            "a"u8.ToArray(),
+            value,
             RecordLifetime.Persistent,
             null,
             cancellationToken
@@ -39,15 +41,17 @@ public sealed class InProcessRecordWatchServiceTests
     public async Task WatchKeyAsync_WhenTheLogCoversTheRevision_ReplaysWithoutAResync()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        using var provider = new InProcessProvider(InProcessTesting.CreateTime());
+        var time = InProcessTesting.CreateTime();
+        using var provider = new InProcessProvider(time);
         var records = GetService<IRecordService>(provider);
         var watches = GetService<IRecordWatchService>(provider);
         var key = InProcessTesting.Keyspace.CreateKey("a");
         var first = await CreateAsync(records, key, cancellationToken);
+        var updated = "b"u8.ToArray();
         var swapped = await records.CompareAndSwapAsync(
             key,
             first,
-            "b"u8.ToArray(),
+            updated,
             RecordLifetime.Persistent,
             null,
             cancellationToken
@@ -78,7 +82,8 @@ public sealed class InProcessRecordWatchServiceTests
     public async Task WatchKeyAsync_WhenTheRevisionIsBeforeTheLog_StartsWithAResync()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        using var provider = new InProcessProvider(InProcessTesting.CreateTime());
+        var time = InProcessTesting.CreateTime();
+        using var provider = new InProcessProvider(time);
         var records = GetService<IRecordService>(provider);
         var watches = GetService<IRecordWatchService>(provider);
         var key = InProcessTesting.Keyspace.CreateKey("a");
@@ -104,7 +109,8 @@ public sealed class InProcessRecordWatchServiceTests
     public async Task WatchKeyAsync_WhenTheRevisionIsAhead_StartsWithAResync()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        using var provider = new InProcessProvider(InProcessTesting.CreateTime());
+        var time = InProcessTesting.CreateTime();
+        using var provider = new InProcessProvider(time);
         var records = GetService<IRecordService>(provider);
         var watches = GetService<IRecordWatchService>(provider);
         var key = InProcessTesting.Keyspace.CreateKey("a");
@@ -129,7 +135,8 @@ public sealed class InProcessRecordWatchServiceTests
     public async Task WatchPrefixAsync_WhenTheSubscriberFallsBehind_YieldsAResync()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        using var provider = new InProcessProvider(InProcessTesting.CreateTime());
+        var time = InProcessTesting.CreateTime();
+        using var provider = new InProcessProvider(time);
         var records = GetService<IRecordService>(provider);
         var watches = GetService<IRecordWatchService>(provider);
         var prefix = InProcessTesting.Keyspace.CreateKey("cfg");
@@ -167,19 +174,18 @@ public sealed class InProcessRecordWatchServiceTests
         var key = InProcessTesting.Keyspace.CreateKey("cfg", "a");
         var prefix = InProcessTesting.Keyspace.CreateKey("cfg");
         var page = new RecordPageRequest(10);
-        var created = await records.CreateAsync(
-            key,
-            "a"u8.ToArray(),
-            RecordLifetime.ForTimeToLive(new TimeToLive(ShortTimeToLive)),
-            null,
-            cancellationToken
-        );
+        var value = "a"u8.ToArray();
+        var timeToLive = new TimeToLive(ShortTimeToLive);
+        var lifetime = RecordLifetime.ForTimeToLive(timeToLive);
+        var created = await records.CreateAsync(key, value, lifetime, null, cancellationToken);
         Assert.True(created.IsWritten);
         Assert.NotNull(created.Revision);
         var before = await records.ListAsync(prefix, page, null, cancellationToken);
         Assert.Single(before.Records);
 
-        time.Advance(ShortTimeToLive + TimeSpan.FromSeconds(1));
+        var margin = TimeSpan.FromSeconds(1);
+
+        time.Advance(ShortTimeToLive + margin);
 
         var after = await records.ListAsync(prefix, page, null, cancellationToken);
 

@@ -13,8 +13,12 @@ public sealed class InProcessDeadlinesTests
 
     private static TimeSpan FiveSeconds { get; } = TimeSpan.FromSeconds(5);
 
-    private static InProcessExpiry Begin(TimeProvider time, TimeSpan timeToLive) =>
-        InProcessExpiry.Begin(time, new TimeToLive(timeToLive));
+    private static InProcessExpiry Begin(TimeProvider time, TimeSpan timeToLive)
+    {
+        var limit = new TimeToLive(timeToLive);
+
+        return InProcessExpiry.Begin(time, limit);
+    }
 
     private static void RunDue(InProcessDeadlines deadlines, Lock gate)
     {
@@ -51,7 +55,8 @@ public sealed class InProcessDeadlinesTests
         var gate = new Lock();
         using var deadlines = new InProcessDeadlines(time, gate);
         var runs = 0;
-        Add(deadlines, gate, Begin(time, TwoSeconds), () => runs++);
+        var expiry = Begin(time, TwoSeconds);
+        Add(deadlines, gate, expiry, () => runs++);
 
         time.Advance(OneSecond);
         RunDue(deadlines, gate);
@@ -67,7 +72,8 @@ public sealed class InProcessDeadlinesTests
         var gate = new Lock();
         using var deadlines = new InProcessDeadlines(time, gate);
         var runs = 0;
-        Add(deadlines, gate, Begin(time, TwoSeconds), () => runs++);
+        var expiry = Begin(time, TwoSeconds);
+        Add(deadlines, gate, expiry, () => runs++);
 
         time.Advance(TwoSeconds);
         RunDue(deadlines, gate);
@@ -88,7 +94,8 @@ public sealed class InProcessDeadlinesTests
         var gate = new Lock();
         using var deadlines = new InProcessDeadlines(time, gate);
         var runs = 0;
-        Add(deadlines, gate, Begin(time, TwoSeconds), () => runs++);
+        var expiry = Begin(time, TwoSeconds);
+        Add(deadlines, gate, expiry, () => runs++);
 
         time.Advance(TwoSeconds);
 
@@ -102,8 +109,10 @@ public sealed class InProcessDeadlinesTests
         var gate = new Lock();
         using var deadlines = new InProcessDeadlines(time, gate);
         List<int> order = [];
-        Add(deadlines, gate, Begin(time, ThreeSeconds), () => order.Add(3));
-        Add(deadlines, gate, Begin(time, TwoSeconds), () => order.Add(2));
+        var threeSecondExpiry = Begin(time, ThreeSeconds);
+        Add(deadlines, gate, threeSecondExpiry, () => order.Add(3));
+        var twoSecondExpiry = Begin(time, TwoSeconds);
+        Add(deadlines, gate, twoSecondExpiry, () => order.Add(2));
 
         time.Advance(FiveSeconds);
 
@@ -117,7 +126,8 @@ public sealed class InProcessDeadlinesTests
         var gate = new Lock();
         using var deadlines = new InProcessDeadlines(time, gate);
         var runs = 0;
-        Add(deadlines, gate, Begin(time, TimeSpan.FromDays(3)), () => runs++);
+        var expiry = Begin(time, TimeSpan.FromDays(3));
+        Add(deadlines, gate, expiry, () => runs++);
 
         time.Advance(TimeSpan.FromDays(2));
         Assert.Equal(0, runs);
@@ -137,7 +147,8 @@ public sealed class InProcessDeadlinesTests
         var gate = new Lock();
         using var deadlines = new InProcessDeadlines(time, gate);
         var runs = 0;
-        var deadline = Add(deadlines, gate, Begin(time, TwoSeconds), () => runs++);
+        var expiry = Begin(time, TwoSeconds);
+        var deadline = Add(deadlines, gate, expiry, () => runs++);
 
         Cancel(deadlines, gate, deadline);
         time.Advance(ThreeSeconds);
@@ -157,7 +168,9 @@ public sealed class InProcessDeadlinesTests
         List<InProcessDeadline> added = [];
         for (var index = 0; index < total; index++)
         {
-            added.Add(Add(deadlines, gate, Begin(time, TwoSeconds), () => { }));
+            var expiry = Begin(time, TwoSeconds);
+            var deadline = Add(deadlines, gate, expiry, () => { });
+            added.Add(deadline);
         }
 
         foreach (var deadline in added)
@@ -182,7 +195,8 @@ public sealed class InProcessDeadlinesTests
         var gate = new Lock();
         var deadlines = new InProcessDeadlines(time, gate);
         var runs = 0;
-        Add(deadlines, gate, Begin(time, TwoSeconds), () => runs++);
+        var expiry = Begin(time, TwoSeconds);
+        Add(deadlines, gate, expiry, () => runs++);
 
         deadlines.Dispose();
         time.Advance(ThreeSeconds);

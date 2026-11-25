@@ -7,10 +7,16 @@ namespace NCode.Coordination.Tests;
 
 public sealed class HolderDeadlineTests
 {
-    private static FakeTimeProvider CreateTime() =>
-        new(new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero));
+    private static FakeTimeProvider CreateTime()
+    {
+        var start = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
 
-    private static TimeToLive TenSeconds { get; } = new(TimeSpan.FromSeconds(10));
+        return new FakeTimeProvider(start);
+    }
+
+    private static TimeSpan TenSecondSpan { get; } = TimeSpan.FromSeconds(10);
+
+    private static TimeToLive TenSeconds { get; } = new(TenSecondSpan);
 
     #region Begin Tests
 
@@ -21,17 +27,19 @@ public sealed class HolderDeadlineTests
 
         var deadline = HolderDeadline.Begin(time, TenSeconds, TimeSpan.Zero);
 
-        Assert.Equal(TimeSpan.FromSeconds(10), deadline.Lifetime);
+        Assert.Equal(TenSecondSpan, deadline.Lifetime);
     }
 
     [Fact]
     public void Begin_WhenAllowanceIsGiven_ShortensTheLifetime()
     {
         var time = CreateTime();
+        var allowance = TimeSpan.FromSeconds(1);
 
-        var deadline = HolderDeadline.Begin(time, TenSeconds, TimeSpan.FromSeconds(1));
+        var deadline = HolderDeadline.Begin(time, TenSeconds, allowance);
 
-        Assert.Equal(TimeSpan.FromSeconds(9), deadline.Lifetime);
+        var expected = TimeSpan.FromSeconds(9);
+        Assert.Equal(expected, deadline.Lifetime);
     }
 
     [Fact]
@@ -88,9 +96,11 @@ public sealed class HolderDeadlineTests
     public void HasPassed_BeforeTheLifetimeEnds_IsFalse()
     {
         var time = CreateTime();
-        var deadline = HolderDeadline.Begin(time, TenSeconds, TimeSpan.FromSeconds(1));
+        var allowance = TimeSpan.FromSeconds(1);
+        var deadline = HolderDeadline.Begin(time, TenSeconds, allowance);
+        var elapsed = TimeSpan.FromMilliseconds(8_999);
 
-        time.Advance(TimeSpan.FromMilliseconds(8_999));
+        time.Advance(elapsed);
 
         Assert.False(deadline.HasPassed);
     }
@@ -99,9 +109,11 @@ public sealed class HolderDeadlineTests
     public void HasPassed_WhenTheLifetimeEnds_IsTrue()
     {
         var time = CreateTime();
-        var deadline = HolderDeadline.Begin(time, TenSeconds, TimeSpan.FromSeconds(1));
+        var allowance = TimeSpan.FromSeconds(1);
+        var deadline = HolderDeadline.Begin(time, TenSeconds, allowance);
+        var elapsed = TimeSpan.FromSeconds(9);
 
-        time.Advance(TimeSpan.FromSeconds(9));
+        time.Advance(elapsed);
 
         Assert.True(deadline.HasPassed);
     }
@@ -114,20 +126,25 @@ public sealed class HolderDeadlineTests
     public void Remaining_WhenTimePasses_CountsDown()
     {
         var time = CreateTime();
-        var deadline = HolderDeadline.Begin(time, TenSeconds, TimeSpan.FromSeconds(1));
+        var allowance = TimeSpan.FromSeconds(1);
+        var deadline = HolderDeadline.Begin(time, TenSeconds, allowance);
+        var elapsed = TimeSpan.FromSeconds(4);
 
-        time.Advance(TimeSpan.FromSeconds(4));
+        time.Advance(elapsed);
 
-        Assert.Equal(TimeSpan.FromSeconds(5), deadline.Remaining);
+        var expected = TimeSpan.FromSeconds(5);
+        Assert.Equal(expected, deadline.Remaining);
     }
 
     [Fact]
     public void Remaining_AfterTheDeadline_IsZero()
     {
         var time = CreateTime();
-        var deadline = HolderDeadline.Begin(time, TenSeconds, TimeSpan.FromSeconds(1));
+        var allowance = TimeSpan.FromSeconds(1);
+        var deadline = HolderDeadline.Begin(time, TenSeconds, allowance);
+        var elapsed = TimeSpan.FromSeconds(20);
 
-        time.Advance(TimeSpan.FromSeconds(20));
+        time.Advance(elapsed);
 
         Assert.Equal(TimeSpan.Zero, deadline.Remaining);
     }

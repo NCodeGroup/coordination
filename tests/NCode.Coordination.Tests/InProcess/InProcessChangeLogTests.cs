@@ -5,8 +5,13 @@ namespace NCode.Coordination.InProcess.Tests;
 
 public sealed class InProcessChangeLogTests
 {
-    private static InProcessLoggedChange CreateChange(long revision, bool isDelete = false) =>
-        new(InProcessTesting.Keyspace.CreateKey("a"), new Revision(revision), isDelete);
+    private static InProcessLoggedChange CreateChange(long revision, bool isDelete = false)
+    {
+        var key = InProcessTesting.Keyspace.CreateKey("a");
+        var changeRevision = new Revision(revision);
+
+        return new InProcessLoggedChange(key, changeRevision, isDelete);
+    }
 
     #region Covers Tests
 
@@ -15,10 +20,13 @@ public sealed class InProcessChangeLogTests
     {
         var log = new InProcessChangeLog();
 
-        log.Append(CreateChange(2));
+        var change = CreateChange(2);
+        log.Append(change);
+
+        var first = new Revision(1);
 
         Assert.Equal(1, log.Floor);
-        Assert.True(log.Covers(new Revision(1)));
+        Assert.True(log.Covers(first));
     }
 
     #endregion
@@ -32,13 +40,18 @@ public sealed class InProcessChangeLogTests
 
         for (var index = 0; index <= InProcessChangeLog.Capacity; index++)
         {
-            log.Append(CreateChange(index + 2));
+            var change = CreateChange(index + 2);
+            log.Append(change);
         }
 
+        var first = new Revision(1);
+        var second = new Revision(2);
+        var changes = log.After(first);
+
         Assert.Equal(2, log.Floor);
-        Assert.False(log.Covers(new Revision(1)));
-        Assert.True(log.Covers(new Revision(2)));
-        Assert.Equal(InProcessChangeLog.Capacity, log.After(new Revision(1)).Count);
+        Assert.False(log.Covers(first));
+        Assert.True(log.Covers(second));
+        Assert.Equal(InProcessChangeLog.Capacity, changes.Count);
     }
 
     #endregion
@@ -56,7 +69,9 @@ public sealed class InProcessChangeLogTests
         log.Append(third);
         log.Append(fourth);
 
-        var changes = log.After(new Revision(2));
+        var after = new Revision(2);
+
+        var changes = log.After(after);
 
         Assert.Equal([third, fourth], changes);
     }

@@ -209,7 +209,8 @@ public sealed class InProcessConcurrencyTests
         var leases = GetService<ILeaseService>(provider);
         var resource = Keyspace.CreateKey("lease");
         var ttl = TimeSpan.FromSeconds(30);
-        var terms = LeaseTerms.ForTimeToLive(new TimeToLive(ttl));
+        var timeToLive = new TimeToLive(ttl);
+        var terms = LeaseTerms.ForTimeToLive(timeToLive);
 
         var results = await RunCallersAsync(
             RacingCallers,
@@ -232,7 +233,8 @@ public sealed class InProcessConcurrencyTests
         var semaphores = GetService<ISemaphoreService>(provider);
         var resource = Keyspace.CreateKey("semaphore");
         var ttl = TimeSpan.FromSeconds(30);
-        var terms = LeaseTerms.ForTimeToLive(new TimeToLive(ttl));
+        var timeToLive = new TimeToLive(ttl);
+        var terms = LeaseTerms.ForTimeToLive(timeToLive);
 
         var results = await RunCallersAsync(
             RacingCallers,
@@ -244,8 +246,9 @@ public sealed class InProcessConcurrencyTests
             .Where(x => x.IsAcquired)
             .Select(x => x.Grant is { } grant ? grant.Slot : -1);
         var full = results.Count(x => x.Status == SemaphoreAcquireStatus.Full);
+        var ordered = slots.Order();
 
-        Assert.Equal([0, 1, 2, 3], slots.Order());
+        Assert.Equal([0, 1, 2, 3], ordered);
         Assert.Equal(RacingCallers - capacity, full);
     }
 
@@ -261,7 +264,8 @@ public sealed class InProcessConcurrencyTests
         var elections = GetService<IElectionService>(provider);
         var role = Keyspace.CreateKey("role");
         var ttl = TimeSpan.FromSeconds(30);
-        var terms = LeaseTerms.ForTimeToLive(new TimeToLive(ttl));
+        var timeToLive = new TimeToLive(ttl);
+        var terms = LeaseTerms.ForTimeToLive(timeToLive);
 
         var results = await RunCallersAsync(
             RacingCallers,
@@ -290,7 +294,8 @@ public sealed class InProcessConcurrencyTests
         using var provider = CreateProvider();
         var claims = GetService<IClaimService>(provider);
         var name = Keyspace.CreateKey("claim");
-        var window = new TimeWindow(DateTimeOffset.UnixEpoch, TimeSpan.FromHours(1));
+        var hour = TimeSpan.FromHours(1);
+        var window = new TimeWindow(DateTimeOffset.UnixEpoch, hour);
         var ttl = TimeSpan.FromSeconds(30);
         var timeToLive = new TimeToLive(ttl);
 
@@ -353,7 +358,8 @@ public sealed class InProcessConcurrencyTests
         await using var stream = notifications
             .SubscribeAsync(topic, null, cancellationToken)
             .GetAsyncEnumerator(cancellationToken);
-        Assert.True(await stream.MoveNextAsync());
+        var moved = await stream.MoveNextAsync();
+        Assert.True(moved);
         Assert.True(stream.Current.IsResync);
 
         await RunCallersAsync(
@@ -370,7 +376,8 @@ public sealed class InProcessConcurrencyTests
         var sequences = new List<long>();
         for (var index = 0; index < CountingCallers; index++)
         {
-            Assert.True(await stream.MoveNextAsync());
+            moved = await stream.MoveNextAsync();
+            Assert.True(moved);
             Assert.False(stream.Current.IsResync);
             sequences.Add(stream.Current.Sequence);
         }

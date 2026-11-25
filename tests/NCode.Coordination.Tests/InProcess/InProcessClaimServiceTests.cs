@@ -11,11 +11,14 @@ public sealed class InProcessClaimServiceTests
     public async Task TryClaimAsync_WhenTheNameHasTheMostSegments_ThrowsArgumentException()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        var service = new InProcessClaimService(InProcessTesting.CreateTime());
+        var time = InProcessTesting.CreateTime();
+        var service = new InProcessClaimService(time);
         var segments = Enumerable.Repeat<KeySegment>("a", CoordinationKey.MaxSegments);
         var name = InProcessTesting.Keyspace.CreateKey(segments);
-        var window = new TimeWindow(DateTimeOffset.UnixEpoch, TimeSpan.FromHours(1));
-        var timeToLive = new TimeToLive(TimeSpan.FromMinutes(1));
+        var hour = TimeSpan.FromHours(1);
+        var window = new TimeWindow(DateTimeOffset.UnixEpoch, hour);
+        var minute = TimeSpan.FromMinutes(1);
+        var timeToLive = new TimeToLive(minute);
 
         var exception = await Assert.ThrowsAsync<ArgumentException>(async () =>
             await service.TryClaimAsync(name, window, timeToLive, null, cancellationToken)
@@ -28,11 +31,15 @@ public sealed class InProcessClaimServiceTests
     public async Task TryClaimAsync_WhenWindowsShareTheirStart_ShareTheClaim()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        var service = new InProcessClaimService(InProcessTesting.CreateTime());
+        var time = InProcessTesting.CreateTime();
+        var service = new InProcessClaimService(time);
         var name = InProcessTesting.Keyspace.CreateKey("job");
-        var oneHour = new TimeWindow(DateTimeOffset.UnixEpoch, TimeSpan.FromHours(1));
-        var twoHours = new TimeWindow(DateTimeOffset.UnixEpoch, TimeSpan.FromHours(2));
-        var timeToLive = new TimeToLive(TimeSpan.FromMinutes(1));
+        var hour = TimeSpan.FromHours(1);
+        var twoHourLength = TimeSpan.FromHours(2);
+        var oneHour = new TimeWindow(DateTimeOffset.UnixEpoch, hour);
+        var twoHours = new TimeWindow(DateTimeOffset.UnixEpoch, twoHourLength);
+        var minute = TimeSpan.FromMinutes(1);
+        var timeToLive = new TimeToLive(minute);
         var first = await service.TryClaimAsync(name, oneHour, timeToLive, null, cancellationToken);
 
         var second = await service.TryClaimAsync(

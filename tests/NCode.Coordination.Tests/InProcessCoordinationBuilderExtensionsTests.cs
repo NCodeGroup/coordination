@@ -86,7 +86,8 @@ public sealed class InProcessCoordinationBuilderExtensionsTests
         AddInProcess(services);
         await using var serviceProvider = services.BuildServiceProvider();
         var leases = serviceProvider.GetRequiredService<ILeaseService>();
-        var timeToLive = new TimeToLive(TimeSpan.FromSeconds(30));
+        var ttl = TimeSpan.FromSeconds(30);
+        var timeToLive = new TimeToLive(ttl);
         var terms = LeaseTerms.ForTimeToLive(timeToLive);
 
         var result = await leases.TryAcquireAsync(
@@ -107,7 +108,8 @@ public sealed class InProcessCoordinationBuilderExtensionsTests
         AddInProcess(services);
         await using var serviceProvider = services.BuildServiceProvider();
         var sessions = serviceProvider.GetRequiredService<ISessionService>();
-        var timeToLive = new TimeToLive(TimeSpan.FromSeconds(30));
+        var ttl = TimeSpan.FromSeconds(30);
+        var timeToLive = new TimeToLive(ttl);
         var grant = await sessions.OpenAsync(
             TestComposition.Keyspace,
             timeToLive,

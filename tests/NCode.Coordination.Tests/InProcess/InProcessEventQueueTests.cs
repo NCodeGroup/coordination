@@ -29,8 +29,10 @@ public sealed class InProcessEventQueueTests
         var first = await queue.TakeAsync(cancellationToken);
         var second = await queue.TakeAsync(cancellationToken);
 
-        Assert.Equal(new InProcessQueued<string>("a", Overflowed: false), first);
-        Assert.Equal(new InProcessQueued<string>("b", Overflowed: false), second);
+        var expectedFirst = new InProcessQueued<string>("a", Overflowed: false);
+        var expectedSecond = new InProcessQueued<string>("b", Overflowed: false);
+        Assert.Equal(expectedFirst, first);
+        Assert.Equal(expectedSecond, second);
     }
 
     [Fact]
@@ -47,7 +49,8 @@ public sealed class InProcessEventQueueTests
 
         var queued = await take;
 
-        Assert.Equal(new InProcessQueued<string>("a", Overflowed: false), queued);
+        var expected = new InProcessQueued<string>("a", Overflowed: false);
+        Assert.Equal(expected, queued);
     }
 
     [Fact]
@@ -87,8 +90,10 @@ public sealed class InProcessEventQueueTests
 
         var next = await queue.TakeAsync(cancellationToken);
 
-        Assert.Equal(new InProcessQueued<string>("c", Overflowed: true), overflow);
-        Assert.Equal(new InProcessQueued<string>("d", Overflowed: false), next);
+        var expectedOverflow = new InProcessQueued<string>("c", Overflowed: true);
+        var expectedNext = new InProcessQueued<string>("d", Overflowed: false);
+        Assert.Equal(expectedOverflow, overflow);
+        Assert.Equal(expectedNext, next);
     }
 
     #endregion

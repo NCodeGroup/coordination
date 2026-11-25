@@ -145,13 +145,16 @@ public sealed class InProcessTransactionServiceTests
         var sessionService = new InProcessSessionService(sessions);
         var boundKey = InProcessTesting.Keyspace.CreateKey("bound");
         ReadOnlyMemory<byte> value = (byte[])[1];
+        var ttl = TimeSpan.FromSeconds(30);
+        var timeToLive = new TimeToLive(ttl);
         var grant = await sessionService.OpenAsync(
             InProcessTesting.Keyspace,
-            new TimeToLive(TimeSpan.FromSeconds(30)),
+            timeToLive,
             null,
             cancellationToken
         );
-        var boundPut = RecordWrite.Put(boundKey, value, RecordLifetime.ForSession(grant.Id));
+        var lifetime = RecordLifetime.ForSession(grant.Id);
+        var boundPut = RecordWrite.Put(boundKey, value, lifetime);
         var transaction = new RecordTransaction([], [boundPut]);
 
         var result = await service.ExecuteAsync(transaction, null, cancellationToken);

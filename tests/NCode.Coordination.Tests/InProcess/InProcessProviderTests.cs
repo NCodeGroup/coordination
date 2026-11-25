@@ -98,7 +98,9 @@ public sealed class InProcessProviderTests
     {
         var provider = CreateProvider();
 
-        var support = GetSupport(provider, new Primitive(name));
+        var primitive = new Primitive(name);
+
+        var support = GetSupport(provider, primitive);
 
         Assert.Equal<Guarantee>(
             [Guarantees.LinearizableWithinProcess, Guarantees.Volatile, Guarantees.ServerClock],
