@@ -25,8 +25,14 @@ internal sealed class HistoryRecorder(TimeSpan callTimeout)
     /// </summary>
     public TimeSpan CallTimeout { get; } = callTimeout;
 
+    /// <summary>
+    /// Gets the lock that guards <see cref="Operations"/>.
+    /// </summary>
     private Lock Gate { get; } = new();
 
+    /// <summary>
+    /// Gets the operations recorded so far, in the order they were added.
+    /// </summary>
     private List<HistoryOperation> Operations { get; } = [];
 
     /// <summary>
@@ -126,6 +132,16 @@ internal sealed class HistoryRecorder(TimeSpan callTimeout)
         }
     }
 
+    /// <summary>
+    /// Records a call that has ended, stamping its return unless it is indeterminate.
+    /// </summary>
+    /// <param name="client">The client that made the call.</param>
+    /// <param name="partition">The key whose history the call belongs to.</param>
+    /// <param name="input">The call: the operation and its arguments.</param>
+    /// <param name="invoked">The stamp taken when the call began.</param>
+    /// <param name="outcome">How the call ended.</param>
+    /// <param name="output">The result of the call, or the exception that ended it.</param>
+    /// <returns>The operation that was recorded.</returns>
     private HistoryOperation Add(
         int client,
         string partition,

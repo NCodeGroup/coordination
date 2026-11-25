@@ -75,8 +75,7 @@ internal static class HistoryFormat
                     $"leader {leader.Term} '{HistoryValues.Decode(leader.Value)}'"
                 )
                 : "no leader",
-            MembershipView view => "members "
-                + string.Join(", ", view.Members.Select(member => member.Session)),
+            MembershipView view => DescribeMembers(view),
             SessionGrant grant => grant.Id.ToString(),
             KeepAliveResult result => result.Status.ToString(),
             SequenceBlock block => string.Create(
@@ -86,4 +85,16 @@ internal static class HistoryFormat
             ImmutableArray<KeySegment> segments => string.Join(", ", segments),
             _ => Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty,
         };
+
+    /// <summary>
+    /// Describes the members of a membership view by their sessions.
+    /// </summary>
+    /// <param name="view">The view.</param>
+    /// <returns>The description.</returns>
+    private static string DescribeMembers(MembershipView view)
+    {
+        var sessions = view.Members.Select(member => member.Session);
+
+        return "members " + string.Join(", ", sessions);
+    }
 }

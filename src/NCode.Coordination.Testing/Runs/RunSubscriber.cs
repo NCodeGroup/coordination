@@ -123,6 +123,15 @@ internal sealed class RunSubscriber<T> : IAsyncDisposable
         }
     }
 
+    /// <summary>
+    /// Reads the subscription until it ends or the token cancels, writing each item to the channel with its stamp, and
+    /// completes the channel.
+    /// </summary>
+    /// <param name="subscribe">The call that opens the subscription, given a token that stops it.</param>
+    /// <param name="recorder">The recorder whose clock stamps each item.</param>
+    /// <param name="writer">The writer of the channel that carries each item.</param>
+    /// <param name="cancellationToken">A token that stops the reading.</param>
+    /// <returns>A task that completes when the reading has ended.</returns>
     private static async ValueTask ReadAsync(
         Func<CancellationToken, IAsyncEnumerable<T>> subscribe,
         HistoryRecorder recorder,

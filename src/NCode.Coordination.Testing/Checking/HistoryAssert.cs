@@ -26,7 +26,9 @@ internal static class HistoryAssert
     {
         var result = LinearizabilityChecker.Check(model, history);
         if (result.Verdict != LinearizabilityVerdict.Linearizable)
+        {
             Assert.Fail(Describe(result));
+        }
     }
 
     /// <summary>

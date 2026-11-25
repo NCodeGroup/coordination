@@ -251,7 +251,8 @@ internal class RecordModel : ISequentialModel<RecordState>
             return false;
         }
 
-        next = new RecordState(null, 0, Math.Max(state.Floor, record.Revision.Value));
+        var floor = Math.Max(state.Floor, record.Revision.Value);
+        next = new RecordState(null, 0, floor);
         return true;
     }
 

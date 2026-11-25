@@ -94,6 +94,18 @@ internal static class ConcurrentRun
         await Task.WhenAll(tasks);
     }
 
+    /// <summary>
+    /// Runs the steps of one client once the gate opens, and releases the fault when half of all the steps are done or
+    /// when a step throws.
+    /// </summary>
+    /// <param name="client">The client that runs the steps.</param>
+    /// <param name="steps">The number of steps the client runs.</param>
+    /// <param name="step">The step to run, given the client, the index of the step and the run's token.</param>
+    /// <param name="gate">The task that completes when every client has started.</param>
+    /// <param name="halfway">The source that completes when half of all the steps are done.</param>
+    /// <param name="remaining">The number of steps left before half of all the steps are done.</param>
+    /// <param name="cancellationToken">A token that cancels the run.</param>
+    /// <returns>A task that completes when the client has run every step.</returns>
     private static async Task RunClientAsync(
         int client,
         int steps,
