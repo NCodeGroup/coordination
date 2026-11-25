@@ -72,7 +72,7 @@ internal sealed class DroppingConnection
     }
 
     /// <summary>
-    /// Removes a subscription, which a drop no longer marks.
+    /// Removes a subscription, which a drop does not mark.
     /// </summary>
     /// <param name="subscription">The subscription to remove.</param>
     public void Unsubscribe(DroppingSubscription subscription)
