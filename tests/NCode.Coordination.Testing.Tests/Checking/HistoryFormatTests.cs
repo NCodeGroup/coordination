@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using System.Collections.Immutable;
+using System.Globalization;
 using NCode.Coordination.Testing.Histories;
 using NCode.Coordination.Testing.Tests;
 
@@ -294,6 +295,28 @@ public sealed class HistoryFormatTests
         var text = HistoryFormat.DescribeValue(result);
 
         Assert.Equal("counts 3, 5", text);
+    }
+
+    [Fact]
+    public void DescribeValue_WhenCounterBatchHasANegativeCount_FormatsItInvariantly()
+    {
+        var culture = (CultureInfo)CultureInfo.InvariantCulture.Clone();
+        culture.NumberFormat.NegativeSign = "~";
+        var result = new CounterBatchResult([-3, 5]);
+        var original = CultureInfo.CurrentCulture;
+
+        string text;
+        try
+        {
+            CultureInfo.CurrentCulture = culture;
+            text = HistoryFormat.DescribeValue(result);
+        }
+        finally
+        {
+            CultureInfo.CurrentCulture = original;
+        }
+
+        Assert.Equal("counts -3, 5", text);
     }
 
     [Fact]

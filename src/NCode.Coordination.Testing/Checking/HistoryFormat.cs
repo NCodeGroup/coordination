@@ -130,7 +130,8 @@ internal static class HistoryFormat
     /// <returns>The description.</returns>
     private static string DescribeBatch(CounterBatchResult result)
     {
-        var counts = "counts " + string.Join(", ", result.Counts);
+        var formatted = result.Counts.Select(count => count.ToString(CultureInfo.InvariantCulture));
+        var counts = "counts " + string.Join(", ", formatted);
 
         if (result.ExceededIndex is not { } exceeded)
         {
