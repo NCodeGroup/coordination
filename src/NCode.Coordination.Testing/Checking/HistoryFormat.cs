@@ -30,9 +30,11 @@ internal static class HistoryFormat
             _ => DescribeValue(operation.Output),
         };
 
+        var input = DescribeValue(operation.Input);
+
         return string.Create(
             CultureInfo.InvariantCulture,
-            $"client {operation.Client} [{operation.Invoked}, {responded}] {DescribeValue(operation.Input)} -> {output}"
+            $"client {operation.Client} [{operation.Invoked}, {responded}] {input} -> {output}"
         );
     }
 
@@ -45,10 +47,7 @@ internal static class HistoryFormat
         value switch
         {
             null => "nothing",
-            StoredRecord record => string.Create(
-                CultureInfo.InvariantCulture,
-                $"'{HistoryValues.Decode(record.Value)}' at {record.Revision}"
-            ),
+            StoredRecord record => DescribeRecord(record),
             RecordWriteResult result => string.Create(
                 CultureInfo.InvariantCulture,
                 $"{result.Status} {result.Revision}"
@@ -69,12 +68,7 @@ internal static class HistoryFormat
                 CultureInfo.InvariantCulture,
                 $"{result.Status} {result.Leadership?.Leader.Term}"
             ),
-            ElectionView view => view.Leader is { } leader
-                ? string.Create(
-                    CultureInfo.InvariantCulture,
-                    $"leader {leader.Term} '{HistoryValues.Decode(leader.Value)}'"
-                )
-                : "no leader",
+            ElectionView view => DescribeLeader(view),
             MembershipView view => DescribeMembers(view),
             SessionGrant grant => grant.Id.ToString(),
             KeepAliveResult result => result.Status.ToString(),
@@ -101,18 +95,54 @@ internal static class HistoryFormat
     }
 
     /// <summary>
+    /// Describes a record by its value and revision.
+    /// </summary>
+    /// <param name="record">The record.</param>
+    /// <returns>The description.</returns>
+    private static string DescribeRecord(StoredRecord record)
+    {
+        var value = HistoryValues.Decode(record.Value);
+
+        return string.Create(CultureInfo.InvariantCulture, $"'{value}' at {record.Revision}");
+    }
+
+    /// <summary>
+    /// Describes the leader of an election view by its term and value.
+    /// </summary>
+    /// <param name="view">The view.</param>
+    /// <returns>The description, or "no leader" when the view has none.</returns>
+    private static string DescribeLeader(ElectionView view)
+    {
+        if (view.Leader is not { } leader)
+        {
+            return "no leader";
+        }
+
+        var value = HistoryValues.Decode(leader.Value);
+
+        return string.Create(CultureInfo.InvariantCulture, $"leader {leader.Term} '{value}'");
+    }
+
+    /// <summary>
+    /// Describes a record of a page by its key, value and revision.
+    /// </summary>
+    /// <param name="record">The record.</param>
+    /// <returns>The description.</returns>
+    private static string DescribeListedRecord(StoredRecord record)
+    {
+        var described = DescribeRecord(record);
+
+        return string.Create(CultureInfo.InvariantCulture, $"{record.Key} {described}");
+    }
+
+    /// <summary>
     /// Describes a page of records by its revision and each record's key, value and revision.
     /// </summary>
     /// <param name="page">The page.</param>
     /// <returns>The description.</returns>
     private static string DescribePage(RecordPage page)
     {
-        var records = page.Records.Select(record =>
-            string.Create(
-                CultureInfo.InvariantCulture,
-                $"{record.Key} '{HistoryValues.Decode(record.Value)}' at {record.Revision}"
-            )
-        );
+        var records = page.Records.Select(DescribeListedRecord);
 
         var listed = page.Records.Length == 0 ? "nothing" : string.Join(", ", records);
         var more = page.ContinuationToken is null ? string.Empty : " and more";
