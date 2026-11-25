@@ -32,7 +32,7 @@ public sealed class DefaultCacheInvalidationServiceTests
         var task = cache.RunAsync(topic, handler, null, stop.Token).AsTask();
 
         await RecipeTesting.WaitUntilAsync(hasCleared);
-        await cache.InvalidateAsync(topic, new byte[] { 1, 2 }, null, cancellationToken);
+        await cache.InvalidateAsync(topic, (byte[])[1, 2], null, cancellationToken);
         await RecipeTesting.WaitUntilAsync(hasInvalidated);
         await stop.CancelAsync();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => task);

@@ -149,7 +149,7 @@ public sealed class PartitionAssignmentTests
     {
         var view = CreateView("node-a", "node-b", "node-c");
         var assignment = PartitionAssignment.Assign(view, Partitions);
-        var nodeIds = new[] { "node-a", "node-b", "node-c" };
+        string[] nodeIds = ["node-a", "node-b", "node-c"];
 
         var covered = nodeIds
             .SelectMany(nodeId => assignment.GetPartitions(nodeId))
