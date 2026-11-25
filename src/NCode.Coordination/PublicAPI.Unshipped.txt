@@ -78,6 +78,11 @@ NCode.Coordination.SlidingWindowLimit.SegmentLength.get -> System.TimeSpan
 NCode.Coordination.SlidingWindowLimit.SegmentsPerWindow.get -> int
 NCode.Coordination.SlidingWindowLimit.SlidingWindowLimit(int permitLimit, System.TimeSpan window, int segmentsPerWindow) -> void
 NCode.Coordination.SlidingWindowLimit.Window.get -> System.TimeSpan
+NCode.Coordination.TokenBucketLimit
+NCode.Coordination.TokenBucketLimit.ReplenishmentPeriod.get -> System.TimeSpan
+NCode.Coordination.TokenBucketLimit.TokenBucketLimit(int tokenLimit, int tokensPerPeriod, System.TimeSpan replenishmentPeriod) -> void
+NCode.Coordination.TokenBucketLimit.TokenLimit.get -> int
+NCode.Coordination.TokenBucketLimit.TokensPerPeriod.get -> int
 override NCode.Coordination.Recipe.ToString() -> string!
 static NCode.Coordination.CoordinationRecipes.All.get -> System.Collections.Immutable.ImmutableArray<NCode.Coordination.Recipe!>
 static NCode.Coordination.CoordinationRecipes.Barrier.get -> NCode.Coordination.Recipe!
