@@ -4,16 +4,10 @@
 namespace NCode.Coordination.InProcess;
 
 /// <summary>
-/// The provider that keeps records, transactions, occurrences, sets, counters and sequences in this process's memory.
+/// The provider that keeps every primitive in this process's memory.
 /// </summary>
-internal class InProcessProvider : ICoordinationProvider
+internal class InProcessProvider : ICoordinationProvider, IDisposable
 {
-    /// <summary>
-    /// Why the provider lists a primitive as unsupported.
-    /// </summary>
-    internal const string UnsupportedReason =
-        "The in-process provider does not implement this primitive.";
-
     /// <summary>
     /// Gets what every in-process provider declares.
     /// </summary>
@@ -42,33 +36,41 @@ internal class InProcessProvider : ICoordinationProvider
 
         Guarantee[] sequence = [Guarantees.LinearizableWithinProcess, Guarantees.Volatile];
 
+        Guarantee[] watch =
+        [
+            Guarantees.LinearizableWithinProcess,
+            Guarantees.AtMostOnceWithGapDetection,
+        ];
+
+        Guarantee[] notification = [Guarantees.AtMostOnceWithGapDetection];
+
         var primitives = new List<PrimitiveSupport>();
         foreach (var primitive in Primitives.All)
         {
-            if (
-                primitive == Primitives.Record
-                || primitive == Primitives.Occurrence
-                || primitive == Primitives.Set
-            )
+            Guarantee[] guarantees;
+            if (primitive == Primitives.RecordWatch)
             {
-                var support = PrimitiveSupport.Supported(primitive, state);
-                primitives.Add(support);
+                guarantees = watch;
+            }
+            else if (primitive == Primitives.Notification)
+            {
+                guarantees = notification;
             }
             else if (primitive == Primitives.Transaction || primitive == Primitives.Counter)
             {
-                var support = PrimitiveSupport.Supported(primitive, atomicState);
-                primitives.Add(support);
+                guarantees = atomicState;
             }
             else if (primitive == Primitives.Sequence)
             {
-                var support = PrimitiveSupport.Supported(primitive, sequence);
-                primitives.Add(support);
+                guarantees = sequence;
             }
             else
             {
-                var support = PrimitiveSupport.Unsupported(primitive, UnsupportedReason);
-                primitives.Add(support);
+                guarantees = state;
             }
+
+            var support = PrimitiveSupport.Supported(primitive, guarantees);
+            primitives.Add(support);
         }
 
         return new ProviderDeclaration(
@@ -88,43 +90,35 @@ internal class InProcessProvider : ICoordinationProvider
 
         var records = new InProcessRecordTable(time);
         var sessions = new InProcessSessionTable(records);
-        Records = new InProcessRecordService(sessions);
-        Transactions = new InProcessTransactionService(sessions);
-        Occurrences = new InProcessOccurrenceService(time);
-        Sets = new InProcessSetService(time);
-        Counters = new InProcessCounterService(time);
-        Sequences = new InProcessSequenceService();
+        RecordTable = records;
+        Services = new Dictionary<Type, object>
+        {
+            [typeof(ISessionService)] = new InProcessSessionService(sessions),
+            [typeof(IMembershipService)] = new InProcessMembershipService(sessions),
+            [typeof(ILeaseService)] = new InProcessLeaseService(sessions),
+            [typeof(ISemaphoreService)] = new InProcessSemaphoreService(sessions),
+            [typeof(IElectionService)] = new InProcessElectionService(sessions),
+            [typeof(IClaimService)] = new InProcessClaimService(time),
+            [typeof(IRecordService)] = new InProcessRecordService(sessions),
+            [typeof(ITransactionService)] = new InProcessTransactionService(sessions),
+            [typeof(IRecordWatchService)] = new InProcessRecordWatchService(records),
+            [typeof(IOccurrenceService)] = new InProcessOccurrenceService(time),
+            [typeof(ISetService)] = new InProcessSetService(time),
+            [typeof(ICounterService)] = new InProcessCounterService(time),
+            [typeof(ISequenceService)] = new InProcessSequenceService(),
+            [typeof(INotificationService)] = new InProcessNotificationService(),
+        };
     }
 
     /// <summary>
-    /// Gets the record service.
+    /// Gets the record table, whose deadlines the provider stops when it is disposed.
     /// </summary>
-    private InProcessRecordService Records { get; }
+    private InProcessRecordTable RecordTable { get; }
 
     /// <summary>
-    /// Gets the transaction service.
+    /// Gets the primitive services by the interface that each implements.
     /// </summary>
-    private InProcessTransactionService Transactions { get; }
-
-    /// <summary>
-    /// Gets the occurrence service.
-    /// </summary>
-    private InProcessOccurrenceService Occurrences { get; }
-
-    /// <summary>
-    /// Gets the set service.
-    /// </summary>
-    private InProcessSetService Sets { get; }
-
-    /// <summary>
-    /// Gets the counter service.
-    /// </summary>
-    private InProcessCounterService Counters { get; }
-
-    /// <summary>
-    /// Gets the sequence service.
-    /// </summary>
-    private InProcessSequenceService Sequences { get; }
+    private Dictionary<Type, object> Services { get; }
 
     /// <inheritdoc />
     public ProviderDeclaration Declaration => DeclarationOfAll;
@@ -134,37 +128,7 @@ internal class InProcessProvider : ICoordinationProvider
     {
         ArgumentNullException.ThrowIfNull(serviceType);
 
-        if (serviceType == typeof(IRecordService))
-        {
-            return Records;
-        }
-
-        if (serviceType == typeof(ITransactionService))
-        {
-            return Transactions;
-        }
-
-        if (serviceType == typeof(IOccurrenceService))
-        {
-            return Occurrences;
-        }
-
-        if (serviceType == typeof(ISetService))
-        {
-            return Sets;
-        }
-
-        if (serviceType == typeof(ICounterService))
-        {
-            return Counters;
-        }
-
-        if (serviceType == typeof(ISequenceService))
-        {
-            return Sequences;
-        }
-
-        return null;
+        return Services.GetValueOrDefault(serviceType);
     }
 
     /// <inheritdoc />
@@ -172,5 +136,13 @@ internal class InProcessProvider : ICoordinationProvider
     {
         cancellationToken.ThrowIfCancellationRequested();
         return ValueTask.CompletedTask;
+    }
+
+    /// <summary>
+    /// Stops the timer that runs the provider's deadlines.
+    /// </summary>
+    public void Dispose()
+    {
+        RecordTable.Dispose();
     }
 }

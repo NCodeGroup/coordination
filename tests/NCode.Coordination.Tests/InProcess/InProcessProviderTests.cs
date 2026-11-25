@@ -79,6 +79,14 @@ public sealed class InProcessProviderTests
         );
     }
 
+    [Fact]
+    public void Declaration_WhenRead_SupportsEveryPrimitive()
+    {
+        var provider = CreateProvider();
+
+        Assert.All(provider.Declaration.Primitives, x => Assert.True(x.IsSupported));
+    }
+
     [Theory]
     [InlineData("session")]
     [InlineData("membership")]
@@ -86,18 +94,31 @@ public sealed class InProcessProviderTests
     [InlineData("semaphore")]
     [InlineData("election")]
     [InlineData("claim")]
-    [InlineData("record-watch")]
-    [InlineData("notification")]
-    public void Declaration_WhenPrimitiveIsNotImplemented_IsUnsupported(string name)
+    public void Declaration_WhenRead_DeclaresTheStateGuaranteesForOwnershipAndLiveness(string name)
     {
         var provider = CreateProvider();
 
-        var primitive = new Primitive(name);
+        var support = GetSupport(provider, new Primitive(name));
 
-        var support = GetSupport(provider, primitive);
+        Assert.Equal<Guarantee>(
+            [Guarantees.LinearizableWithinProcess, Guarantees.Volatile, Guarantees.ServerClock],
+            support.Guarantees
+        );
+    }
 
-        Assert.False(support.IsSupported);
-        Assert.Equal(InProcessProvider.UnsupportedReason, support.UnsupportedReason);
+    [Fact]
+    public void Declaration_WhenRead_DeclaresGapDetectionForWatchesAndNotifications()
+    {
+        var provider = CreateProvider();
+
+        var watch = GetSupport(provider, Primitives.RecordWatch);
+        var notification = GetSupport(provider, Primitives.Notification);
+
+        Assert.Equal<Guarantee>(
+            [Guarantees.LinearizableWithinProcess, Guarantees.AtMostOnceWithGapDetection],
+            watch.Guarantees
+        );
+        Assert.Equal<Guarantee>([Guarantees.AtMostOnceWithGapDetection], notification.Guarantees);
     }
 
     #endregion
@@ -105,12 +126,20 @@ public sealed class InProcessProviderTests
     #region GetPrimitiveService Tests
 
     [Theory]
+    [InlineData(typeof(ISessionService))]
+    [InlineData(typeof(IMembershipService))]
+    [InlineData(typeof(ILeaseService))]
+    [InlineData(typeof(ISemaphoreService))]
+    [InlineData(typeof(IElectionService))]
+    [InlineData(typeof(IClaimService))]
     [InlineData(typeof(IRecordService))]
     [InlineData(typeof(ITransactionService))]
+    [InlineData(typeof(IRecordWatchService))]
     [InlineData(typeof(IOccurrenceService))]
     [InlineData(typeof(ISetService))]
     [InlineData(typeof(ICounterService))]
     [InlineData(typeof(ISequenceService))]
+    [InlineData(typeof(INotificationService))]
     public void GetPrimitiveService_WhenPrimitiveIsImplemented_ReturnsItsService(Type type)
     {
         var provider = CreateProvider();
@@ -122,11 +151,11 @@ public sealed class InProcessProviderTests
     }
 
     [Fact]
-    public void GetPrimitiveService_WhenPrimitiveIsNotImplemented_ReturnsNull()
+    public void GetPrimitiveService_WhenTypeIsNotAPrimitive_ReturnsNull()
     {
         var provider = CreateProvider();
 
-        var service = provider.GetPrimitiveService(typeof(ILeaseService));
+        var service = provider.GetPrimitiveService(typeof(string));
 
         Assert.Null(service);
     }
@@ -154,6 +183,19 @@ public sealed class InProcessProviderTests
         var provider = CreateProvider();
 
         await provider.ProbeAsync(cancellationToken);
+    }
+
+    #endregion
+
+    #region Dispose Tests
+
+    [Fact]
+    public void Dispose_WhenCalledTwice_Completes()
+    {
+        var provider = CreateProvider();
+
+        provider.Dispose();
+        provider.Dispose();
     }
 
     #endregion

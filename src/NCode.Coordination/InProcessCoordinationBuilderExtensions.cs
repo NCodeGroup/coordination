@@ -19,8 +19,8 @@ public static class InProcessCoordinationBuilderExtensions
     extension(ICoordinationBuilder builder)
     {
         /// <summary>
-        /// Adds the provider that keeps records, transactions, occurrences, sets, counters and sequences in this
-        /// process's memory; the host binds it by <see cref="ProviderName"/>.
+        /// Adds the provider that keeps every primitive in this process's memory; the host binds it by
+        /// <see cref="ProviderName"/>.
         /// </summary>
         /// <returns>The builder, for chaining.</returns>
         /// <exception cref="ArgumentNullException">The builder is null.</exception>
