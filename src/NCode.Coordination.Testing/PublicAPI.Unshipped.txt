@@ -18,6 +18,7 @@ NCode.Coordination.Testing.ConformanceTarget.DropConnections.init -> void
 NCode.Coordination.Testing.ConformanceTarget.ConformanceTarget(NCode.Coordination.ICoordinationProvider! provider) -> void
 NCode.Coordination.Testing.ConformanceTarget.Provider.get -> NCode.Coordination.ICoordinationProvider!
 NCode.Coordination.Testing.CounterContractTests
+NCode.Coordination.Testing.CounterContractTests.ConcurrentRun_WhenClientsRace_KeepsALinearizableHistory() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.CounterContractTests.CounterContractTests() -> void
 NCode.Coordination.Testing.CounterContractTests.IncrementAsync_WhenAmountIsBelowOne_ThrowsArgumentOutOfRangeException() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.CounterContractTests.IncrementAsync_WhenCounterExists_KeepsTheTimeToLiveThatCreatedIt() -> System.Threading.Tasks.Task!

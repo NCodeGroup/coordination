@@ -1,6 +1,10 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using NCode.Coordination.Testing.Checking;
+using NCode.Coordination.Testing.Histories;
+using NCode.Coordination.Testing.Models;
+using NCode.Coordination.Testing.Runs;
 using Xunit;
 
 namespace NCode.Coordination.Testing;
@@ -419,6 +423,82 @@ public abstract class CounterContractTests : ProviderContractTests
         );
 
         Assert.Equal(CoordinationErrorCodes.Unsupported, exception.Code);
+    }
+
+    #endregion
+
+    #region Concurrent Run Tests
+
+    /// <summary>
+    /// Checks that the history of clients that increment, read, batch and reset two counters at once is linearizable.
+    /// </summary>
+    [Fact]
+    public async Task ConcurrentRun_WhenClientsRace_KeepsALinearizableHistory()
+    {
+        SkipUnlessLinearizable(Primitives.Counter);
+        var counters = Counters;
+        var keys = CreateRunKeys();
+        var recorder = new HistoryRecorder();
+
+        await ConcurrentRun.RunAsync(
+            async (client, index, cancellationToken) =>
+            {
+                var key = keys[(client + index) % keys.Length];
+                var partition = key.ToString();
+                switch ((client + index) % 4)
+                {
+                    case 0:
+                        var amount = client + 1;
+                        var increment = new CounterCall(CounterCall.Increment, amount, 0);
+                        await recorder.RecordAsync(
+                            client,
+                            partition,
+                            increment,
+                            token =>
+                                counters.IncrementAsync(key, amount, LongTimeToLive, null, token),
+                            cancellationToken
+                        );
+                        break;
+                    case 1:
+                        var read = new CounterCall(CounterCall.Read, 0, 0);
+                        await recorder.RecordAsync(
+                            client,
+                            partition,
+                            read,
+                            token => counters.ReadAsync(key, null, token),
+                            cancellationToken
+                        );
+                        break;
+                    case 2:
+                        var batch = new CounterCall(CounterCall.Batch, 2, 10);
+                        IReadOnlyList<CounterIncrement> increments =
+                        [
+                            new CounterIncrement(key, 2, 10, LongTimeToLive),
+                        ];
+                        await recorder.RecordAsync(
+                            client,
+                            partition,
+                            batch,
+                            token => counters.IncrementBatchAsync(increments, null, token),
+                            cancellationToken
+                        );
+                        break;
+                    default:
+                        var reset = new CounterCall(CounterCall.Reset, 0, 0);
+                        await recorder.RecordAsync(
+                            client,
+                            partition,
+                            reset,
+                            token => counters.ResetAsync(key, null, token),
+                            cancellationToken
+                        );
+                        break;
+                }
+            },
+            TestCancellationToken
+        );
+
+        HistoryAssert.Linearizable(new CounterModel(), recorder.ToHistory());
     }
 
     #endregion
