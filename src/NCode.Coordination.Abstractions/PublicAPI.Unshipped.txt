@@ -104,6 +104,13 @@ NCode.Coordination.IMembershipService.JoinAsync(NCode.Coordination.CoordinationK
 NCode.Coordination.IMembershipService.LeaveAsync(NCode.Coordination.CoordinationKey! group, NCode.Coordination.SessionId! session, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
 NCode.Coordination.IMembershipService.ReadAsync(NCode.Coordination.CoordinationKey! group, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.MembershipView!>
 NCode.Coordination.IMembershipService.WatchAsync(NCode.Coordination.CoordinationKey! group, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Collections.Generic.IAsyncEnumerable<NCode.Coordination.MembershipView!>!
+NCode.Coordination.IRecordService
+NCode.Coordination.IRecordService.CompareAndDeleteAsync(NCode.Coordination.CoordinationKey! key, NCode.Coordination.Revision! expected, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.RecordDeleteStatus>
+NCode.Coordination.IRecordService.CompareAndSwapAsync(NCode.Coordination.CoordinationKey! key, NCode.Coordination.Revision! expected, System.ReadOnlyMemory<byte> value, NCode.Coordination.RecordLifetime! lifetime, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.RecordWriteResult!>
+NCode.Coordination.IRecordService.CreateAsync(NCode.Coordination.CoordinationKey! key, System.ReadOnlyMemory<byte> value, NCode.Coordination.RecordLifetime! lifetime, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.RecordWriteResult!>
+NCode.Coordination.IRecordService.ListAsync(NCode.Coordination.CoordinationKey! prefix, NCode.Coordination.RecordPageRequest! page, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.RecordPage!>
+NCode.Coordination.IRecordService.ReadAsync(NCode.Coordination.CoordinationKey! key, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.StoredRecord?>
+NCode.Coordination.IRecordService.TakeAsync(NCode.Coordination.CoordinationKey! key, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.StoredRecord?>
 NCode.Coordination.ISemaphoreService
 NCode.Coordination.ISemaphoreService.ReleaseAsync(NCode.Coordination.SemaphoreGrant! grant, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<bool>
 NCode.Coordination.ISemaphoreService.RenewAsync(NCode.Coordination.SemaphoreGrant! grant, NCode.Coordination.TimeToLive! timeToLive, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<bool>
@@ -230,6 +237,17 @@ NCode.Coordination.RecordLifetime
 NCode.Coordination.RecordLifetime.IsPersistent.get -> bool
 NCode.Coordination.RecordLifetime.Session.get -> NCode.Coordination.SessionId?
 NCode.Coordination.RecordLifetime.TimeToLive.get -> NCode.Coordination.TimeToLive?
+NCode.Coordination.RecordPage
+NCode.Coordination.RecordPage.ContinuationToken.get -> string?
+NCode.Coordination.RecordPage.ContinuationToken.init -> void
+NCode.Coordination.RecordPage.RecordPage(NCode.Coordination.Revision! revision, params System.Collections.Generic.IEnumerable<NCode.Coordination.StoredRecord!>! records) -> void
+NCode.Coordination.RecordPage.Records.get -> System.Collections.Immutable.ImmutableArray<NCode.Coordination.StoredRecord!>
+NCode.Coordination.RecordPage.Revision.get -> NCode.Coordination.Revision!
+NCode.Coordination.RecordPageRequest
+NCode.Coordination.RecordPageRequest.ContinuationToken.get -> string?
+NCode.Coordination.RecordPageRequest.ContinuationToken.init -> void
+NCode.Coordination.RecordPageRequest.Limit.get -> int
+NCode.Coordination.RecordPageRequest.RecordPageRequest(int limit) -> void
 NCode.Coordination.RecordWriteResult
 NCode.Coordination.RecordWriteResult.IsWritten.get -> bool
 NCode.Coordination.RecordWriteResult.Revision.get -> NCode.Coordination.Revision?
