@@ -14,6 +14,12 @@ namespace NCode.Coordination;
 /// </remarks>
 public sealed class HolderDeadline
 {
+    /// <summary>
+    /// Creates a deadline that began at a timestamp and lasts a lifetime.
+    /// </summary>
+    /// <param name="time">The clock the deadline is measured on.</param>
+    /// <param name="start">The timestamp of the clock at which the deadline began.</param>
+    /// <param name="lifetime">How long the deadline lasts from when it began.</param>
     private HolderDeadline(TimeProvider time, long start, TimeSpan lifetime)
     {
         Time = time;
@@ -21,8 +27,14 @@ public sealed class HolderDeadline
         Lifetime = lifetime;
     }
 
+    /// <summary>
+    /// Gets the clock the deadline is measured on.
+    /// </summary>
     private TimeProvider Time { get; }
 
+    /// <summary>
+    /// Gets the timestamp of the clock at which the deadline began.
+    /// </summary>
     private long Start { get; }
 
     /// <summary>
@@ -72,6 +84,9 @@ public sealed class HolderDeadline
         ArgumentOutOfRangeException.ThrowIfLessThan(driftAllowance, TimeSpan.Zero);
         ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(driftAllowance, timeToLive.Duration);
 
-        return new HolderDeadline(time, time.GetTimestamp(), timeToLive.Duration - driftAllowance);
+        var start = time.GetTimestamp();
+        var lifetime = timeToLive.Duration - driftAllowance;
+
+        return new HolderDeadline(time, start, lifetime);
     }
 }
