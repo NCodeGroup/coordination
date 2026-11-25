@@ -11,7 +11,10 @@ public sealed class ProviderCatalogTests
     private static IServiceProvider Services { get; } =
         new ServiceCollection().BuildServiceProvider();
 
-    private static TestProvider CreateProvider(string name, params PrimitiveSupport[] primitives)
+    private static TestProvider CreateProvider(
+        string name,
+        params IEnumerable<PrimitiveSupport> primitives
+    )
     {
         var declaration = new ProviderDeclaration(name, primitives);
         return new TestProvider(declaration);

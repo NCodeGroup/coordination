@@ -18,6 +18,22 @@ public sealed class OperationInstrumentationTests
 
     private static Operation Operation { get; } = Operations.OccurrenceTryRecord;
 
+    private static async IAsyncEnumerable<string> Items(IReadOnlyList<string> items)
+    {
+        foreach (var item in items)
+        {
+            await Task.Yield();
+            yield return item;
+        }
+    }
+
+    private static async IAsyncEnumerable<string> Failing(Exception exception)
+    {
+        await Task.Yield();
+        yield return "a";
+        throw exception;
+    }
+
     #region MeasureAsync Tests
 
     [Fact]
@@ -330,22 +346,6 @@ public sealed class OperationInstrumentationTests
     }
 
     #endregion
-
-    private static async IAsyncEnumerable<string> Items(IReadOnlyList<string> items)
-    {
-        foreach (var item in items)
-        {
-            await Task.Yield();
-            yield return item;
-        }
-    }
-
-    private static async IAsyncEnumerable<string> Failing(Exception exception)
-    {
-        await Task.Yield();
-        yield return "a";
-        throw exception;
-    }
 
     private sealed class Fixture : IDisposable
     {

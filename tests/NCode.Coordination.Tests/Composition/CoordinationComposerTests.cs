@@ -9,16 +9,12 @@ namespace NCode.Coordination.Composition.Tests;
 
 public sealed class CoordinationComposerTests : IDisposable
 {
-    private MockRepository Mocks { get; } = new(MockBehavior.Strict);
-
     private static IServiceProvider Services { get; } =
         new ServiceCollection().BuildServiceProvider();
 
-    public void Dispose() => Mocks.Verify();
-
     private static CoordinationRegistrations Register(
         TestProvider provider,
-        params ProviderBinding[] bindings
+        params IEnumerable<ProviderBinding> bindings
     )
     {
         var registrations = new CoordinationRegistrations();
@@ -27,16 +23,20 @@ public sealed class CoordinationComposerTests : IDisposable
         return registrations;
     }
 
+    private static ProviderDeclaration Declare(params IEnumerable<Guarantee> guarantees)
+    {
+        var support = PrimitiveSupport.Supported(Primitives.Occurrence, guarantees);
+        return new ProviderDeclaration("memory", support);
+    }
+
+    private MockRepository Mocks { get; } = new(MockBehavior.Strict);
+
+    public void Dispose() => Mocks.Verify();
+
     private TestProvider CreateProvider(ProviderDeclaration declaration)
     {
         var mock = Mocks.Create<IOccurrenceService>();
         return new TestProvider(declaration, mock.Object);
-    }
-
-    private static ProviderDeclaration Declare(params Guarantee[] guarantees)
-    {
-        var support = PrimitiveSupport.Supported(Primitives.Occurrence, guarantees);
-        return new ProviderDeclaration("memory", support);
     }
 
     #region Compose Tests

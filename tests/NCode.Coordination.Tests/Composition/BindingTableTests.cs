@@ -18,7 +18,7 @@ public sealed class BindingTableTests
     private static BoundPrimitive Bound(string provider, Primitive primitive, Keyspace? keyspace) =>
         new(provider, primitive, keyspace, null, ImmutableHashSet<Guarantee>.Empty);
 
-    private static BindingTable Build(params BoundPrimitive[] bound)
+    private static BindingTable Build(params IEnumerable<BoundPrimitive> bound)
     {
         var checkedTable = BindingTable.Create(bound);
         Assert.Empty(checkedTable.Failures);

@@ -16,20 +16,20 @@ public sealed class RequirementCheckerTests
         string provider,
         Primitive primitive,
         Keyspace? keyspace,
-        params Guarantee[] guarantees
+        params IEnumerable<Guarantee> guarantees
     )
     {
         var closed = Registry.Close(guarantees);
         return new BoundPrimitive(provider, primitive, keyspace, null, closed);
     }
 
-    private static BindingTable Build(params BoundPrimitive[] bound) =>
+    private static BindingTable Build(params IEnumerable<BoundPrimitive> bound) =>
         BindingTable.Create(bound).Value;
 
     private static ImmutableArray<string> Check(
         BindingTable table,
         bool singleNode,
-        params FeatureRequirement[] requirements
+        params IEnumerable<FeatureRequirement> requirements
     )
     {
         return RequirementChecker.Check(requirements, table, Registry, singleNode);

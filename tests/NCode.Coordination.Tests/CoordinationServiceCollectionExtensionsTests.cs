@@ -14,7 +14,7 @@ public sealed class CoordinationServiceCollectionExtensionsTests : IDisposable
 
     public void Dispose() => Mocks.Verify();
 
-    private TestProvider CreateProvider(params Guarantee[] guarantees)
+    private TestProvider CreateProvider(params IEnumerable<Guarantee> guarantees)
     {
         var service = Mocks.Create<IOccurrenceService>().Object;
         var support = PrimitiveSupport.Supported(Primitives.Occurrence, guarantees);

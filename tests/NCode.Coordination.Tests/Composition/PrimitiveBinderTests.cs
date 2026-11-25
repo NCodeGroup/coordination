@@ -9,17 +9,13 @@ namespace NCode.Coordination.Composition.Tests;
 
 public sealed class PrimitiveBinderTests : IDisposable
 {
-    private MockRepository Mocks { get; } = new(MockBehavior.Strict);
-
     private static IServiceProvider Services { get; } =
         new ServiceCollection().BuildServiceProvider();
-
-    public void Dispose() => Mocks.Verify();
 
     private static GuaranteeRegistry CreateRegistry() =>
         GuaranteeRegistry.Create(Guarantees.Definitions).Value;
 
-    private static ProviderCatalog CreateCatalog(params TestProvider[] providers)
+    private static ProviderCatalog CreateCatalog(params IEnumerable<TestProvider> providers)
     {
         var factories = providers
             .Select(provider => new Func<IServiceProvider, ICoordinationProvider>(_ => provider))
@@ -29,7 +25,14 @@ public sealed class PrimitiveBinderTests : IDisposable
         return checkedCatalog.Value;
     }
 
-    private TestProvider CreateProvider(string name, params PrimitiveSupport[] primitives)
+    private MockRepository Mocks { get; } = new(MockBehavior.Strict);
+
+    public void Dispose() => Mocks.Verify();
+
+    private TestProvider CreateProvider(
+        string name,
+        params IEnumerable<PrimitiveSupport> primitives
+    )
     {
         var declaration = new ProviderDeclaration(name, primitives);
         var mock = Mocks.Create<IOccurrenceService>();
@@ -54,7 +57,8 @@ public sealed class PrimitiveBinderTests : IDisposable
         var bound = checkedBound.Value;
 
         Assert.Empty(checkedBound.Failures);
-        Assert.Equal([Primitives.Occurrence, custom], bound.Select(x => x.Primitive));
+        var boundPrimitives = bound.Select(x => x.Primitive);
+        Assert.Equal([Primitives.Occurrence, custom], boundPrimitives);
     }
 
     [Fact]

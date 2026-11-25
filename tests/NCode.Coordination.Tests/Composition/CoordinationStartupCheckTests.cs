@@ -9,10 +9,10 @@ namespace NCode.Coordination.Composition.Tests;
 
 public sealed class CoordinationStartupCheckTests : IDisposable
 {
-    private MockRepository Mocks { get; } = new(MockBehavior.Strict);
-
     private static IServiceProvider Services { get; } =
         new ServiceCollection().BuildServiceProvider();
+
+    private MockRepository Mocks { get; } = new(MockBehavior.Strict);
 
     public void Dispose() => Mocks.Verify();
 

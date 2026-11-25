@@ -9,12 +9,8 @@ namespace NCode.Coordination.Composition.Tests;
 
 public sealed class CoordinationCompositionTests : IDisposable
 {
-    private MockRepository Mocks { get; } = new(MockBehavior.Strict);
-
     private static IServiceProvider Services { get; } =
         new ServiceCollection().BuildServiceProvider();
-
-    public void Dispose() => Mocks.Verify();
 
     private static ProviderDeclaration Declare(string name)
     {
@@ -24,7 +20,7 @@ public sealed class CoordinationCompositionTests : IDisposable
 
     private static CoordinationRegistrations Register(
         ICoordinationProvider provider,
-        params ProviderBinding[] bindings
+        params IEnumerable<ProviderBinding> bindings
     )
     {
         var registrations = new CoordinationRegistrations();
@@ -32,6 +28,10 @@ public sealed class CoordinationCompositionTests : IDisposable
         registrations.Bindings.AddRange(bindings);
         return registrations;
     }
+
+    private MockRepository Mocks { get; } = new(MockBehavior.Strict);
+
+    public void Dispose() => Mocks.Verify();
 
     #region Resolve Tests
 
