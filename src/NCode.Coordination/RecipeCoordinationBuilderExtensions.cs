@@ -27,17 +27,16 @@ public static class RecipeCoordinationBuilderExtensions
         var requirements = new List<FeatureRequirement>(recipe.Needs.Length);
         foreach (var need in recipe.Needs)
         {
-            requirements.Add(
-                new FeatureRequirement(feature, need.Primitive, need.Guarantees)
-                {
-                    Keyspace = keyspace,
-                }
-            );
+            var requirement = new FeatureRequirement(feature, need.Primitive, need.Guarantees)
+            {
+                Keyspace = keyspace,
+            };
+            requirements.Add(requirement);
         }
 
-        foreach (var requirement in requirements)
+        foreach (var pending in requirements)
         {
-            builder.Require(requirement);
+            builder.Require(pending);
         }
 
         return builder;
