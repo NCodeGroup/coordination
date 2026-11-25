@@ -28,7 +28,7 @@ internal class InProcessTransactionService(InProcessRecordTable table) : ITransa
         ArgumentNullException.ThrowIfNull(transaction);
         InProcessGuard.Check(options, cancellationToken);
 
-        lock (Table.Gate)
+        using (Table.Enter())
         {
             var succeeded = ConditionsHold(transaction);
             var writes = succeeded ? transaction.OnSuccess : transaction.OnFailure;
@@ -59,8 +59,7 @@ internal class InProcessTransactionService(InProcessRecordTable table) : ITransa
                 if (write.Lifetime is { } lifetime)
                 {
                     var record = new StoredRecord(write.Key, write.Value, revision);
-                    var expiry = InProcessExpiry.ForLifetime(Table.Time, lifetime);
-                    Table.Put(record, expiry);
+                    Table.Put(record, lifetime);
                 }
                 else
                 {

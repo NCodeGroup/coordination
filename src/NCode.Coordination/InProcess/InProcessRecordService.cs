@@ -65,7 +65,7 @@ internal class InProcessRecordService(InProcessRecordTable table) : IRecordServi
         InProcessGuard.CheckValue(value, nameof(value));
         InProcessGuard.Check(options, cancellationToken);
 
-        lock (Table.Gate)
+        using (Table.Enter())
         {
             if (lifetime.Session is not null)
             {
@@ -92,7 +92,7 @@ internal class InProcessRecordService(InProcessRecordTable table) : IRecordServi
         ArgumentNullException.ThrowIfNull(key);
         InProcessGuard.Check(options, cancellationToken);
 
-        lock (Table.Gate)
+        using (Table.Enter())
         {
             var current = Table.Find(key);
             return ValueTask.FromResult(current);
@@ -115,7 +115,7 @@ internal class InProcessRecordService(InProcessRecordTable table) : IRecordServi
         InProcessGuard.CheckValue(value, nameof(value));
         InProcessGuard.Check(options, cancellationToken);
 
-        lock (Table.Gate)
+        using (Table.Enter())
         {
             if (lifetime.Session is not null)
             {
@@ -150,7 +150,7 @@ internal class InProcessRecordService(InProcessRecordTable table) : IRecordServi
         ArgumentNullException.ThrowIfNull(expected);
         InProcessGuard.Check(options, cancellationToken);
 
-        lock (Table.Gate)
+        using (Table.Enter())
         {
             var current = Table.Find(key);
             if (current is null)
@@ -179,7 +179,7 @@ internal class InProcessRecordService(InProcessRecordTable table) : IRecordServi
         ArgumentNullException.ThrowIfNull(key);
         InProcessGuard.Check(options, cancellationToken);
 
-        lock (Table.Gate)
+        using (Table.Enter())
         {
             var current = Table.Find(key);
             if (current is null)
@@ -207,7 +207,7 @@ internal class InProcessRecordService(InProcessRecordTable table) : IRecordServi
 
         var after = ParseContinuationToken(page);
 
-        lock (Table.Gate)
+        using (Table.Enter())
         {
             var live = Table.ListLive(prefix);
             var capacity = Math.Min(page.Limit, live.Count);
@@ -255,8 +255,7 @@ internal class InProcessRecordService(InProcessRecordTable table) : IRecordServi
     {
         var revision = Table.Advance(key.Keyspace);
         var record = new StoredRecord(key, value, revision);
-        var expiry = InProcessExpiry.ForLifetime(Table.Time, lifetime);
-        Table.Put(record, expiry);
+        Table.Put(record, lifetime);
         return RecordWriteResult.Written(revision);
     }
 }

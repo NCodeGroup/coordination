@@ -7,18 +7,30 @@ namespace NCode.Coordination.InProcess;
 /// The records of the in-process provider and the revision of each keyspace, shared by the record and transaction
 /// services.
 /// </summary>
-/// <param name="time">The clock the records' expiries are measured on.</param>
 /// <remarks>
-/// The table is not thread-safe: every method, except <see cref="Time"/> and <see cref="Gate"/>, is called while
-/// holding <see cref="Gate"/>. A keyspace's revision is 1 before its first write. Each keyspace's records are held in
-/// a table of their own, which, like the keyspace's revision, stays once written.
+/// The table is not thread-safe: every method, except <see cref="Time"/>, <see cref="Gate"/>, <see cref="Deadlines"/>,
+/// <see cref="Enter"/> and <see cref="Dispose"/>, is called inside <see cref="Enter"/>. A keyspace's revision is 1
+/// before its first write. Each keyspace's records are held in a dictionary of their own, which, like the keyspace's
+/// revision, stays once written. A record's expiry is a delete at a new revision of its keyspace.
 /// </remarks>
-internal class InProcessRecordTable(TimeProvider time)
+internal class InProcessRecordTable : IDisposable
 {
+    /// <summary>
+    /// Initializes a new instance of the <see cref="InProcessRecordTable"/> class.
+    /// </summary>
+    /// <param name="time">The clock the records' expiries are measured on.</param>
+    public InProcessRecordTable(TimeProvider time)
+    {
+        ArgumentNullException.ThrowIfNull(time);
+
+        Time = time;
+        Deadlines = new InProcessDeadlines(time, Gate);
+    }
+
     /// <summary>
     /// Gets the clock the records' expiries are measured on.
     /// </summary>
-    public TimeProvider Time { get; } = time;
+    public TimeProvider Time { get; }
 
     /// <summary>
     /// Gets the lock that every operation on the table holds for its whole duration.
@@ -26,11 +38,16 @@ internal class InProcessRecordTable(TimeProvider time)
     public Lock Gate { get; } = new();
 
     /// <summary>
+    /// Gets the deadlines of the state that <see cref="Gate"/> guards.
+    /// </summary>
+    public InProcessDeadlines Deadlines { get; }
+
+    /// <summary>
     /// Gets the live records of each keyspace that was written, each with the sequence of its write.
     /// </summary>
     private Dictionary<
         Keyspace,
-        InProcessExpiringTable<CoordinationKey, InProcessRecordEntry>
+        Dictionary<CoordinationKey, InProcessRecordEntry>
     > RecordsByKeyspace { get; } = [];
 
     /// <summary>
@@ -44,6 +61,34 @@ internal class InProcessRecordTable(TimeProvider time)
     private long WriteSequence { get; set; }
 
     /// <summary>
+    /// Takes the lock and runs the deadlines that are due.
+    /// </summary>
+    /// <returns>The scope that releases the lock when it is disposed.</returns>
+    public Lock.Scope Enter()
+    {
+        var scope = Gate.EnterScope();
+        try
+        {
+            Deadlines.RunDue();
+        }
+        catch
+        {
+            scope.Dispose();
+            throw;
+        }
+
+        return scope;
+    }
+
+    /// <summary>
+    /// Stops the timer of the deadlines so that no record expires after it.
+    /// </summary>
+    public void Dispose()
+    {
+        Deadlines.Dispose();
+    }
+
+    /// <summary>
     /// Finds a live record.
     /// </summary>
     /// <param name="key">The key of the record.</param>
@@ -55,7 +100,7 @@ internal class InProcessRecordTable(TimeProvider time)
             return null;
         }
 
-        return records.TryGet(key, out var entry) ? entry.Record : null;
+        return records.TryGetValue(key, out var entry) ? entry.Record : null;
     }
 
     /// <summary>
@@ -85,28 +130,50 @@ internal class InProcessRecordTable(TimeProvider time)
     /// Stores a record, replacing any record of its key.
     /// </summary>
     /// <param name="record">The record to store.</param>
-    /// <param name="expiry">The expiry of the record, or null when it never ends.</param>
-    public void Put(StoredRecord record, InProcessExpiry? expiry)
+    /// <param name="lifetime">How long the record lives and the session it is bound to, if any.</param>
+    public void Put(StoredRecord record, RecordLifetime lifetime)
     {
         var keyspace = record.Key.Keyspace;
         if (!RecordsByKeyspace.TryGetValue(keyspace, out var records))
         {
-            records = new InProcessExpiringTable<CoordinationKey, InProcessRecordEntry>(Time);
+            records = [];
             RecordsByKeyspace[keyspace] = records;
         }
 
-        var entry = new InProcessRecordEntry(record, ++WriteSequence);
-        records.Set(record.Key, entry, expiry);
+        if (records.TryGetValue(record.Key, out var replaced))
+        {
+            Deadlines.Cancel(replaced.Deadline);
+        }
+
+        var sequence = ++WriteSequence;
+        var key = record.Key;
+
+        InProcessDeadline? deadline = null;
+        if (InProcessExpiry.ForLifetime(Time, lifetime) is { } expiry)
+        {
+            deadline = Deadlines.Add(expiry, () => Expire(key, sequence));
+        }
+
+        records[key] = new InProcessRecordEntry(record, sequence, lifetime.Session, deadline);
     }
 
     /// <summary>
-    /// Removes a record.
+    /// Removes a record and cancels its deadline.
     /// </summary>
     /// <param name="key">The key of the record.</param>
     /// <returns>True when a live record was removed.</returns>
     public bool Remove(CoordinationKey key)
     {
-        return RecordsByKeyspace.TryGetValue(key.Keyspace, out var records) && records.Remove(key);
+        if (
+            !RecordsByKeyspace.TryGetValue(key.Keyspace, out var records)
+            || !records.Remove(key, out var entry)
+        )
+        {
+            return false;
+        }
+
+        Deadlines.Cancel(entry.Deadline);
+        return true;
     }
 
     /// <summary>
@@ -121,14 +188,35 @@ internal class InProcessRecordTable(TimeProvider time)
             return [];
         }
 
-        var live = records.ListLive(prefix.IsPrefixOf);
-        var entries = new List<InProcessRecordEntry>(live.Count);
-        foreach (var (_, entry) in live)
+        var entries = new List<InProcessRecordEntry>(records.Count);
+        foreach (var (key, entry) in records)
         {
-            entries.Add(entry);
+            if (prefix.IsPrefixOf(key))
+            {
+                entries.Add(entry);
+            }
         }
 
         entries.Sort((left, right) => left.Sequence.CompareTo(right.Sequence));
         return entries;
+    }
+
+    /// <summary>
+    /// Ends a record whose deadline came due, as a delete at a new revision of its keyspace, unless the record was
+    /// replaced since the deadline was added.
+    /// </summary>
+    /// <param name="key">The key of the record.</param>
+    /// <param name="sequence">The sequence of the write whose deadline came due.</param>
+    private void Expire(CoordinationKey key, long sequence)
+    {
+        if (
+            RecordsByKeyspace.TryGetValue(key.Keyspace, out var records)
+            && records.TryGetValue(key, out var entry)
+            && entry.Sequence == sequence
+        )
+        {
+            Remove(key);
+            Advance(key.Keyspace);
+        }
     }
 }
