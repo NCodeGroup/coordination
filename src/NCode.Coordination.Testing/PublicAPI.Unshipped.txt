@@ -63,6 +63,7 @@ NCode.Coordination.Testing.ElectionContractTests.WatchAsync_WhenALeaderIsElected
 NCode.Coordination.Testing.ElectionContractTests.WatchAsync_WhenStarted_YieldsTheCurrentViewFirst() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.ElectionContractTests.WatchAsync_WhenTheLeaderResigns_YieldsAVacancy() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.LeaseContractTests
+NCode.Coordination.Testing.LeaseContractTests.ConcurrentRun_WhenClientsRace_KeepsALinearizableHistory() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.LeaseContractTests.LeaseContractTests() -> void
 NCode.Coordination.Testing.LeaseContractTests.ReleaseAsync_WhenAnotherGrantHoldsTheResource_ReturnsFalseAndKeepsIt() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.LeaseContractTests.ReleaseAsync_WhenGrantHolds_ReturnsTrueAndFreesTheResource() -> System.Threading.Tasks.Task!

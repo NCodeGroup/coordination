@@ -1,6 +1,10 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using NCode.Coordination.Testing.Checking;
+using NCode.Coordination.Testing.Histories;
+using NCode.Coordination.Testing.Models;
+using NCode.Coordination.Testing.Runs;
 using Xunit;
 
 namespace NCode.Coordination.Testing;
@@ -58,6 +62,106 @@ public abstract class LeaseContractTests : ProviderContractTests
         var terms = LeaseTerms.ForTimeToLive(timeToLive);
 
         return Leases.TryAcquireAsync(resource, terms, null, cancellationToken);
+    }
+
+    /// <summary>
+    /// Tries to acquire the lease on a resource for a time to live and records the call in a history.
+    /// </summary>
+    /// <param name="recorder">The recorder of the history.</param>
+    /// <param name="client">The client that makes the call.</param>
+    /// <param name="resource">The resource to lease.</param>
+    /// <param name="timeToLive">The time to live to ask for.</param>
+    /// <param name="cancellationToken">A token that cancels the run.</param>
+    /// <returns>The grant, or null when the call did not acquire the lease or did not return.</returns>
+    private async ValueTask<LeaseGrant?> AcquireAsync(
+        HistoryRecorder recorder,
+        int client,
+        CoordinationKey resource,
+        TimeToLive timeToLive,
+        CancellationToken cancellationToken
+    )
+    {
+        var leases = Leases;
+        var terms = LeaseTerms.ForTimeToLive(timeToLive);
+        var call = new LeaseCall(LeaseCall.Acquire, null, 0, timeToLive.Duration);
+
+        var operation = await recorder.RecordAsync(
+            client,
+            resource.ToString(),
+            call,
+            token => leases.TryAcquireAsync(resource, terms, null, token),
+            cancellationToken
+        );
+
+        return (operation.Output as LeaseAcquireResult)?.Grant;
+    }
+
+    /// <summary>
+    /// Renews a grant for the long time to live and records the call in a history.
+    /// </summary>
+    /// <param name="recorder">The recorder of the history.</param>
+    /// <param name="client">The client that makes the call.</param>
+    /// <param name="grant">The grant to renew.</param>
+    /// <param name="cancellationToken">A token that cancels the run.</param>
+    /// <returns>True when the call returned and renewed the grant; otherwise, false.</returns>
+    private async ValueTask<bool> RenewAsync(
+        HistoryRecorder recorder,
+        int client,
+        LeaseGrant grant,
+        CancellationToken cancellationToken
+    )
+    {
+        var leases = Leases;
+        var call = new LeaseCall(
+            LeaseCall.Renew,
+            grant.Owner.Value,
+            grant.FencingToken.Value,
+            LongTimeToLive.Duration
+        );
+
+        var operation = await recorder.RecordAsync(
+            client,
+            grant.Resource.ToString(),
+            call,
+            token => leases.RenewAsync(grant, LongTimeToLive, null, token),
+            cancellationToken
+        );
+
+        return operation.Output is true;
+    }
+
+    /// <summary>
+    /// Releases a grant and records the call in a history.
+    /// </summary>
+    /// <param name="recorder">The recorder of the history.</param>
+    /// <param name="client">The client that makes the call.</param>
+    /// <param name="grant">The grant to release.</param>
+    /// <param name="cancellationToken">A token that cancels the run.</param>
+    /// <returns>True when the call returned and released the grant; otherwise, false.</returns>
+    private async ValueTask<bool> ReleaseAsync(
+        HistoryRecorder recorder,
+        int client,
+        LeaseGrant grant,
+        CancellationToken cancellationToken
+    )
+    {
+        var leases = Leases;
+        var call = new LeaseCall(
+            LeaseCall.Release,
+            grant.Owner.Value,
+            grant.FencingToken.Value,
+            TimeSpan.Zero
+        );
+
+        var operation = await recorder.RecordAsync(
+            client,
+            grant.Resource.ToString(),
+            call,
+            token => leases.ReleaseAsync(grant, null, token),
+            cancellationToken
+        );
+
+        return operation.Output is true;
     }
 
     #region TryAcquireAsync Tests
@@ -424,6 +528,56 @@ public abstract class LeaseContractTests : ProviderContractTests
         await source.CancelAsync();
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => wait);
+    }
+
+    #endregion
+
+    #region Concurrent Run Tests
+
+    /// <summary>
+    /// Checks that the history of clients that acquire, renew and release leases at once is linearizable.
+    /// </summary>
+    [Fact]
+    public async Task ConcurrentRun_WhenClientsRace_KeepsALinearizableHistory()
+    {
+        SkipUnlessLinearizable(Primitives.Lease);
+        var keys = CreateRunKeys();
+        var held = new LeaseGrant?[ConcurrentRun.Clients];
+        var recorder = new HistoryRecorder();
+
+        await ConcurrentRun.RunAsync(
+            async (client, index, cancellationToken) =>
+            {
+                var grant = held[client];
+                if (grant is null)
+                {
+                    var key = keys[(client + index) % keys.Length];
+                    held[client] = await AcquireAsync(
+                        recorder,
+                        client,
+                        key,
+                        LongTimeToLive,
+                        cancellationToken
+                    );
+                    return;
+                }
+
+                if (index % 3 == 0)
+                {
+                    await ReleaseAsync(recorder, client, grant, cancellationToken);
+                    held[client] = null;
+                    return;
+                }
+
+                if (!await RenewAsync(recorder, client, grant, cancellationToken))
+                {
+                    held[client] = null;
+                }
+            },
+            TestCancellationToken
+        );
+
+        HistoryAssert.Linearizable(new LeaseModel(), recorder.ToHistory());
     }
 
     #endregion
