@@ -24,6 +24,7 @@ internal static class RecordWatchDeliveryChecker
     /// Whether the provider declares gap detection, which requires the last write of each key or a resync after it.
     /// </param>
     /// <returns>A description of each violation found, empty when the changes are as declared.</returns>
+    /// <exception cref="ArgumentNullException">The history or the closing revisions are null.</exception>
     public static ImmutableArray<string> Check(
         IReadOnlyList<HistoryOperation> history,
         ImmutableArray<Delivery<RecordChange>> changes,

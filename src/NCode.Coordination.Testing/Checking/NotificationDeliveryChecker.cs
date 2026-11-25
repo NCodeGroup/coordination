@@ -23,6 +23,7 @@ internal static class NotificationDeliveryChecker
     /// Whether the provider declares gap detection, which requires consecutive numbers or a resync between them.
     /// </param>
     /// <returns>A description of each violation found, empty when the deliveries are as declared.</returns>
+    /// <exception cref="ArgumentNullException">The history or the subscribers are null.</exception>
     public static ImmutableArray<string> Check(
         IReadOnlyList<HistoryOperation> history,
         IReadOnlyList<ImmutableArray<Delivery<Notification>>> subscribers,
