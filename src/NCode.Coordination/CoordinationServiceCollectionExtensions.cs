@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using NCode.Coordination.Composition;
+using NCode.Coordination.Routing;
 using NCode.Coordination.Telemetry;
 
 namespace NCode.Coordination;
@@ -44,6 +45,7 @@ public static class CoordinationServiceCollectionExtensions
             );
 
             // Each primitive's service routes its calls to the bound provider.
+            services.TryAddSingleton<ISessionService, DefaultSessionService>();
             return services;
         }
     }
