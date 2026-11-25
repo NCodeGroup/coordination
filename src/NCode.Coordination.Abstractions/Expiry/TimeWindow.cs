@@ -48,7 +48,7 @@ public sealed record TimeWindow
             throw new ArgumentOutOfRangeException(
                 nameof(start),
                 start,
-                "A window starts at or after the Unix epoch and ends before the largest instant."
+                "A window starts at or after the Unix epoch and ends at or before the largest instant."
             );
         }
 
@@ -100,7 +100,8 @@ public sealed record TimeWindow
     /// </param>
     /// <returns>The window that starts at or before the instant and ends after it.</returns>
     /// <exception cref="ArgumentOutOfRangeException">
-    /// The length is zero or less or above the longest time to live, or the instant lies before the Unix epoch.
+    /// The length is zero or less or above the longest time to live, the instant lies before the Unix epoch, or the
+    /// window that contains the instant would end after the largest instant.
     /// </exception>
     /// <exception cref="ArgumentException">The length is not a whole number of milliseconds.</exception>
     public static TimeWindow Containing(DateTimeOffset instant, TimeSpan length)
@@ -110,6 +111,15 @@ public sealed record TimeWindow
 
         var elapsed = (instant - DateTimeOffset.UnixEpoch).Ticks;
         var start = DateTimeOffset.UnixEpoch.AddTicks(elapsed - (elapsed % length.Ticks));
+
+        if (start > DateTimeOffset.MaxValue - length)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(instant),
+                instant,
+                "The window that contains the instant ends at or before the largest instant."
+            );
+        }
 
         return new(start, length);
     }
@@ -134,8 +144,13 @@ public sealed record TimeWindow
     /// Returns the start in the invariant "O" format, a slash and the length in the invariant "c" format.
     /// </summary>
     /// <returns>The window as text.</returns>
-    public override string ToString() =>
-        $"{Start.ToString("O", CultureInfo.InvariantCulture)}/{Length.ToString("c", CultureInfo.InvariantCulture)}";
+    public override string ToString()
+    {
+        var start = Start.ToString("O", CultureInfo.InvariantCulture);
+        var length = Length.ToString("c", CultureInfo.InvariantCulture);
+
+        return $"{start}/{length}";
+    }
 
     private static void ValidateLength(TimeSpan length)
     {

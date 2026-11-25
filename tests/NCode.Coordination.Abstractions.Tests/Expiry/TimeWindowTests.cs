@@ -8,6 +8,15 @@ public sealed class TimeWindowTests
     private static readonly TimeSpan OneHour = TimeSpan.FromHours(1);
     private static readonly DateTimeOffset Ten = new(2026, 11, 25, 10, 0, 0, TimeSpan.Zero);
 
+    private static DateTimeOffset LastStartThatFits()
+    {
+        var elapsedTicks = DateTimeOffset.MaxValue.Ticks - DateTimeOffset.UnixEpoch.Ticks;
+        var windows = (elapsedTicks / OneHour.Ticks) - 1;
+        var startTicks = windows * OneHour.Ticks;
+
+        return DateTimeOffset.UnixEpoch.AddTicks(startTicks);
+    }
+
     #region Constructor Tests
 
     [Fact]
@@ -56,6 +65,30 @@ public sealed class TimeWindowTests
     public void Constructor_WhenWindowEndsBeyondLargestInstant_Throws()
     {
         var start = DateTimeOffset.MaxValue;
+
+        var exception = Assert.Throws<ArgumentOutOfRangeException>(() =>
+            new TimeWindow(start, OneHour)
+        );
+
+        Assert.Equal("start", exception.ParamName);
+    }
+
+    [Fact]
+    public void Constructor_WhenWindowIsTheLastThatFits_Accepts()
+    {
+        var start = LastStartThatFits();
+
+        var window = new TimeWindow(start, OneHour);
+
+        Assert.Equal(start, window.Start);
+        Assert.True(window.End <= DateTimeOffset.MaxValue);
+    }
+
+    [Fact]
+    public void Constructor_WhenWindowStartsOneLengthLater_Throws()
+    {
+        var lastStart = LastStartThatFits();
+        var start = lastStart + OneHour;
 
         var exception = Assert.Throws<ArgumentOutOfRangeException>(() =>
             new TimeWindow(start, OneHour)
@@ -161,6 +194,18 @@ public sealed class TimeWindowTests
     }
 
     [Fact]
+    public void Containing_WhenWindowWouldEndAfterTheLargestInstant_Throws()
+    {
+        var instant = DateTimeOffset.MaxValue;
+
+        var exception = Assert.Throws<ArgumentOutOfRangeException>(() =>
+            TimeWindow.Containing(instant, OneHour)
+        );
+
+        Assert.Equal("instant", exception.ParamName);
+    }
+
+    [Fact]
     public void Containing_WhenLengthIsZero_Throws()
     {
         var length = TimeSpan.Zero;
@@ -233,7 +278,7 @@ public sealed class TimeWindowTests
 
     #endregion
 
-    #region Equality Tests
+    #region Equals Tests
 
     [Fact]
     public void Equals_WhenStartAndLengthMatch_IsEqual()
