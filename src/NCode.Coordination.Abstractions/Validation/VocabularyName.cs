@@ -44,6 +44,7 @@ internal static partial class VocabularyName
         return value;
     }
 
+    /// <summary>Matches a name: lowercase letters and digits, with a single '.' or '-' between them.</summary>
     [GeneratedRegex(@"^[a-z0-9]+(?:[.-][a-z0-9]+)*\z", RegexOptions.CultureInvariant)]
     private static partial Regex Pattern();
 }

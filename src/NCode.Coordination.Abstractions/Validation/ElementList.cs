@@ -56,6 +56,7 @@ internal static class ElementList
         return items;
     }
 
+    /// <summary>Throws when the array holds a null element, naming the parameter that holds it.</summary>
     private static void ThrowIfNullElement<T>(ImmutableArray<T> items, string paramName)
         where T : class
     {
