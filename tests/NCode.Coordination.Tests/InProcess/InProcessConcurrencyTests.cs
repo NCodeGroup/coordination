@@ -19,14 +19,6 @@ public sealed class InProcessConcurrencyTests
 
     private static InProcessProvider CreateProvider() => new(TimeProvider.System);
 
-    private static TService GetService<TService>(InProcessProvider provider)
-        where TService : class
-    {
-        var service = provider.GetPrimitiveService(typeof(TService)) as TService;
-        Assert.NotNull(service);
-        return service;
-    }
-
     private static async Task<TResult[]> RunCallersAsync<TResult>(
         int count,
         Func<int, ValueTask<TResult>> caller,
@@ -68,7 +60,7 @@ public sealed class InProcessConcurrencyTests
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var provider = CreateProvider();
-        var records = GetService<IRecordService>(provider);
+        var records = InProcessTesting.GetService<IRecordService>(provider);
         var key = Keyspace.CreateKey("record");
 
         var results = await RunCallersAsync(
@@ -102,7 +94,7 @@ public sealed class InProcessConcurrencyTests
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var provider = CreateProvider();
-        var occurrences = GetService<IOccurrenceService>(provider);
+        var occurrences = InProcessTesting.GetService<IOccurrenceService>(provider);
         var key = Keyspace.CreateKey("occurrence");
         var ttl = TimeSpan.FromSeconds(30);
         var timeToLive = new TimeToLive(ttl);
@@ -128,7 +120,7 @@ public sealed class InProcessConcurrencyTests
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var provider = CreateProvider();
-        var counters = GetService<ICounterService>(provider);
+        var counters = InProcessTesting.GetService<ICounterService>(provider);
         var key = Keyspace.CreateKey("counter");
         var ttl = TimeSpan.FromSeconds(30);
         var timeToLive = new TimeToLive(ttl);
@@ -154,7 +146,7 @@ public sealed class InProcessConcurrencyTests
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var provider = CreateProvider();
-        var sequences = GetService<ISequenceService>(provider);
+        var sequences = InProcessTesting.GetService<ISequenceService>(provider);
         var key = Keyspace.CreateKey("sequence");
 
         var numbers = await RunCallersAsync(
@@ -175,7 +167,7 @@ public sealed class InProcessConcurrencyTests
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var provider = CreateProvider();
-        var transactions = GetService<ITransactionService>(provider);
+        var transactions = InProcessTesting.GetService<ITransactionService>(provider);
         var key = Keyspace.CreateKey("transaction");
         var absent = RecordCondition.Absent(key);
 
@@ -206,7 +198,7 @@ public sealed class InProcessConcurrencyTests
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         using var provider = CreateProvider();
-        var leases = GetService<ILeaseService>(provider);
+        var leases = InProcessTesting.GetService<ILeaseService>(provider);
         var resource = Keyspace.CreateKey("lease");
         var ttl = TimeSpan.FromSeconds(30);
         var timeToLive = new TimeToLive(ttl);
@@ -230,7 +222,7 @@ public sealed class InProcessConcurrencyTests
         const int capacity = 4;
         var cancellationToken = TestContext.Current.CancellationToken;
         using var provider = CreateProvider();
-        var semaphores = GetService<ISemaphoreService>(provider);
+        var semaphores = InProcessTesting.GetService<ISemaphoreService>(provider);
         var resource = Keyspace.CreateKey("semaphore");
         var ttl = TimeSpan.FromSeconds(30);
         var timeToLive = new TimeToLive(ttl);
@@ -261,7 +253,7 @@ public sealed class InProcessConcurrencyTests
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         using var provider = CreateProvider();
-        var elections = GetService<IElectionService>(provider);
+        var elections = InProcessTesting.GetService<IElectionService>(provider);
         var role = Keyspace.CreateKey("role");
         var ttl = TimeSpan.FromSeconds(30);
         var timeToLive = new TimeToLive(ttl);
@@ -292,7 +284,7 @@ public sealed class InProcessConcurrencyTests
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         using var provider = CreateProvider();
-        var claims = GetService<IClaimService>(provider);
+        var claims = InProcessTesting.GetService<IClaimService>(provider);
         var name = Keyspace.CreateKey("claim");
         var hour = TimeSpan.FromHours(1);
         var window = new TimeWindow(DateTimeOffset.UnixEpoch, hour);
@@ -320,8 +312,8 @@ public sealed class InProcessConcurrencyTests
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         using var provider = CreateProvider();
-        var sessions = GetService<ISessionService>(provider);
-        var memberships = GetService<IMembershipService>(provider);
+        var sessions = InProcessTesting.GetService<ISessionService>(provider);
+        var memberships = InProcessTesting.GetService<IMembershipService>(provider);
         var group = Keyspace.CreateKey("group");
         var ttl = TimeSpan.FromSeconds(30);
         var timeToLive = new TimeToLive(ttl);
@@ -353,7 +345,7 @@ public sealed class InProcessConcurrencyTests
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         using var provider = CreateProvider();
-        var notifications = GetService<INotificationService>(provider);
+        var notifications = InProcessTesting.GetService<INotificationService>(provider);
         var topic = Keyspace.CreateKey("topic");
         await using var stream = notifications
             .SubscribeAsync(topic, null, cancellationToken)

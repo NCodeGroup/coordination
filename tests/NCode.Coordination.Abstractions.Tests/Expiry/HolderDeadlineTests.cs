@@ -46,9 +46,10 @@ public sealed class HolderDeadlineTests
     public void Begin_WhenAllowanceIsNegative_Throws()
     {
         var time = CreateTime();
+        var allowance = TimeSpan.FromSeconds(-1);
 
         var exception = Assert.Throws<ArgumentOutOfRangeException>(() =>
-            HolderDeadline.Begin(time, TenSeconds, TimeSpan.FromSeconds(-1))
+            HolderDeadline.Begin(time, TenSeconds, allowance)
         );
 
         Assert.Equal("driftAllowance", exception.ParamName);
@@ -58,9 +59,10 @@ public sealed class HolderDeadlineTests
     public void Begin_WhenAllowanceIsNotShorterThanTheTimeToLive_Throws()
     {
         var time = CreateTime();
+        var allowance = TimeSpan.FromSeconds(10);
 
         var exception = Assert.Throws<ArgumentOutOfRangeException>(() =>
-            HolderDeadline.Begin(time, TenSeconds, TimeSpan.FromSeconds(10))
+            HolderDeadline.Begin(time, TenSeconds, allowance)
         );
 
         Assert.Equal("driftAllowance", exception.ParamName);

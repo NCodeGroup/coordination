@@ -1,9 +1,11 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using Microsoft.Extensions.Time.Testing;
+
 namespace NCode.Coordination.InProcess.Tests;
 
-public sealed class InProcessDeadlinesTests
+public sealed class InProcessDeadlinesTests : IDisposable
 {
     private static TimeSpan OneSecond { get; } = TimeSpan.FromSeconds(1);
 
@@ -13,37 +15,48 @@ public sealed class InProcessDeadlinesTests
 
     private static TimeSpan FiveSeconds { get; } = TimeSpan.FromSeconds(5);
 
-    private static InProcessExpiry Begin(TimeProvider time, TimeSpan timeToLive)
+    private FakeTimeProvider Time { get; } = InProcessTesting.CreateTime();
+
+    private Lock Gate { get; } = new();
+
+    private InProcessDeadlines Deadlines { get; }
+
+    public InProcessDeadlinesTests()
+    {
+        Deadlines = new InProcessDeadlines(Time, Gate);
+    }
+
+    public void Dispose()
+    {
+        Deadlines.Dispose();
+    }
+
+    private void RunDue()
+    {
+        using var scope = Gate.EnterScope();
+
+        Deadlines.RunDue();
+    }
+
+    private void Cancel(InProcessDeadline? deadline)
+    {
+        using var scope = Gate.EnterScope();
+
+        Deadlines.Cancel(deadline);
+    }
+
+    private InProcessExpiry Begin(TimeSpan timeToLive)
     {
         var limit = new TimeToLive(timeToLive);
 
-        return InProcessExpiry.Begin(time, limit);
+        return InProcessExpiry.Begin(Time, limit);
     }
 
-    private static void RunDue(InProcessDeadlines deadlines, Lock gate)
+    private InProcessDeadline Add(InProcessExpiry expiry, Action expire)
     {
-        using var scope = gate.EnterScope();
+        using var scope = Gate.EnterScope();
 
-        deadlines.RunDue();
-    }
-
-    private static void Cancel(InProcessDeadlines deadlines, Lock gate, InProcessDeadline? deadline)
-    {
-        using var scope = gate.EnterScope();
-
-        deadlines.Cancel(deadline);
-    }
-
-    private static InProcessDeadline Add(
-        InProcessDeadlines deadlines,
-        Lock gate,
-        InProcessExpiry expiry,
-        Action expire
-    )
-    {
-        using var scope = gate.EnterScope();
-
-        return deadlines.Add(expiry, expire);
+        return Deadlines.Add(expiry, expire);
     }
 
     #region RunDue Tests
@@ -51,36 +64,30 @@ public sealed class InProcessDeadlinesTests
     [Fact]
     public void RunDue_BeforeTheDeadline_RunsNothing()
     {
-        var time = InProcessTesting.CreateTime();
-        var gate = new Lock();
-        using var deadlines = new InProcessDeadlines(time, gate);
         var runs = 0;
-        var expiry = Begin(time, TwoSeconds);
-        Add(deadlines, gate, expiry, () => runs++);
+        var expiry = Begin(TwoSeconds);
+        Add(expiry, () => runs++);
 
-        time.Advance(OneSecond);
-        RunDue(deadlines, gate);
+        Time.Advance(OneSecond);
+        RunDue();
 
         Assert.Equal(0, runs);
-        Assert.Equal(1, deadlines.Pending);
+        Assert.Equal(1, Deadlines.Pending);
     }
 
     [Fact]
     public void RunDue_AfterTheDeadline_RunsItOnce()
     {
-        var time = InProcessTesting.CreateTime();
-        var gate = new Lock();
-        using var deadlines = new InProcessDeadlines(time, gate);
         var runs = 0;
-        var expiry = Begin(time, TwoSeconds);
-        Add(deadlines, gate, expiry, () => runs++);
+        var expiry = Begin(TwoSeconds);
+        Add(expiry, () => runs++);
 
-        time.Advance(TwoSeconds);
-        RunDue(deadlines, gate);
-        RunDue(deadlines, gate);
+        Time.Advance(TwoSeconds);
+        RunDue();
+        RunDue();
 
         Assert.Equal(1, runs);
-        Assert.Equal(0, deadlines.Pending);
+        Assert.Equal(0, Deadlines.Pending);
     }
 
     #endregion
@@ -90,14 +97,11 @@ public sealed class InProcessDeadlinesTests
     [Fact]
     public void Add_WhenTheDeadlinePasses_RunsItWithoutRunDue()
     {
-        var time = InProcessTesting.CreateTime();
-        var gate = new Lock();
-        using var deadlines = new InProcessDeadlines(time, gate);
         var runs = 0;
-        var expiry = Begin(time, TwoSeconds);
-        Add(deadlines, gate, expiry, () => runs++);
+        var expiry = Begin(TwoSeconds);
+        Add(expiry, () => runs++);
 
-        time.Advance(TwoSeconds);
+        Time.Advance(TwoSeconds);
 
         Assert.Equal(1, runs);
     }
@@ -105,16 +109,13 @@ public sealed class InProcessDeadlinesTests
     [Fact]
     public void Add_WhenTwoDeadlinesPass_RunsThemInDeadlineOrder()
     {
-        var time = InProcessTesting.CreateTime();
-        var gate = new Lock();
-        using var deadlines = new InProcessDeadlines(time, gate);
         List<int> order = [];
-        var threeSecondExpiry = Begin(time, ThreeSeconds);
-        Add(deadlines, gate, threeSecondExpiry, () => order.Add(3));
-        var twoSecondExpiry = Begin(time, TwoSeconds);
-        Add(deadlines, gate, twoSecondExpiry, () => order.Add(2));
+        var threeSecondExpiry = Begin(ThreeSeconds);
+        Add(threeSecondExpiry, () => order.Add(3));
+        var twoSecondExpiry = Begin(TwoSeconds);
+        Add(twoSecondExpiry, () => order.Add(2));
 
-        time.Advance(FiveSeconds);
+        Time.Advance(FiveSeconds);
 
         Assert.Equal([2, 3], order);
     }
@@ -122,20 +123,17 @@ public sealed class InProcessDeadlinesTests
     [Fact]
     public void Add_WhenTheDeadlineIsBeyondTheLongestWait_RunsItWhenItComes()
     {
-        var time = InProcessTesting.CreateTime();
-        var gate = new Lock();
-        using var deadlines = new InProcessDeadlines(time, gate);
         var runs = 0;
         var threeDays = TimeSpan.FromDays(3);
         var twoDays = TimeSpan.FromDays(2);
         var oneDay = TimeSpan.FromDays(1);
-        var expiry = Begin(time, threeDays);
-        Add(deadlines, gate, expiry, () => runs++);
+        var expiry = Begin(threeDays);
+        Add(expiry, () => runs++);
 
-        time.Advance(twoDays);
+        Time.Advance(twoDays);
         Assert.Equal(0, runs);
 
-        time.Advance(oneDay);
+        Time.Advance(oneDay);
         Assert.Equal(1, runs);
     }
 
@@ -146,45 +144,39 @@ public sealed class InProcessDeadlinesTests
     [Fact]
     public void Cancel_WhenCalledBeforeTheDeadline_KeepsItFromRunning()
     {
-        var time = InProcessTesting.CreateTime();
-        var gate = new Lock();
-        using var deadlines = new InProcessDeadlines(time, gate);
         var runs = 0;
-        var expiry = Begin(time, TwoSeconds);
-        var deadline = Add(deadlines, gate, expiry, () => runs++);
+        var expiry = Begin(TwoSeconds);
+        var deadline = Add(expiry, () => runs++);
 
-        Cancel(deadlines, gate, deadline);
-        time.Advance(ThreeSeconds);
-        RunDue(deadlines, gate);
+        Cancel(deadline);
+        Time.Advance(ThreeSeconds);
+        RunDue();
 
         Assert.Equal(0, runs);
-        Assert.Equal(0, deadlines.Pending);
+        Assert.Equal(0, Deadlines.Pending);
     }
 
     [Fact]
     public void Cancel_WhenManyAreCancelled_CompactsTheQueue()
     {
-        var time = InProcessTesting.CreateTime();
-        var gate = new Lock();
-        using var deadlines = new InProcessDeadlines(time, gate);
         const int total = InProcessDeadlines.CompactFloor + 10;
         List<InProcessDeadline> added = [];
         for (var index = 0; index < total; index++)
         {
-            var expiry = Begin(time, TwoSeconds);
-            var deadline = Add(deadlines, gate, expiry, () => { });
+            var expiry = Begin(TwoSeconds);
+            var deadline = Add(expiry, () => { });
             added.Add(deadline);
         }
 
         foreach (var deadline in added)
         {
-            Cancel(deadlines, gate, deadline);
+            Cancel(deadline);
         }
 
-        Assert.Equal(0, deadlines.Pending);
+        Assert.Equal(0, Deadlines.Pending);
         // The queue compacts at the first cancel that leaves it more than 2 * Pending + CompactFloor handles,
         // which is the 1,030th with 4 pending, and the later cancels leave it under that bound.
-        Assert.Equal(4, deadlines.Count);
+        Assert.Equal(4, Deadlines.Count);
     }
 
     #endregion
@@ -194,15 +186,12 @@ public sealed class InProcessDeadlinesTests
     [Fact]
     public void Dispose_WhenCalled_StopsTheTimer()
     {
-        var time = InProcessTesting.CreateTime();
-        var gate = new Lock();
-        var deadlines = new InProcessDeadlines(time, gate);
         var runs = 0;
-        var expiry = Begin(time, TwoSeconds);
-        Add(deadlines, gate, expiry, () => runs++);
+        var expiry = Begin(TwoSeconds);
+        Add(expiry, () => runs++);
 
-        deadlines.Dispose();
-        time.Advance(ThreeSeconds);
+        Deadlines.Dispose();
+        Time.Advance(ThreeSeconds);
 
         Assert.Equal(0, runs);
     }

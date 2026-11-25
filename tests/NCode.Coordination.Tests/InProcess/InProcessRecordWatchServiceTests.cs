@@ -7,13 +7,6 @@ public sealed class InProcessRecordWatchServiceTests
 {
     private static TimeSpan ShortTimeToLive { get; } = TimeSpan.FromMinutes(1);
 
-    private static TService GetService<TService>(InProcessProvider provider)
-        where TService : class
-    {
-        var service = provider.GetPrimitiveService(typeof(TService));
-        return Assert.IsAssignableFrom<TService>(service);
-    }
-
     private static async Task<Revision> CreateAsync(
         IRecordService records,
         CoordinationKey key,
@@ -43,8 +36,8 @@ public sealed class InProcessRecordWatchServiceTests
         var cancellationToken = TestContext.Current.CancellationToken;
         var time = InProcessTesting.CreateTime();
         using var provider = new InProcessProvider(time);
-        var records = GetService<IRecordService>(provider);
-        var watches = GetService<IRecordWatchService>(provider);
+        var records = InProcessTesting.GetService<IRecordService>(provider);
+        var watches = InProcessTesting.GetService<IRecordWatchService>(provider);
         var key = InProcessTesting.Keyspace.CreateKey("a");
         var first = await CreateAsync(records, key, cancellationToken);
         var updated = "b"u8.ToArray();
@@ -84,8 +77,8 @@ public sealed class InProcessRecordWatchServiceTests
         var cancellationToken = TestContext.Current.CancellationToken;
         var time = InProcessTesting.CreateTime();
         using var provider = new InProcessProvider(time);
-        var records = GetService<IRecordService>(provider);
-        var watches = GetService<IRecordWatchService>(provider);
+        var records = InProcessTesting.GetService<IRecordService>(provider);
+        var watches = InProcessTesting.GetService<IRecordWatchService>(provider);
         var key = InProcessTesting.Keyspace.CreateKey("a");
         var first = await CreateAsync(records, key, cancellationToken);
         var last = first;
@@ -111,8 +104,8 @@ public sealed class InProcessRecordWatchServiceTests
         var cancellationToken = TestContext.Current.CancellationToken;
         var time = InProcessTesting.CreateTime();
         using var provider = new InProcessProvider(time);
-        var records = GetService<IRecordService>(provider);
-        var watches = GetService<IRecordWatchService>(provider);
+        var records = InProcessTesting.GetService<IRecordService>(provider);
+        var watches = InProcessTesting.GetService<IRecordWatchService>(provider);
         var key = InProcessTesting.Keyspace.CreateKey("a");
         var first = await CreateAsync(records, key, cancellationToken);
         var ahead = new Revision(first.Value + 100);
@@ -137,8 +130,8 @@ public sealed class InProcessRecordWatchServiceTests
         var cancellationToken = TestContext.Current.CancellationToken;
         var time = InProcessTesting.CreateTime();
         using var provider = new InProcessProvider(time);
-        var records = GetService<IRecordService>(provider);
-        var watches = GetService<IRecordWatchService>(provider);
+        var records = InProcessTesting.GetService<IRecordService>(provider);
+        var watches = InProcessTesting.GetService<IRecordWatchService>(provider);
         var prefix = InProcessTesting.Keyspace.CreateKey("cfg");
         await using var stream = watches
             .WatchPrefixAsync(prefix, null, null, cancellationToken)
@@ -170,7 +163,7 @@ public sealed class InProcessRecordWatchServiceTests
         var cancellationToken = TestContext.Current.CancellationToken;
         var time = InProcessTesting.CreateTime();
         using var provider = new InProcessProvider(time);
-        var records = GetService<IRecordService>(provider);
+        var records = InProcessTesting.GetService<IRecordService>(provider);
         var key = InProcessTesting.Keyspace.CreateKey("cfg", "a");
         var prefix = InProcessTesting.Keyspace.CreateKey("cfg");
         var page = new RecordPageRequest(10);

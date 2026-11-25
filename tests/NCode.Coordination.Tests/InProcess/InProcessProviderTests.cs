@@ -197,7 +197,10 @@ public sealed class InProcessProviderTests
         var provider = CreateProvider();
 
         provider.Dispose();
-        provider.Dispose();
+
+        var exception = Record.Exception(provider.Dispose);
+
+        Assert.Null(exception);
     }
 
     #endregion

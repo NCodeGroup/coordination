@@ -10,7 +10,11 @@ public sealed class InProcessEventQueueTests
     [Fact]
     public void Constructor_WhenCapacityIsBelowOne_Throws()
     {
-        Assert.Throws<ArgumentOutOfRangeException>(() => new InProcessEventQueue<string>(0));
+        var exception = Assert.Throws<ArgumentOutOfRangeException>(() =>
+            new InProcessEventQueue<string>(0)
+        );
+
+        Assert.Equal("capacity", exception.ParamName);
     }
 
     #endregion

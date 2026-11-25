@@ -5,12 +5,6 @@ namespace NCode.Coordination.InProcess.Tests;
 
 public sealed class InProcessNotificationServiceTests
 {
-    private static INotificationService GetService(InProcessProvider provider)
-    {
-        var service = provider.GetPrimitiveService(typeof(INotificationService));
-        return Assert.IsAssignableFrom<INotificationService>(service);
-    }
-
     #region SubscribeAsync Tests
 
     [Fact]
@@ -19,7 +13,7 @@ public sealed class InProcessNotificationServiceTests
         var cancellationToken = TestContext.Current.CancellationToken;
         var time = InProcessTesting.CreateTime();
         using var provider = new InProcessProvider(time);
-        var service = GetService(provider);
+        var service = InProcessTesting.GetService<INotificationService>(provider);
         var topic = InProcessTesting.Keyspace.CreateKey("t");
         var payload = "a"u8.ToArray();
         await using var stream = service
@@ -66,7 +60,7 @@ public sealed class InProcessNotificationServiceTests
         var cancellationToken = TestContext.Current.CancellationToken;
         var time = InProcessTesting.CreateTime();
         using var provider = new InProcessProvider(time);
-        var service = GetService(provider);
+        var service = InProcessTesting.GetService<INotificationService>(provider);
         var first = InProcessTesting.Keyspace.CreateKey("first");
         var second = InProcessTesting.Keyspace.CreateKey("second");
         var payload = "a"u8.ToArray();
