@@ -15,8 +15,9 @@ declared guarantees ([D3](#d3-guarantees)), protocol-named providers ([D4](#d4-p
 tokens ([D5](#d5-sessions-and-fencing)), sequenced notifications without brokering ([D6](#d6-notifications)), one
 conformance kit ([D7](#d7-conformance)), the first stable release's scope ([D8](#d8-first-stable-release)), expiry as a
 duration on a declared clock ([D9](#d9-expiry-clock)), the shapes of the primitives' contracts
-([D10](#d10-contract-values) to [D15](#d15-counting-sequences-and-notifications)), and the composition that binds
-providers and checks requirements when the host starts ([D16](#d16-composition)).
+([D10](#d10-contract-values) to [D15](#d15-counting-sequences-and-notifications)), the composition that binds
+providers and checks requirements when the host starts ([D16](#d16-composition)), and the conformance kit's contract
+suites ([D17](#d17-conformance-kit)).
 
 ## Goals and Non-Goals
 
@@ -275,6 +276,12 @@ Occurrences fail closed, windows align to the epoch, and notifications number ea
 A host registers providers on one builder and binds each to primitives or to keyspaces; its start fails on every
 requirement a binding cannot keep, and every operation is traced and measured without its keys.
 [ADR-1016](../decisions/1016-a-host-binds-providers-by-primitive-and-keyspace-and-its-start-fails-on-every-requirement-a-binding-cannot-keep.md)
+
+### D17. Conformance kit
+
+The conformance kit is a set of xUnit contract classes, one per primitive, that a provider's test project derives from,
+giving the provider under test and a way to advance its clock; a test skips what the provider declares unsupported.
+[ADR-1017](../decisions/1017-the-conformance-kit-is-a-set-of-xunit-contract-classes-a-providers-tests-derive-from.md)
 
 ## Open Questions
 
