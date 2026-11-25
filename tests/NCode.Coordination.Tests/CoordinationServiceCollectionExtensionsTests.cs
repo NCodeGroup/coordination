@@ -4,7 +4,14 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Moq;
+using NCode.Coordination.Barriers;
+using NCode.Coordination.Caching;
 using NCode.Coordination.Composition;
+using NCode.Coordination.Locks;
+using NCode.Coordination.Partitions;
+using NCode.Coordination.RateLimiting;
+using NCode.Coordination.SingleFlight;
+using NCode.Coordination.Singletons;
 
 namespace NCode.Coordination.Tests;
 
@@ -115,6 +122,36 @@ public sealed class CoordinationServiceCollectionExtensionsTests : IDisposable
             Assert.Equal(ServiceLifetime.Singleton, descriptor.Lifetime);
             Assert.Equal("NCode.Coordination.Routing", descriptor.ImplementationType?.Namespace);
         }
+    }
+
+    [Fact]
+    public async Task AddCoordination_WhenCalled_RegistersEveryRecipe()
+    {
+        var services = new ServiceCollection();
+        services.AddMetrics();
+        services.AddCoordination(_ => { });
+        await using var serviceProvider = services.BuildServiceProvider();
+
+        Assert.IsType<DefaultLockService>(serviceProvider.GetRequiredService<ILockService>());
+        Assert.IsType<DefaultReadWriteLockService>(
+            serviceProvider.GetRequiredService<IReadWriteLockService>()
+        );
+        Assert.IsType<DefaultBarrierService>(serviceProvider.GetRequiredService<IBarrierService>());
+        Assert.IsType<DefaultSingletonService>(
+            serviceProvider.GetRequiredService<ISingletonService>()
+        );
+        Assert.IsType<DefaultPartitionOwnershipService>(
+            serviceProvider.GetRequiredService<IPartitionOwnershipService>()
+        );
+        Assert.IsType<DefaultSingleFlightService>(
+            serviceProvider.GetRequiredService<ISingleFlightService>()
+        );
+        Assert.IsType<DefaultRateLimiterFactory>(
+            serviceProvider.GetRequiredService<IRateLimiterFactory>()
+        );
+        Assert.IsType<DefaultCacheInvalidationService>(
+            serviceProvider.GetRequiredService<ICacheInvalidationService>()
+        );
     }
 
     [Fact]
