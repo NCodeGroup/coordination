@@ -23,26 +23,30 @@ internal static class ContractStreams
     public static TimeSpan Timeout { get; } = TimeSpan.FromSeconds(10);
 
     /// <summary>
-    /// Starts reading a stream with the current test's cancellation token.
+    /// Starts reading a stream.
     /// </summary>
     /// <typeparam name="T">The type of the stream's items.</typeparam>
     /// <param name="stream">The stream to read.</param>
+    /// <param name="cancellationToken">A token that cancels the reading.</param>
     /// <returns>The enumerator that reads the stream.</returns>
-    public static IAsyncEnumerator<T> Open<T>(IAsyncEnumerable<T> stream) =>
-        stream.GetAsyncEnumerator(TestContext.Current.CancellationToken);
+    public static IAsyncEnumerator<T> Open<T>(
+        IAsyncEnumerable<T> stream,
+        CancellationToken cancellationToken
+    ) => stream.GetAsyncEnumerator(cancellationToken);
 
     /// <summary>
     /// Reads the next item of a stream, and fails when none arrives within <see cref="Timeout"/> or the stream ends.
     /// </summary>
     /// <typeparam name="T">The type of the stream's items.</typeparam>
     /// <param name="stream">The enumerator that reads the stream.</param>
+    /// <param name="cancellationToken">A token that cancels the wait.</param>
     /// <returns>The next item.</returns>
-    public static async ValueTask<T> NextAsync<T>(IAsyncEnumerator<T> stream)
+    public static async ValueTask<T> NextAsync<T>(
+        IAsyncEnumerator<T> stream,
+        CancellationToken cancellationToken
+    )
     {
-        var moved = await stream
-            .MoveNextAsync()
-            .AsTask()
-            .WaitAsync(Timeout, TestContext.Current.CancellationToken);
+        var moved = await stream.MoveNextAsync().AsTask().WaitAsync(Timeout, cancellationToken);
 
         Assert.True(moved, "The stream ended.");
         return stream.Current;
@@ -55,15 +59,17 @@ internal static class ContractStreams
     /// <typeparam name="T">The type of the stream's items.</typeparam>
     /// <param name="stream">The enumerator that reads the stream.</param>
     /// <param name="match">The predicate that tells the item that is wanted.</param>
+    /// <param name="cancellationToken">A token that cancels the wait.</param>
     /// <returns>The first item that matches.</returns>
     public static async ValueTask<T> NextMatchingAsync<T>(
         IAsyncEnumerator<T> stream,
-        Func<T, bool> match
+        Func<T, bool> match,
+        CancellationToken cancellationToken
     )
     {
         for (var index = 0; index < MaxItemsRead; index++)
         {
-            var item = await NextAsync(stream);
+            var item = await NextAsync(stream, cancellationToken);
 
             if (match(item))
             {
@@ -79,7 +85,8 @@ internal static class ContractStreams
     /// Waits for a task to complete, and fails when it does not within <see cref="Timeout"/>.
     /// </summary>
     /// <param name="task">The task to wait for.</param>
+    /// <param name="cancellationToken">A token that cancels the wait.</param>
     /// <returns>A task that completes when <paramref name="task"/> has completed.</returns>
-    public static async ValueTask CompletesAsync(Task task) =>
-        await task.WaitAsync(Timeout, TestContext.Current.CancellationToken);
+    public static async ValueTask CompletesAsync(Task task, CancellationToken cancellationToken) =>
+        await task.WaitAsync(Timeout, cancellationToken);
 }

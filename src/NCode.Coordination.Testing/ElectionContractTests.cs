@@ -28,14 +28,16 @@ public abstract class ElectionContractTests : ProviderContractTests
     /// <param name="role">The role to lead.</param>
     /// <param name="value">The value followers read.</param>
     /// <param name="timeToLive">The time to live to ask for.</param>
+    /// <param name="cancellationToken">A token that cancels the operation.</param>
     /// <returns>The leadership.</returns>
     private async ValueTask<Leadership> LeadAsync(
         CoordinationKey role,
         byte[] value,
-        TimeToLive timeToLive
+        TimeToLive timeToLive,
+        CancellationToken cancellationToken
     )
     {
-        var result = await TryLeadAsync(role, value, timeToLive);
+        var result = await TryLeadAsync(role, value, timeToLive, cancellationToken);
 
         Assert.True(result.IsElected);
         return result.Leadership;
@@ -47,16 +49,18 @@ public abstract class ElectionContractTests : ProviderContractTests
     /// <param name="role">The role to lead.</param>
     /// <param name="value">The value followers read.</param>
     /// <param name="timeToLive">The time to live to ask for.</param>
+    /// <param name="cancellationToken">A token that cancels the operation.</param>
     /// <returns>The result of the attempt.</returns>
     private ValueTask<ElectionResult> TryLeadAsync(
         CoordinationKey role,
         byte[] value,
-        TimeToLive timeToLive
+        TimeToLive timeToLive,
+        CancellationToken cancellationToken
     )
     {
         var terms = LeaseTerms.ForTimeToLive(timeToLive);
 
-        return Elections.TryLeadAsync(role, value, terms, null, TestCancellationToken);
+        return Elections.TryLeadAsync(role, value, terms, null, cancellationToken);
     }
 
     #region TryLeadAsync Tests
@@ -70,7 +74,7 @@ public abstract class ElectionContractTests : ProviderContractTests
         var role = CreateKey("role");
         var value = "node-a"u8.ToArray();
 
-        var result = await TryLeadAsync(role, value, LongTimeToLive);
+        var result = await TryLeadAsync(role, value, LongTimeToLive, TestCancellationToken);
 
         Assert.Equal(ElectionStatus.Elected, result.Status);
         var leadership = Assert.IsType<Leadership>(result.Leadership);
@@ -96,9 +100,9 @@ public abstract class ElectionContractTests : ProviderContractTests
         var role = CreateKey("role");
         var nodeA = "node-a"u8.ToArray();
         var nodeB = "node-b"u8.ToArray();
-        var leadership = await LeadAsync(role, nodeA, LongTimeToLive);
+        var leadership = await LeadAsync(role, nodeA, LongTimeToLive, TestCancellationToken);
 
-        var result = await TryLeadAsync(role, nodeB, LongTimeToLive);
+        var result = await TryLeadAsync(role, nodeB, LongTimeToLive, TestCancellationToken);
 
         Assert.Equal(ElectionStatus.Led, result.Status);
         Assert.Null(result.Leadership);
@@ -170,7 +174,7 @@ public abstract class ElectionContractTests : ProviderContractTests
         var value = new byte[CoordinationLimits.MaxValueLength + 1];
 
         var exception = await Assert.ThrowsAnyAsync<ArgumentException>(async () =>
-            await TryLeadAsync(role, value, LongTimeToLive)
+            await TryLeadAsync(role, value, LongTimeToLive, TestCancellationToken)
         );
 
         Assert.Equal("value", exception.ParamName);
@@ -189,7 +193,7 @@ public abstract class ElectionContractTests : ProviderContractTests
         var role = CreateKey("role");
         var value = new byte[CoordinationLimits.MaxValueLength];
 
-        var result = await TryLeadAsync(role, value, LongTimeToLive);
+        var result = await TryLeadAsync(role, value, LongTimeToLive, TestCancellationToken);
 
         Assert.Equal(ElectionStatus.Elected, result.Status);
 
@@ -207,10 +211,10 @@ public abstract class ElectionContractTests : ProviderContractTests
         var role = CreateKey("role");
         var nodeA = "node-a"u8.ToArray();
         var nodeB = "node-b"u8.ToArray();
-        var earlier = await LeadAsync(role, nodeA, LongTimeToLive);
+        var earlier = await LeadAsync(role, nodeA, LongTimeToLive, TestCancellationToken);
         await Elections.ResignAsync(earlier, null, TestCancellationToken);
 
-        var later = await LeadAsync(role, nodeB, LongTimeToLive);
+        var later = await LeadAsync(role, nodeB, LongTimeToLive, TestCancellationToken);
 
         Assert.True(later.Leader.Term > earlier.Leader.Term);
     }
@@ -223,7 +227,7 @@ public abstract class ElectionContractTests : ProviderContractTests
     {
         var role = CreateKey("role");
         var value = "node-a"u8.ToArray();
-        await LeadAsync(role, value, ShortTimeToLive);
+        await LeadAsync(role, value, ShortTimeToLive, TestCancellationToken);
 
         await AdvanceClockAsync(StillAlive, TestCancellationToken);
 
@@ -296,7 +300,7 @@ public abstract class ElectionContractTests : ProviderContractTests
     {
         var role = CreateKey("role");
         var value = "node-a"u8.ToArray();
-        var leadership = await LeadAsync(role, value, LongTimeToLive);
+        var leadership = await LeadAsync(role, value, LongTimeToLive, TestCancellationToken);
 
         var view = await Elections.ReadAsync(role, null, TestCancellationToken);
 
@@ -333,7 +337,7 @@ public abstract class ElectionContractTests : ProviderContractTests
     {
         var role = CreateKey("role");
         var value = "node-a"u8.ToArray();
-        var leadership = await LeadAsync(role, value, ShortTimeToLive);
+        var leadership = await LeadAsync(role, value, ShortTimeToLive, TestCancellationToken);
 
         await AdvanceClockAsync(BeforeExpiry, TestCancellationToken);
         var renewed = await Elections.RenewAsync(
@@ -363,7 +367,7 @@ public abstract class ElectionContractTests : ProviderContractTests
     {
         var role = CreateKey("role");
         var value = "node-a"u8.ToArray();
-        var leadership = await LeadAsync(role, value, LongTimeToLive);
+        var leadership = await LeadAsync(role, value, LongTimeToLive, TestCancellationToken);
         await Elections.ResignAsync(leadership, null, TestCancellationToken);
 
         var renewed = await Elections.RenewAsync(
@@ -415,7 +419,7 @@ public abstract class ElectionContractTests : ProviderContractTests
     {
         var role = CreateKey("role");
         var value = "node-a"u8.ToArray();
-        var leadership = await LeadAsync(role, value, LongTimeToLive);
+        var leadership = await LeadAsync(role, value, LongTimeToLive, TestCancellationToken);
 
         var resigned = await Elections.ResignAsync(leadership, null, TestCancellationToken);
 
@@ -434,9 +438,9 @@ public abstract class ElectionContractTests : ProviderContractTests
         var role = CreateKey("role");
         var nodeA = "node-a"u8.ToArray();
         var nodeB = "node-b"u8.ToArray();
-        var first = await LeadAsync(role, nodeA, LongTimeToLive);
+        var first = await LeadAsync(role, nodeA, LongTimeToLive, TestCancellationToken);
         await Elections.ResignAsync(first, null, TestCancellationToken);
-        var second = await LeadAsync(role, nodeB, LongTimeToLive);
+        var second = await LeadAsync(role, nodeB, LongTimeToLive, TestCancellationToken);
 
         var resigned = await Elections.ResignAsync(first, null, TestCancellationToken);
 
@@ -459,11 +463,11 @@ public abstract class ElectionContractTests : ProviderContractTests
     {
         var role = CreateKey("role");
         var value = "node-a"u8.ToArray();
-        var leadership = await LeadAsync(role, value, LongTimeToLive);
+        var leadership = await LeadAsync(role, value, LongTimeToLive, TestCancellationToken);
 
         var watch = Elections.WatchAsync(role, null, TestCancellationToken);
-        await using var stream = ContractStreams.Open(watch);
-        var first = await ContractStreams.NextAsync(stream);
+        await using var stream = ContractStreams.Open(watch, TestCancellationToken);
+        var first = await ContractStreams.NextAsync(stream, TestCancellationToken);
 
         Assert.Equal(role, first.Role);
         var leader = Assert.IsType<Leader>(first.Leader);
@@ -480,13 +484,15 @@ public abstract class ElectionContractTests : ProviderContractTests
     {
         var role = CreateKey("role");
         var watch = Elections.WatchAsync(role, null, TestCancellationToken);
-        await using var stream = ContractStreams.Open(watch);
-        var first = await ContractStreams.NextAsync(stream);
+        await using var stream = ContractStreams.Open(watch, TestCancellationToken);
+        var first = await ContractStreams.NextAsync(stream, TestCancellationToken);
         var value = "node-a"u8.ToArray();
-        var leadership = await LeadAsync(role, value, LongTimeToLive);
+        var leadership = await LeadAsync(role, value, LongTimeToLive, TestCancellationToken);
 
-        var view = await ContractStreams.NextMatchingAsync(stream, candidate =>
-            candidate.Leader is not null
+        var view = await ContractStreams.NextMatchingAsync(
+            stream,
+            candidate => candidate.Leader is not null,
+            TestCancellationToken
         );
 
         Assert.Null(first.Leader);
@@ -502,14 +508,16 @@ public abstract class ElectionContractTests : ProviderContractTests
     {
         var role = CreateKey("role");
         var value = "node-a"u8.ToArray();
-        var leadership = await LeadAsync(role, value, LongTimeToLive);
+        var leadership = await LeadAsync(role, value, LongTimeToLive, TestCancellationToken);
         var watch = Elections.WatchAsync(role, null, TestCancellationToken);
-        await using var stream = ContractStreams.Open(watch);
-        var first = await ContractStreams.NextAsync(stream);
+        await using var stream = ContractStreams.Open(watch, TestCancellationToken);
+        var first = await ContractStreams.NextAsync(stream, TestCancellationToken);
         await Elections.ResignAsync(leadership, null, TestCancellationToken);
 
-        var view = await ContractStreams.NextMatchingAsync(stream, candidate =>
-            candidate.Leader is null
+        var view = await ContractStreams.NextMatchingAsync(
+            stream,
+            candidate => candidate.Leader is null,
+            TestCancellationToken
         );
 
         Assert.NotNull(first.Leader);

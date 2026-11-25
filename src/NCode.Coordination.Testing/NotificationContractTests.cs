@@ -32,8 +32,8 @@ public abstract class NotificationContractTests : ProviderContractTests
         var topic = CreateKey("topic");
 
         var subscription = Notifications.SubscribeAsync(topic, null, TestCancellationToken);
-        await using var stream = ContractStreams.Open(subscription);
-        var first = await ContractStreams.NextAsync(stream);
+        await using var stream = ContractStreams.Open(subscription, TestCancellationToken);
+        var first = await ContractStreams.NextAsync(stream, TestCancellationToken);
 
         Assert.True(first.IsResync);
         Assert.Equal(topic, first.Topic);
@@ -70,14 +70,14 @@ public abstract class NotificationContractTests : ProviderContractTests
     {
         var topic = CreateKey("topic");
         var subscription = Notifications.SubscribeAsync(topic, null, TestCancellationToken);
-        await using var stream = ContractStreams.Open(subscription);
-        await ContractStreams.NextAsync(stream);
+        await using var stream = ContractStreams.Open(subscription, TestCancellationToken);
+        await ContractStreams.NextAsync(stream, TestCancellationToken);
 
         var payload = "a"u8.ToArray();
 
         await Notifications.PublishAsync(topic, payload, null, TestCancellationToken);
 
-        var message = await ContractStreams.NextAsync(stream);
+        var message = await ContractStreams.NextAsync(stream, TestCancellationToken);
         var delivered = message.Payload.ToArray();
         Assert.False(message.IsResync);
         Assert.Equal(topic, message.Topic);
@@ -98,8 +98,8 @@ public abstract class NotificationContractTests : ProviderContractTests
 
         var topic = CreateKey("topic");
         var subscription = Notifications.SubscribeAsync(topic, null, TestCancellationToken);
-        await using var stream = ContractStreams.Open(subscription);
-        await ContractStreams.NextAsync(stream);
+        await using var stream = ContractStreams.Open(subscription, TestCancellationToken);
+        await ContractStreams.NextAsync(stream, TestCancellationToken);
 
         var payloadA = "a"u8.ToArray();
         var payloadB = "b"u8.ToArray();
@@ -107,8 +107,8 @@ public abstract class NotificationContractTests : ProviderContractTests
         await Notifications.PublishAsync(topic, payloadA, null, TestCancellationToken);
         await Notifications.PublishAsync(topic, payloadB, null, TestCancellationToken);
 
-        var first = await ContractStreams.NextAsync(stream);
-        var second = await ContractStreams.NextAsync(stream);
+        var first = await ContractStreams.NextAsync(stream, TestCancellationToken);
+        var second = await ContractStreams.NextAsync(stream, TestCancellationToken);
         var firstDelivered = first.Payload.ToArray();
         var secondDelivered = second.Payload.ToArray();
         Assert.Equal(first.Sequence + 1, second.Sequence);
@@ -124,18 +124,18 @@ public abstract class NotificationContractTests : ProviderContractTests
     {
         var topic = CreateKey("topic");
         var firstSubscription = Notifications.SubscribeAsync(topic, null, TestCancellationToken);
-        await using var first = ContractStreams.Open(firstSubscription);
+        await using var first = ContractStreams.Open(firstSubscription, TestCancellationToken);
         var secondSubscription = Notifications.SubscribeAsync(topic, null, TestCancellationToken);
-        await using var second = ContractStreams.Open(secondSubscription);
-        await ContractStreams.NextAsync(first);
-        await ContractStreams.NextAsync(second);
+        await using var second = ContractStreams.Open(secondSubscription, TestCancellationToken);
+        await ContractStreams.NextAsync(first, TestCancellationToken);
+        await ContractStreams.NextAsync(second, TestCancellationToken);
 
         var payload = "a"u8.ToArray();
 
         await Notifications.PublishAsync(topic, payload, null, TestCancellationToken);
 
-        var firstMessage = await ContractStreams.NextAsync(first);
-        var secondMessage = await ContractStreams.NextAsync(second);
+        var firstMessage = await ContractStreams.NextAsync(first, TestCancellationToken);
+        var secondMessage = await ContractStreams.NextAsync(second, TestCancellationToken);
         var firstDelivered = firstMessage.Payload.ToArray();
         var secondDelivered = secondMessage.Payload.ToArray();
         Assert.Equal(payload, firstDelivered);
@@ -151,8 +151,8 @@ public abstract class NotificationContractTests : ProviderContractTests
         var topicA = CreateKey("a");
         var topicB = CreateKey("b");
         var subscription = Notifications.SubscribeAsync(topicA, null, TestCancellationToken);
-        await using var stream = ContractStreams.Open(subscription);
-        await ContractStreams.NextAsync(stream);
+        await using var stream = ContractStreams.Open(subscription, TestCancellationToken);
+        await ContractStreams.NextAsync(stream, TestCancellationToken);
 
         var payloadA = "a"u8.ToArray();
         var payloadB = "b"u8.ToArray();
@@ -160,7 +160,7 @@ public abstract class NotificationContractTests : ProviderContractTests
         await Notifications.PublishAsync(topicB, payloadB, null, TestCancellationToken);
         await Notifications.PublishAsync(topicA, payloadA, null, TestCancellationToken);
 
-        var message = await ContractStreams.NextAsync(stream);
+        var message = await ContractStreams.NextAsync(stream, TestCancellationToken);
         var delivered = message.Payload.ToArray();
         Assert.False(message.IsResync);
         Assert.Equal(topicA, message.Topic);
@@ -191,14 +191,14 @@ public abstract class NotificationContractTests : ProviderContractTests
     {
         var topic = CreateKey("topic");
         var subscription = Notifications.SubscribeAsync(topic, null, TestCancellationToken);
-        await using var stream = ContractStreams.Open(subscription);
-        await ContractStreams.NextAsync(stream);
+        await using var stream = ContractStreams.Open(subscription, TestCancellationToken);
+        await ContractStreams.NextAsync(stream, TestCancellationToken);
 
         var payload = new byte[CoordinationLimits.MaxPayloadLength];
 
         await Notifications.PublishAsync(topic, payload, null, TestCancellationToken);
 
-        var message = await ContractStreams.NextAsync(stream);
+        var message = await ContractStreams.NextAsync(stream, TestCancellationToken);
         Assert.False(message.IsResync);
         Assert.Equal(CoordinationLimits.MaxPayloadLength, message.Payload.Length);
     }

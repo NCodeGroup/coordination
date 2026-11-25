@@ -28,14 +28,16 @@ public abstract class SemaphoreContractTests : ProviderContractTests
     /// <param name="resource">The resource to hold a slot of.</param>
     /// <param name="capacity">The number of slots.</param>
     /// <param name="timeToLive">The time to live to ask for.</param>
+    /// <param name="cancellationToken">A token that cancels the operation.</param>
     /// <returns>The grant.</returns>
     private async ValueTask<SemaphoreGrant> AcquireAsync(
         CoordinationKey resource,
         int capacity,
-        TimeToLive timeToLive
+        TimeToLive timeToLive,
+        CancellationToken cancellationToken
     )
     {
-        var result = await TryAcquireAsync(resource, capacity, timeToLive);
+        var result = await TryAcquireAsync(resource, capacity, timeToLive, cancellationToken);
 
         Assert.True(result.IsAcquired);
         return result.Grant;
@@ -47,16 +49,18 @@ public abstract class SemaphoreContractTests : ProviderContractTests
     /// <param name="resource">The resource to hold a slot of.</param>
     /// <param name="capacity">The number of slots.</param>
     /// <param name="timeToLive">The time to live to ask for.</param>
+    /// <param name="cancellationToken">A token that cancels the operation.</param>
     /// <returns>The result of the attempt.</returns>
     private ValueTask<SemaphoreAcquireResult> TryAcquireAsync(
         CoordinationKey resource,
         int capacity,
-        TimeToLive timeToLive
+        TimeToLive timeToLive,
+        CancellationToken cancellationToken
     )
     {
         var terms = LeaseTerms.ForTimeToLive(timeToLive);
 
-        return Semaphores.TryAcquireAsync(resource, capacity, terms, null, TestCancellationToken);
+        return Semaphores.TryAcquireAsync(resource, capacity, terms, null, cancellationToken);
     }
 
     #region TryAcquireAsync Tests
@@ -69,8 +73,8 @@ public abstract class SemaphoreContractTests : ProviderContractTests
     {
         var resource = CreateKey("resource");
 
-        var first = await AcquireAsync(resource, 2, LongTimeToLive);
-        var second = await AcquireAsync(resource, 2, LongTimeToLive);
+        var first = await AcquireAsync(resource, 2, LongTimeToLive, TestCancellationToken);
+        var second = await AcquireAsync(resource, 2, LongTimeToLive, TestCancellationToken);
 
         Assert.Equal(resource, first.Resource);
         Assert.NotEqual(first.Slot, second.Slot);
@@ -86,9 +90,9 @@ public abstract class SemaphoreContractTests : ProviderContractTests
     public async Task TryAcquireAsync_WhenEverySlotIsHeld_ReturnsFull()
     {
         var resource = CreateKey("resource");
-        await AcquireAsync(resource, 1, LongTimeToLive);
+        await AcquireAsync(resource, 1, LongTimeToLive, TestCancellationToken);
 
-        var result = await TryAcquireAsync(resource, 1, LongTimeToLive);
+        var result = await TryAcquireAsync(resource, 1, LongTimeToLive, TestCancellationToken);
 
         Assert.Equal(SemaphoreAcquireStatus.Full, result.Status);
         Assert.Null(result.Grant);
@@ -101,9 +105,9 @@ public abstract class SemaphoreContractTests : ProviderContractTests
     public async Task TryAcquireAsync_WhenHoldersUseAnotherCapacity_ReturnsCapacityConflict()
     {
         var resource = CreateKey("resource");
-        await AcquireAsync(resource, 2, LongTimeToLive);
+        await AcquireAsync(resource, 2, LongTimeToLive, TestCancellationToken);
 
-        var result = await TryAcquireAsync(resource, 3, LongTimeToLive);
+        var result = await TryAcquireAsync(resource, 3, LongTimeToLive, TestCancellationToken);
 
         Assert.Equal(SemaphoreAcquireStatus.CapacityConflict, result.Status);
         Assert.Null(result.Grant);
@@ -118,7 +122,7 @@ public abstract class SemaphoreContractTests : ProviderContractTests
         var resource = CreateKey("resource");
 
         var exception = await Assert.ThrowsAsync<ArgumentOutOfRangeException>(async () =>
-            await TryAcquireAsync(resource, 0, LongTimeToLive)
+            await TryAcquireAsync(resource, 0, LongTimeToLive, TestCancellationToken)
         );
 
         Assert.Equal("capacity", exception.ParamName);
@@ -136,7 +140,8 @@ public abstract class SemaphoreContractTests : ProviderContractTests
             await TryAcquireAsync(
                 resource,
                 CoordinationLimits.MaxSemaphoreCapacity + 1,
-                LongTimeToLive
+                LongTimeToLive,
+                TestCancellationToken
             )
         );
 
@@ -154,7 +159,8 @@ public abstract class SemaphoreContractTests : ProviderContractTests
         var result = await TryAcquireAsync(
             resource,
             CoordinationLimits.MaxSemaphoreCapacity,
-            LongTimeToLive
+            LongTimeToLive,
+            TestCancellationToken
         );
 
         Assert.True(result.IsAcquired);
@@ -248,10 +254,10 @@ public abstract class SemaphoreContractTests : ProviderContractTests
     public async Task TryAcquireAsync_AfterASlotIsReleased_GivesAGreaterFencingToken()
     {
         var resource = CreateKey("resource");
-        var earlier = await AcquireAsync(resource, 1, LongTimeToLive);
+        var earlier = await AcquireAsync(resource, 1, LongTimeToLive, TestCancellationToken);
         await Semaphores.ReleaseAsync(earlier, null, TestCancellationToken);
 
-        var later = await AcquireAsync(resource, 1, LongTimeToLive);
+        var later = await AcquireAsync(resource, 1, LongTimeToLive, TestCancellationToken);
 
         Assert.Equal(earlier.Slot, later.Slot);
         Assert.True(later.FencingToken > earlier.FencingToken);
@@ -264,10 +270,10 @@ public abstract class SemaphoreContractTests : ProviderContractTests
     public async Task TryAcquireAsync_WhenEveryHolderReleased_AcceptsAnotherCapacity()
     {
         var resource = CreateKey("resource");
-        var grant = await AcquireAsync(resource, 1, LongTimeToLive);
+        var grant = await AcquireAsync(resource, 1, LongTimeToLive, TestCancellationToken);
         await Semaphores.ReleaseAsync(grant, null, TestCancellationToken);
 
-        var result = await TryAcquireAsync(resource, 2, LongTimeToLive);
+        var result = await TryAcquireAsync(resource, 2, LongTimeToLive, TestCancellationToken);
 
         Assert.Equal(SemaphoreAcquireStatus.Acquired, result.Status);
     }
@@ -279,16 +285,16 @@ public abstract class SemaphoreContractTests : ProviderContractTests
     public async Task TryAcquireAsync_WhenAGrantExpires_FreesItsSlot()
     {
         var resource = CreateKey("resource");
-        await AcquireAsync(resource, 1, ShortTimeToLive);
+        await AcquireAsync(resource, 1, ShortTimeToLive, TestCancellationToken);
 
         await AdvanceClockAsync(StillAlive, TestCancellationToken);
 
-        var before = await TryAcquireAsync(resource, 1, ShortTimeToLive);
+        var before = await TryAcquireAsync(resource, 1, ShortTimeToLive, TestCancellationToken);
         Assert.Equal(SemaphoreAcquireStatus.Full, before.Status);
 
         await AdvanceClockAsync(PastExpiry, TestCancellationToken);
 
-        var after = await TryAcquireAsync(resource, 1, ShortTimeToLive);
+        var after = await TryAcquireAsync(resource, 1, ShortTimeToLive, TestCancellationToken);
         Assert.Equal(SemaphoreAcquireStatus.Acquired, after.Status);
     }
 
@@ -316,7 +322,7 @@ public abstract class SemaphoreContractTests : ProviderContractTests
 
         await Sessions.CloseAsync(session, null, TestCancellationToken);
 
-        var result = await TryAcquireAsync(resource, 1, LongTimeToLive);
+        var result = await TryAcquireAsync(resource, 1, LongTimeToLive, TestCancellationToken);
         Assert.True(held.IsAcquired);
         Assert.Equal(SemaphoreAcquireStatus.Acquired, result.Status);
     }
@@ -355,7 +361,7 @@ public abstract class SemaphoreContractTests : ProviderContractTests
     public async Task RenewAsync_WhenGrantHolds_ExtendsItFromTheRenewal()
     {
         var resource = CreateKey("resource");
-        var grant = await AcquireAsync(resource, 1, ShortTimeToLive);
+        var grant = await AcquireAsync(resource, 1, ShortTimeToLive, TestCancellationToken);
 
         await AdvanceClockAsync(BeforeExpiry, TestCancellationToken);
         var renewed = await Semaphores.RenewAsync(
@@ -368,12 +374,12 @@ public abstract class SemaphoreContractTests : ProviderContractTests
 
         Assert.True(renewed);
 
-        var before = await TryAcquireAsync(resource, 1, ShortTimeToLive);
+        var before = await TryAcquireAsync(resource, 1, ShortTimeToLive, TestCancellationToken);
         Assert.Equal(SemaphoreAcquireStatus.Full, before.Status);
 
         await AdvanceClockAsync(PastExpiry, TestCancellationToken);
 
-        var after = await TryAcquireAsync(resource, 1, ShortTimeToLive);
+        var after = await TryAcquireAsync(resource, 1, ShortTimeToLive, TestCancellationToken);
         Assert.Equal(SemaphoreAcquireStatus.Acquired, after.Status);
     }
 
@@ -384,7 +390,7 @@ public abstract class SemaphoreContractTests : ProviderContractTests
     public async Task RenewAsync_WhenGrantEnded_ReturnsFalse()
     {
         var resource = CreateKey("resource");
-        var grant = await AcquireAsync(resource, 1, LongTimeToLive);
+        var grant = await AcquireAsync(resource, 1, LongTimeToLive, TestCancellationToken);
         await Semaphores.ReleaseAsync(grant, null, TestCancellationToken);
 
         var renewed = await Semaphores.RenewAsync(
@@ -439,13 +445,13 @@ public abstract class SemaphoreContractTests : ProviderContractTests
     public async Task ReleaseAsync_WhenGrantHolds_ReturnsTrueAndFreesTheSlot()
     {
         var resource = CreateKey("resource");
-        var grant = await AcquireAsync(resource, 1, LongTimeToLive);
+        var grant = await AcquireAsync(resource, 1, LongTimeToLive, TestCancellationToken);
 
         var released = await Semaphores.ReleaseAsync(grant, null, TestCancellationToken);
 
         Assert.True(released);
 
-        var result = await TryAcquireAsync(resource, 1, LongTimeToLive);
+        var result = await TryAcquireAsync(resource, 1, LongTimeToLive, TestCancellationToken);
         Assert.Equal(SemaphoreAcquireStatus.Acquired, result.Status);
     }
 
@@ -456,7 +462,7 @@ public abstract class SemaphoreContractTests : ProviderContractTests
     public async Task ReleaseAsync_WhenGrantEnded_ReturnsFalse()
     {
         var resource = CreateKey("resource");
-        var grant = await AcquireAsync(resource, 1, LongTimeToLive);
+        var grant = await AcquireAsync(resource, 1, LongTimeToLive, TestCancellationToken);
         await Semaphores.ReleaseAsync(grant, null, TestCancellationToken);
 
         var released = await Semaphores.ReleaseAsync(grant, null, TestCancellationToken);
@@ -472,15 +478,15 @@ public abstract class SemaphoreContractTests : ProviderContractTests
     public async Task ReleaseAsync_WhenTheSlotWasGrantedAgain_ReturnsFalseAndKeepsIt()
     {
         var resource = CreateKey("resource");
-        var first = await AcquireAsync(resource, 1, LongTimeToLive);
+        var first = await AcquireAsync(resource, 1, LongTimeToLive, TestCancellationToken);
         await Semaphores.ReleaseAsync(first, null, TestCancellationToken);
-        await AcquireAsync(resource, 1, LongTimeToLive);
+        await AcquireAsync(resource, 1, LongTimeToLive, TestCancellationToken);
 
         var released = await Semaphores.ReleaseAsync(first, null, TestCancellationToken);
 
         Assert.False(released);
 
-        var result = await TryAcquireAsync(resource, 1, LongTimeToLive);
+        var result = await TryAcquireAsync(resource, 1, LongTimeToLive, TestCancellationToken);
         Assert.Equal(SemaphoreAcquireStatus.Full, result.Status);
     }
 
@@ -495,11 +501,11 @@ public abstract class SemaphoreContractTests : ProviderContractTests
     public async Task WaitForReleaseAsync_WhenASlotIsFree_CompletesAtOnce()
     {
         var resource = CreateKey("resource");
-        await AcquireAsync(resource, 2, LongTimeToLive);
+        await AcquireAsync(resource, 2, LongTimeToLive, TestCancellationToken);
 
         var wait = Semaphores.WaitForReleaseAsync(resource, null, TestCancellationToken).AsTask();
 
-        await ContractStreams.CompletesAsync(wait);
+        await ContractStreams.CompletesAsync(wait, TestCancellationToken);
     }
 
     /// <summary>
@@ -509,14 +515,14 @@ public abstract class SemaphoreContractTests : ProviderContractTests
     public async Task WaitForReleaseAsync_WhenAHolderReleases_Completes()
     {
         var resource = CreateKey("resource");
-        var grant = await AcquireAsync(resource, 1, LongTimeToLive);
+        var grant = await AcquireAsync(resource, 1, LongTimeToLive, TestCancellationToken);
         var wait = Semaphores.WaitForReleaseAsync(resource, null, TestCancellationToken).AsTask();
 
         Assert.False(wait.IsCompleted);
 
         await Semaphores.ReleaseAsync(grant, null, TestCancellationToken);
 
-        await ContractStreams.CompletesAsync(wait);
+        await ContractStreams.CompletesAsync(wait, TestCancellationToken);
     }
 
     #endregion

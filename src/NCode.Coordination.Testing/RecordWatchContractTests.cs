@@ -37,11 +37,13 @@ public abstract class RecordWatchContractTests : ProviderContractTests
     /// <param name="key">The key of the record.</param>
     /// <param name="expected">The revision the record holds.</param>
     /// <param name="value">The value to store.</param>
+    /// <param name="cancellationToken">A token that cancels the operation.</param>
     /// <returns>The revision of the write.</returns>
     private async ValueTask<Revision> SwapAsync(
         CoordinationKey key,
         Revision expected,
-        byte[] value
+        byte[] value,
+        CancellationToken cancellationToken
     )
     {
         var result = await Records.CompareAndSwapAsync(
@@ -50,7 +52,7 @@ public abstract class RecordWatchContractTests : ProviderContractTests
             value,
             RecordLifetime.Persistent,
             null,
-            TestCancellationToken
+            cancellationToken
         );
 
         Assert.True(result.IsWritten);
@@ -59,15 +61,15 @@ public abstract class RecordWatchContractTests : ProviderContractTests
     }
 
     /// <summary>
-    /// Lists every record under a prefix that a filter keeps, page by page.
+    /// Lists every record that a watch's scope covers, page by page.
     /// </summary>
-    /// <param name="prefix">The prefix to list.</param>
-    /// <param name="matches">The filter that tells the keys to keep.</param>
+    /// <param name="scope">The records the watch covers.</param>
+    /// <param name="cancellationToken">A token that cancels the operation.</param>
     /// <returns>The records by key, and the revision that the last page reflects.</returns>
     private async ValueTask<(
         Dictionary<CoordinationKey, StoredRecord> Records,
         Revision Revision
-    )> ListAllAsync(CoordinationKey prefix, Func<CoordinationKey, bool> matches)
+    )> ListAllAsync(ContractWatchScope scope, CancellationToken cancellationToken)
     {
         const int limit = 100;
         var view = new Dictionary<CoordinationKey, StoredRecord>();
@@ -77,11 +79,11 @@ public abstract class RecordWatchContractTests : ProviderContractTests
         {
             var request = new RecordPageRequest(limit) { ContinuationToken = token };
 
-            var page = await Records.ListAsync(prefix, request, null, TestCancellationToken);
+            var page = await Records.ListAsync(scope.Prefix, request, null, cancellationToken);
 
             foreach (var record in page.Records)
             {
-                if (matches(record.Key))
+                if (scope.Matches(record.Key))
                 {
                     view[record.Key] = record;
                 }
@@ -99,16 +101,16 @@ public abstract class RecordWatchContractTests : ProviderContractTests
     /// </summary>
     /// <param name="changes">The enumerator that reads the watch.</param>
     /// <param name="first">The change to start with, which the test has read.</param>
-    /// <param name="prefix">The prefix that a resync lists.</param>
-    /// <param name="matches">The filter that tells the keys the watch covers.</param>
+    /// <param name="scope">The records the watch covers, which a resync lists.</param>
     /// <param name="until">The revision that the view has to reach.</param>
+    /// <param name="cancellationToken">A token that cancels the operation.</param>
     /// <returns>The view of the watched records at the revision it reached, by key.</returns>
     private async ValueTask<Dictionary<CoordinationKey, StoredRecord>> ConvergeAsync(
         IAsyncEnumerator<RecordChange> changes,
         RecordChange first,
-        CoordinationKey prefix,
-        Func<CoordinationKey, bool> matches,
-        Revision until
+        ContractWatchScope scope,
+        Revision until,
+        CancellationToken cancellationToken
     )
     {
         var view = new Dictionary<CoordinationKey, StoredRecord>();
@@ -117,7 +119,7 @@ public abstract class RecordWatchContractTests : ProviderContractTests
         {
             if (change.IsResync)
             {
-                var (listed, revision) = await ListAllAsync(prefix, matches);
+                var (listed, revision) = await ListAllAsync(scope, cancellationToken);
                 view = listed;
                 if (revision >= until)
                 {
@@ -142,7 +144,7 @@ public abstract class RecordWatchContractTests : ProviderContractTests
                 }
             }
 
-            change = await ContractStreams.NextAsync(changes);
+            change = await ContractStreams.NextAsync(changes, cancellationToken);
         }
     }
 
@@ -157,8 +159,8 @@ public abstract class RecordWatchContractTests : ProviderContractTests
         var key = CreateKey("a");
 
         var watch = Watches.WatchKeyAsync(key, null, null, TestCancellationToken);
-        await using var stream = ContractStreams.Open(watch);
-        var first = await ContractStreams.NextAsync(stream);
+        await using var stream = ContractStreams.Open(watch, TestCancellationToken);
+        var first = await ContractStreams.NextAsync(stream, TestCancellationToken);
 
         Assert.True(first.IsResync);
     }
@@ -172,8 +174,8 @@ public abstract class RecordWatchContractTests : ProviderContractTests
         var key = CreateKey("a");
         var value = "one"u8.ToArray();
         var watch = Watches.WatchKeyAsync(key, null, null, TestCancellationToken);
-        await using var stream = ContractStreams.Open(watch);
-        await ContractStreams.NextAsync(stream);
+        await using var stream = ContractStreams.Open(watch, TestCancellationToken);
+        await ContractStreams.NextAsync(stream, TestCancellationToken);
 
         var revision = await ContractRecords.CreateAsync(
             Records,
@@ -182,7 +184,11 @@ public abstract class RecordWatchContractTests : ProviderContractTests
             TestCancellationToken
         );
 
-        var change = await ContractStreams.NextMatchingAsync(stream, item => !item.IsResync);
+        var change = await ContractStreams.NextMatchingAsync(
+            stream,
+            item => !item.IsResync,
+            TestCancellationToken
+        );
         Assert.Equal(RecordChangeKind.Written, change.Kind);
         Assert.Equal(key, change.Key);
         Assert.Equal(revision, change.Revision);
@@ -202,14 +208,18 @@ public abstract class RecordWatchContractTests : ProviderContractTests
         var value = "one"u8.ToArray();
         var written = await ContractRecords.CreateAsync(Records, key, value, TestCancellationToken);
         var watch = Watches.WatchKeyAsync(key, null, null, TestCancellationToken);
-        await using var stream = ContractStreams.Open(watch);
-        await ContractStreams.NextAsync(stream);
+        await using var stream = ContractStreams.Open(watch, TestCancellationToken);
+        await ContractStreams.NextAsync(stream, TestCancellationToken);
 
         var status = await Records.CompareAndDeleteAsync(key, written, null, TestCancellationToken);
 
         Assert.Equal(RecordDeleteStatus.Deleted, status);
 
-        var change = await ContractStreams.NextMatchingAsync(stream, item => !item.IsResync);
+        var change = await ContractStreams.NextMatchingAsync(
+            stream,
+            item => !item.IsResync,
+            TestCancellationToken
+        );
         Assert.Equal(RecordChangeKind.Deleted, change.Kind);
         Assert.Equal(key, change.Key);
         Assert.True(change.Revision > written);
@@ -225,13 +235,17 @@ public abstract class RecordWatchContractTests : ProviderContractTests
         var otherKey = CreateKey("b");
         var value = "one"u8.ToArray();
         var watch = Watches.WatchKeyAsync(key, null, null, TestCancellationToken);
-        await using var stream = ContractStreams.Open(watch);
-        await ContractStreams.NextAsync(stream);
+        await using var stream = ContractStreams.Open(watch, TestCancellationToken);
+        await ContractStreams.NextAsync(stream, TestCancellationToken);
 
         await ContractRecords.CreateAsync(Records, otherKey, value, TestCancellationToken);
         await ContractRecords.CreateAsync(Records, key, value, TestCancellationToken);
 
-        var change = await ContractStreams.NextMatchingAsync(stream, item => !item.IsResync);
+        var change = await ContractStreams.NextMatchingAsync(
+            stream,
+            item => !item.IsResync,
+            TestCancellationToken
+        );
         Assert.Equal(RecordChangeKind.Written, change.Kind);
         Assert.Equal(key, change.Key);
     }
@@ -247,14 +261,16 @@ public abstract class RecordWatchContractTests : ProviderContractTests
         var lifetime = RecordLifetime.ForTimeToLive(ShortTimeToLive);
         await ContractRecords.CreateAsync(Records, key, value, lifetime, TestCancellationToken);
         var watch = Watches.WatchKeyAsync(key, null, null, TestCancellationToken);
-        await using var stream = ContractStreams.Open(watch);
-        await ContractStreams.NextAsync(stream);
+        await using var stream = ContractStreams.Open(watch, TestCancellationToken);
+        await ContractStreams.NextAsync(stream, TestCancellationToken);
 
         await AdvanceClockAsync(StillAlive, TestCancellationToken);
         await AdvanceClockAsync(PastExpiry, TestCancellationToken);
 
-        var change = await ContractStreams.NextMatchingAsync(stream, item =>
-            item.Kind == RecordChangeKind.Deleted
+        var change = await ContractStreams.NextMatchingAsync(
+            stream,
+            item => item.Kind == RecordChangeKind.Deleted,
+            TestCancellationToken
         );
         Assert.Equal(key, change.Key);
     }
@@ -276,13 +292,15 @@ public abstract class RecordWatchContractTests : ProviderContractTests
         var lifetime = RecordLifetime.ForSession(session);
         await ContractRecords.CreateAsync(Records, key, value, lifetime, TestCancellationToken);
         var watch = Watches.WatchKeyAsync(key, null, null, TestCancellationToken);
-        await using var stream = ContractStreams.Open(watch);
-        await ContractStreams.NextAsync(stream);
+        await using var stream = ContractStreams.Open(watch, TestCancellationToken);
+        await ContractStreams.NextAsync(stream, TestCancellationToken);
 
         await Sessions.CloseAsync(session, null, TestCancellationToken);
 
-        var change = await ContractStreams.NextMatchingAsync(stream, item =>
-            item.Kind == RecordChangeKind.Deleted
+        var change = await ContractStreams.NextMatchingAsync(
+            stream,
+            item => item.Kind == RecordChangeKind.Deleted,
+            TestCancellationToken
         );
         Assert.Equal(key, change.Key);
     }
@@ -298,16 +316,20 @@ public abstract class RecordWatchContractTests : ProviderContractTests
         var two = "two"u8.ToArray();
         var three = "three"u8.ToArray();
         var watch = Watches.WatchKeyAsync(key, null, null, TestCancellationToken);
-        await using var stream = ContractStreams.Open(watch);
-        await ContractStreams.NextAsync(stream);
+        await using var stream = ContractStreams.Open(watch, TestCancellationToken);
+        await ContractStreams.NextAsync(stream, TestCancellationToken);
         var first = await ContractRecords.CreateAsync(Records, key, one, TestCancellationToken);
-        var second = await SwapAsync(key, first, two);
-        var third = await SwapAsync(key, second, three);
+        var second = await SwapAsync(key, first, two, TestCancellationToken);
+        var third = await SwapAsync(key, second, three, TestCancellationToken);
 
         Revision? previous = null;
         while (previous is null || previous < third)
         {
-            var change = await ContractStreams.NextMatchingAsync(stream, item => !item.IsResync);
+            var change = await ContractStreams.NextMatchingAsync(
+                stream,
+                item => !item.IsResync,
+                TestCancellationToken
+            );
 
             Assert.True(previous is null || change.Revision > previous);
             previous = change.Revision;
@@ -327,18 +349,20 @@ public abstract class RecordWatchContractTests : ProviderContractTests
         var one = "one"u8.ToArray();
         var two = "two"u8.ToArray();
         var first = await ContractRecords.CreateAsync(Records, key, one, TestCancellationToken);
-        var second = await SwapAsync(key, first, two);
+        var second = await SwapAsync(key, first, two, TestCancellationToken);
 
         var watch = Watches.WatchKeyAsync(key, first, null, TestCancellationToken);
-        await using var stream = ContractStreams.Open(watch);
-        var change = await ContractStreams.NextAsync(stream);
+        await using var stream = ContractStreams.Open(watch, TestCancellationToken);
+        var change = await ContractStreams.NextAsync(stream, TestCancellationToken);
 
         Assert.True(
             change.IsResync
                 || (change.Kind == RecordChangeKind.Written && change.Revision == second)
         );
 
-        var view = await ConvergeAsync(stream, change, key, item => item.Equals(key), second);
+        var scope = new ContractWatchScope(key, item => item.Equals(key));
+
+        var view = await ConvergeAsync(stream, change, scope, second, TestCancellationToken);
 
         var record = Assert.Single(view).Value;
         Assert.Equal(key, record.Key);
@@ -388,8 +412,8 @@ public abstract class RecordWatchContractTests : ProviderContractTests
         var valueC1 = "c1"u8.ToArray();
         var valueO1 = "o1"u8.ToArray();
         var watch = Watches.WatchPrefixAsync(prefix, null, null, TestCancellationToken);
-        await using var stream = ContractStreams.Open(watch);
-        var first = await ContractStreams.NextAsync(stream);
+        await using var stream = ContractStreams.Open(watch, TestCancellationToken);
+        var first = await ContractStreams.NextAsync(stream, TestCancellationToken);
         var createdA = await ContractRecords.CreateAsync(
             Records,
             keyA,
@@ -397,7 +421,7 @@ public abstract class RecordWatchContractTests : ProviderContractTests
             TestCancellationToken
         );
         await ContractRecords.CreateAsync(Records, keyB, valueB1, TestCancellationToken);
-        await SwapAsync(keyA, createdA, valueA2);
+        await SwapAsync(keyA, createdA, valueA2, TestCancellationToken);
         await Records.TakeAsync(keyB, null, TestCancellationToken);
         await ContractRecords.CreateAsync(Records, other, valueO1, TestCancellationToken);
         var createdC = await ContractRecords.CreateAsync(
@@ -407,9 +431,11 @@ public abstract class RecordWatchContractTests : ProviderContractTests
             TestCancellationToken
         );
 
-        var view = await ConvergeAsync(stream, first, prefix, _ => true, createdC);
+        var scope = new ContractWatchScope(prefix, _ => true);
 
-        var (listed, _) = await ListAllAsync(prefix, _ => true);
+        var view = await ConvergeAsync(stream, first, scope, createdC, TestCancellationToken);
+
+        var (listed, _) = await ListAllAsync(scope, TestCancellationToken);
         Assert.Equal(2, listed.Count);
         Assert.Equal(listed.Count, view.Count);
         foreach (var (key, expected) in listed)
@@ -440,13 +466,17 @@ public abstract class RecordWatchContractTests : ProviderContractTests
         var other = CreateKey("other");
         var value = "one"u8.ToArray();
         var watch = Watches.WatchPrefixAsync(prefix, null, null, TestCancellationToken);
-        await using var stream = ContractStreams.Open(watch);
-        await ContractStreams.NextAsync(stream);
+        await using var stream = ContractStreams.Open(watch, TestCancellationToken);
+        await ContractStreams.NextAsync(stream, TestCancellationToken);
 
         await ContractRecords.CreateAsync(Records, other, value, TestCancellationToken);
         await ContractRecords.CreateAsync(Records, key, value, TestCancellationToken);
 
-        var change = await ContractStreams.NextMatchingAsync(stream, item => !item.IsResync);
+        var change = await ContractStreams.NextMatchingAsync(
+            stream,
+            item => !item.IsResync,
+            TestCancellationToken
+        );
         Assert.Equal(RecordChangeKind.Written, change.Kind);
         Assert.Equal(key, change.Key);
     }

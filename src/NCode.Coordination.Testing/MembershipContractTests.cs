@@ -358,8 +358,8 @@ public abstract class MembershipContractTests : ProviderContractTests
         var current = await Members.ReadAsync(group, null, TestCancellationToken);
 
         var watch = Members.WatchAsync(group, null, TestCancellationToken);
-        await using var stream = ContractStreams.Open(watch);
-        var first = await ContractStreams.NextAsync(stream);
+        await using var stream = ContractStreams.Open(watch, TestCancellationToken);
+        var first = await ContractStreams.NextAsync(stream, TestCancellationToken);
 
         Assert.Equal(group, first.Group);
         Assert.Equal(current.Revision, first.Revision);
@@ -382,12 +382,14 @@ public abstract class MembershipContractTests : ProviderContractTests
         );
         var member = CreateMember(session, "b");
         var watch = Members.WatchAsync(group, null, TestCancellationToken);
-        await using var stream = ContractStreams.Open(watch);
-        var first = await ContractStreams.NextAsync(stream);
+        await using var stream = ContractStreams.Open(watch, TestCancellationToken);
+        var first = await ContractStreams.NextAsync(stream, TestCancellationToken);
         await Members.JoinAsync(group, member, null, TestCancellationToken);
 
-        var view = await ContractStreams.NextMatchingAsync(stream, candidate =>
-            candidate.Members.Any(listed => listed.NodeId == "b")
+        var view = await ContractStreams.NextMatchingAsync(
+            stream,
+            candidate => candidate.Members.Any(listed => listed.NodeId == "b"),
+            TestCancellationToken
         );
 
         Assert.True(view.Revision > first.Revision);
@@ -409,12 +411,14 @@ public abstract class MembershipContractTests : ProviderContractTests
         var member = CreateMember(session, "a");
         await Members.JoinAsync(group, member, null, TestCancellationToken);
         var watch = Members.WatchAsync(group, null, TestCancellationToken);
-        await using var stream = ContractStreams.Open(watch);
-        var first = await ContractStreams.NextAsync(stream);
+        await using var stream = ContractStreams.Open(watch, TestCancellationToken);
+        var first = await ContractStreams.NextAsync(stream, TestCancellationToken);
         await Sessions.CloseAsync(session, null, TestCancellationToken);
 
-        var view = await ContractStreams.NextMatchingAsync(stream, candidate =>
-            candidate.Members.IsEmpty
+        var view = await ContractStreams.NextMatchingAsync(
+            stream,
+            candidate => candidate.Members.IsEmpty,
+            TestCancellationToken
         );
 
         Assert.Single(first.Members);

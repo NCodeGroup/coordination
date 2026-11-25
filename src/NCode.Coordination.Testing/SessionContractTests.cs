@@ -164,7 +164,7 @@ public abstract class SessionContractTests : ProviderContractTests
 
         await AdvanceClockAsync(PastExpiry, TestCancellationToken);
 
-        await ContractStreams.CompletesAsync(wait);
+        await ContractStreams.CompletesAsync(wait, TestCancellationToken);
     }
 
     #endregion
@@ -213,7 +213,7 @@ public abstract class SessionContractTests : ProviderContractTests
 
         await Sessions.CloseAsync(session, null, TestCancellationToken);
 
-        await ContractStreams.CompletesAsync(wait);
+        await ContractStreams.CompletesAsync(wait, TestCancellationToken);
     }
 
     /// <summary>
@@ -235,7 +235,7 @@ public abstract class SessionContractTests : ProviderContractTests
 
         await AdvanceClockAsync(PastExpiry, TestCancellationToken);
 
-        await ContractStreams.CompletesAsync(wait);
+        await ContractStreams.CompletesAsync(wait, TestCancellationToken);
     }
 
     /// <summary>
@@ -252,7 +252,7 @@ public abstract class SessionContractTests : ProviderContractTests
 
         var wait = Sessions.WaitForEndAsync(session, null, TestCancellationToken).AsTask();
 
-        await ContractStreams.CompletesAsync(wait);
+        await ContractStreams.CompletesAsync(wait, TestCancellationToken);
     }
 
     /// <summary>

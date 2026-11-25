@@ -27,14 +27,16 @@ public abstract class LeaseContractTests : ProviderContractTests
     /// </summary>
     /// <param name="resource">The resource to lease.</param>
     /// <param name="timeToLive">The time to live to ask for.</param>
+    /// <param name="cancellationToken">A token that cancels the operation.</param>
     /// <returns>The grant.</returns>
     private async ValueTask<LeaseGrant> AcquireAsync(
         CoordinationKey resource,
-        TimeToLive timeToLive
+        TimeToLive timeToLive,
+        CancellationToken cancellationToken
     )
     {
         var terms = LeaseTerms.ForTimeToLive(timeToLive);
-        var result = await Leases.TryAcquireAsync(resource, terms, null, TestCancellationToken);
+        var result = await Leases.TryAcquireAsync(resource, terms, null, cancellationToken);
 
         Assert.True(result.IsAcquired);
         return result.Grant;
@@ -45,15 +47,17 @@ public abstract class LeaseContractTests : ProviderContractTests
     /// </summary>
     /// <param name="resource">The resource to lease.</param>
     /// <param name="timeToLive">The time to live to ask for.</param>
+    /// <param name="cancellationToken">A token that cancels the operation.</param>
     /// <returns>The result of the attempt.</returns>
     private ValueTask<LeaseAcquireResult> TryAcquireAsync(
         CoordinationKey resource,
-        TimeToLive timeToLive
+        TimeToLive timeToLive,
+        CancellationToken cancellationToken
     )
     {
         var terms = LeaseTerms.ForTimeToLive(timeToLive);
 
-        return Leases.TryAcquireAsync(resource, terms, null, TestCancellationToken);
+        return Leases.TryAcquireAsync(resource, terms, null, cancellationToken);
     }
 
     #region TryAcquireAsync Tests
@@ -66,7 +70,7 @@ public abstract class LeaseContractTests : ProviderContractTests
     {
         var resource = CreateKey("resource");
 
-        var result = await TryAcquireAsync(resource, LongTimeToLive);
+        var result = await TryAcquireAsync(resource, LongTimeToLive, TestCancellationToken);
 
         Assert.Equal(LeaseAcquireStatus.Acquired, result.Status);
         var grant = Assert.IsType<LeaseGrant>(result.Grant);
@@ -82,9 +86,9 @@ public abstract class LeaseContractTests : ProviderContractTests
     public async Task TryAcquireAsync_WhenAnotherHolderHasIt_ReturnsHeld()
     {
         var resource = CreateKey("resource");
-        await AcquireAsync(resource, LongTimeToLive);
+        await AcquireAsync(resource, LongTimeToLive, TestCancellationToken);
 
-        var result = await TryAcquireAsync(resource, LongTimeToLive);
+        var result = await TryAcquireAsync(resource, LongTimeToLive, TestCancellationToken);
 
         Assert.Equal(LeaseAcquireStatus.Held, result.Status);
         Assert.Null(result.Grant);
@@ -176,10 +180,10 @@ public abstract class LeaseContractTests : ProviderContractTests
     public async Task TryAcquireAsync_AfterRelease_GivesAGreaterFencingToken()
     {
         var resource = CreateKey("resource");
-        var earlier = await AcquireAsync(resource, LongTimeToLive);
+        var earlier = await AcquireAsync(resource, LongTimeToLive, TestCancellationToken);
         await Leases.ReleaseAsync(earlier, null, TestCancellationToken);
 
-        var later = await AcquireAsync(resource, LongTimeToLive);
+        var later = await AcquireAsync(resource, LongTimeToLive, TestCancellationToken);
 
         Assert.True(later.FencingToken > earlier.FencingToken);
     }
@@ -192,16 +196,16 @@ public abstract class LeaseContractTests : ProviderContractTests
     public async Task TryAcquireAsync_AfterExpiry_GivesAGreaterFencingToken()
     {
         var resource = CreateKey("resource");
-        var earlier = await AcquireAsync(resource, ShortTimeToLive);
+        var earlier = await AcquireAsync(resource, ShortTimeToLive, TestCancellationToken);
 
         await AdvanceClockAsync(StillAlive, TestCancellationToken);
 
-        var before = await TryAcquireAsync(resource, ShortTimeToLive);
+        var before = await TryAcquireAsync(resource, ShortTimeToLive, TestCancellationToken);
         Assert.Equal(LeaseAcquireStatus.Held, before.Status);
 
         await AdvanceClockAsync(PastExpiry, TestCancellationToken);
 
-        var later = await AcquireAsync(resource, ShortTimeToLive);
+        var later = await AcquireAsync(resource, ShortTimeToLive, TestCancellationToken);
         Assert.True(later.FencingToken > earlier.FencingToken);
     }
 
@@ -223,7 +227,7 @@ public abstract class LeaseContractTests : ProviderContractTests
 
         await Sessions.CloseAsync(session, null, TestCancellationToken);
 
-        var result = await TryAcquireAsync(resource, LongTimeToLive);
+        var result = await TryAcquireAsync(resource, LongTimeToLive, TestCancellationToken);
         Assert.True(held.IsAcquired);
         Assert.Equal(LeaseAcquireStatus.Acquired, result.Status);
     }
@@ -256,7 +260,7 @@ public abstract class LeaseContractTests : ProviderContractTests
     public async Task RenewAsync_WhenGrantHolds_ExtendsItFromTheRenewal()
     {
         var resource = CreateKey("resource");
-        var grant = await AcquireAsync(resource, ShortTimeToLive);
+        var grant = await AcquireAsync(resource, ShortTimeToLive, TestCancellationToken);
 
         await AdvanceClockAsync(BeforeExpiry, TestCancellationToken);
         var renewed = await Leases.RenewAsync(grant, ShortTimeToLive, null, TestCancellationToken);
@@ -264,12 +268,12 @@ public abstract class LeaseContractTests : ProviderContractTests
 
         Assert.True(renewed);
 
-        var before = await TryAcquireAsync(resource, ShortTimeToLive);
+        var before = await TryAcquireAsync(resource, ShortTimeToLive, TestCancellationToken);
         Assert.Equal(LeaseAcquireStatus.Held, before.Status);
 
         await AdvanceClockAsync(PastExpiry, TestCancellationToken);
 
-        var after = await TryAcquireAsync(resource, ShortTimeToLive);
+        var after = await TryAcquireAsync(resource, ShortTimeToLive, TestCancellationToken);
         Assert.Equal(LeaseAcquireStatus.Acquired, after.Status);
     }
 
@@ -280,7 +284,7 @@ public abstract class LeaseContractTests : ProviderContractTests
     public async Task RenewAsync_WhenGrantEnded_ReturnsFalse()
     {
         var resource = CreateKey("resource");
-        var grant = await AcquireAsync(resource, LongTimeToLive);
+        var grant = await AcquireAsync(resource, LongTimeToLive, TestCancellationToken);
         await Leases.ReleaseAsync(grant, null, TestCancellationToken);
 
         var renewed = await Leases.RenewAsync(grant, LongTimeToLive, null, TestCancellationToken);
@@ -324,13 +328,13 @@ public abstract class LeaseContractTests : ProviderContractTests
     public async Task ReleaseAsync_WhenGrantHolds_ReturnsTrueAndFreesTheResource()
     {
         var resource = CreateKey("resource");
-        var grant = await AcquireAsync(resource, LongTimeToLive);
+        var grant = await AcquireAsync(resource, LongTimeToLive, TestCancellationToken);
 
         var released = await Leases.ReleaseAsync(grant, null, TestCancellationToken);
 
         Assert.True(released);
 
-        var result = await TryAcquireAsync(resource, LongTimeToLive);
+        var result = await TryAcquireAsync(resource, LongTimeToLive, TestCancellationToken);
         Assert.Equal(LeaseAcquireStatus.Acquired, result.Status);
     }
 
@@ -341,15 +345,15 @@ public abstract class LeaseContractTests : ProviderContractTests
     public async Task ReleaseAsync_WhenAnotherGrantHoldsTheResource_ReturnsFalseAndKeepsIt()
     {
         var resource = CreateKey("resource");
-        var first = await AcquireAsync(resource, LongTimeToLive);
+        var first = await AcquireAsync(resource, LongTimeToLive, TestCancellationToken);
         await Leases.ReleaseAsync(first, null, TestCancellationToken);
-        await AcquireAsync(resource, LongTimeToLive);
+        await AcquireAsync(resource, LongTimeToLive, TestCancellationToken);
 
         var released = await Leases.ReleaseAsync(first, null, TestCancellationToken);
 
         Assert.False(released);
 
-        var result = await TryAcquireAsync(resource, LongTimeToLive);
+        var result = await TryAcquireAsync(resource, LongTimeToLive, TestCancellationToken);
         Assert.Equal(LeaseAcquireStatus.Held, result.Status);
     }
 
@@ -367,7 +371,7 @@ public abstract class LeaseContractTests : ProviderContractTests
 
         var wait = Leases.WaitForReleaseAsync(resource, null, TestCancellationToken).AsTask();
 
-        await ContractStreams.CompletesAsync(wait);
+        await ContractStreams.CompletesAsync(wait, TestCancellationToken);
     }
 
     /// <summary>
@@ -377,14 +381,14 @@ public abstract class LeaseContractTests : ProviderContractTests
     public async Task WaitForReleaseAsync_WhenTheHolderReleases_Completes()
     {
         var resource = CreateKey("resource");
-        var grant = await AcquireAsync(resource, LongTimeToLive);
+        var grant = await AcquireAsync(resource, LongTimeToLive, TestCancellationToken);
         var wait = Leases.WaitForReleaseAsync(resource, null, TestCancellationToken).AsTask();
 
         Assert.False(wait.IsCompleted);
 
         await Leases.ReleaseAsync(grant, null, TestCancellationToken);
 
-        await ContractStreams.CompletesAsync(wait);
+        await ContractStreams.CompletesAsync(wait, TestCancellationToken);
     }
 
     /// <summary>
@@ -394,7 +398,7 @@ public abstract class LeaseContractTests : ProviderContractTests
     public async Task WaitForReleaseAsync_WhenTheGrantExpires_Completes()
     {
         var resource = CreateKey("resource");
-        await AcquireAsync(resource, ShortTimeToLive);
+        await AcquireAsync(resource, ShortTimeToLive, TestCancellationToken);
         var wait = Leases.WaitForReleaseAsync(resource, null, TestCancellationToken).AsTask();
 
         await AdvanceClockAsync(StillAlive, TestCancellationToken);
@@ -403,7 +407,7 @@ public abstract class LeaseContractTests : ProviderContractTests
 
         await AdvanceClockAsync(PastExpiry, TestCancellationToken);
 
-        await ContractStreams.CompletesAsync(wait);
+        await ContractStreams.CompletesAsync(wait, TestCancellationToken);
     }
 
     /// <summary>
@@ -413,7 +417,7 @@ public abstract class LeaseContractTests : ProviderContractTests
     public async Task WaitForReleaseAsync_WhenTokenIsCanceled_ThrowsOperationCanceledException()
     {
         var resource = CreateKey("resource");
-        await AcquireAsync(resource, LongTimeToLive);
+        await AcquireAsync(resource, LongTimeToLive, TestCancellationToken);
         using var source = CancellationTokenSource.CreateLinkedTokenSource(TestCancellationToken);
         var wait = Leases.WaitForReleaseAsync(resource, null, source.Token).AsTask();
 
