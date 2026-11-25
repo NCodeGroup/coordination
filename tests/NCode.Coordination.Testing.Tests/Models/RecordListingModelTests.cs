@@ -31,7 +31,7 @@ public sealed class RecordListingModelTests
         return new(key, encoded, new Revision(revision));
     }
 
-    private static RecordPage Page(long revision, params StoredRecord[] records) =>
+    private static RecordPage Page(long revision, params IEnumerable<StoredRecord> records) =>
         new(new Revision(revision), records);
 
     #region TryApply Tests

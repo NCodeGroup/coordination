@@ -23,12 +23,11 @@ public sealed class MembershipModelTests
 
     private static MembershipCall Read { get; } = new(MembershipCall.Read, 0);
 
-    private static MembershipView ViewOf(params SessionId[] members) =>
-        new(
-            Group,
-            new Revision(1),
-            members.Select(session => new Member(session, "node", "address"))
-        );
+    private static MembershipView ViewOf(params IEnumerable<SessionId> members)
+    {
+        var listed = members.Select(session => new Member(session, "node", "address"));
+        return new(Group, new Revision(1), listed);
+    }
 
     #region TryApply Tests
 

@@ -78,7 +78,7 @@ public sealed class RecordWatchDeliveryCheckerTests
     }
 
     private static ImmutableArray<Delivery<RecordChange>> Changes(
-        params Delivery<RecordChange>[] changes
+        params IEnumerable<Delivery<RecordChange>> changes
     ) => [.. changes];
 
     private static IReadOnlyDictionary<CoordinationKey, Revision> Closing(long revision) =>

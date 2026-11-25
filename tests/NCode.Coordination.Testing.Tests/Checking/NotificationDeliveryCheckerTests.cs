@@ -31,7 +31,7 @@ public sealed class NotificationDeliveryCheckerTests
     }
 
     private static ImmutableArray<Delivery<Notification>> Subscriber(
-        params Delivery<Notification>[] deliveries
+        params IEnumerable<Delivery<Notification>> deliveries
     ) => [.. deliveries];
 
     #region Check Tests
