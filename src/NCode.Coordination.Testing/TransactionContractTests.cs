@@ -75,13 +75,19 @@ public abstract class TransactionContractTests : ProviderContractTests
         var key1 = CreateKey("k1");
         var key2 = CreateKey("k2");
         var key3 = CreateKey("k3");
-        var revision1 = await CreateRecordAsync(key1, "one"u8.ToArray());
-        var transaction = new RecordTransaction(
-            [RecordCondition.RevisionEquals(key1, revision1), RecordCondition.Absent(key2)],
-            [Put(key1, "uno"u8.ToArray()), Put(key2, "dos"u8.ToArray())]
-        )
+        var one = "one"u8.ToArray();
+        var uno = "uno"u8.ToArray();
+        var dos = "dos"u8.ToArray();
+        var tres = "tres"u8.ToArray();
+        var revision1 = await CreateRecordAsync(key1, one);
+        var revisionEquals = RecordCondition.RevisionEquals(key1, revision1);
+        var absent = RecordCondition.Absent(key2);
+        var putUno = Put(key1, uno);
+        var putDos = Put(key2, dos);
+        var putTres = Put(key3, tres);
+        var transaction = new RecordTransaction([revisionEquals, absent], [putUno, putDos])
         {
-            OnFailure = [Put(key3, "tres"u8.ToArray())],
+            OnFailure = [putTres],
         };
 
         var result = await Transactions.ExecuteAsync(transaction, null, TestCancellationToken);
@@ -89,13 +95,16 @@ public abstract class TransactionContractTests : ProviderContractTests
         Assert.True(result.Succeeded);
         var record1 = await Records.ReadAsync(key1, null, TestCancellationToken);
         Assert.NotNull(record1);
-        Assert.Equal("uno"u8.ToArray(), record1.Value.ToArray());
+        var actual1 = record1.Value.ToArray();
+        Assert.Equal(uno, actual1);
         Assert.Equal(result.Revision, record1.Revision);
         var record2 = await Records.ReadAsync(key2, null, TestCancellationToken);
         Assert.NotNull(record2);
-        Assert.Equal("dos"u8.ToArray(), record2.Value.ToArray());
+        var actual2 = record2.Value.ToArray();
+        Assert.Equal(dos, actual2);
         Assert.Equal(result.Revision, record2.Revision);
-        Assert.Null(await ReadValueAsync(key3));
+        var actual3 = await ReadValueAsync(key3);
+        Assert.Null(actual3);
     }
 
     /// <summary>
@@ -108,21 +117,28 @@ public abstract class TransactionContractTests : ProviderContractTests
         var key1 = CreateKey("k1");
         var key2 = CreateKey("k2");
         var key3 = CreateKey("k3");
-        await CreateRecordAsync(key1, "one"u8.ToArray());
-        var transaction = new RecordTransaction(
-            [RecordCondition.Absent(key1)],
-            [Put(key2, "dos"u8.ToArray())]
-        )
+        var one = "one"u8.ToArray();
+        var dos = "dos"u8.ToArray();
+        var tres = "tres"u8.ToArray();
+        await CreateRecordAsync(key1, one);
+        var absent = RecordCondition.Absent(key1);
+        var putDos = Put(key2, dos);
+        var deleteKey1 = RecordWrite.Delete(key1);
+        var putTres = Put(key3, tres);
+        var transaction = new RecordTransaction([absent], [putDos])
         {
-            OnFailure = [RecordWrite.Delete(key1), Put(key3, "tres"u8.ToArray())],
+            OnFailure = [deleteKey1, putTres],
         };
 
         var result = await Transactions.ExecuteAsync(transaction, null, TestCancellationToken);
 
         Assert.False(result.Succeeded);
-        Assert.Null(await ReadValueAsync(key1));
-        Assert.Equal("tres"u8.ToArray(), await ReadValueAsync(key3));
-        Assert.Null(await ReadValueAsync(key2));
+        var actual1 = await ReadValueAsync(key1);
+        Assert.Null(actual1);
+        var actual3 = await ReadValueAsync(key3);
+        Assert.Equal(tres, actual3);
+        var actual2 = await ReadValueAsync(key2);
+        Assert.Null(actual2);
     }
 
     /// <summary>
@@ -133,16 +149,18 @@ public abstract class TransactionContractTests : ProviderContractTests
     {
         var key1 = CreateKey("k1");
         var key2 = CreateKey("k2");
-        await CreateRecordAsync(key1, "one"u8.ToArray());
-        var transaction = new RecordTransaction(
-            [RecordCondition.ValueEquals(key1, "one"u8.ToArray())],
-            [Put(key2, "dos"u8.ToArray())]
-        );
+        var one = "one"u8.ToArray();
+        var dos = "dos"u8.ToArray();
+        await CreateRecordAsync(key1, one);
+        var valueEquals = RecordCondition.ValueEquals(key1, one);
+        var putDos = Put(key2, dos);
+        var transaction = new RecordTransaction([valueEquals], [putDos]);
 
         var result = await Transactions.ExecuteAsync(transaction, null, TestCancellationToken);
 
         Assert.True(result.Succeeded);
-        Assert.Equal("dos"u8.ToArray(), await ReadValueAsync(key2));
+        var actual = await ReadValueAsync(key2);
+        Assert.Equal(dos, actual);
     }
 
     /// <summary>
@@ -153,16 +171,19 @@ public abstract class TransactionContractTests : ProviderContractTests
     {
         var key1 = CreateKey("k1");
         var key2 = CreateKey("k2");
-        await CreateRecordAsync(key1, "one"u8.ToArray());
-        var transaction = new RecordTransaction(
-            [RecordCondition.ValueEquals(key1, "other"u8.ToArray())],
-            [Put(key2, "dos"u8.ToArray())]
-        );
+        var one = "one"u8.ToArray();
+        var other = "other"u8.ToArray();
+        var dos = "dos"u8.ToArray();
+        await CreateRecordAsync(key1, one);
+        var valueEquals = RecordCondition.ValueEquals(key1, other);
+        var putDos = Put(key2, dos);
+        var transaction = new RecordTransaction([valueEquals], [putDos]);
 
         var result = await Transactions.ExecuteAsync(transaction, null, TestCancellationToken);
 
         Assert.False(result.Succeeded);
-        Assert.Null(await ReadValueAsync(key2));
+        var actual = await ReadValueAsync(key2);
+        Assert.Null(actual);
     }
 
     /// <summary>
@@ -172,12 +193,15 @@ public abstract class TransactionContractTests : ProviderContractTests
     public async Task ExecuteAsync_WhenNoConditionIsGiven_Succeeds()
     {
         var key = CreateKey("k1");
-        var transaction = new RecordTransaction([], [Put(key, "one"u8.ToArray())]);
+        var one = "one"u8.ToArray();
+        var putOne = Put(key, one);
+        var transaction = new RecordTransaction([], [putOne]);
 
         var result = await Transactions.ExecuteAsync(transaction, null, TestCancellationToken);
 
         Assert.True(result.Succeeded);
-        Assert.Equal("one"u8.ToArray(), await ReadValueAsync(key));
+        var actual = await ReadValueAsync(key);
+        Assert.Equal(one, actual);
     }
 
     /// <summary>
@@ -188,17 +212,20 @@ public abstract class TransactionContractTests : ProviderContractTests
     {
         var key1 = CreateKey("k1");
         var key2 = CreateKey("k2");
-        await CreateRecordAsync(key1, "one"u8.ToArray());
-        var transaction = new RecordTransaction(
-            [RecordCondition.Absent(key1)],
-            [Put(key2, "dos"u8.ToArray())]
-        );
+        var one = "one"u8.ToArray();
+        var dos = "dos"u8.ToArray();
+        await CreateRecordAsync(key1, one);
+        var absent = RecordCondition.Absent(key1);
+        var putDos = Put(key2, dos);
+        var transaction = new RecordTransaction([absent], [putDos]);
 
         var result = await Transactions.ExecuteAsync(transaction, null, TestCancellationToken);
 
         Assert.False(result.Succeeded);
-        Assert.Equal("one"u8.ToArray(), await ReadValueAsync(key1));
-        Assert.Null(await ReadValueAsync(key2));
+        var actual1 = await ReadValueAsync(key1);
+        Assert.Equal(one, actual1);
+        var actual2 = await ReadValueAsync(key2);
+        Assert.Null(actual2);
     }
 
     /// <summary>
@@ -207,8 +234,13 @@ public abstract class TransactionContractTests : ProviderContractTests
     [Fact]
     public async Task ExecuteAsync_WhenItWrites_GivesALaterRevision()
     {
-        var earlier = await CreateRecordAsync(CreateKey("k1"), "one"u8.ToArray());
-        var transaction = new RecordTransaction([], [Put(CreateKey("k2"), "dos"u8.ToArray())]);
+        var key1 = CreateKey("k1");
+        var key2 = CreateKey("k2");
+        var one = "one"u8.ToArray();
+        var dos = "dos"u8.ToArray();
+        var earlier = await CreateRecordAsync(key1, one);
+        var putDos = Put(key2, dos);
+        var transaction = new RecordTransaction([], [putDos]);
 
         var result = await Transactions.ExecuteAsync(transaction, null, TestCancellationToken);
 
@@ -222,18 +254,20 @@ public abstract class TransactionContractTests : ProviderContractTests
     public async Task ExecuteAsync_WhenAPutCarriesATimeToLive_ExpiresTheRecord()
     {
         var key = CreateKey("k1");
-        var transaction = new RecordTransaction(
-            [],
-            [RecordWrite.Put(key, "one"u8.ToArray(), RecordLifetime.ForTimeToLive(ShortTimeToLive))]
-        );
+        var one = "one"u8.ToArray();
+        var lifetime = RecordLifetime.ForTimeToLive(ShortTimeToLive);
+        var putOne = RecordWrite.Put(key, one, lifetime);
+        var transaction = new RecordTransaction([], [putOne]);
         var result = await Transactions.ExecuteAsync(transaction, null, TestCancellationToken);
         Assert.True(result.Succeeded);
 
         await AdvanceClockAsync(StillAlive);
-        Assert.Equal("one"u8.ToArray(), await ReadValueAsync(key));
+        var alive = await ReadValueAsync(key);
+        Assert.Equal(one, alive);
 
         await AdvanceClockAsync(PastExpiry);
-        Assert.Null(await ReadValueAsync(key));
+        var expired = await ReadValueAsync(key);
+        Assert.Null(expired);
     }
 
     /// <summary>
@@ -244,25 +278,22 @@ public abstract class TransactionContractTests : ProviderContractTests
     {
         var key1 = CreateKey("k1");
         var key2 = CreateKey("k2");
-        var created = await Records.CreateAsync(
-            key1,
-            "one"u8.ToArray(),
-            RecordLifetime.ForTimeToLive(ShortTimeToLive),
-            null,
-            TestCancellationToken
-        );
+        var one = "one"u8.ToArray();
+        var dos = "dos"u8.ToArray();
+        var lifetime = RecordLifetime.ForTimeToLive(ShortTimeToLive);
+        var created = await Records.CreateAsync(key1, one, lifetime, null, TestCancellationToken);
         Assert.True(created.IsWritten);
         await AdvanceClockAsync(StillAlive);
         await AdvanceClockAsync(PastExpiry);
-        var transaction = new RecordTransaction(
-            [RecordCondition.Absent(key1)],
-            [Put(key2, "dos"u8.ToArray())]
-        );
+        var absent = RecordCondition.Absent(key1);
+        var putDos = Put(key2, dos);
+        var transaction = new RecordTransaction([absent], [putDos]);
 
         var result = await Transactions.ExecuteAsync(transaction, null, TestCancellationToken);
 
         Assert.True(result.Succeeded);
-        Assert.Equal("dos"u8.ToArray(), await ReadValueAsync(key2));
+        var actual = await ReadValueAsync(key2);
+        Assert.Equal(dos, actual);
     }
 
     /// <summary>
@@ -272,22 +303,28 @@ public abstract class TransactionContractTests : ProviderContractTests
     [Fact]
     public async Task ExecuteAsync_WhenKeysSpanPartitionsAndAtomicityAcrossPartitionsIsDeclared_AppliesEveryWrite()
     {
+        var declaresAcross = Declares(Primitives.Transaction, Guarantees.AtomicAcrossPartitions);
         Assert.SkipUnless(
-            Declares(Primitives.Transaction, Guarantees.AtomicAcrossPartitions),
+            declaresAcross,
             "The provider does not declare atomicity across partitions."
         );
         var key1 = CreateKey("p1", "a") with { PartitionDepth = 1 };
         var key2 = CreateKey("p2", "b") with { PartitionDepth = 1 };
-        var transaction = new RecordTransaction(
-            [RecordCondition.Absent(key1), RecordCondition.Absent(key2)],
-            [Put(key1, "one"u8.ToArray()), Put(key2, "two"u8.ToArray())]
-        );
+        var one = "one"u8.ToArray();
+        var two = "two"u8.ToArray();
+        var absent1 = RecordCondition.Absent(key1);
+        var absent2 = RecordCondition.Absent(key2);
+        var putOne = Put(key1, one);
+        var putTwo = Put(key2, two);
+        var transaction = new RecordTransaction([absent1, absent2], [putOne, putTwo]);
 
         var result = await Transactions.ExecuteAsync(transaction, null, TestCancellationToken);
 
         Assert.True(result.Succeeded);
-        Assert.Equal("one"u8.ToArray(), await ReadValueAsync(key1));
-        Assert.Equal("two"u8.ToArray(), await ReadValueAsync(key2));
+        var actual1 = await ReadValueAsync(key1);
+        Assert.Equal(one, actual1);
+        var actual2 = await ReadValueAsync(key2);
+        Assert.Equal(two, actual2);
     }
 
     /// <summary>
@@ -297,17 +334,19 @@ public abstract class TransactionContractTests : ProviderContractTests
     [Fact]
     public async Task ExecuteAsync_WhenKeysSpanPartitionsAndOnlyAtomicityWithinPartitionIsDeclared_ThrowsUnsupported()
     {
+        var declaresWithin = Declares(Primitives.Transaction, Guarantees.AtomicWithinPartition);
+        var declaresAcross = Declares(Primitives.Transaction, Guarantees.AtomicAcrossPartitions);
         Assert.SkipUnless(
-            Declares(Primitives.Transaction, Guarantees.AtomicWithinPartition)
-                && !Declares(Primitives.Transaction, Guarantees.AtomicAcrossPartitions),
+            declaresWithin && !declaresAcross,
             "The provider does not declare atomicity within a partition only."
         );
         var key1 = CreateKey("p1", "a") with { PartitionDepth = 1 };
         var key2 = CreateKey("p2", "b") with { PartitionDepth = 1 };
-        var transaction = new RecordTransaction(
-            [],
-            [Put(key1, "one"u8.ToArray()), Put(key2, "two"u8.ToArray())]
-        );
+        var one = "one"u8.ToArray();
+        var two = "two"u8.ToArray();
+        var putOne = Put(key1, one);
+        var putTwo = Put(key2, two);
+        var transaction = new RecordTransaction([], [putOne, putTwo]);
 
         var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
             await Transactions.ExecuteAsync(transaction, null, TestCancellationToken)
@@ -322,7 +361,10 @@ public abstract class TransactionContractTests : ProviderContractTests
     [Fact]
     public async Task ExecuteAsync_WhenOptionsCarryAnUnknownExtension_ThrowsUnsupported()
     {
-        var transaction = new RecordTransaction([], [Put(CreateKey("k1"), "one"u8.ToArray())]);
+        var key = CreateKey("k1");
+        var one = "one"u8.ToArray();
+        var putOne = Put(key, one);
+        var transaction = new RecordTransaction([], [putOne]);
 
         var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
             await Transactions.ExecuteAsync(transaction, UnknownExtension, TestCancellationToken)
@@ -337,14 +379,14 @@ public abstract class TransactionContractTests : ProviderContractTests
     [Fact]
     public async Task ExecuteAsync_WhenTokenIsCanceled_ThrowsOperationCanceledException()
     {
-        var transaction = new RecordTransaction([], [Put(CreateKey("k1"), "one"u8.ToArray())]);
+        var key = CreateKey("k1");
+        var one = "one"u8.ToArray();
+        var putOne = Put(key, one);
+        var transaction = new RecordTransaction([], [putOne]);
+        var canceledToken = new CancellationToken(canceled: true);
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
-            await Transactions.ExecuteAsync(
-                transaction,
-                null,
-                new CancellationToken(canceled: true)
-            )
+            await Transactions.ExecuteAsync(transaction, null, canceledToken)
         );
     }
 
