@@ -70,7 +70,7 @@ public abstract class OccurrenceContractTests : ProviderContractTests
         );
         Assert.Equal(OccurrenceStatus.Recorded, first);
 
-        await AdvanceClockAsync(StillAlive);
+        await AdvanceClockAsync(StillAlive, TestCancellationToken);
 
         var status = await Occurrences.TryRecordAsync(
             key,
@@ -97,8 +97,8 @@ public abstract class OccurrenceContractTests : ProviderContractTests
         );
         Assert.Equal(OccurrenceStatus.Recorded, first);
 
-        await AdvanceClockAsync(StillAlive);
-        await AdvanceClockAsync(PastExpiry);
+        await AdvanceClockAsync(StillAlive, TestCancellationToken);
+        await AdvanceClockAsync(PastExpiry, TestCancellationToken);
 
         var status = await Occurrences.TryRecordAsync(
             key,

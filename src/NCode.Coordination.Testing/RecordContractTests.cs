@@ -17,37 +17,22 @@ public abstract class RecordContractTests : ProviderContractTests
     private IRecordService Records => GetService<IRecordService>(Primitives.Record);
 
     /// <summary>
-    /// Creates a persistent record that must not exist yet and returns the revision it was written at.
-    /// </summary>
-    /// <param name="key">The key to create.</param>
-    /// <param name="value">The value to store.</param>
-    /// <returns>The revision of the record.</returns>
-    private async ValueTask<Revision> CreateRecordAsync(CoordinationKey key, byte[] value)
-    {
-        var result = await Records.CreateAsync(
-            key,
-            value,
-            RecordLifetime.Persistent,
-            null,
-            TestCancellationToken
-        );
-
-        Assert.True(result.IsWritten);
-        return result.Revision;
-    }
-
-    /// <summary>
     /// Creates a record that expires after <see cref="ProviderContractTests.ShortTimeToLive"/> and returns the
     /// revision it was written at.
     /// </summary>
     /// <param name="key">The key to create.</param>
     /// <param name="value">The value to store.</param>
+    /// <param name="cancellationToken">A token that cancels the write.</param>
     /// <returns>The revision of the record.</returns>
-    private async ValueTask<Revision> CreateExpiringRecordAsync(CoordinationKey key, byte[] value)
+    private async ValueTask<Revision> CreateExpiringRecordAsync(
+        CoordinationKey key,
+        byte[] value,
+        CancellationToken cancellationToken
+    )
     {
         var lifetime = RecordLifetime.ForTimeToLive(ShortTimeToLive);
 
-        var result = await Records.CreateAsync(key, value, lifetime, null, TestCancellationToken);
+        var result = await Records.CreateAsync(key, value, lifetime, null, cancellationToken);
 
         Assert.True(result.IsWritten);
         return result.Revision;
@@ -64,7 +49,12 @@ public abstract class RecordContractTests : ProviderContractTests
         var key = CreateKey("a");
         var value = "one"u8.ToArray();
 
-        var revision = await CreateRecordAsync(key, value);
+        var revision = await ContractRecords.CreateAsync(
+            Records,
+            key,
+            value,
+            TestCancellationToken
+        );
 
         var record = await Records.ReadAsync(key, null, TestCancellationToken);
         Assert.NotNull(record);
@@ -82,7 +72,7 @@ public abstract class RecordContractTests : ProviderContractTests
         var key = CreateKey("a");
         var one = "one"u8.ToArray();
         var two = "two"u8.ToArray();
-        await CreateRecordAsync(key, one);
+        await ContractRecords.CreateAsync(Records, key, one, TestCancellationToken);
 
         var result = await Records.CreateAsync(
             key,
@@ -132,9 +122,19 @@ public abstract class RecordContractTests : ProviderContractTests
         var secondKey = CreateKey("b");
         var one = "one"u8.ToArray();
         var two = "two"u8.ToArray();
-        var first = await CreateRecordAsync(firstKey, one);
+        var first = await ContractRecords.CreateAsync(
+            Records,
+            firstKey,
+            one,
+            TestCancellationToken
+        );
 
-        var second = await CreateRecordAsync(secondKey, two);
+        var second = await ContractRecords.CreateAsync(
+            Records,
+            secondKey,
+            two,
+            TestCancellationToken
+        );
 
         Assert.True(second > first);
     }
@@ -148,11 +148,11 @@ public abstract class RecordContractTests : ProviderContractTests
         var key = CreateKey("a");
         var one = "one"u8.ToArray();
         var two = "two"u8.ToArray();
-        var first = await CreateRecordAsync(key, one);
+        var first = await ContractRecords.CreateAsync(Records, key, one, TestCancellationToken);
         var deleted = await Records.CompareAndDeleteAsync(key, first, null, TestCancellationToken);
         Assert.Equal(RecordDeleteStatus.Deleted, deleted);
 
-        var second = await CreateRecordAsync(key, two);
+        var second = await ContractRecords.CreateAsync(Records, key, two, TestCancellationToken);
 
         Assert.True(second > first);
         var record = await Records.ReadAsync(key, null, TestCancellationToken);
@@ -171,18 +171,18 @@ public abstract class RecordContractTests : ProviderContractTests
         var key = CreateKey("a");
         var one = "one"u8.ToArray();
         var two = "two"u8.ToArray();
-        await CreateExpiringRecordAsync(key, one);
+        await CreateExpiringRecordAsync(key, one, TestCancellationToken);
 
-        await AdvanceClockAsync(StillAlive);
+        await AdvanceClockAsync(StillAlive, TestCancellationToken);
 
         var alive = await Records.ReadAsync(key, null, TestCancellationToken);
         Assert.NotNull(alive);
 
-        await AdvanceClockAsync(PastExpiry);
+        await AdvanceClockAsync(PastExpiry, TestCancellationToken);
 
         var expired = await Records.ReadAsync(key, null, TestCancellationToken);
         Assert.Null(expired);
-        await CreateRecordAsync(key, two);
+        await ContractRecords.CreateAsync(Records, key, two, TestCancellationToken);
     }
 
     /// <summary>
@@ -245,7 +245,7 @@ public abstract class RecordContractTests : ProviderContractTests
         var key = CreateKey("a");
         var one = "one"u8.ToArray();
         var two = "two"u8.ToArray();
-        var created = await CreateRecordAsync(key, one);
+        var created = await ContractRecords.CreateAsync(Records, key, one, TestCancellationToken);
 
         var result = await Records.CompareAndSwapAsync(
             key,
@@ -277,8 +277,13 @@ public abstract class RecordContractTests : ProviderContractTests
         var one = "one"u8.ToArray();
         var two = "two"u8.ToArray();
         var three = "three"u8.ToArray();
-        var created = await CreateRecordAsync(key, one);
-        var later = await CreateRecordAsync(otherKey, two);
+        var created = await ContractRecords.CreateAsync(Records, key, one, TestCancellationToken);
+        var later = await ContractRecords.CreateAsync(
+            Records,
+            otherKey,
+            two,
+            TestCancellationToken
+        );
         Assert.NotEqual(created, later);
 
         var result = await Records.CompareAndSwapAsync(
@@ -330,9 +335,9 @@ public abstract class RecordContractTests : ProviderContractTests
         var one = "one"u8.ToArray();
         var two = "two"u8.ToArray();
         var lifetime = RecordLifetime.ForTimeToLive(ShortTimeToLive);
-        var created = await CreateExpiringRecordAsync(key, one);
+        var created = await CreateExpiringRecordAsync(key, one, TestCancellationToken);
         var beforeSwap = TimeSpan.FromSeconds(1.5);
-        await AdvanceClockAsync(beforeSwap);
+        await AdvanceClockAsync(beforeSwap, TestCancellationToken);
 
         var result = await Records.CompareAndSwapAsync(
             key,
@@ -344,14 +349,14 @@ public abstract class RecordContractTests : ProviderContractTests
         );
         Assert.True(result.IsWritten);
 
-        await AdvanceClockAsync(StillAlive);
+        await AdvanceClockAsync(StillAlive, TestCancellationToken);
 
         var record = await Records.ReadAsync(key, null, TestCancellationToken);
         Assert.NotNull(record);
         var actual = record.Value.ToArray();
         Assert.Equal(two, actual);
 
-        await AdvanceClockAsync(PastExpiry);
+        await AdvanceClockAsync(PastExpiry, TestCancellationToken);
 
         var expired = await Records.ReadAsync(key, null, TestCancellationToken);
         Assert.Null(expired);
@@ -366,7 +371,7 @@ public abstract class RecordContractTests : ProviderContractTests
         var key = CreateKey("a");
         var one = "one"u8.ToArray();
         var two = "two"u8.ToArray();
-        var created = await CreateExpiringRecordAsync(key, one);
+        var created = await CreateExpiringRecordAsync(key, one, TestCancellationToken);
 
         var result = await Records.CompareAndSwapAsync(
             key,
@@ -379,7 +384,7 @@ public abstract class RecordContractTests : ProviderContractTests
         Assert.True(result.IsWritten);
 
         var pastTimeToLive = TimeSpan.FromSeconds(3);
-        await AdvanceClockAsync(pastTimeToLive);
+        await AdvanceClockAsync(pastTimeToLive, TestCancellationToken);
 
         var record = await Records.ReadAsync(key, null, TestCancellationToken);
         Assert.NotNull(record);
@@ -399,7 +404,7 @@ public abstract class RecordContractTests : ProviderContractTests
     {
         var key = CreateKey("a");
         var one = "one"u8.ToArray();
-        var created = await CreateRecordAsync(key, one);
+        var created = await ContractRecords.CreateAsync(Records, key, one, TestCancellationToken);
 
         var status = await Records.CompareAndDeleteAsync(key, created, null, TestCancellationToken);
 
@@ -419,8 +424,13 @@ public abstract class RecordContractTests : ProviderContractTests
         var otherKey = CreateKey("b");
         var one = "one"u8.ToArray();
         var two = "two"u8.ToArray();
-        var created = await CreateRecordAsync(key, one);
-        var later = await CreateRecordAsync(otherKey, two);
+        var created = await ContractRecords.CreateAsync(Records, key, one, TestCancellationToken);
+        var later = await ContractRecords.CreateAsync(
+            Records,
+            otherKey,
+            two,
+            TestCancellationToken
+        );
         Assert.NotEqual(created, later);
 
         var status = await Records.CompareAndDeleteAsync(key, later, null, TestCancellationToken);
@@ -463,7 +473,7 @@ public abstract class RecordContractTests : ProviderContractTests
     {
         var key = CreateKey("a");
         var one = "one"u8.ToArray();
-        var created = await CreateRecordAsync(key, one);
+        var created = await ContractRecords.CreateAsync(Records, key, one, TestCancellationToken);
 
         var taken = await Records.TakeAsync(key, null, TestCancellationToken);
 
@@ -506,10 +516,10 @@ public abstract class RecordContractTests : ProviderContractTests
         var keys = new[] { prefix, childA, childB };
         foreach (var key in keys)
         {
-            await CreateRecordAsync(key, value);
+            await ContractRecords.CreateAsync(Records, key, value, TestCancellationToken);
         }
 
-        await CreateRecordAsync(otherKey, value);
+        await ContractRecords.CreateAsync(Records, otherKey, value, TestCancellationToken);
         var request = new RecordPageRequest(10);
 
         var page = await Records.ListAsync(prefix, request, null, TestCancellationToken);
@@ -542,7 +552,7 @@ public abstract class RecordContractTests : ProviderContractTests
         {
             var key = CreateKey("cfg", index);
             keys.Add(key);
-            await CreateRecordAsync(key, value);
+            await ContractRecords.CreateAsync(Records, key, value, TestCancellationToken);
         }
 
         var seen = new List<CoordinationKey>();
@@ -579,7 +589,7 @@ public abstract class RecordContractTests : ProviderContractTests
         var prefix = CreateKey("cfg");
         var value = "v"u8.ToArray();
         var request = new RecordPageRequest(10);
-        await CreateRecordAsync(otherKey, value);
+        await ContractRecords.CreateAsync(Records, otherKey, value, TestCancellationToken);
 
         var page = await Records.ListAsync(prefix, request, null, TestCancellationToken);
 
@@ -598,10 +608,10 @@ public abstract class RecordContractTests : ProviderContractTests
         var prefix = CreateKey("cfg");
         var value = "v"u8.ToArray();
         var request = new RecordPageRequest(10);
-        await CreateExpiringRecordAsync(expiring, value);
-        await CreateRecordAsync(kept, value);
+        await CreateExpiringRecordAsync(expiring, value, TestCancellationToken);
+        await ContractRecords.CreateAsync(Records, kept, value, TestCancellationToken);
 
-        await AdvanceClockAsync(StillAlive + PastExpiry);
+        await AdvanceClockAsync(StillAlive + PastExpiry, TestCancellationToken);
 
         var page = await Records.ListAsync(prefix, request, null, TestCancellationToken);
         var record = Assert.Single(page.Records);

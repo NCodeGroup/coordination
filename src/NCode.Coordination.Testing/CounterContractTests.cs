@@ -81,8 +81,8 @@ public abstract class CounterContractTests : ProviderContractTests
         var key = CreateKey("c");
         await Counters.IncrementAsync(key, 3, ShortTimeToLive, null, TestCancellationToken);
 
-        await AdvanceClockAsync(StillAlive);
-        await AdvanceClockAsync(PastExpiry);
+        await AdvanceClockAsync(StillAlive, TestCancellationToken);
+        await AdvanceClockAsync(PastExpiry, TestCancellationToken);
 
         var expired = await Counters.ReadAsync(key, null, TestCancellationToken);
         Assert.Equal(0, expired);
@@ -104,7 +104,7 @@ public abstract class CounterContractTests : ProviderContractTests
     {
         var key = CreateKey("c");
         await Counters.IncrementAsync(key, 1, ShortTimeToLive, null, TestCancellationToken);
-        await AdvanceClockAsync(StillAlive);
+        await AdvanceClockAsync(StillAlive, TestCancellationToken);
         var count = await Counters.IncrementAsync(
             key,
             1,
@@ -114,7 +114,7 @@ public abstract class CounterContractTests : ProviderContractTests
         );
         Assert.Equal(2, count);
 
-        await AdvanceClockAsync(PastExpiry);
+        await AdvanceClockAsync(PastExpiry, TestCancellationToken);
 
         var stored = await Counters.ReadAsync(key, null, TestCancellationToken);
         Assert.Equal(0, stored);

@@ -35,7 +35,7 @@ NCode.Coordination.Testing.OccurrenceContractTests.TryRecordAsync_WhenTimeToLive
 NCode.Coordination.Testing.OccurrenceContractTests.TryRecordAsync_WhenTimeToLivePassed_ReturnsRecordedAgain() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.OccurrenceContractTests.TryRecordAsync_WhenTokenIsCanceled_ThrowsOperationCanceledException() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.ProviderContractTests
-NCode.Coordination.Testing.ProviderContractTests.AdvanceClockAsync(System.TimeSpan duration) -> System.Threading.Tasks.ValueTask
+NCode.Coordination.Testing.ProviderContractTests.AdvanceClockAsync(System.TimeSpan duration, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
 NCode.Coordination.Testing.ProviderContractTests.CreateKey(params System.Collections.Generic.IEnumerable<NCode.Coordination.KeySegment!>! segments) -> NCode.Coordination.CoordinationKey!
 NCode.Coordination.Testing.ProviderContractTests.Declares(NCode.Coordination.Primitive! primitive, NCode.Coordination.Guarantee! guarantee) -> bool
 NCode.Coordination.Testing.ProviderContractTests.DisposeAsync() -> System.Threading.Tasks.ValueTask

@@ -19,7 +19,7 @@ namespace NCode.Coordination.Testing;
 public abstract class ProviderContractTests : IAsyncLifetime
 {
     /// <summary>
-    /// Gets the time to live of the states that a test lets expire, 2 seconds.
+    /// Gets the duration of <see cref="ShortTimeToLive"/>, 2 seconds.
     /// </summary>
     protected static TimeSpan ShortDuration { get; } = TimeSpan.FromSeconds(2);
 
@@ -124,6 +124,7 @@ public abstract class ProviderContractTests : IAsyncLifetime
             disposable.Dispose();
         }
 
+        // CA1816: a derived suite may declare a finalizer, which disposal suppresses here.
         GC.SuppressFinalize(this);
     }
 
@@ -198,8 +199,12 @@ public abstract class ProviderContractTests : IAsyncLifetime
     /// Moves the provider's clock forward, and skips the test when the target cannot advance it.
     /// </summary>
     /// <param name="duration">How far to move the clock.</param>
+    /// <param name="cancellationToken">A token that cancels the move.</param>
     /// <returns>A task that completes when the clock has moved.</returns>
-    protected async ValueTask AdvanceClockAsync(TimeSpan duration)
+    protected async ValueTask AdvanceClockAsync(
+        TimeSpan duration,
+        CancellationToken cancellationToken
+    )
     {
         var advance = Target.AdvanceClock;
         if (advance is null)
@@ -208,6 +213,6 @@ public abstract class ProviderContractTests : IAsyncLifetime
             return;
         }
 
-        await advance(duration, TestContext.Current.CancellationToken);
+        await advance(duration, cancellationToken);
     }
 }

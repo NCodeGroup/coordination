@@ -63,7 +63,7 @@ public abstract class SetContractTests : ProviderContractTests
         await Sets.AddAsync(key, member, ShortTimeToLive, null, TestCancellationToken);
 
         var beforeExpiry = TimeSpan.FromSeconds(1.5);
-        await AdvanceClockAsync(beforeExpiry);
+        await AdvanceClockAsync(beforeExpiry, TestCancellationToken);
         var readded = await Sets.AddAsync(
             key,
             member,
@@ -73,11 +73,11 @@ public abstract class SetContractTests : ProviderContractTests
         );
         Assert.False(readded);
 
-        await AdvanceClockAsync(StillAlive);
+        await AdvanceClockAsync(StillAlive, TestCancellationToken);
         var alive = await Sets.ListAsync(key, null, TestCancellationToken);
         Assert.Contains(member, alive);
 
-        await AdvanceClockAsync(PastExpiry);
+        await AdvanceClockAsync(PastExpiry, TestCancellationToken);
         var expired = await Sets.ListAsync(key, null, TestCancellationToken);
         Assert.Empty(expired);
     }
@@ -95,7 +95,7 @@ public abstract class SetContractTests : ProviderContractTests
         await Sets.AddAsync(key, longLived, LongTimeToLive, null, TestCancellationToken);
 
         var pastShortExpiry = TimeSpan.FromSeconds(3);
-        await AdvanceClockAsync(pastShortExpiry);
+        await AdvanceClockAsync(pastShortExpiry, TestCancellationToken);
 
         var members = await Sets.ListAsync(key, null, TestCancellationToken);
         Assert.Single(members);
