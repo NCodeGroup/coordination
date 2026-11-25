@@ -8,6 +8,13 @@
         "csharpier"
       ],
       "rollForward": false
+    },
+    "nuget-license": {
+      "version": "4.0.19",
+      "commands": [
+        "nuget-license"
+      ],
+      "rollForward": false
     }
   }
 }

@@ -28,6 +28,7 @@ Run from the repository root in PowerShell 7.
 - Build: `dotnet build`
 - Test: `dotnet test`
 - Definition of Done: `./build/dod.ps1` (the full gate CI runs) or `./build/dod.ps1 -Fast` (Debug, no pack), and `dotnet csharpier format .` fixes its Format stage; it ends with `Definition of Done: PASSED`. Record a public API change with `./build/Update-PublicApi.ps1`
+- License check, which CI runs in `.github/workflows/originality.yml` and `./build/dod.ps1` does not: `./build/Test-Licenses.ps1` after adding or changing a package
 
 ## Landing
 

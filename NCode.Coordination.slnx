@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/NCode.Coordination.Abstractions/NCode.Coordination.Abstractions.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/NCode.Coordination.Abstractions.Tests/NCode.Coordination.Abstractions.Tests.csproj" />
+  </Folder>
+</Solution>

@@ -22,10 +22,13 @@ Once in each clone, run `git config core.hooksPath .githooks`. It turns on `.git
 | The local gate before a push | `./build/dod.ps1 -Fast` |
 | Only the tests a filter matches | `./build/dod.ps1 -Fast -Filter 'FullyQualifiedName~OrderStore'` |
 | Format C# | `dotnet csharpier format .` |
+| Check the dependencies' licenses | `./build/Test-Licenses.ps1` |
 
 The Definition of Done checks the decision index, checks the formatting, builds in Release with warnings as errors, runs the tests, packs and ends with `Definition of Done: PASSED`. CI runs `./build/dod.ps1` on every pull request.
 
 CI fails when the tests cover less than 90% of the statements or 80% of the branches, the OpenSSF Best Practices gold thresholds, as `./.template/Test-Coverage.ps1` reports from the coverage the tests write ([the decision](docs/decisions/project-template/0026-tests-gate-coverage-at-the-gold-thresholds-and-a-release-waits-for-them.md)). `./build/dod.ps1` collects it and runs the check in its Coverage stage once the solution has a `*.Tests` project. Run `./.template/Test-Coverage.ps1` after the tests to see the figures.
+
+Every pull request also runs `.github/workflows/originality.yml`, which checks each dependency's license, transitive ones included, against the licenses [ORIGINALITY.md](ORIGINALITY.md) permits.
 
 ## Make a Change
 

@@ -1,0 +1,147 @@
+#nullable enable
+const NCode.Coordination.CoordinationKey.MaxSegments = 16 -> int
+const NCode.Coordination.GuaranteeDimensions.Consistency = "consistency" -> string!
+const NCode.Coordination.GuaranteeDimensions.Delivery = "delivery" -> string!
+const NCode.Coordination.GuaranteeDimensions.Durability = "durability" -> string!
+const NCode.Coordination.GuaranteeDimensions.Expiry = "expiry" -> string!
+const NCode.Coordination.KeySegment.MaxTextLength = 256 -> int
+const NCode.Coordination.Keyspace.MaxClusterLength = 63 -> int
+const NCode.Coordination.Keyspace.MaxSegments = 8 -> int
+NCode.Coordination.CoordinationKey
+NCode.Coordination.CoordinationKey.<Clone>$() -> NCode.Coordination.CoordinationKey!
+NCode.Coordination.CoordinationKey.CoordinationKey(NCode.Coordination.Keyspace! keyspace, params System.Collections.Generic.IEnumerable<NCode.Coordination.KeySegment!>! segments) -> void
+NCode.Coordination.CoordinationKey.Equals(NCode.Coordination.CoordinationKey? other) -> bool
+NCode.Coordination.CoordinationKey.IsPrefixOf(NCode.Coordination.CoordinationKey! other) -> bool
+NCode.Coordination.CoordinationKey.Keyspace.get -> NCode.Coordination.Keyspace!
+NCode.Coordination.CoordinationKey.PartitionDepth.get -> int
+NCode.Coordination.CoordinationKey.PartitionDepth.init -> void
+NCode.Coordination.CoordinationKey.Segments.get -> System.Collections.Immutable.ImmutableArray<NCode.Coordination.KeySegment!>
+NCode.Coordination.FeatureRequirement
+NCode.Coordination.FeatureRequirement.Feature.get -> string!
+NCode.Coordination.FeatureRequirement.FeatureRequirement(string! feature, NCode.Coordination.Primitive! primitive, params System.Collections.Generic.IEnumerable<NCode.Coordination.Guarantee!>! guarantees) -> void
+NCode.Coordination.FeatureRequirement.Guarantees.get -> System.Collections.Immutable.ImmutableArray<NCode.Coordination.Guarantee!>
+NCode.Coordination.FeatureRequirement.Keyspace.get -> NCode.Coordination.Keyspace?
+NCode.Coordination.FeatureRequirement.Keyspace.init -> void
+NCode.Coordination.FeatureRequirement.Primitive.get -> NCode.Coordination.Primitive!
+NCode.Coordination.Guarantee
+NCode.Coordination.Guarantee.<Clone>$() -> NCode.Coordination.Guarantee!
+NCode.Coordination.Guarantee.Equals(NCode.Coordination.Guarantee? other) -> bool
+NCode.Coordination.Guarantee.Guarantee(string! name) -> void
+NCode.Coordination.Guarantee.Name.get -> string!
+NCode.Coordination.GuaranteeDefinition
+NCode.Coordination.GuaranteeDefinition.Description.get -> string!
+NCode.Coordination.GuaranteeDefinition.Dimension.get -> string!
+NCode.Coordination.GuaranteeDefinition.Guarantee.get -> NCode.Coordination.Guarantee!
+NCode.Coordination.GuaranteeDefinition.GuaranteeDefinition(NCode.Coordination.Guarantee! guarantee, string! dimension, string! description) -> void
+NCode.Coordination.GuaranteeDefinition.Implies.get -> System.Collections.Immutable.ImmutableArray<NCode.Coordination.Guarantee!>
+NCode.Coordination.GuaranteeDefinition.Implies.init -> void
+NCode.Coordination.GuaranteeDimensions
+NCode.Coordination.Guarantees
+NCode.Coordination.KeySegment
+NCode.Coordination.KeySegment.<Clone>$() -> NCode.Coordination.KeySegment!
+NCode.Coordination.KeySegment.Equals(NCode.Coordination.KeySegment? other) -> bool
+NCode.Coordination.KeySegment.Kind.get -> NCode.Coordination.KeySegmentKind
+NCode.Coordination.KeySegment.Number.get -> long?
+NCode.Coordination.KeySegment.Text.get -> string?
+NCode.Coordination.KeySegment.Uuid.get -> System.Guid?
+NCode.Coordination.KeySegmentKind
+NCode.Coordination.KeySegmentKind.Number = 1 -> NCode.Coordination.KeySegmentKind
+NCode.Coordination.KeySegmentKind.Text = 0 -> NCode.Coordination.KeySegmentKind
+NCode.Coordination.KeySegmentKind.Uuid = 2 -> NCode.Coordination.KeySegmentKind
+NCode.Coordination.Keyspace
+NCode.Coordination.Keyspace.<Clone>$() -> NCode.Coordination.Keyspace!
+NCode.Coordination.Keyspace.Cluster.get -> string!
+NCode.Coordination.Keyspace.CreateKey(params System.Collections.Generic.IEnumerable<NCode.Coordination.KeySegment!>! segments) -> NCode.Coordination.CoordinationKey!
+NCode.Coordination.Keyspace.Equals(NCode.Coordination.Keyspace? other) -> bool
+NCode.Coordination.Keyspace.Keyspace(string! cluster, params System.Collections.Generic.IEnumerable<NCode.Coordination.KeySegment!>! segments) -> void
+NCode.Coordination.Keyspace.Segments.get -> System.Collections.Immutable.ImmutableArray<NCode.Coordination.KeySegment!>
+NCode.Coordination.Primitive
+NCode.Coordination.Primitive.<Clone>$() -> NCode.Coordination.Primitive!
+NCode.Coordination.Primitive.Equals(NCode.Coordination.Primitive? other) -> bool
+NCode.Coordination.Primitive.Name.get -> string!
+NCode.Coordination.Primitive.Primitive(string! name) -> void
+NCode.Coordination.Primitives
+NCode.Coordination.PrimitiveSupport
+NCode.Coordination.PrimitiveSupport.Guarantees.get -> System.Collections.Immutable.ImmutableArray<NCode.Coordination.Guarantee!>
+NCode.Coordination.PrimitiveSupport.IsSupported.get -> bool
+NCode.Coordination.PrimitiveSupport.Primitive.get -> NCode.Coordination.Primitive!
+NCode.Coordination.PrimitiveSupport.UnsupportedReason.get -> string?
+NCode.Coordination.ProviderDeclaration
+NCode.Coordination.ProviderDeclaration.Definitions.get -> System.Collections.Immutable.ImmutableArray<NCode.Coordination.GuaranteeDefinition!>
+NCode.Coordination.ProviderDeclaration.Definitions.init -> void
+NCode.Coordination.ProviderDeclaration.Primitives.get -> System.Collections.Immutable.ImmutableArray<NCode.Coordination.PrimitiveSupport!>
+NCode.Coordination.ProviderDeclaration.Profile.get -> string?
+NCode.Coordination.ProviderDeclaration.Profile.init -> void
+NCode.Coordination.ProviderDeclaration.Provider.get -> string!
+NCode.Coordination.ProviderDeclaration.ProviderDeclaration(string! provider, params System.Collections.Generic.IEnumerable<NCode.Coordination.PrimitiveSupport!>! primitives) -> void
+NCode.Coordination.TimeToLive
+NCode.Coordination.TimeToLive.<Clone>$() -> NCode.Coordination.TimeToLive!
+NCode.Coordination.TimeToLive.Duration.get -> System.TimeSpan
+NCode.Coordination.TimeToLive.Equals(NCode.Coordination.TimeToLive? other) -> bool
+NCode.Coordination.TimeToLive.TimeToLive(System.TimeSpan duration) -> void
+override NCode.Coordination.CoordinationKey.Equals(object? obj) -> bool
+override NCode.Coordination.CoordinationKey.GetHashCode() -> int
+override NCode.Coordination.CoordinationKey.ToString() -> string!
+override NCode.Coordination.Guarantee.Equals(object? obj) -> bool
+override NCode.Coordination.Guarantee.GetHashCode() -> int
+override NCode.Coordination.Guarantee.ToString() -> string!
+override NCode.Coordination.KeySegment.Equals(object? obj) -> bool
+override NCode.Coordination.KeySegment.GetHashCode() -> int
+override NCode.Coordination.KeySegment.ToString() -> string!
+override NCode.Coordination.Keyspace.Equals(object? obj) -> bool
+override NCode.Coordination.Keyspace.GetHashCode() -> int
+override NCode.Coordination.Keyspace.ToString() -> string!
+override NCode.Coordination.Primitive.Equals(object? obj) -> bool
+override NCode.Coordination.Primitive.GetHashCode() -> int
+override NCode.Coordination.Primitive.ToString() -> string!
+override NCode.Coordination.TimeToLive.Equals(object? obj) -> bool
+override NCode.Coordination.TimeToLive.GetHashCode() -> int
+override NCode.Coordination.TimeToLive.ToString() -> string!
+static NCode.Coordination.CoordinationKey.operator !=(NCode.Coordination.CoordinationKey? left, NCode.Coordination.CoordinationKey? right) -> bool
+static NCode.Coordination.CoordinationKey.operator ==(NCode.Coordination.CoordinationKey? left, NCode.Coordination.CoordinationKey? right) -> bool
+static NCode.Coordination.Guarantee.operator !=(NCode.Coordination.Guarantee? left, NCode.Coordination.Guarantee? right) -> bool
+static NCode.Coordination.Guarantee.operator ==(NCode.Coordination.Guarantee? left, NCode.Coordination.Guarantee? right) -> bool
+static NCode.Coordination.Guarantees.AtMostOnce.get -> NCode.Coordination.Guarantee!
+static NCode.Coordination.Guarantees.AtMostOnceWithGapDetection.get -> NCode.Coordination.Guarantee!
+static NCode.Coordination.Guarantees.CallerClock.get -> NCode.Coordination.Guarantee!
+static NCode.Coordination.Guarantees.Definitions.get -> System.Collections.Immutable.ImmutableArray<NCode.Coordination.GuaranteeDefinition!>
+static NCode.Coordination.Guarantees.Durable.get -> NCode.Coordination.Guarantee!
+static NCode.Coordination.Guarantees.LinearizableAcrossFailover.get -> NCode.Coordination.Guarantee!
+static NCode.Coordination.Guarantees.LinearizableUntilFailover.get -> NCode.Coordination.Guarantee!
+static NCode.Coordination.Guarantees.LinearizableWithinProcess.get -> NCode.Coordination.Guarantee!
+static NCode.Coordination.Guarantees.ReplicatedAsynchronously.get -> NCode.Coordination.Guarantee!
+static NCode.Coordination.Guarantees.ServerClock.get -> NCode.Coordination.Guarantee!
+static NCode.Coordination.Guarantees.Volatile.get -> NCode.Coordination.Guarantee!
+static NCode.Coordination.KeySegment.FromGuid(System.Guid value) -> NCode.Coordination.KeySegment!
+static NCode.Coordination.KeySegment.FromInt64(long value) -> NCode.Coordination.KeySegment!
+static NCode.Coordination.KeySegment.FromString(string! text) -> NCode.Coordination.KeySegment!
+static NCode.Coordination.KeySegment.implicit operator NCode.Coordination.KeySegment!(long value) -> NCode.Coordination.KeySegment!
+static NCode.Coordination.KeySegment.implicit operator NCode.Coordination.KeySegment!(string! text) -> NCode.Coordination.KeySegment!
+static NCode.Coordination.KeySegment.implicit operator NCode.Coordination.KeySegment!(System.Guid value) -> NCode.Coordination.KeySegment!
+static NCode.Coordination.KeySegment.operator !=(NCode.Coordination.KeySegment? left, NCode.Coordination.KeySegment? right) -> bool
+static NCode.Coordination.KeySegment.operator ==(NCode.Coordination.KeySegment? left, NCode.Coordination.KeySegment? right) -> bool
+static NCode.Coordination.Keyspace.operator !=(NCode.Coordination.Keyspace? left, NCode.Coordination.Keyspace? right) -> bool
+static NCode.Coordination.Keyspace.operator ==(NCode.Coordination.Keyspace? left, NCode.Coordination.Keyspace? right) -> bool
+static NCode.Coordination.Primitive.operator !=(NCode.Coordination.Primitive? left, NCode.Coordination.Primitive? right) -> bool
+static NCode.Coordination.Primitive.operator ==(NCode.Coordination.Primitive? left, NCode.Coordination.Primitive? right) -> bool
+static NCode.Coordination.Primitives.All.get -> System.Collections.Immutable.ImmutableArray<NCode.Coordination.Primitive!>
+static NCode.Coordination.Primitives.Claim.get -> NCode.Coordination.Primitive!
+static NCode.Coordination.Primitives.Counter.get -> NCode.Coordination.Primitive!
+static NCode.Coordination.Primitives.Election.get -> NCode.Coordination.Primitive!
+static NCode.Coordination.Primitives.Lease.get -> NCode.Coordination.Primitive!
+static NCode.Coordination.Primitives.Membership.get -> NCode.Coordination.Primitive!
+static NCode.Coordination.Primitives.Notification.get -> NCode.Coordination.Primitive!
+static NCode.Coordination.Primitives.Occurrence.get -> NCode.Coordination.Primitive!
+static NCode.Coordination.Primitives.Record.get -> NCode.Coordination.Primitive!
+static NCode.Coordination.Primitives.RecordWatch.get -> NCode.Coordination.Primitive!
+static NCode.Coordination.Primitives.Semaphore.get -> NCode.Coordination.Primitive!
+static NCode.Coordination.Primitives.Sequence.get -> NCode.Coordination.Primitive!
+static NCode.Coordination.Primitives.Session.get -> NCode.Coordination.Primitive!
+static NCode.Coordination.Primitives.Set.get -> NCode.Coordination.Primitive!
+static NCode.Coordination.Primitives.Transaction.get -> NCode.Coordination.Primitive!
+static NCode.Coordination.PrimitiveSupport.Supported(NCode.Coordination.Primitive! primitive, params System.Collections.Generic.IEnumerable<NCode.Coordination.Guarantee!>! guarantees) -> NCode.Coordination.PrimitiveSupport!
+static NCode.Coordination.PrimitiveSupport.Unsupported(NCode.Coordination.Primitive! primitive, string! reason) -> NCode.Coordination.PrimitiveSupport!
+static NCode.Coordination.TimeToLive.MaxDuration.get -> System.TimeSpan
+static NCode.Coordination.TimeToLive.operator !=(NCode.Coordination.TimeToLive? left, NCode.Coordination.TimeToLive? right) -> bool
+static NCode.Coordination.TimeToLive.operator ==(NCode.Coordination.TimeToLive? left, NCode.Coordination.TimeToLive? right) -> bool
+static NCode.Coordination.TimeToLive.TryCreateUntil(System.DateTimeOffset instant, System.DateTimeOffset now, System.TimeSpan skewAllowance, out NCode.Coordination.TimeToLive? timeToLive) -> bool

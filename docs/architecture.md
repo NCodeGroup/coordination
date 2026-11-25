@@ -8,7 +8,11 @@ requirements.
 
 ## Components
 
-No package is built yet; [the design](designs/coordination.md#packages) names the packages its phases build.
+| Component | Role |
+| --- | --- |
+| `NCode.Coordination.Abstractions` | The vocabulary every contract is written in: structured keys, the guarantee vocabulary, expiry as a time to live, and the declarations and requirements the composition checks. |
+
+[The design](designs/coordination.md#packages) names the other packages and the phase that builds each.
 
 ## Design Rules
 
@@ -24,7 +28,10 @@ No package is built yet; [the design](designs/coordination.md#packages) names th
 ## Build and Release
 
 CI runs the project's commands on every pull request
-(`.github/workflows/ci.yml`). Releases are tagged and published as
+(`.github/workflows/ci.yml`). `.github/workflows/originality.yml` also checks every pull request's NuGet dependencies,
+transitive ones included, against the permitted licenses
+([ADR-1009](decisions/1009-ci-checks-every-dependencys-license-and-no-snippet-scan-runs.md)).
+Releases are tagged and published as
 [ADR-0016](decisions/project-template/0016-releases-are-tagged-and-published-when-their-pull-request-merges.md)
 records. `publish.yml` tests and packs the tagged commit, pushes to nuget.org through trusted publishing once a
 maintainer approves the `nuget` environment, and calls `release-provenance.yml` and `raise-baseline.yml`

@@ -1,6 +1,6 @@
 # Design: NCode.Coordination
 
-- **Status:** Draft
+- **Status:** In progress (phase 2 of 7)
 - **Date:** 2026-11-24
 - **Issue:** [#4](https://github.com/NCodeGroup/coordination/issues/4)
 - **Authors:** NCode Group
@@ -12,8 +12,9 @@ liveness, ownership, one-time events, change and usage, through one programming 
 Each provider speaks a standard protocol, declares the guarantees it keeps, and proves them against one conformance
 kit. The central decisions are the product's scope ([D1](#d1-scope)), its originality ([D2](#d2-originality)),
 declared guarantees ([D3](#d3-guarantees)), protocol-named providers ([D4](#d4-providers)), sessions with fencing
-tokens ([D5](#d5-sessions-and-fencing)), sequenced notifications without brokering ([D6](#d6-notifications)) and one
-conformance kit ([D7](#d7-conformance)).
+tokens ([D5](#d5-sessions-and-fencing)), sequenced notifications without brokering ([D6](#d6-notifications)), one
+conformance kit ([D7](#d7-conformance)), the first stable release's scope ([D8](#d8-first-stable-release)) and expiry as
+a duration on a declared clock ([D9](#d9-expiry-clock)).
 
 ## Goals and Non-Goals
 
@@ -221,6 +222,22 @@ Notifications carry a sequence and tell a subscriber to resync, and the product 
 Every provider passes one conformance kit that checks recorded histories against each guarantee.
 [ADR-1006](../decisions/1006-every-provider-passes-one-conformance-kit-that-checks-recorded-histories-against-each-guarantee.md)
 
+### D8. First stable release
+
+The first stable release carries every primitive and recipe of the design, implemented by the in-process, RESP and
+PostgreSQL providers and verified by the conformance kit, and is cut after NCode.Identity runs on prerelease packages.
+The etcd and Consul providers, further vendor profiles and the native server follow as additive minor releases, and
+each contract is checked against etcd's and Consul's public API documentation while it is designed, so they fit it.
+[ADR-1007](../decisions/1007-the-first-stable-release-carries-the-whole-model-proven-on-three-providers-and-by-its-first-consumer.md)
+
+### D9. Expiry clock
+
+Every expiry is a duration, measured on the clock the provider declares as its expiry authority, the server's wherever
+the server can, and rounded up to the server's units. A feature whose lifetime is an instant, such as a token's `exp` or
+a window's end, converts it on its own clock and adds an allowance for skew between nodes; holders of time-bound
+ownership give it up at a conservative local deadline and rely on fencing tokens.
+[ADR-1008](../decisions/1008-expiry-is-a-duration-on-the-providers-declared-clock-and-an-instant-becomes-one-at-the-caller-with-an-allowance-for-skew.md)
+
 ## Open Questions
 
 - **Q1.** How NCode.Identity consumes the packages while both repositories change together: prerelease packages from a
@@ -229,20 +246,30 @@ Every provider passes one conformance kit that checks recorded histories against
   definitions from the etcd API reference; copying etcd's own `.proto` files is ruled out, because they are another
   project's files.
 - **Q3.** Which capabilities beyond NCode.Identity's needs the first stable release carries, and which follow it.
+  Decided: [D8](#d8-first-stable-release),
+  [ADR-1007](../decisions/1007-the-first-stable-release-carries-the-whole-model-proven-on-three-providers-and-by-its-first-consumer.md).
 - **Q4.** Whether expiry is evaluated on the server's clock for every provider that can, or on the caller's where a
-  feature needs an absolute instant.
+  feature needs an absolute instant. Decided: [D9](#d9-expiry-clock),
+  [ADR-1008](../decisions/1008-expiry-is-a-duration-on-the-providers-declared-clock-and-an-instant-becomes-one-at-the-caller-with-an-allowance-for-skew.md).
 
 ## Rollout and Phases
 
 1. **Foundation.** The repository, this design, the originality policy and the founding decisions.
 2. **Model.** The abstractions, the in-process provider and the conformance kit with its history checker, and the
-   snippet-scanning and license checks [ORIGINALITY.md](../../ORIGINALITY.md) requires in CI.
+   license check [ORIGINALITY.md](../../ORIGINALITY.md) requires in CI, in eight plans:
+   the abstractions foundation with the CI checks ([#6](https://github.com/NCodeGroup/coordination/issues/6)), the
+   primitives' contracts ([#7](https://github.com/NCodeGroup/coordination/issues/7)), the composition
+   ([#8](https://github.com/NCodeGroup/coordination/issues/8)), the in-process provider with the kit's contract tests
+   ([#9](https://github.com/NCodeGroup/coordination/issues/9), [#10](https://github.com/NCodeGroup/coordination/issues/10)),
+   the history checker ([#11](https://github.com/NCodeGroup/coordination/issues/11)), the recipes
+   ([#12](https://github.com/NCodeGroup/coordination/issues/12)) and hosting
+   ([#13](https://github.com/NCodeGroup/coordination/issues/13)).
 3. **RESP.** The RESP provider with Valkey and Garnet profiles, covering every NCode.Identity need, with gap-detecting
    notifications.
 4. **PostgreSQL.** A provider that needs no infrastructure beyond the database a service already runs.
 5. **First-consumer adoption.** NCode.Identity depends on NCode.Coordination and retires its shared-state packages;
    its interval passes and refresh lease become claims and fenced leases. This phase is planned and landed in
-   NCode.Identity.
+   NCode.Identity, and the first stable release follows it ([D8](#d8-first-stable-release)).
 6. **etcd and Consul.** Providers whose servers keep sessions, leases and watches natively, linearizable across
    failover.
 7. **Native server, if needed.** A coordination server of the product's own, built from the published consensus
@@ -255,4 +282,6 @@ Every provider passes one conformance kit that checks recorded histories against
 - Gray, Cheriton, "Leases: An efficient fault-tolerant mechanism for distributed file cache consistency", SOSP 1989
 - Herlihy, Wing, "Linearizability: A correctness condition for concurrent objects", TOPLAS 1990
 - Kleppmann, "Designing Data-Intensive Applications", O'Reilly 2017
+- [RFC 7519](https://www.rfc-editor.org/rfc/rfc7519), JSON Web Token, and [RFC 9449](https://www.rfc-editor.org/rfc/rfc9449),
+  OAuth 2.0 Demonstrating Proof of Possession, on the lifetimes of one-time values
 - [Provenance](../provenance.md): the documentation consulted for this design

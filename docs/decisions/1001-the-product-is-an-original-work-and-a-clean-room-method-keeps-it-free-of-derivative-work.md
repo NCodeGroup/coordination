@@ -1,6 +1,6 @@
 # 1001. The product is an original work, and a clean-room method keeps it free of derivative work
 
-- **Status:** Proposed
+- **Status:** Proposed (amended by 1009)
 - **Date:** 2026-11-24
 - **Deciders:** NCode Group
 

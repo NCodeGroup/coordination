@@ -40,9 +40,9 @@ Copyright protects expression, not ideas. The product takes ideas freely and tak
 
 A dependency is used, not derived from:
 
-- **Permissive licenses only**: MIT, Apache-2.0, the BSD licenses, the PostgreSQL License, or an equivalent. No
-  dependency under the GPL, LGPL, AGPL, SSPL, a source-available license or any license whose terms reach the code
-  that uses it.
+- **Permissive licenses only**: MIT, Apache-2.0, the BSD licenses, the PostgreSQL License, or an equivalent;
+  `build/allowed-licenses.json` lists their SPDX identifiers. No dependency under the GPL, LGPL, AGPL, SSPL, a
+  source-available license or any license whose terms reach the code that uses it.
 - **Through its public API and documentation.** Its source is not read, and none of its files are copied or vendored
   into this repository.
 - **A server is not a dependency.** A provider talks to a server over its protocol; the server's license does not
@@ -51,19 +51,21 @@ A dependency is used, not derived from:
 ## Checks
 
 - **Review** looks for code, tests or prose that resemble another project's beyond what a shared protocol or idea
-  requires, and for any file whose origin is not this repository.
-- **Snippet scanning** in CI compares the repository's code against a database of public open-source code and fails
-  on a match that the protocol does not explain.
-- **License checking** in CI fails on a dependency outside the permitted licenses.
+  requires, and for any file whose origin is not this repository. It is the only check against code a language model
+  reproduces from what it learned.
+- **License checking** in CI fails on a dependency, transitive ones included, whose license is not on the permitted
+  list.
 
-The repository has no code or dependencies before the design's Model phase, which adds both CI checks with its first
-package.
+License checking runs in `.github/workflows/originality.yml` on every pull request
+([ADR-1009](docs/decisions/1009-ci-checks-every-dependencys-license-and-no-snippet-scan-runs.md)), and
+`./build/Test-Licenses.ps1` runs it from a checkout. No snippet scan runs: no service the project can use compares its
+code with public open-source code, as ADR-1009 records.
 
 ## Limits
 
 - **A language model's training data is outside the method's reach.** An agent that writes code here may have been
   trained on public source code, including projects named above, and could reproduce part of it. The method keeps
-  source out of every session's input and traces each design to public sources, and the checks above look for
-  reproduced code; neither certifies what a model learned.
+  source out of every session's input and traces each design to public sources, and review looks for reproduced
+  code; neither certifies what a model learned, and no automated check compares the code with public source.
 - **Patents are a separate question.** Originality addresses copyright. Whether a design is free to use is decided
   with legal advice when it arises.
