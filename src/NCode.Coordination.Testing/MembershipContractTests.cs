@@ -18,6 +18,15 @@ public abstract class MembershipContractTests : ProviderContractTests
     private const string Address = "10.0.0.4:5000";
 
     /// <summary>
+    /// Creates a member of the suite.
+    /// </summary>
+    /// <param name="session">The session that keeps the member alive.</param>
+    /// <param name="nodeId">The identity of the node.</param>
+    /// <returns>The member.</returns>
+    private static Member CreateMember(SessionId session, string nodeId) =>
+        new(session, nodeId, Address);
+
+    /// <summary>
     /// Gets the provider's membership service, and skips the test when the provider does not support membership.
     /// </summary>
     private IMembershipService Members => GetService<IMembershipService>(Primitives.Membership);
@@ -26,15 +35,6 @@ public abstract class MembershipContractTests : ProviderContractTests
     /// Gets the provider's session service, and skips the test when the provider does not support sessions.
     /// </summary>
     private ISessionService Sessions => GetService<ISessionService>(Primitives.Session);
-
-    /// <summary>
-    /// Creates a member of the suite.
-    /// </summary>
-    /// <param name="session">The session that keeps the member alive.</param>
-    /// <param name="nodeId">The identity of the node.</param>
-    /// <returns>The member.</returns>
-    private static Member CreateMember(SessionId session, string nodeId) =>
-        new(session, nodeId, Address);
 
     #region JoinAsync Tests
 

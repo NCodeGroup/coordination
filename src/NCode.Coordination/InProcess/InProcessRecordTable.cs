@@ -241,7 +241,9 @@ internal class InProcessRecordTable : IDisposable
     /// otherwise with a resync.
     /// </summary>
     /// <param name="watcher">The watch to add.</param>
-    /// <param name="after">The revision after which the watch wants the changes, or null to start with a resync.</param>
+    /// <param name="after">
+    /// The revision after which the watch wants the changes, or null to start with a resync.
+    /// </param>
     public void AddWatcher(InProcessRecordWatcher watcher, Revision? after)
     {
         ArgumentNullException.ThrowIfNull(watcher);

@@ -222,7 +222,9 @@ internal class InProcessMembershipService : IMembershipService
     /// Gets the view of a group.
     /// </summary>
     /// <param name="group">The group to view.</param>
-    /// <returns>The view of the group at its keyspace's current revision, with no members when the group has none.</returns>
+    /// <returns>
+    /// The view of the group at its keyspace's current revision, with no members when the group has none.
+    /// </returns>
     private MembershipView View(CoordinationKey group)
     {
         var revision = Sessions.Records.Current(group.Keyspace);

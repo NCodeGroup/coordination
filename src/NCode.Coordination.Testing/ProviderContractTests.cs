@@ -40,6 +40,12 @@ public abstract class ProviderContractTests : IAsyncLifetime
     protected static TimeSpan PastExpiry { get; } = TimeSpan.FromSeconds(2);
 
     /// <summary>
+    /// Gets how far a test advances the clock to stay before a two-second time to live ends, after which a renewal
+    /// measures the time to live again.
+    /// </summary>
+    protected static TimeSpan BeforeExpiry { get; } = TimeSpan.FromSeconds(1.5);
+
+    /// <summary>
     /// Gets the duration of <see cref="LongTimeToLive"/>, 30 seconds.
     /// </summary>
     private static TimeSpan LongDuration { get; } = TimeSpan.FromSeconds(30);

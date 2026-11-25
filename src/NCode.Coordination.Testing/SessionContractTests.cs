@@ -155,8 +155,7 @@ public abstract class SessionContractTests : ProviderContractTests
         );
         var wait = Sessions.WaitForEndAsync(session, null, TestCancellationToken).AsTask();
 
-        var beforeExpiry = TimeSpan.FromSeconds(1.5);
-        await AdvanceClockAsync(beforeExpiry, TestCancellationToken);
+        await AdvanceClockAsync(BeforeExpiry, TestCancellationToken);
         var result = await Sessions.KeepAliveAsync(session, null, TestCancellationToken);
         await AdvanceClockAsync(StillAlive, TestCancellationToken);
 

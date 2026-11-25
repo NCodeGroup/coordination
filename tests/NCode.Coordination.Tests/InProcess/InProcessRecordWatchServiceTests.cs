@@ -5,7 +5,7 @@ namespace NCode.Coordination.InProcess.Tests;
 
 public sealed class InProcessRecordWatchServiceTests
 {
-    private static readonly TimeSpan ShortTimeToLive = TimeSpan.FromMinutes(1);
+    private static TimeSpan ShortTimeToLive { get; } = TimeSpan.FromMinutes(1);
 
     private static TService GetService<TService>(InProcessProvider provider)
         where TService : class
@@ -155,10 +155,10 @@ public sealed class InProcessRecordWatchServiceTests
 
     #endregion
 
-    #region CreateAsync Tests
+    #region ListAsync Tests
 
     [Fact]
-    public async Task CreateAsync_WhenTheRecordExpires_ListsAtALaterRevision()
+    public async Task ListAsync_WhenTheRecordExpires_ListsAtALaterRevision()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var time = InProcessTesting.CreateTime();

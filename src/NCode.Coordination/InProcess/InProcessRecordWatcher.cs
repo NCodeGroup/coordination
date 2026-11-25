@@ -7,7 +7,9 @@ namespace NCode.Coordination.InProcess;
 /// A watch on one key or on the keys under one prefix, with the queue of changes that it has not yet delivered.
 /// </summary>
 /// <param name="target">The key to watch, or the prefix of the keys to watch.</param>
-/// <param name="isPrefix">True to watch every key that the target is a prefix of; false to watch only the target.</param>
+/// <param name="isPrefix">
+/// True to watch every key that the target is a prefix of; false to watch only the target.
+/// </param>
 /// <remarks>
 /// The record table posts to the queue while it holds its lock; the watch's reader takes from the queue.
 /// </remarks>

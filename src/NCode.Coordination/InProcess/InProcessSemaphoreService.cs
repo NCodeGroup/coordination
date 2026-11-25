@@ -10,6 +10,28 @@ namespace NCode.Coordination.InProcess;
 internal class InProcessSemaphoreService : ISemaphoreService
 {
     /// <summary>
+    /// Finds the slot a session holds in a semaphore.
+    /// </summary>
+    /// <param name="semaphore">The semaphore to look in.</param>
+    /// <param name="session">The session that may hold a slot.</param>
+    /// <returns>The hold of the session, or null when it holds no slot.</returns>
+    private static InProcessHold<SemaphoreGrant>? FindHeld(
+        InProcessSemaphore semaphore,
+        SessionId session
+    )
+    {
+        foreach (var hold in semaphore.Slots)
+        {
+            if (hold is not null && session.Equals(hold.Terms.Session))
+            {
+                return hold;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="InProcessSemaphoreService"/> class.
     /// </summary>
     /// <param name="sessions">The session table, which shares its lock with the record table.</param>
@@ -219,28 +241,6 @@ internal class InProcessSemaphoreService : ISemaphoreService
         }
 
         return waiter.Task;
-    }
-
-    /// <summary>
-    /// Finds the slot a session holds in a semaphore.
-    /// </summary>
-    /// <param name="semaphore">The semaphore to look in.</param>
-    /// <param name="session">The session that may hold a slot.</param>
-    /// <returns>The hold of the session, or null when it holds no slot.</returns>
-    private static InProcessHold<SemaphoreGrant>? FindHeld(
-        InProcessSemaphore semaphore,
-        SessionId session
-    )
-    {
-        foreach (var hold in semaphore.Slots)
-        {
-            if (hold is not null && session.Equals(hold.Terms.Session))
-            {
-                return hold;
-            }
-        }
-
-        return null;
     }
 
     /// <summary>

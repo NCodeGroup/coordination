@@ -355,8 +355,7 @@ public abstract class SemaphoreContractTests : ProviderContractTests
         var resource = CreateKey("resource");
         var grant = await AcquireAsync(resource, 1, ShortTimeToLive);
 
-        var beforeExpiry = TimeSpan.FromSeconds(1.5);
-        await AdvanceClockAsync(beforeExpiry, TestCancellationToken);
+        await AdvanceClockAsync(BeforeExpiry, TestCancellationToken);
         var renewed = await Semaphores.RenewAsync(
             grant,
             ShortTimeToLive,

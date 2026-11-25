@@ -13,6 +13,11 @@ namespace NCode.Coordination.Testing;
 internal static class ContractStreams
 {
     /// <summary>
+    /// The most items that <see cref="NextMatchingAsync{T}"/> reads before it fails.
+    /// </summary>
+    private const int MaxItemsRead = 1_000;
+
+    /// <summary>
     /// Gets how long a test waits for one item of a stream, or for a task, before it fails.
     /// </summary>
     public static TimeSpan Timeout { get; } = TimeSpan.FromSeconds(10);
@@ -44,7 +49,8 @@ internal static class ContractStreams
     }
 
     /// <summary>
-    /// Reads items of a stream until one matches, and fails when none of the next 1,000 items matches.
+    /// Reads items of a stream until one matches, and fails when none of the next <see cref="MaxItemsRead"/> items
+    /// matches.
     /// </summary>
     /// <typeparam name="T">The type of the stream's items.</typeparam>
     /// <param name="stream">The enumerator that reads the stream.</param>
@@ -55,7 +61,7 @@ internal static class ContractStreams
         Func<T, bool> match
     )
     {
-        for (var index = 0; index < 1_000; index++)
+        for (var index = 0; index < MaxItemsRead; index++)
         {
             var item = await NextAsync(stream);
 

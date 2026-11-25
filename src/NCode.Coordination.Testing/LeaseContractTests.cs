@@ -269,8 +269,7 @@ public abstract class LeaseContractTests : ProviderContractTests
         var resource = CreateKey("resource");
         var grant = await AcquireAsync(resource, ShortTimeToLive);
 
-        var beforeExpiry = TimeSpan.FromSeconds(1.5);
-        await AdvanceClockAsync(beforeExpiry, TestCancellationToken);
+        await AdvanceClockAsync(BeforeExpiry, TestCancellationToken);
         var renewed = await Leases.RenewAsync(grant, ShortTimeToLive, null, TestCancellationToken);
         await AdvanceClockAsync(StillAlive, TestCancellationToken);
 

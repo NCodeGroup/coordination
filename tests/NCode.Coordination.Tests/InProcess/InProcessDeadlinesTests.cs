@@ -79,10 +79,10 @@ public sealed class InProcessDeadlinesTests
 
     #endregion
 
-    #region Timer Tests
+    #region Add Tests
 
     [Fact]
-    public void Advance_WhenTheDeadlinePasses_RunsItWithoutRunDue()
+    public void Add_WhenTheDeadlinePasses_RunsItWithoutRunDue()
     {
         var time = InProcessTesting.CreateTime();
         var gate = new Lock();
@@ -96,7 +96,7 @@ public sealed class InProcessDeadlinesTests
     }
 
     [Fact]
-    public void Advance_WhenTwoDeadlinesPass_RunsThemInDeadlineOrder()
+    public void Add_WhenTwoDeadlinesPass_RunsThemInDeadlineOrder()
     {
         var time = InProcessTesting.CreateTime();
         var gate = new Lock();
@@ -111,7 +111,7 @@ public sealed class InProcessDeadlinesTests
     }
 
     [Fact]
-    public void Advance_WhenTheDeadlineIsBeyondTheLongestWait_RunsItWhenItComes()
+    public void Add_WhenTheDeadlineIsBeyondTheLongestWait_RunsItWhenItComes()
     {
         var time = InProcessTesting.CreateTime();
         var gate = new Lock();

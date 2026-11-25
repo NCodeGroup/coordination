@@ -312,8 +312,7 @@ public abstract class ElectionContractTests : ProviderContractTests
         var role = CreateKey("role");
         var leadership = await LeadAsync(role, "node-a"u8.ToArray(), ShortTimeToLive);
 
-        var beforeExpiry = TimeSpan.FromSeconds(1.5);
-        await AdvanceClockAsync(beforeExpiry, TestCancellationToken);
+        await AdvanceClockAsync(BeforeExpiry, TestCancellationToken);
         var renewed = await Elections.RenewAsync(
             leadership,
             ShortTimeToLive,
