@@ -46,6 +46,7 @@ public static class CoordinationServiceCollectionExtensions
 
             // Each primitive's service routes its calls to the bound provider.
             services.TryAddSingleton<ISessionService, DefaultSessionService>();
+            services.TryAddSingleton<IMembershipService, DefaultMembershipService>();
             return services;
         }
     }
