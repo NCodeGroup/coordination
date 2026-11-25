@@ -55,6 +55,7 @@ public static class CoordinationServiceCollectionExtensions
             services.TryAddSingleton<IRecordWatchService, DefaultRecordWatchService>();
             services.TryAddSingleton<ITransactionService, DefaultTransactionService>();
             services.TryAddSingleton<IOccurrenceService, DefaultOccurrenceService>();
+            services.TryAddSingleton<ISetService, DefaultSetService>();
             return services;
         }
     }
