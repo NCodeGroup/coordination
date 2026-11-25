@@ -46,7 +46,8 @@ internal class InProcessOccurrenceService(TimeProvider time) : IOccurrenceServic
                 return ValueTask.FromResult(OccurrenceStatus.Duplicate);
             }
 
-            Occurrences.Set(key, true, InProcessExpiry.Begin(Time, timeToLive));
+            var expiry = InProcessExpiry.Begin(Time, timeToLive);
+            Occurrences.Set(key, true, expiry);
             return ValueTask.FromResult(OccurrenceStatus.Recorded);
         }
     }

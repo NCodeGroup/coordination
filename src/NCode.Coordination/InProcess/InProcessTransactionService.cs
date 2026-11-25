@@ -47,9 +47,9 @@ internal class InProcessTransactionService(InProcessRecordTable table) : ITransa
 
             if (writes.IsEmpty)
             {
-                return ValueTask.FromResult(
-                    new TransactionResult(succeeded, Table.Current(transaction.Keyspace))
-                );
+                var current = Table.Current(transaction.Keyspace);
+                var unchanged = new TransactionResult(succeeded, current);
+                return ValueTask.FromResult(unchanged);
             }
 
             var revision = Table.Advance(transaction.Keyspace);
@@ -58,10 +58,9 @@ internal class InProcessTransactionService(InProcessRecordTable table) : ITransa
             {
                 if (write.Lifetime is { } lifetime)
                 {
-                    Table.Put(
-                        new StoredRecord(write.Key, write.Value, revision),
-                        InProcessExpiry.ForLifetime(Table.Time, lifetime)
-                    );
+                    var record = new StoredRecord(write.Key, write.Value, revision);
+                    var expiry = InProcessExpiry.ForLifetime(Table.Time, lifetime);
+                    Table.Put(record, expiry);
                 }
                 else
                 {
@@ -69,7 +68,8 @@ internal class InProcessTransactionService(InProcessRecordTable table) : ITransa
                 }
             }
 
-            return ValueTask.FromResult(new TransactionResult(succeeded, revision));
+            var result = new TransactionResult(succeeded, revision);
+            return ValueTask.FromResult(result);
         }
     }
 

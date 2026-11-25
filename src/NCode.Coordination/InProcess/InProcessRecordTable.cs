@@ -48,7 +48,8 @@ internal class InProcessRecordTable(TimeProvider time)
     /// <returns>The revision of the keyspace's latest write, or 1 before its first write.</returns>
     public Revision Current(Keyspace keyspace)
     {
-        return new Revision(Revisions.GetValueOrDefault(keyspace, 1));
+        var current = Revisions.GetValueOrDefault(keyspace, 1);
+        return new Revision(current);
     }
 
     /// <summary>
@@ -70,7 +71,8 @@ internal class InProcessRecordTable(TimeProvider time)
     /// <param name="expiry">The expiry of the record, or null when it never ends.</param>
     public void Put(StoredRecord record, InProcessExpiry? expiry)
     {
-        Records.Set(record.Key, new InProcessRecordEntry(record, ++WriteSequence), expiry);
+        var entry = new InProcessRecordEntry(record, ++WriteSequence);
+        Records.Set(record.Key, entry, expiry);
     }
 
     /// <summary>

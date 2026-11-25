@@ -71,7 +71,8 @@ internal class InProcessSetService(TimeProvider time) : ISetService
                 }
             }
 
-            members.Set(member, true, InProcessExpiry.Begin(Time, timeToLive));
+            var expiry = InProcessExpiry.Begin(Time, timeToLive);
+            members.Set(member, true, expiry);
 
             AddsSinceSweep++;
             if (
@@ -106,7 +107,8 @@ internal class InProcessSetService(TimeProvider time) : ISetService
                 return ValueTask.FromResult(false);
             }
 
-            return ValueTask.FromResult(members.Remove(member));
+            var removed = members.Remove(member);
+            return ValueTask.FromResult(removed);
         }
     }
 
@@ -134,7 +136,8 @@ internal class InProcessSetService(TimeProvider time) : ISetService
                 return ValueTask.FromResult(ImmutableArray<KeySegment>.Empty);
             }
 
-            return ValueTask.FromResult(live.Select(entry => entry.Key).ToImmutableArray());
+            var listed = live.Select(entry => entry.Key).ToImmutableArray();
+            return ValueTask.FromResult(listed);
         }
     }
 

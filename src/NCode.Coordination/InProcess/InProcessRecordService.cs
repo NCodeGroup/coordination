@@ -45,7 +45,8 @@ internal class InProcessRecordService(InProcessRecordTable table) : IRecordServi
                 return ValueTask.FromResult(RecordWriteResult.Conflict);
             }
 
-            return ValueTask.FromResult(Write(key, value, lifetime));
+            var result = Write(key, value, lifetime);
+            return ValueTask.FromResult(result);
         }
     }
 
@@ -61,7 +62,8 @@ internal class InProcessRecordService(InProcessRecordTable table) : IRecordServi
 
         lock (Table.Gate)
         {
-            return ValueTask.FromResult(Table.Find(key));
+            var current = Table.Find(key);
+            return ValueTask.FromResult(current);
         }
     }
 
@@ -99,7 +101,8 @@ internal class InProcessRecordService(InProcessRecordTable table) : IRecordServi
                 return ValueTask.FromResult(RecordWriteResult.Conflict);
             }
 
-            return ValueTask.FromResult(Write(key, value, lifetime));
+            var result = Write(key, value, lifetime);
+            return ValueTask.FromResult(result);
         }
     }
 
@@ -195,7 +198,8 @@ internal class InProcessRecordService(InProcessRecordTable table) : IRecordServi
                 lastSequence = entry.Sequence;
             }
 
-            var result = new RecordPage(Table.Current(prefix.Keyspace), records)
+            var revision = Table.Current(prefix.Keyspace);
+            var result = new RecordPage(revision, records)
             {
                 ContinuationToken = more
                     ? lastSequence.ToString(CultureInfo.InvariantCulture)
@@ -213,10 +217,9 @@ internal class InProcessRecordService(InProcessRecordTable table) : IRecordServi
     )
     {
         var revision = Table.Advance(key.Keyspace);
-        Table.Put(
-            new StoredRecord(key, value, revision),
-            InProcessExpiry.ForLifetime(Table.Time, lifetime)
-        );
+        var record = new StoredRecord(key, value, revision);
+        var expiry = InProcessExpiry.ForLifetime(Table.Time, lifetime);
+        Table.Put(record, expiry);
         return RecordWriteResult.Written(revision);
     }
 

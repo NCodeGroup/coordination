@@ -56,7 +56,8 @@ internal class InProcessCounterService(TimeProvider time) : ICounterService
                 return ValueTask.FromResult(count);
             }
 
-            Counters.Set(key, amount, InProcessExpiry.Begin(Time, timeToLive));
+            var expiry = InProcessExpiry.Begin(Time, timeToLive);
+            Counters.Set(key, amount, expiry);
             return ValueTask.FromResult(amount);
         }
     }
@@ -73,7 +74,8 @@ internal class InProcessCounterService(TimeProvider time) : ICounterService
 
         lock (Gate)
         {
-            return ValueTask.FromResult(Counters.TryGet(key, out var count) ? count : 0);
+            var current = Counters.TryGet(key, out var count) ? count : 0;
+            return ValueTask.FromResult(current);
         }
     }
 
@@ -176,13 +178,13 @@ internal class InProcessCounterService(TimeProvider time) : ICounterService
                 }
                 else
                 {
-                    Counters.Set(key, count, InProcessExpiry.Begin(Time, created[key]));
+                    var expiry = InProcessExpiry.Begin(Time, created[key]);
+                    Counters.Set(key, count, expiry);
                 }
             }
 
-            return ValueTask.FromResult(
-                new CounterBatchResult(counts) { ExceededIndex = exceeded }
-            );
+            var result = new CounterBatchResult(counts) { ExceededIndex = exceeded };
+            return ValueTask.FromResult(result);
         }
     }
 

@@ -76,7 +76,8 @@ internal class InProcessSequenceService : ISequenceService
             }
 
             Last[key] = last + count;
-            return ValueTask.FromResult(new SequenceBlock(last + 1, count));
+            var block = new SequenceBlock(last + 1, count);
+            return ValueTask.FromResult(block);
         }
     }
 }
