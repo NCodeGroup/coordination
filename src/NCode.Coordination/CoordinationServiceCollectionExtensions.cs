@@ -51,6 +51,7 @@ public static class CoordinationServiceCollectionExtensions
             services.TryAddSingleton<ISemaphoreService, DefaultSemaphoreService>();
             services.TryAddSingleton<IElectionService, DefaultElectionService>();
             services.TryAddSingleton<IClaimService, DefaultClaimService>();
+            services.TryAddSingleton<IRecordService, DefaultRecordService>();
             return services;
         }
     }
