@@ -220,6 +220,7 @@ NCode.Coordination.Testing.SequenceContractTests.ReserveAsync_WhenSequenceIsNew_
 NCode.Coordination.Testing.SequenceContractTests.SequenceContractTests() -> void
 NCode.Coordination.Testing.SessionContractTests
 NCode.Coordination.Testing.SessionContractTests.CloseAsync_WhenSessionHasEnded_Succeeds() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.SessionContractTests.ConcurrentRun_WhenClientsRace_KeepsALinearizableHistory() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.SessionContractTests.KeepAliveAsync_WhenRenewedBeforeExpiry_MeasuresTheTimeToLiveFromTheRenewal() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.SessionContractTests.KeepAliveAsync_WhenSessionIsLive_ReturnsRenewed() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.SessionContractTests.KeepAliveAsync_WhenSessionIsUnknown_ReturnsEnded() -> System.Threading.Tasks.Task!
