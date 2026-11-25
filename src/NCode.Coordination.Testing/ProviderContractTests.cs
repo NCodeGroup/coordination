@@ -40,18 +40,26 @@ public abstract class ProviderContractTests : IAsyncLifetime
     protected static TimeSpan PastExpiry { get; } = TimeSpan.FromSeconds(2);
 
     /// <summary>
+    /// Gets the duration of <see cref="LongTimeToLive"/>, 30 seconds.
+    /// </summary>
+    private static TimeSpan LongDuration { get; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>
     /// Gets a time to live that no test outlasts, 30 seconds.
     /// </summary>
-    protected static TimeToLive LongTimeToLive { get; } = new(TimeSpan.FromSeconds(30));
+    protected static TimeToLive LongTimeToLive { get; } = new(LongDuration);
+
+    /// <summary>
+    /// Gets the extensions that no provider knows.
+    /// </summary>
+    private static ImmutableDictionary<string, string> UnknownExtensions { get; } =
+        ImmutableDictionary<string, string>.Empty.Add("conformance.unknown", "on");
 
     /// <summary>
     /// Gets options with an extension that no provider knows.
     /// </summary>
     protected static OperationOptions UnknownExtension { get; } =
-        new()
-        {
-            Extensions = ImmutableDictionary<string, string>.Empty.Add("conformance.unknown", "on"),
-        };
+        new() { Extensions = UnknownExtensions };
 
     /// <summary>
     /// Gets the cancellation token of the running test.
@@ -62,7 +70,7 @@ public abstract class ProviderContractTests : IAsyncLifetime
     /// <summary>
     /// Gets the keyspace of this test, which no other test uses, so tests that share a server never meet.
     /// </summary>
-    protected Keyspace Keyspace { get; } = new("conformance", KeySegment.FromGuid(Guid.NewGuid()));
+    protected Keyspace Keyspace { get; } = CreateUniqueKeyspace();
 
     private ConformanceTarget? CurrentTarget { get; set; }
 
@@ -103,6 +111,17 @@ public abstract class ProviderContractTests : IAsyncLifetime
         }
 
         GC.SuppressFinalize(this);
+    }
+
+    /// <summary>
+    /// Creates a keyspace that no other test uses.
+    /// </summary>
+    /// <returns>The keyspace.</returns>
+    private static Keyspace CreateUniqueKeyspace()
+    {
+        var id = Guid.NewGuid();
+        var segment = KeySegment.FromGuid(id);
+        return new Keyspace("conformance", segment);
     }
 
     /// <summary>

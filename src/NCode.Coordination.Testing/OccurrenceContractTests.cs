@@ -24,8 +24,10 @@ public abstract class OccurrenceContractTests : ProviderContractTests
     [Fact]
     public async Task TryRecordAsync_WhenKeyIsNew_ReturnsRecorded()
     {
+        var key = CreateKey("a");
+
         var status = await Occurrences.TryRecordAsync(
-            CreateKey("a"),
+            key,
             LongTimeToLive,
             null,
             TestCancellationToken
@@ -114,15 +116,18 @@ public abstract class OccurrenceContractTests : ProviderContractTests
     [Fact]
     public async Task TryRecordAsync_WhenKeysDiffer_RecordsEach()
     {
+        var firstKey = CreateKey("a");
+        var secondKey = CreateKey("b");
+
         var first = await Occurrences.TryRecordAsync(
-            CreateKey("a"),
+            firstKey,
             LongTimeToLive,
             null,
             TestCancellationToken
         );
 
         var second = await Occurrences.TryRecordAsync(
-            CreateKey("b"),
+            secondKey,
             LongTimeToLive,
             null,
             TestCancellationToken
@@ -166,9 +171,11 @@ public abstract class OccurrenceContractTests : ProviderContractTests
     [Fact]
     public async Task TryRecordAsync_WhenOptionsCarryAnUnknownExtension_ThrowsUnsupported()
     {
+        var key = CreateKey("a");
+
         var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
             await Occurrences.TryRecordAsync(
-                CreateKey("a"),
+                key,
                 LongTimeToLive,
                 UnknownExtension,
                 TestCancellationToken
@@ -184,13 +191,11 @@ public abstract class OccurrenceContractTests : ProviderContractTests
     [Fact]
     public async Task TryRecordAsync_WhenTokenIsCanceled_ThrowsOperationCanceledException()
     {
+        var key = CreateKey("a");
+        var canceledToken = new CancellationToken(canceled: true);
+
         await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
-            await Occurrences.TryRecordAsync(
-                CreateKey("a"),
-                LongTimeToLive,
-                null,
-                new CancellationToken(canceled: true)
-            )
+            await Occurrences.TryRecordAsync(key, LongTimeToLive, null, canceledToken)
         );
     }
 

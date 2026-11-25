@@ -62,7 +62,8 @@ public abstract class SetContractTests : ProviderContractTests
         var member = KeySegment.FromString("m1");
         await Sets.AddAsync(key, member, ShortTimeToLive, null, TestCancellationToken);
 
-        await AdvanceClockAsync(TimeSpan.FromSeconds(1.5));
+        var beforeExpiry = TimeSpan.FromSeconds(1.5);
+        await AdvanceClockAsync(beforeExpiry);
         var readded = await Sets.AddAsync(
             key,
             member,
@@ -93,7 +94,8 @@ public abstract class SetContractTests : ProviderContractTests
         await Sets.AddAsync(key, shortLived, ShortTimeToLive, null, TestCancellationToken);
         await Sets.AddAsync(key, longLived, LongTimeToLive, null, TestCancellationToken);
 
-        await AdvanceClockAsync(TimeSpan.FromSeconds(3));
+        var pastShortExpiry = TimeSpan.FromSeconds(3);
+        await AdvanceClockAsync(pastShortExpiry);
 
         var members = await Sets.ListAsync(key, null, TestCancellationToken);
         Assert.Single(members);
@@ -109,7 +111,8 @@ public abstract class SetContractTests : ProviderContractTests
         var key = CreateKey("set");
         var text = KeySegment.FromString("1");
         var number = KeySegment.FromInt64(1);
-        var uuid = KeySegment.FromGuid(Guid.NewGuid());
+        var id = Guid.NewGuid();
+        var uuid = KeySegment.FromGuid(id);
 
         var addedText = await Sets.AddAsync(key, text, LongTimeToLive, null, TestCancellationToken);
         var addedNumber = await Sets.AddAsync(
@@ -141,31 +144,17 @@ public abstract class SetContractTests : ProviderContractTests
         var key = CreateKey("set");
         for (var index = 0; index < CoordinationLimits.MaxSetMembers; index++)
         {
-            await Sets.AddAsync(
-                key,
-                KeySegment.FromInt64(index),
-                LongTimeToLive,
-                null,
-                TestCancellationToken
-            );
+            var member = KeySegment.FromInt64(index);
+            await Sets.AddAsync(key, member, LongTimeToLive, null, TestCancellationToken);
         }
 
+        var extra = KeySegment.FromInt64(CoordinationLimits.MaxSetMembers);
+        var first = KeySegment.FromInt64(0);
+
         var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
-            await Sets.AddAsync(
-                key,
-                KeySegment.FromInt64(CoordinationLimits.MaxSetMembers),
-                LongTimeToLive,
-                null,
-                TestCancellationToken
-            )
+            await Sets.AddAsync(key, extra, LongTimeToLive, null, TestCancellationToken)
         );
-        var readded = await Sets.AddAsync(
-            key,
-            KeySegment.FromInt64(0),
-            LongTimeToLive,
-            null,
-            TestCancellationToken
-        );
+        var readded = await Sets.AddAsync(key, first, LongTimeToLive, null, TestCancellationToken);
 
         Assert.Equal(CoordinationErrorCodes.LimitExceeded, exception.Code);
         Assert.False(readded);
@@ -177,10 +166,13 @@ public abstract class SetContractTests : ProviderContractTests
     [Fact]
     public async Task AddAsync_WhenOptionsCarryAnUnknownExtension_ThrowsUnsupported()
     {
+        var key = CreateKey("set");
+        var member = KeySegment.FromString("m1");
+
         var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
             await Sets.AddAsync(
-                CreateKey("set"),
-                KeySegment.FromString("m1"),
+                key,
+                member,
                 LongTimeToLive,
                 UnknownExtension,
                 TestCancellationToken
@@ -217,12 +209,10 @@ public abstract class SetContractTests : ProviderContractTests
     [Fact]
     public async Task RemoveAsync_WhenMemberIsAbsent_ReturnsFalse()
     {
-        var removed = await Sets.RemoveAsync(
-            CreateKey("set"),
-            KeySegment.FromString("m1"),
-            null,
-            TestCancellationToken
-        );
+        var key = CreateKey("set");
+        var member = KeySegment.FromString("m1");
+
+        var removed = await Sets.RemoveAsync(key, member, null, TestCancellationToken);
 
         Assert.False(removed);
     }
@@ -237,7 +227,9 @@ public abstract class SetContractTests : ProviderContractTests
     [Fact]
     public async Task ListAsync_WhenSetIsAbsent_ReturnsEmpty()
     {
-        var members = await Sets.ListAsync(CreateKey("set"), null, TestCancellationToken);
+        var key = CreateKey("set");
+
+        var members = await Sets.ListAsync(key, null, TestCancellationToken);
 
         Assert.Empty(members);
     }
@@ -248,8 +240,11 @@ public abstract class SetContractTests : ProviderContractTests
     [Fact]
     public async Task ListAsync_WhenTokenIsCanceled_ThrowsOperationCanceledException()
     {
+        var key = CreateKey("set");
+        var canceledToken = new CancellationToken(canceled: true);
+
         await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
-            await Sets.ListAsync(CreateKey("set"), null, new CancellationToken(canceled: true))
+            await Sets.ListAsync(key, null, canceledToken)
         );
     }
 
@@ -264,20 +259,10 @@ public abstract class SetContractTests : ProviderContractTests
     public async Task ClearAsync_WhenSetHasMembers_RemovesEach()
     {
         var key = CreateKey("set");
-        await Sets.AddAsync(
-            key,
-            KeySegment.FromString("m1"),
-            LongTimeToLive,
-            null,
-            TestCancellationToken
-        );
-        await Sets.AddAsync(
-            key,
-            KeySegment.FromString("m2"),
-            LongTimeToLive,
-            null,
-            TestCancellationToken
-        );
+        var first = KeySegment.FromString("m1");
+        var second = KeySegment.FromString("m2");
+        await Sets.AddAsync(key, first, LongTimeToLive, null, TestCancellationToken);
+        await Sets.AddAsync(key, second, LongTimeToLive, null, TestCancellationToken);
 
         await Sets.ClearAsync(key, null, TestCancellationToken);
 

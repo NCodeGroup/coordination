@@ -24,8 +24,10 @@ public abstract class CounterContractTests : ProviderContractTests
     [Fact]
     public async Task IncrementAsync_WhenCounterIsAbsent_ReturnsTheAmount()
     {
+        var key = CreateKey("c");
+
         var count = await Counters.IncrementAsync(
-            CreateKey("c"),
+            key,
             3,
             LongTimeToLive,
             null,
@@ -52,8 +54,9 @@ public abstract class CounterContractTests : ProviderContractTests
             TestCancellationToken
         );
 
+        var stored = await Counters.ReadAsync(key, null, TestCancellationToken);
         Assert.Equal(7, count);
-        Assert.Equal(7, await Counters.ReadAsync(key, null, TestCancellationToken));
+        Assert.Equal(7, stored);
     }
 
     /// <summary>
@@ -62,14 +65,10 @@ public abstract class CounterContractTests : ProviderContractTests
     [Fact]
     public async Task IncrementAsync_WhenAmountIsBelowOne_ThrowsArgumentOutOfRangeException()
     {
+        var key = CreateKey("c");
+
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(async () =>
-            await Counters.IncrementAsync(
-                CreateKey("c"),
-                0,
-                LongTimeToLive,
-                null,
-                TestCancellationToken
-            )
+            await Counters.IncrementAsync(key, 0, LongTimeToLive, null, TestCancellationToken)
         );
     }
 
@@ -85,7 +84,8 @@ public abstract class CounterContractTests : ProviderContractTests
         await AdvanceClockAsync(StillAlive);
         await AdvanceClockAsync(PastExpiry);
 
-        Assert.Equal(0, await Counters.ReadAsync(key, null, TestCancellationToken));
+        var expired = await Counters.ReadAsync(key, null, TestCancellationToken);
+        Assert.Equal(0, expired);
         var count = await Counters.IncrementAsync(
             key,
             4,
@@ -116,7 +116,8 @@ public abstract class CounterContractTests : ProviderContractTests
 
         await AdvanceClockAsync(PastExpiry);
 
-        Assert.Equal(0, await Counters.ReadAsync(key, null, TestCancellationToken));
+        var stored = await Counters.ReadAsync(key, null, TestCancellationToken);
+        Assert.Equal(0, stored);
     }
 
     /// <summary>
@@ -126,9 +127,11 @@ public abstract class CounterContractTests : ProviderContractTests
     [Fact]
     public async Task IncrementAsync_WhenOptionsCarryAnUnknownExtension_ThrowsUnsupported()
     {
+        var key = CreateKey("c");
+
         var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
             await Counters.IncrementAsync(
-                CreateKey("c"),
+                key,
                 1,
                 LongTimeToLive,
                 UnknownExtension,
@@ -149,7 +152,9 @@ public abstract class CounterContractTests : ProviderContractTests
     [Fact]
     public async Task ReadAsync_WhenCounterIsAbsent_ReturnsZero()
     {
-        var count = await Counters.ReadAsync(CreateKey("c"), null, TestCancellationToken);
+        var key = CreateKey("c");
+
+        var count = await Counters.ReadAsync(key, null, TestCancellationToken);
 
         Assert.Equal(0, count);
     }
@@ -160,8 +165,11 @@ public abstract class CounterContractTests : ProviderContractTests
     [Fact]
     public async Task ReadAsync_WhenTokenIsCanceled_ThrowsOperationCanceledException()
     {
+        var key = CreateKey("c");
+        var canceledToken = new CancellationToken(canceled: true);
+
         await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
-            await Counters.ReadAsync(CreateKey("c"), null, new CancellationToken(canceled: true))
+            await Counters.ReadAsync(key, null, canceledToken)
         );
     }
 
@@ -180,7 +188,8 @@ public abstract class CounterContractTests : ProviderContractTests
 
         await Counters.ResetAsync(key, null, TestCancellationToken);
 
-        Assert.Equal(0, await Counters.ReadAsync(key, null, TestCancellationToken));
+        var count = await Counters.ReadAsync(key, null, TestCancellationToken);
+        Assert.Equal(0, count);
     }
 
     #endregion
@@ -197,19 +206,18 @@ public abstract class CounterContractTests : ProviderContractTests
         var key1 = CreateKey("k1");
         var key2 = CreateKey("k2");
 
-        var result = await Counters.IncrementBatchAsync(
-            [
-                new CounterIncrement(key1, 1, 10, LongTimeToLive),
-                new CounterIncrement(key2, 2, 10, LongTimeToLive),
-            ],
-            null,
-            TestCancellationToken
-        );
+        var first = new CounterIncrement(key1, 1, 10, LongTimeToLive);
+        var second = new CounterIncrement(key2, 2, 10, LongTimeToLive);
+        IReadOnlyList<CounterIncrement> increments = [first, second];
 
+        var result = await Counters.IncrementBatchAsync(increments, null, TestCancellationToken);
+
+        var count1 = await Counters.ReadAsync(key1, null, TestCancellationToken);
+        var count2 = await Counters.ReadAsync(key2, null, TestCancellationToken);
         Assert.Equal([1L, 2L], result.Counts);
         Assert.Null(result.ExceededIndex);
-        Assert.Equal(1, await Counters.ReadAsync(key1, null, TestCancellationToken));
-        Assert.Equal(2, await Counters.ReadAsync(key2, null, TestCancellationToken));
+        Assert.Equal(1, count1);
+        Assert.Equal(2, count2);
     }
 
     /// <summary>
@@ -223,21 +231,21 @@ public abstract class CounterContractTests : ProviderContractTests
         var key2 = CreateKey("k2");
         var key3 = CreateKey("k3");
 
-        var result = await Counters.IncrementBatchAsync(
-            [
-                new CounterIncrement(key1, 1, 10, LongTimeToLive),
-                new CounterIncrement(key2, 5, 3, LongTimeToLive),
-                new CounterIncrement(key3, 1, 10, LongTimeToLive),
-            ],
-            null,
-            TestCancellationToken
-        );
+        var first = new CounterIncrement(key1, 1, 10, LongTimeToLive);
+        var second = new CounterIncrement(key2, 5, 3, LongTimeToLive);
+        var third = new CounterIncrement(key3, 1, 10, LongTimeToLive);
+        IReadOnlyList<CounterIncrement> increments = [first, second, third];
 
+        var result = await Counters.IncrementBatchAsync(increments, null, TestCancellationToken);
+
+        var count1 = await Counters.ReadAsync(key1, null, TestCancellationToken);
+        var count2 = await Counters.ReadAsync(key2, null, TestCancellationToken);
+        var count3 = await Counters.ReadAsync(key3, null, TestCancellationToken);
         Assert.Equal([1L, 5L], result.Counts);
         Assert.Equal(1, result.ExceededIndex);
-        Assert.Equal(1, await Counters.ReadAsync(key1, null, TestCancellationToken));
-        Assert.Equal(5, await Counters.ReadAsync(key2, null, TestCancellationToken));
-        Assert.Equal(0, await Counters.ReadAsync(key3, null, TestCancellationToken));
+        Assert.Equal(1, count1);
+        Assert.Equal(5, count2);
+        Assert.Equal(0, count3);
     }
 
     /// <summary>
@@ -248,17 +256,15 @@ public abstract class CounterContractTests : ProviderContractTests
     {
         var key = CreateKey("k1");
 
-        var result = await Counters.IncrementBatchAsync(
-            [
-                new CounterIncrement(key, 1, 10, LongTimeToLive),
-                new CounterIncrement(key, 2, 10, LongTimeToLive),
-            ],
-            null,
-            TestCancellationToken
-        );
+        var first = new CounterIncrement(key, 1, 10, LongTimeToLive);
+        var second = new CounterIncrement(key, 2, 10, LongTimeToLive);
+        IReadOnlyList<CounterIncrement> increments = [first, second];
 
+        var result = await Counters.IncrementBatchAsync(increments, null, TestCancellationToken);
+
+        var count = await Counters.ReadAsync(key, null, TestCancellationToken);
         Assert.Equal([1L, 3L], result.Counts);
-        Assert.Equal(3, await Counters.ReadAsync(key, null, TestCancellationToken));
+        Assert.Equal(3, count);
     }
 
     /// <summary>
@@ -280,7 +286,11 @@ public abstract class CounterContractTests : ProviderContractTests
     {
         var increments = Enumerable
             .Range(0, CoordinationLimits.MaxBatchIncrements + 1)
-            .Select(index => new CounterIncrement(CreateKey($"k{index}"), 1, 10, LongTimeToLive))
+            .Select(index =>
+            {
+                var key = CreateKey($"k{index}");
+                return new CounterIncrement(key, 1, 10, LongTimeToLive);
+            })
             .ToList();
 
         await Assert.ThrowsAsync<ArgumentException>(async () =>
@@ -294,17 +304,17 @@ public abstract class CounterContractTests : ProviderContractTests
     [Fact]
     public async Task IncrementBatchAsync_WhenKeyspacesDiffer_ThrowsArgumentException()
     {
-        var other = new Keyspace("conformance", KeySegment.FromGuid(Guid.NewGuid()));
+        var id = Guid.NewGuid();
+        var segment = KeySegment.FromGuid(id);
+        var other = new Keyspace("conformance", segment);
+        var key1 = CreateKey("k1");
+        var key2 = other.CreateKey("k2");
+        var first = new CounterIncrement(key1, 1, 10, LongTimeToLive);
+        var second = new CounterIncrement(key2, 1, 10, LongTimeToLive);
+        IReadOnlyList<CounterIncrement> increments = [first, second];
 
         await Assert.ThrowsAsync<ArgumentException>(async () =>
-            await Counters.IncrementBatchAsync(
-                [
-                    new CounterIncrement(CreateKey("k1"), 1, 10, LongTimeToLive),
-                    new CounterIncrement(other.CreateKey("k2"), 1, 10, LongTimeToLive),
-                ],
-                null,
-                TestCancellationToken
-            )
+            await Counters.IncrementBatchAsync(increments, null, TestCancellationToken)
         );
     }
 
@@ -315,25 +325,24 @@ public abstract class CounterContractTests : ProviderContractTests
     [Fact]
     public async Task IncrementBatchAsync_WhenKeysSpanPartitionsAndAtomicityAcrossPartitionsIsDeclared_AppliesEveryIncrement()
     {
+        var declaresAcross = Declares(Primitives.Counter, Guarantees.AtomicAcrossPartitions);
         Assert.SkipUnless(
-            Declares(Primitives.Counter, Guarantees.AtomicAcrossPartitions),
+            declaresAcross,
             "The provider does not declare atomicity across partitions."
         );
         var key1 = CreateKey("p1", "a") with { PartitionDepth = 1 };
         var key2 = CreateKey("p2", "b") with { PartitionDepth = 1 };
+        var first = new CounterIncrement(key1, 1, 10, LongTimeToLive);
+        var second = new CounterIncrement(key2, 2, 10, LongTimeToLive);
+        IReadOnlyList<CounterIncrement> increments = [first, second];
 
-        var result = await Counters.IncrementBatchAsync(
-            [
-                new CounterIncrement(key1, 1, 10, LongTimeToLive),
-                new CounterIncrement(key2, 2, 10, LongTimeToLive),
-            ],
-            null,
-            TestCancellationToken
-        );
+        var result = await Counters.IncrementBatchAsync(increments, null, TestCancellationToken);
 
+        var count1 = await Counters.ReadAsync(key1, null, TestCancellationToken);
+        var count2 = await Counters.ReadAsync(key2, null, TestCancellationToken);
         Assert.Equal([1L, 2L], result.Counts);
-        Assert.Equal(1, await Counters.ReadAsync(key1, null, TestCancellationToken));
-        Assert.Equal(2, await Counters.ReadAsync(key2, null, TestCancellationToken));
+        Assert.Equal(1, count1);
+        Assert.Equal(2, count2);
     }
 
     /// <summary>
@@ -343,23 +352,20 @@ public abstract class CounterContractTests : ProviderContractTests
     [Fact]
     public async Task IncrementBatchAsync_WhenKeysSpanPartitionsAndOnlyAtomicityWithinPartitionIsDeclared_ThrowsUnsupported()
     {
+        var declaresWithin = Declares(Primitives.Counter, Guarantees.AtomicWithinPartition);
+        var declaresAcross = Declares(Primitives.Counter, Guarantees.AtomicAcrossPartitions);
         Assert.SkipUnless(
-            Declares(Primitives.Counter, Guarantees.AtomicWithinPartition)
-                && !Declares(Primitives.Counter, Guarantees.AtomicAcrossPartitions),
+            declaresWithin && !declaresAcross,
             "The provider does not declare atomicity within a partition only."
         );
         var key1 = CreateKey("p1", "a") with { PartitionDepth = 1 };
         var key2 = CreateKey("p2", "b") with { PartitionDepth = 1 };
+        var first = new CounterIncrement(key1, 1, 10, LongTimeToLive);
+        var second = new CounterIncrement(key2, 2, 10, LongTimeToLive);
+        IReadOnlyList<CounterIncrement> increments = [first, second];
 
         var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
-            await Counters.IncrementBatchAsync(
-                [
-                    new CounterIncrement(key1, 1, 10, LongTimeToLive),
-                    new CounterIncrement(key2, 2, 10, LongTimeToLive),
-                ],
-                null,
-                TestCancellationToken
-            )
+            await Counters.IncrementBatchAsync(increments, null, TestCancellationToken)
         );
 
         Assert.Equal(CoordinationErrorCodes.Unsupported, exception.Code);

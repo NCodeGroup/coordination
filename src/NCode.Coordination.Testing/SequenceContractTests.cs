@@ -24,7 +24,9 @@ public abstract class SequenceContractTests : ProviderContractTests
     [Fact]
     public async Task NextAsync_WhenSequenceIsNew_ReturnsOne()
     {
-        var number = await Sequences.NextAsync(CreateKey("s"), null, TestCancellationToken);
+        var key = CreateKey("s");
+
+        var number = await Sequences.NextAsync(key, null, TestCancellationToken);
 
         Assert.Equal(1, number);
     }
@@ -67,8 +69,10 @@ public abstract class SequenceContractTests : ProviderContractTests
     [Fact]
     public async Task NextAsync_WhenOptionsCarryAnUnknownExtension_ThrowsUnsupported()
     {
+        var key = CreateKey("s");
+
         var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
-            await Sequences.NextAsync(CreateKey("s"), UnknownExtension, TestCancellationToken)
+            await Sequences.NextAsync(key, UnknownExtension, TestCancellationToken)
         );
 
         Assert.Equal(CoordinationErrorCodes.Unsupported, exception.Code);
@@ -80,8 +84,11 @@ public abstract class SequenceContractTests : ProviderContractTests
     [Fact]
     public async Task NextAsync_WhenTokenIsCanceled_ThrowsOperationCanceledException()
     {
+        var key = CreateKey("s");
+        var canceledToken = new CancellationToken(canceled: true);
+
         await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
-            await Sequences.NextAsync(CreateKey("s"), null, new CancellationToken(canceled: true))
+            await Sequences.NextAsync(key, null, canceledToken)
         );
     }
 
@@ -95,7 +102,9 @@ public abstract class SequenceContractTests : ProviderContractTests
     [Fact]
     public async Task ReserveAsync_WhenSequenceIsNew_StartsAtOne()
     {
-        var block = await Sequences.ReserveAsync(CreateKey("s"), 5, null, TestCancellationToken);
+        var key = CreateKey("s");
+
+        var block = await Sequences.ReserveAsync(key, 5, null, TestCancellationToken);
 
         Assert.Equal(1, block.First);
         Assert.Equal(5, block.Count);
@@ -126,8 +135,10 @@ public abstract class SequenceContractTests : ProviderContractTests
     [Fact]
     public async Task ReserveAsync_WhenCountIsZero_ThrowsArgumentOutOfRangeException()
     {
+        var key = CreateKey("s");
+
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(async () =>
-            await Sequences.ReserveAsync(CreateKey("s"), 0, null, TestCancellationToken)
+            await Sequences.ReserveAsync(key, 0, null, TestCancellationToken)
         );
     }
 
@@ -137,13 +148,11 @@ public abstract class SequenceContractTests : ProviderContractTests
     [Fact]
     public async Task ReserveAsync_WhenCountIsAboveTheLimit_ThrowsArgumentOutOfRangeException()
     {
+        var key = CreateKey("s");
+        var count = CoordinationLimits.MaxSequenceBlock + 1;
+
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(async () =>
-            await Sequences.ReserveAsync(
-                CreateKey("s"),
-                CoordinationLimits.MaxSequenceBlock + 1,
-                null,
-                TestCancellationToken
-            )
+            await Sequences.ReserveAsync(key, count, null, TestCancellationToken)
         );
     }
 
