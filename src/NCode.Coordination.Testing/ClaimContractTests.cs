@@ -12,16 +12,29 @@ namespace NCode.Coordination.Testing;
 public abstract class ClaimContractTests : ProviderContractTests
 {
     /// <summary>
+    /// Gets the instant one hour after the Unix epoch, where the first window starts.
+    /// </summary>
+    private static DateTimeOffset FirstStart { get; } = DateTimeOffset.UnixEpoch.AddHours(1);
+
+    /// <summary>
+    /// Gets the instant two hours after the Unix epoch, where the second window starts.
+    /// </summary>
+    private static DateTimeOffset SecondStart { get; } = DateTimeOffset.UnixEpoch.AddHours(2);
+
+    /// <summary>
+    /// Gets the length of both windows, one hour.
+    /// </summary>
+    private static TimeSpan WindowLength { get; } = TimeSpan.FromHours(1);
+
+    /// <summary>
     /// Gets the window of one hour that starts one hour after the Unix epoch.
     /// </summary>
-    private static TimeWindow FirstWindow { get; } =
-        new(DateTimeOffset.UnixEpoch.AddHours(1), TimeSpan.FromHours(1));
+    private static TimeWindow FirstWindow { get; } = new(FirstStart, WindowLength);
 
     /// <summary>
     /// Gets the window of one hour that starts two hours after the Unix epoch.
     /// </summary>
-    private static TimeWindow SecondWindow { get; } =
-        new(DateTimeOffset.UnixEpoch.AddHours(2), TimeSpan.FromHours(1));
+    private static TimeWindow SecondWindow { get; } = new(SecondStart, WindowLength);
 
     /// <summary>
     /// Gets the provider's claim service, and skips the test when the provider does not support claims.

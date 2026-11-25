@@ -126,13 +126,16 @@ public sealed class InProcessDeadlinesTests
         var gate = new Lock();
         using var deadlines = new InProcessDeadlines(time, gate);
         var runs = 0;
-        var expiry = Begin(time, TimeSpan.FromDays(3));
+        var threeDays = TimeSpan.FromDays(3);
+        var twoDays = TimeSpan.FromDays(2);
+        var oneDay = TimeSpan.FromDays(1);
+        var expiry = Begin(time, threeDays);
         Add(deadlines, gate, expiry, () => runs++);
 
-        time.Advance(TimeSpan.FromDays(2));
+        time.Advance(twoDays);
         Assert.Equal(0, runs);
 
-        time.Advance(TimeSpan.FromDays(1));
+        time.Advance(oneDay);
         Assert.Equal(1, runs);
     }
 

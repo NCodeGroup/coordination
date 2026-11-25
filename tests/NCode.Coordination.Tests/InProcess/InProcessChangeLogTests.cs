@@ -24,9 +24,10 @@ public sealed class InProcessChangeLogTests
         log.Append(change);
 
         var first = new Revision(1);
+        var coversFirst = log.Covers(first);
 
         Assert.Equal(1, log.Floor);
-        Assert.True(log.Covers(first));
+        Assert.True(coversFirst);
     }
 
     #endregion
@@ -47,10 +48,12 @@ public sealed class InProcessChangeLogTests
         var first = new Revision(1);
         var second = new Revision(2);
         var changes = log.After(first);
+        var coversFirst = log.Covers(first);
+        var coversSecond = log.Covers(second);
 
         Assert.Equal(2, log.Floor);
-        Assert.False(log.Covers(first));
-        Assert.True(log.Covers(second));
+        Assert.False(coversFirst);
+        Assert.True(coversSecond);
         Assert.Equal(InProcessChangeLog.Capacity, changes.Count);
     }
 

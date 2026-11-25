@@ -9,7 +9,8 @@ public sealed class InProcessRecordServiceTests
     {
         var time = InProcessTesting.CreateTime();
         var table = new InProcessRecordTable(time);
-        return new InProcessRecordService(new InProcessSessionTable(table));
+        var sessions = new InProcessSessionTable(table);
+        return new InProcessRecordService(sessions);
     }
 
     private static RecordLifetime SessionLifetime()
