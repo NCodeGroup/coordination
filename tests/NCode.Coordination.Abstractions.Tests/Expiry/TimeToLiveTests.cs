@@ -134,8 +134,11 @@ public sealed class TimeToLiveTests
     [Fact]
     public void TryCreateUntil_WhenAllowanceIsNegative_Throws()
     {
+        var instant = Now.AddMinutes(1);
+        var allowance = TimeSpan.FromSeconds(-1);
+
         var exception = Assert.Throws<ArgumentOutOfRangeException>(() =>
-            TimeToLive.TryCreateUntil(Now.AddMinutes(1), Now, TimeSpan.FromSeconds(-1), out _)
+            TimeToLive.TryCreateUntil(instant, Now, allowance, out _)
         );
 
         Assert.Equal("skewAllowance", exception.ParamName);
@@ -144,10 +147,11 @@ public sealed class TimeToLiveTests
     [Fact]
     public void TryCreateUntil_WhenAllowanceIsTooLarge_Throws()
     {
+        var instant = Now.AddMinutes(-1);
         var allowance = TimeToLive.MaxDuration + TimeSpan.FromTicks(1);
 
         var exception = Assert.Throws<ArgumentOutOfRangeException>(() =>
-            TimeToLive.TryCreateUntil(Now.AddMinutes(-1), Now, allowance, out _)
+            TimeToLive.TryCreateUntil(instant, Now, allowance, out _)
         );
 
         Assert.Equal("skewAllowance", exception.ParamName);
@@ -166,12 +170,38 @@ public sealed class TimeToLiveTests
         Assert.Contains("longest time to live", exception.Message, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void TryCreateUntil_WhenRemainingEqualsMaxDuration_ReturnsMaxDuration()
+    {
+        var allowance = TimeSpan.FromMinutes(1);
+        var instant = Now + TimeToLive.MaxDuration - allowance;
+
+        var created = TimeToLive.TryCreateUntil(instant, Now, allowance, out var timeToLive);
+
+        Assert.True(created);
+        Assert.NotNull(timeToLive);
+        Assert.Equal(TimeToLive.MaxDuration, timeToLive.Duration);
+    }
+
+    [Fact]
+    public void TryCreateUntil_WhenRemainingIsOneTickOverMaxDuration_Throws()
+    {
+        var instant = Now + TimeToLive.MaxDuration + TimeSpan.FromTicks(1);
+        var allowance = TimeSpan.Zero;
+
+        var exception = Assert.Throws<ArgumentOutOfRangeException>(() =>
+            TimeToLive.TryCreateUntil(instant, Now, allowance, out _)
+        );
+
+        Assert.Equal("instant", exception.ParamName);
+    }
+
     #endregion
 
     #region ToString Tests
 
     [Fact]
-    public void ToString_ReturnsInvariantDuration()
+    public void ToString_Always_ReturnsInvariantDuration()
     {
         var timeToLive = new TimeToLive(TimeSpan.FromMinutes(5));
 
