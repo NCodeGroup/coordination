@@ -28,6 +28,9 @@ const NCode.Coordination.GuaranteeDimensions.Expiry = "expiry" -> string!
 const NCode.Coordination.KeySegment.MaxTextLength = 256 -> int
 const NCode.Coordination.Keyspace.MaxClusterLength = 63 -> int
 const NCode.Coordination.Keyspace.MaxSegments = 8 -> int
+NCode.Coordination.ClaimStatus
+NCode.Coordination.ClaimStatus.Claimed = 0 -> NCode.Coordination.ClaimStatus
+NCode.Coordination.ClaimStatus.Taken = 1 -> NCode.Coordination.ClaimStatus
 NCode.Coordination.CoordinationErrorCodes
 NCode.Coordination.CoordinationException
 NCode.Coordination.CoordinationException.Code.get -> string!
@@ -83,6 +86,8 @@ NCode.Coordination.GuaranteeDefinition.Implies.get -> System.Collections.Immutab
 NCode.Coordination.GuaranteeDefinition.Implies.init -> void
 NCode.Coordination.GuaranteeDimensions
 NCode.Coordination.Guarantees
+NCode.Coordination.IClaimService
+NCode.Coordination.IClaimService.TryClaimAsync(NCode.Coordination.CoordinationKey! name, NCode.Coordination.TimeWindow! window, NCode.Coordination.TimeToLive! timeToLive, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.ClaimStatus>
 NCode.Coordination.IElectionService
 NCode.Coordination.IElectionService.ReadAsync(NCode.Coordination.CoordinationKey! role, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.ElectionView!>
 NCode.Coordination.IElectionService.RenewAsync(NCode.Coordination.Leadership! leadership, NCode.Coordination.TimeToLive! timeToLive, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<bool>
