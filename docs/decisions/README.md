@@ -66,7 +66,7 @@ records are indexed in [project-template/](project-template/README.md).
 | ADR | Decision | Status |
 | --- | --- | --- |
 | [1000](1000-ncode-coordination-is-a-general-coordination-library-for-the-nodes-of-a-cluster.md) | NCode.Coordination is a general coordination library for the nodes of a cluster | Proposed |
-| [1001](1001-the-product-is-an-original-work-and-a-clean-room-method-keeps-it-free-of-derivative-work.md) | The product is an original work, and a clean-room method keeps it free of derivative work | Proposed |
+| [1001](1001-the-product-is-an-original-work-and-a-clean-room-method-keeps-it-free-of-derivative-work.md) | The product is an original work, and a clean-room method keeps it free of derivative work | Proposed (amended by 1009) |
 | [1002](1002-primitives-declare-guarantees-and-the-composition-refuses-a-requirement-no-provider-meets.md) | Primitives declare guarantees, and the composition refuses a requirement no provider meets | Proposed |
 | [1003](1003-providers-are-named-for-the-protocol-they-speak-and-carry-a-profile-per-vendor.md) | Providers are named for the protocol they speak and carry a profile per vendor | Proposed |
 | [1004](1004-a-node-holds-a-session-that-binds-its-leases-and-membership-and-every-lease-grant-carries-a-fencing-token.md) | A node holds a session that binds its leases and membership, and every lease grant carries a fencing token | Proposed |
@@ -74,4 +74,4 @@ records are indexed in [project-template/](project-template/README.md).
 | [1006](1006-every-provider-passes-one-conformance-kit-that-checks-recorded-histories-against-each-guarantee.md) | Every provider passes one conformance kit that checks recorded histories against each guarantee | Proposed |
 | [1007](1007-the-first-stable-release-carries-the-whole-model-proven-on-three-providers-and-by-its-first-consumer.md) | The first stable release carries the whole model, proven on three providers and by its first consumer | Proposed |
 | [1008](1008-expiry-is-a-duration-on-the-providers-declared-clock-and-an-instant-becomes-one-at-the-caller-with-an-allowance-for-skew.md) | Expiry is a duration on the provider's declared clock, and an instant becomes one at the caller with an allowance for skew | Proposed |
-| [1009](1009-ci-checks-originality-with-scanoss-snippet-matching-and-nuget-license-license-checking.md) | CI checks originality with SCANOSS snippet matching and nuget-license license checking | Proposed |
+| [1009](1009-ci-checks-every-dependencys-license-and-no-snippet-scan-runs.md) | CI checks every dependency's license, and no snippet scan runs (amends 1001) | Proposed |
