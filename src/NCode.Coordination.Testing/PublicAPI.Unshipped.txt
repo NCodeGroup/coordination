@@ -26,6 +26,23 @@ NCode.Coordination.Testing.CounterContractTests.IncrementBatchAsync_WhenTooLarge
 NCode.Coordination.Testing.CounterContractTests.ReadAsync_WhenCounterIsAbsent_ReturnsZero() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.CounterContractTests.ReadAsync_WhenTokenIsCanceled_ThrowsOperationCanceledException() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.CounterContractTests.ResetAsync_WhenCounterExists_DeletesIt() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.MembershipContractTests
+NCode.Coordination.Testing.MembershipContractTests.JoinAsync_WhenNodeIdIsHeldByAnotherSession_ReturnsNodeIdTaken() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.MembershipContractTests.JoinAsync_WhenOptionsCarryAnUnknownExtension_ThrowsUnsupported() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.MembershipContractTests.JoinAsync_WhenSessionHasEnded_ReturnsSessionEnded() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.MembershipContractTests.JoinAsync_WhenSessionIsLive_ListsTheMember() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.MembershipContractTests.JoinAsync_WhenTheSessionCloses_RemovesTheMember() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.MembershipContractTests.JoinAsync_WhenTheSessionExpires_RemovesTheMember() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.MembershipContractTests.JoinAsync_WhenTheSessionJoinsAgain_ReplacesItsEntry() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.MembershipContractTests.LeaveAsync_WhenSessionIsAMember_RemovesItsEntry() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.MembershipContractTests.LeaveAsync_WhenSessionIsNotAMember_Succeeds() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.MembershipContractTests.MembershipContractTests() -> void
+NCode.Coordination.Testing.MembershipContractTests.ReadAsync_WhenGroupIsEmpty_ReturnsNoMembers() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.MembershipContractTests.ReadAsync_WhenMembershipChanges_GivesALaterRevision() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.MembershipContractTests.ReadAsync_WhenTokenIsCanceled_ThrowsOperationCanceledException() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.MembershipContractTests.WatchAsync_WhenAMemberJoins_YieldsAViewWithIt() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.MembershipContractTests.WatchAsync_WhenAMembersSessionEnds_YieldsAViewWithoutIt() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.MembershipContractTests.WatchAsync_WhenStarted_YieldsTheCurrentViewFirst() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.OccurrenceContractTests
 NCode.Coordination.Testing.OccurrenceContractTests.OccurrenceContractTests() -> void
 NCode.Coordination.Testing.OccurrenceContractTests.TryRecordAsync_WhenKeyIsNew_ReturnsRecorded() -> System.Threading.Tasks.Task!
