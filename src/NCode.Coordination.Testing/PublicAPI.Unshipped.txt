@@ -20,16 +20,27 @@ NCode.Coordination.Testing.RecordContractTests
 NCode.Coordination.Testing.RecordContractTests.CompareAndDeleteAsync_WhenKeyIsAbsent_ReturnsNotFound() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.RecordContractTests.CompareAndDeleteAsync_WhenRevisionDiffers_ReturnsConflict() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.RecordContractTests.CompareAndDeleteAsync_WhenRevisionMatches_DeletesTheRecord() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.RecordContractTests.CompareAndSwapAsync_WhenItCarriesATimeToLive_MeasuresItFromTheWrite() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.RecordContractTests.CompareAndSwapAsync_WhenKeyIsAbsent_ReturnsNotFound() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.RecordContractTests.CompareAndSwapAsync_WhenLifetimeIsPersistent_KeepsTheRecordPastTheEarlierTimeToLive() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.RecordContractTests.CompareAndSwapAsync_WhenRevisionDiffers_ReturnsConflict() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.RecordContractTests.CompareAndSwapAsync_WhenRevisionMatches_WritesALaterRevision() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.RecordContractTests.CreateAsync_WhenAnotherKeyIsWritten_GivesALaterRevision() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.RecordContractTests.CreateAsync_WhenKeyIsAbsent_WritesTheRecord() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.RecordContractTests.CreateAsync_WhenKeyIsPresent_ReturnsConflict() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.RecordContractTests.CreateAsync_WhenTheRecordWasDeleted_WritesItAgain() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.RecordContractTests.CreateAsync_WhenTimeToLivePasses_ExpiresTheRecord() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.RecordContractTests.CreateAsync_WhenTokenIsCanceled_ThrowsOperationCanceledException() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.RecordContractTests.CreateAsync_WhenValueIsTooLong_ThrowsArgumentException() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.RecordContractTests.ListAsync_WhenARecordExpired_LeavesItOut() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.RecordContractTests.ListAsync_WhenNothingIsUnderThePrefix_ReturnsAnEmptyPage() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.RecordContractTests.ListAsync_WhenRecordsAreUnderThePrefix_ReturnsThemWithThePrefixesOwnRecord() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.RecordContractTests.ListAsync_WhenRecordsExceedTheLimit_PagesThroughEachRecord() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.RecordContractTests.ReadAsync_WhenKeyIsAbsent_ReturnsNull() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.RecordContractTests.ReadAsync_WhenOptionsCarryAnUnknownExtension_ThrowsUnsupported() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.RecordContractTests.RecordContractTests() -> void
+NCode.Coordination.Testing.RecordContractTests.TakeAsync_WhenKeyIsAbsent_ReturnsNull() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.RecordContractTests.TakeAsync_WhenKeyIsPresent_ReturnsAndDeletesTheRecord() -> System.Threading.Tasks.Task!
 static NCode.Coordination.Testing.ProviderContractTests.LongTimeToLive.get -> NCode.Coordination.TimeToLive!
 static NCode.Coordination.Testing.ProviderContractTests.PastExpiry.get -> System.TimeSpan
 static NCode.Coordination.Testing.ProviderContractTests.ShortDuration.get -> System.TimeSpan

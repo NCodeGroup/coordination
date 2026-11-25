@@ -36,6 +36,27 @@ public abstract class RecordContractTests : ProviderContractTests
         return result.Revision;
     }
 
+    /// <summary>
+    /// Creates a record that expires after <see cref="ProviderContractTests.ShortTimeToLive"/> and returns the
+    /// revision it was written at.
+    /// </summary>
+    /// <param name="key">The key to create.</param>
+    /// <param name="value">The value to store.</param>
+    /// <returns>The revision of the record.</returns>
+    private async ValueTask<Revision> CreateExpiringRecordAsync(CoordinationKey key, byte[] value)
+    {
+        var result = await Records.CreateAsync(
+            key,
+            value,
+            RecordLifetime.ForTimeToLive(ShortTimeToLive),
+            null,
+            TestCancellationToken
+        );
+
+        Assert.True(result.IsWritten);
+        return result.Revision;
+    }
+
     #region CreateAsync Tests
 
     /// <summary>
@@ -131,6 +152,43 @@ public abstract class RecordContractTests : ProviderContractTests
         Assert.Equal("two"u8.ToArray(), record.Value.ToArray());
     }
 
+    /// <summary>
+    /// Checks that a record created with a time to live is present while the time to live runs, is gone once it has
+    /// passed, and can then be created again.
+    /// </summary>
+    [Fact]
+    public async Task CreateAsync_WhenTimeToLivePasses_ExpiresTheRecord()
+    {
+        var key = CreateKey("a");
+        await CreateExpiringRecordAsync(key, "one"u8.ToArray());
+
+        await AdvanceClockAsync(StillAlive);
+
+        Assert.NotNull(await Records.ReadAsync(key, null, TestCancellationToken));
+
+        await AdvanceClockAsync(PastExpiry);
+
+        Assert.Null(await Records.ReadAsync(key, null, TestCancellationToken));
+        await CreateRecordAsync(key, "two"u8.ToArray());
+    }
+
+    /// <summary>
+    /// Checks that creating a record with a token that is already canceled throws an operation canceled exception.
+    /// </summary>
+    [Fact]
+    public async Task CreateAsync_WhenTokenIsCanceled_ThrowsOperationCanceledException()
+    {
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+            await Records.CreateAsync(
+                CreateKey("a"),
+                "one"u8.ToArray(),
+                RecordLifetime.Persistent,
+                null,
+                new CancellationToken(canceled: true)
+            )
+        );
+    }
+
     #endregion
 
     #region ReadAsync Tests
@@ -144,6 +202,19 @@ public abstract class RecordContractTests : ProviderContractTests
         var record = await Records.ReadAsync(CreateKey("absent"), null, TestCancellationToken);
 
         Assert.Null(record);
+    }
+
+    /// <summary>
+    /// Checks that reading with an option extension that the provider does not know throws an unsupported error.
+    /// </summary>
+    [Fact]
+    public async Task ReadAsync_WhenOptionsCarryAnUnknownExtension_ThrowsUnsupported()
+    {
+        var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
+            await Records.ReadAsync(CreateKey("a"), UnknownExtension, TestCancellationToken)
+        );
+
+        Assert.Equal(CoordinationErrorCodes.Unsupported, exception.Code);
     }
 
     #endregion
@@ -222,6 +293,63 @@ public abstract class RecordContractTests : ProviderContractTests
         Assert.Equal(RecordWriteStatus.NotFound, result.Status);
     }
 
+    /// <summary>
+    /// Checks that a swap that carries a time to live measures it from the swap, not from the earlier write.
+    /// </summary>
+    [Fact]
+    public async Task CompareAndSwapAsync_WhenItCarriesATimeToLive_MeasuresItFromTheWrite()
+    {
+        var key = CreateKey("a");
+        var created = await CreateExpiringRecordAsync(key, "one"u8.ToArray());
+        await AdvanceClockAsync(TimeSpan.FromSeconds(1.5));
+
+        var result = await Records.CompareAndSwapAsync(
+            key,
+            created,
+            "two"u8.ToArray(),
+            RecordLifetime.ForTimeToLive(ShortTimeToLive),
+            null,
+            TestCancellationToken
+        );
+        Assert.True(result.IsWritten);
+
+        await AdvanceClockAsync(StillAlive);
+
+        var record = await Records.ReadAsync(key, null, TestCancellationToken);
+        Assert.NotNull(record);
+        Assert.Equal("two"u8.ToArray(), record.Value.ToArray());
+
+        await AdvanceClockAsync(PastExpiry);
+
+        Assert.Null(await Records.ReadAsync(key, null, TestCancellationToken));
+    }
+
+    /// <summary>
+    /// Checks that a swap with a persistent lifetime keeps the record past the time to live of the write it replaced.
+    /// </summary>
+    [Fact]
+    public async Task CompareAndSwapAsync_WhenLifetimeIsPersistent_KeepsTheRecordPastTheEarlierTimeToLive()
+    {
+        var key = CreateKey("a");
+        var created = await CreateExpiringRecordAsync(key, "one"u8.ToArray());
+
+        var result = await Records.CompareAndSwapAsync(
+            key,
+            created,
+            "two"u8.ToArray(),
+            RecordLifetime.Persistent,
+            null,
+            TestCancellationToken
+        );
+        Assert.True(result.IsWritten);
+
+        await AdvanceClockAsync(TimeSpan.FromSeconds(3));
+
+        var record = await Records.ReadAsync(key, null, TestCancellationToken);
+        Assert.NotNull(record);
+        Assert.Equal("two"u8.ToArray(), record.Value.ToArray());
+    }
+
     #endregion
 
     #region CompareAndDeleteAsync Tests
@@ -275,6 +403,161 @@ public abstract class RecordContractTests : ProviderContractTests
         );
 
         Assert.Equal(RecordDeleteStatus.NotFound, status);
+    }
+
+    #endregion
+
+    #region TakeAsync Tests
+
+    /// <summary>
+    /// Checks that taking a present record returns it and deletes it.
+    /// </summary>
+    [Fact]
+    public async Task TakeAsync_WhenKeyIsPresent_ReturnsAndDeletesTheRecord()
+    {
+        var key = CreateKey("a");
+        var created = await CreateRecordAsync(key, "one"u8.ToArray());
+
+        var taken = await Records.TakeAsync(key, null, TestCancellationToken);
+
+        Assert.NotNull(taken);
+        Assert.Equal("one"u8.ToArray(), taken.Value.ToArray());
+        Assert.Equal(created, taken.Revision);
+        Assert.Null(await Records.ReadAsync(key, null, TestCancellationToken));
+    }
+
+    /// <summary>
+    /// Checks that taking an absent key returns null.
+    /// </summary>
+    [Fact]
+    public async Task TakeAsync_WhenKeyIsAbsent_ReturnsNull()
+    {
+        var taken = await Records.TakeAsync(CreateKey("absent"), null, TestCancellationToken);
+
+        Assert.Null(taken);
+    }
+
+    #endregion
+
+    #region ListAsync Tests
+
+    /// <summary>
+    /// Checks that listing a prefix returns the prefix's own record and the records below it, and no others.
+    /// </summary>
+    [Fact]
+    public async Task ListAsync_WhenRecordsAreUnderThePrefix_ReturnsThemWithThePrefixesOwnRecord()
+    {
+        var prefix = CreateKey("cfg");
+        var keys = new[] { prefix, CreateKey("cfg", "a"), CreateKey("cfg", "b") };
+        foreach (var key in keys)
+        {
+            await CreateRecordAsync(key, "v"u8.ToArray());
+        }
+
+        await CreateRecordAsync(CreateKey("other"), "v"u8.ToArray());
+
+        var page = await Records.ListAsync(
+            prefix,
+            new RecordPageRequest(10),
+            null,
+            TestCancellationToken
+        );
+
+        Assert.Equal(keys.Length, page.Records.Length);
+        foreach (var key in keys)
+        {
+            Assert.Contains(page.Records, record => record.Key.Equals(key));
+        }
+
+        Assert.Null(page.ContinuationToken);
+        foreach (var record in page.Records)
+        {
+            Assert.True(page.Revision >= record.Revision);
+        }
+    }
+
+    /// <summary>
+    /// Checks that listing with a limit below the number of records pages through every record once.
+    /// </summary>
+    [Fact]
+    public async Task ListAsync_WhenRecordsExceedTheLimit_PagesThroughEachRecord()
+    {
+        const int count = 5;
+        const int limit = 2;
+        var keys = new List<CoordinationKey>();
+        for (var index = 0; index < count; index++)
+        {
+            var key = CreateKey("cfg", index);
+            keys.Add(key);
+            await CreateRecordAsync(key, "v"u8.ToArray());
+        }
+
+        var seen = new List<CoordinationKey>();
+        string? token = null;
+        var pages = 0;
+        do
+        {
+            var page = await Records.ListAsync(
+                CreateKey("cfg"),
+                new RecordPageRequest(limit) { ContinuationToken = token },
+                null,
+                TestCancellationToken
+            );
+
+            Assert.True(page.Records.Length <= limit);
+            seen.AddRange(page.Records.Select(record => record.Key));
+            token = page.ContinuationToken;
+            pages++;
+            Assert.True(pages <= count + 1, "The listing did not end.");
+        } while (token is not null);
+
+        Assert.Equal(count, seen.Count);
+        foreach (var key in keys)
+        {
+            Assert.Single(seen, seenKey => seenKey.Equals(key));
+        }
+    }
+
+    /// <summary>
+    /// Checks that listing a prefix with no records under it returns an empty page without a continuation token.
+    /// </summary>
+    [Fact]
+    public async Task ListAsync_WhenNothingIsUnderThePrefix_ReturnsAnEmptyPage()
+    {
+        await CreateRecordAsync(CreateKey("other"), "v"u8.ToArray());
+
+        var page = await Records.ListAsync(
+            CreateKey("cfg"),
+            new RecordPageRequest(10),
+            null,
+            TestCancellationToken
+        );
+
+        Assert.Empty(page.Records);
+        Assert.Null(page.ContinuationToken);
+    }
+
+    /// <summary>
+    /// Checks that listing a prefix leaves out a record whose time to live has passed.
+    /// </summary>
+    [Fact]
+    public async Task ListAsync_WhenARecordExpired_LeavesItOut()
+    {
+        var expiring = CreateKey("cfg", "a");
+        var kept = CreateKey("cfg", "b");
+        await CreateExpiringRecordAsync(expiring, "v"u8.ToArray());
+        await CreateRecordAsync(kept, "v"u8.ToArray());
+
+        await AdvanceClockAsync(StillAlive + PastExpiry);
+
+        var page = await Records.ListAsync(
+            CreateKey("cfg"),
+            new RecordPageRequest(10),
+            null,
+            TestCancellationToken
+        );
+        var record = Assert.Single(page.Records);
+        Assert.Equal(kept, record.Key);
     }
 
     #endregion
