@@ -44,6 +44,18 @@ NCode.Coordination.CoordinationKey.PartitionDepth.get -> int
 NCode.Coordination.CoordinationKey.PartitionDepth.init -> void
 NCode.Coordination.CoordinationKey.Segments.get -> System.Collections.Immutable.ImmutableArray<NCode.Coordination.KeySegment!>
 NCode.Coordination.CoordinationLimits
+NCode.Coordination.ElectionResult
+NCode.Coordination.ElectionResult.IsElected.get -> bool
+NCode.Coordination.ElectionResult.Leadership.get -> NCode.Coordination.Leadership?
+NCode.Coordination.ElectionResult.Status.get -> NCode.Coordination.ElectionStatus
+NCode.Coordination.ElectionStatus
+NCode.Coordination.ElectionStatus.Elected = 0 -> NCode.Coordination.ElectionStatus
+NCode.Coordination.ElectionStatus.Led = 1 -> NCode.Coordination.ElectionStatus
+NCode.Coordination.ElectionStatus.SessionEnded = 2 -> NCode.Coordination.ElectionStatus
+NCode.Coordination.ElectionView
+NCode.Coordination.ElectionView.ElectionView(NCode.Coordination.CoordinationKey! role, NCode.Coordination.Leader? leader) -> void
+NCode.Coordination.ElectionView.Leader.get -> NCode.Coordination.Leader?
+NCode.Coordination.ElectionView.Role.get -> NCode.Coordination.CoordinationKey!
 NCode.Coordination.FeatureRequirement
 NCode.Coordination.FeatureRequirement.Feature.get -> string!
 NCode.Coordination.FeatureRequirement.FeatureRequirement(string! feature, NCode.Coordination.Primitive! primitive, params System.Collections.Generic.IEnumerable<NCode.Coordination.Guarantee!>! guarantees) -> void
@@ -71,6 +83,12 @@ NCode.Coordination.GuaranteeDefinition.Implies.get -> System.Collections.Immutab
 NCode.Coordination.GuaranteeDefinition.Implies.init -> void
 NCode.Coordination.GuaranteeDimensions
 NCode.Coordination.Guarantees
+NCode.Coordination.IElectionService
+NCode.Coordination.IElectionService.ReadAsync(NCode.Coordination.CoordinationKey! role, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.ElectionView!>
+NCode.Coordination.IElectionService.RenewAsync(NCode.Coordination.Leadership! leadership, NCode.Coordination.TimeToLive! timeToLive, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<bool>
+NCode.Coordination.IElectionService.ResignAsync(NCode.Coordination.Leadership! leadership, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<bool>
+NCode.Coordination.IElectionService.TryLeadAsync(NCode.Coordination.CoordinationKey! role, System.ReadOnlyMemory<byte> value, NCode.Coordination.LeaseTerms! terms, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.ElectionResult!>
+NCode.Coordination.IElectionService.WatchAsync(NCode.Coordination.CoordinationKey! role, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Collections.Generic.IAsyncEnumerable<NCode.Coordination.ElectionView!>!
 NCode.Coordination.ILeaseService
 NCode.Coordination.ILeaseService.ReleaseAsync(NCode.Coordination.LeaseGrant! grant, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<bool>
 NCode.Coordination.ILeaseService.RenewAsync(NCode.Coordination.LeaseGrant! grant, NCode.Coordination.TimeToLive! timeToLive, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<bool>
@@ -116,6 +134,16 @@ NCode.Coordination.Keyspace.CreateKey(params System.Collections.Generic.IEnumera
 NCode.Coordination.Keyspace.Equals(NCode.Coordination.Keyspace? other) -> bool
 NCode.Coordination.Keyspace.Keyspace(string! cluster, params System.Collections.Generic.IEnumerable<NCode.Coordination.KeySegment!>! segments) -> void
 NCode.Coordination.Keyspace.Segments.get -> System.Collections.Immutable.ImmutableArray<NCode.Coordination.KeySegment!>
+NCode.Coordination.Leader
+NCode.Coordination.Leader.Leader(NCode.Coordination.CoordinationKey! role, NCode.Coordination.FencingToken! term, System.ReadOnlyMemory<byte> value) -> void
+NCode.Coordination.Leader.Role.get -> NCode.Coordination.CoordinationKey!
+NCode.Coordination.Leader.Term.get -> NCode.Coordination.FencingToken!
+NCode.Coordination.Leader.Value.get -> System.ReadOnlyMemory<byte>
+NCode.Coordination.Leadership
+NCode.Coordination.Leadership.Leader.get -> NCode.Coordination.Leader!
+NCode.Coordination.Leadership.Leadership(NCode.Coordination.Leader! leader, NCode.Coordination.OwnerToken! owner, NCode.Coordination.LeaseTerms! terms) -> void
+NCode.Coordination.Leadership.Owner.get -> NCode.Coordination.OwnerToken!
+NCode.Coordination.Leadership.Terms.get -> NCode.Coordination.LeaseTerms!
 NCode.Coordination.LeaseAcquireResult
 NCode.Coordination.LeaseAcquireResult.Grant.get -> NCode.Coordination.LeaseGrant?
 NCode.Coordination.LeaseAcquireResult.IsAcquired.get -> bool
@@ -273,6 +301,9 @@ override NCode.Coordination.TimeWindow.GetHashCode() -> int
 override NCode.Coordination.TimeWindow.ToString() -> string!
 static NCode.Coordination.CoordinationKey.operator !=(NCode.Coordination.CoordinationKey? left, NCode.Coordination.CoordinationKey? right) -> bool
 static NCode.Coordination.CoordinationKey.operator ==(NCode.Coordination.CoordinationKey? left, NCode.Coordination.CoordinationKey? right) -> bool
+static NCode.Coordination.ElectionResult.Elected(NCode.Coordination.Leadership! leadership) -> NCode.Coordination.ElectionResult!
+static NCode.Coordination.ElectionResult.Led.get -> NCode.Coordination.ElectionResult!
+static NCode.Coordination.ElectionResult.SessionEnded.get -> NCode.Coordination.ElectionResult!
 static NCode.Coordination.FencingToken.operator !=(NCode.Coordination.FencingToken? left, NCode.Coordination.FencingToken? right) -> bool
 static NCode.Coordination.FencingToken.operator <(NCode.Coordination.FencingToken? left, NCode.Coordination.FencingToken? right) -> bool
 static NCode.Coordination.FencingToken.operator <=(NCode.Coordination.FencingToken? left, NCode.Coordination.FencingToken? right) -> bool
