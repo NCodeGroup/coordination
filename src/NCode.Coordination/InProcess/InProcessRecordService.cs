@@ -8,11 +8,11 @@ namespace NCode.Coordination.InProcess;
 /// <summary>
 /// The records of the in-process provider.
 /// </summary>
-/// <param name="table">The record table, shared with the transaction service.</param>
+/// <param name="sessions">The session table, which holds the record table that the transaction service shares.</param>
 /// <remarks>
 /// Every operation runs entirely while holding the table's lock, so it is linearizable in the process.
 /// </remarks>
-internal class InProcessRecordService(InProcessRecordTable table) : IRecordService
+internal class InProcessRecordService(InProcessSessionTable sessions) : IRecordService
 {
     /// <summary>
     /// Reads the position that the continuation token of a page request names.
@@ -49,7 +49,12 @@ internal class InProcessRecordService(InProcessRecordTable table) : IRecordServi
     /// <summary>
     /// Gets the record table, shared with the transaction service.
     /// </summary>
-    private InProcessRecordTable Table { get; } = table;
+    private InProcessRecordTable Table => Sessions.Records;
+
+    /// <summary>
+    /// Gets the session table, which says whether a session is live.
+    /// </summary>
+    private InProcessSessionTable Sessions { get; } = sessions;
 
     /// <inheritdoc />
     public ValueTask<RecordWriteResult> CreateAsync(
@@ -67,7 +72,7 @@ internal class InProcessRecordService(InProcessRecordTable table) : IRecordServi
 
         using (Table.Enter())
         {
-            if (lifetime.Session is not null)
+            if (lifetime.Session is { } session && !Sessions.IsLive(session))
             {
                 return ValueTask.FromResult(RecordWriteResult.SessionEnded);
             }
@@ -117,7 +122,7 @@ internal class InProcessRecordService(InProcessRecordTable table) : IRecordServi
 
         using (Table.Enter())
         {
-            if (lifetime.Session is not null)
+            if (lifetime.Session is { } session && !Sessions.IsLive(session))
             {
                 return ValueTask.FromResult(RecordWriteResult.SessionEnded);
             }

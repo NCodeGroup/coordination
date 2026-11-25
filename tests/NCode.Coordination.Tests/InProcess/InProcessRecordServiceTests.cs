@@ -9,19 +9,19 @@ public sealed class InProcessRecordServiceTests
     {
         var time = InProcessTesting.CreateTime();
         var table = new InProcessRecordTable(time);
-        return new InProcessRecordService(table);
+        return new InProcessRecordService(new InProcessSessionTable(table));
     }
 
     private static RecordLifetime SessionLifetime()
     {
-        var sessionId = new SessionId(InProcessTesting.Keyspace, "s1");
+        var sessionId = new SessionId(InProcessTesting.Keyspace, "unknown");
         return RecordLifetime.ForSession(sessionId);
     }
 
     #region CreateAsync Tests
 
     [Fact]
-    public async Task CreateAsync_WhenLifetimeIsBoundToASession_ReturnsSessionEnded()
+    public async Task CreateAsync_WhenTheSessionIsUnknown_ReturnsSessionEnded()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var service = CreateService();
@@ -64,7 +64,7 @@ public sealed class InProcessRecordServiceTests
     #region CompareAndSwapAsync Tests
 
     [Fact]
-    public async Task CompareAndSwapAsync_WhenLifetimeIsBoundToASession_ReturnsSessionEnded()
+    public async Task CompareAndSwapAsync_WhenTheSessionIsUnknown_ReturnsSessionEnded()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var service = CreateService();

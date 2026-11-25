@@ -37,7 +37,7 @@ public sealed class InProcessTransactionServiceTests
         var cancellationToken = TestContext.Current.CancellationToken;
         var time = InProcessTesting.CreateTime();
         var table = new InProcessRecordTable(time);
-        var records = new InProcessRecordService(table);
+        var records = new InProcessRecordService(new InProcessSessionTable(table));
         var service = new InProcessTransactionService(table);
         var plainKey = InProcessTesting.Keyspace.CreateKey("plain");
         var boundKey = InProcessTesting.Keyspace.CreateKey("bound");
@@ -65,7 +65,7 @@ public sealed class InProcessTransactionServiceTests
         var cancellationToken = TestContext.Current.CancellationToken;
         var time = InProcessTesting.CreateTime();
         var table = new InProcessRecordTable(time);
-        var records = new InProcessRecordService(table);
+        var records = new InProcessRecordService(new InProcessSessionTable(table));
         var service = new InProcessTransactionService(table);
         var existingKey = InProcessTesting.Keyspace.CreateKey("existing");
         var otherKey = InProcessTesting.Keyspace.CreateKey("other");

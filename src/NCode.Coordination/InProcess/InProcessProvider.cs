@@ -87,7 +87,8 @@ internal class InProcessProvider : ICoordinationProvider
         ArgumentNullException.ThrowIfNull(time);
 
         var records = new InProcessRecordTable(time);
-        Records = new InProcessRecordService(records);
+        var sessions = new InProcessSessionTable(records);
+        Records = new InProcessRecordService(sessions);
         Transactions = new InProcessTransactionService(records);
         Occurrences = new InProcessOccurrenceService(time);
         Sets = new InProcessSetService(time);
