@@ -59,19 +59,18 @@ internal class InProcessNotificationService : INotificationService
 
         InProcessGuard.Check(options, cancellationToken);
 
-        using (Gate.EnterScope())
+        using var scope = Gate.EnterScope();
+
+        var sequence = Sequences.GetValueOrDefault(topic) + 1;
+        Sequences[topic] = sequence;
+
+        if (Subscribers.TryGetValue(topic, out var queues))
         {
-            var sequence = Sequences.GetValueOrDefault(topic) + 1;
-            Sequences[topic] = sequence;
+            var message = Notification.Message(topic, sequence, payload);
 
-            if (Subscribers.TryGetValue(topic, out var queues))
+            foreach (var queue in queues)
             {
-                var message = Notification.Message(topic, sequence, payload);
-
-                foreach (var queue in queues)
-                {
-                    queue.Post(message);
-                }
+                queue.Post(message);
             }
         }
 

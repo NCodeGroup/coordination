@@ -31,7 +31,7 @@ internal class InProcessRecordWatchService(InProcessRecordTable table) : IRecord
         ArgumentNullException.ThrowIfNull(key);
         InProcessGuard.Check(options, cancellationToken);
 
-        var watcher = new InProcessRecordWatcher(key, isPrefix: false);
+        var watcher = InProcessRecordWatcher.ForKey(key);
 
         return WatchCoreAsync(watcher, after, cancellationToken);
     }
@@ -47,7 +47,7 @@ internal class InProcessRecordWatchService(InProcessRecordTable table) : IRecord
         ArgumentNullException.ThrowIfNull(prefix);
         InProcessGuard.Check(options, cancellationToken);
 
-        var watcher = new InProcessRecordWatcher(prefix, isPrefix: true);
+        var watcher = InProcessRecordWatcher.ForPrefix(prefix);
 
         return WatchCoreAsync(watcher, after, cancellationToken);
     }

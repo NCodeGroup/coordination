@@ -69,7 +69,7 @@ internal class InProcessSessionService(InProcessSessionTable sessions) : ISessio
     }
 
     /// <inheritdoc />
-    public async ValueTask WaitForEndAsync(
+    public ValueTask WaitForEndAsync(
         SessionId session,
         OperationOptions? options,
         CancellationToken cancellationToken
@@ -80,7 +80,14 @@ internal class InProcessSessionService(InProcessSessionTable sessions) : ISessio
 
         var ended = StartWait(session);
 
-        await ended.WaitAsync(cancellationToken).ConfigureAwait(false);
+        if (ended.IsCompleted)
+        {
+            return ValueTask.CompletedTask;
+        }
+
+        var waiting = ended.WaitAsync(cancellationToken);
+
+        return new ValueTask(waiting);
     }
 
     /// <summary>

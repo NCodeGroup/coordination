@@ -150,7 +150,7 @@ internal class InProcessLeaseService : ILeaseService
     }
 
     /// <inheritdoc />
-    public async ValueTask WaitForReleaseAsync(
+    public ValueTask WaitForReleaseAsync(
         CoordinationKey resource,
         OperationOptions? options,
         CancellationToken cancellationToken
@@ -159,7 +159,16 @@ internal class InProcessLeaseService : ILeaseService
         ArgumentNullException.ThrowIfNull(resource);
         InProcessGuard.Check(options, cancellationToken);
 
-        await StartWait(resource).WaitAsync(cancellationToken).ConfigureAwait(false);
+        var released = StartWait(resource);
+
+        if (released.IsCompleted)
+        {
+            return ValueTask.CompletedTask;
+        }
+
+        var waiting = released.WaitAsync(cancellationToken);
+
+        return new ValueTask(waiting);
     }
 
     /// <summary>

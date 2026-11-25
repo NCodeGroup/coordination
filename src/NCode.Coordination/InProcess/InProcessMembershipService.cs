@@ -228,7 +228,12 @@ internal class InProcessMembershipService : IMembershipService
     private MembershipView View(CoordinationKey group)
     {
         var revision = Sessions.Records.Current(group.Keyspace);
-        var members = Groups.TryGetValue(group, out var found) ? found : [];
+        IEnumerable<Member> members = [];
+
+        if (Groups.TryGetValue(group, out var found))
+        {
+            members = found;
+        }
 
         return new MembershipView(group, revision, members);
     }

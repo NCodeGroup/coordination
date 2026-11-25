@@ -15,6 +15,37 @@ namespace NCode.Coordination;
 public sealed class HolderDeadline
 {
     /// <summary>
+    /// Begins a deadline at the current instant on the holder's clock.
+    /// </summary>
+    /// <param name="time">The holder's clock, read on its monotonic timestamp.</param>
+    /// <param name="timeToLive">The time to live the request asks for, never longer than the one granted.</param>
+    /// <param name="driftAllowance">
+    /// The margin for drift that the deadline passes before the time to live ends: zero up to, not including, the
+    /// time to live.
+    /// </param>
+    /// <returns>The deadline, which passes after the time to live less the drift allowance.</returns>
+    /// <exception cref="ArgumentNullException">The clock or the time to live is null.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// The drift allowance is negative, or is not shorter than the time to live.
+    /// </exception>
+    public static HolderDeadline Begin(
+        TimeProvider time,
+        TimeToLive timeToLive,
+        TimeSpan driftAllowance
+    )
+    {
+        ArgumentNullException.ThrowIfNull(time);
+        ArgumentNullException.ThrowIfNull(timeToLive);
+        ArgumentOutOfRangeException.ThrowIfLessThan(driftAllowance, TimeSpan.Zero);
+        ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(driftAllowance, timeToLive.Duration);
+
+        var start = time.GetTimestamp();
+        var lifetime = timeToLive.Duration - driftAllowance;
+
+        return new HolderDeadline(time, start, lifetime);
+    }
+
+    /// <summary>
     /// Creates a deadline that began at a timestamp and lasts a lifetime.
     /// </summary>
     /// <param name="time">The clock the deadline is measured on.</param>
@@ -58,35 +89,4 @@ public sealed class HolderDeadline
     /// Gets a value that indicates whether the deadline has passed.
     /// </summary>
     public bool HasPassed => Time.GetElapsedTime(Start) >= Lifetime;
-
-    /// <summary>
-    /// Begins a deadline at the current instant on the holder's clock.
-    /// </summary>
-    /// <param name="time">The holder's clock, read on its monotonic timestamp.</param>
-    /// <param name="timeToLive">The time to live the request asks for, never longer than the one granted.</param>
-    /// <param name="driftAllowance">
-    /// The margin for drift that the deadline passes before the time to live ends: zero up to, not including, the
-    /// time to live.
-    /// </param>
-    /// <returns>The deadline, which passes after the time to live less the drift allowance.</returns>
-    /// <exception cref="ArgumentNullException">The clock or the time to live is null.</exception>
-    /// <exception cref="ArgumentOutOfRangeException">
-    /// The drift allowance is negative, or is not shorter than the time to live.
-    /// </exception>
-    public static HolderDeadline Begin(
-        TimeProvider time,
-        TimeToLive timeToLive,
-        TimeSpan driftAllowance
-    )
-    {
-        ArgumentNullException.ThrowIfNull(time);
-        ArgumentNullException.ThrowIfNull(timeToLive);
-        ArgumentOutOfRangeException.ThrowIfLessThan(driftAllowance, TimeSpan.Zero);
-        ArgumentOutOfRangeException.ThrowIfGreaterThanOrEqual(driftAllowance, timeToLive.Duration);
-
-        var start = time.GetTimestamp();
-        var lifetime = timeToLive.Duration - driftAllowance;
-
-        return new HolderDeadline(time, start, lifetime);
-    }
 }

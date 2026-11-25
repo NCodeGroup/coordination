@@ -46,7 +46,8 @@ internal static class ContractStreams
         CancellationToken cancellationToken
     )
     {
-        var moved = await stream.MoveNextAsync().AsTask().WaitAsync(Timeout, cancellationToken);
+        var next = stream.MoveNextAsync().AsTask();
+        var moved = await next.WaitAsync(Timeout, cancellationToken);
 
         Assert.True(moved, "The stream ended.");
         return stream.Current;
