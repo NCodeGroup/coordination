@@ -127,7 +127,7 @@ internal static class ConcurrentRun
     /// <param name="remaining">The number of steps left before half of all the steps are done.</param>
     /// <param name="cancellationToken">A token that cancels the run.</param>
     /// <returns>A task that completes when the client has run every step.</returns>
-    private static async Task RunClientAsync(
+    private static async ValueTask RunClientAsync(
         int client,
         int steps,
         Func<int, int, CancellationToken, ValueTask> step,

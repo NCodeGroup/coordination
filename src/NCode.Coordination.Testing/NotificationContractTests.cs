@@ -238,7 +238,7 @@ public abstract class NotificationContractTests : ProviderContractTests
     /// </summary>
     [Fact]
     public async Task ConcurrentRun_WhenClientsPublish_DeliversAsDeclared() =>
-        await RunDeliveryAsync(null);
+        await RunDeliveryAsync(null, TestCancellationToken);
 
     /// <summary>
     /// Checks that two subscribers receive the messages as the provider declares when its connections drop in the
@@ -248,7 +248,7 @@ public abstract class NotificationContractTests : ProviderContractTests
     public async Task ConcurrentRun_WhenConnectionsDrop_DeliversAsDeclared()
     {
         var fault = GetDropConnections();
-        await RunDeliveryAsync(fault);
+        await RunDeliveryAsync(fault, TestCancellationToken);
     }
 
     /// <summary>
@@ -256,8 +256,12 @@ public abstract class NotificationContractTests : ProviderContractTests
     /// subscribers received is as the provider declares.
     /// </summary>
     /// <param name="fault">The fault to inject once half of the steps are done, or null for none.</param>
+    /// <param name="cancellationToken">A token that cancels the run.</param>
     /// <returns>A task that completes when the deliveries have been checked.</returns>
-    private async Task RunDeliveryAsync(Func<CancellationToken, ValueTask>? fault)
+    private async ValueTask RunDeliveryAsync(
+        Func<CancellationToken, ValueTask>? fault,
+        CancellationToken cancellationToken
+    )
     {
         var keepsDelivery = Keeps(Primitives.Notification, Guarantees.AtMostOnce);
         Assert.SkipUnless(
@@ -274,21 +278,21 @@ public abstract class NotificationContractTests : ProviderContractTests
         await using var first = new RunSubscriber<Notification>(
             token => notifications.SubscribeAsync(topic, null, token),
             recorder,
-            TestCancellationToken
+            cancellationToken
         );
         await using var second = new RunSubscriber<Notification>(
             token => notifications.SubscribeAsync(topic, null, token),
             recorder,
-            TestCancellationToken
+            cancellationToken
         );
-        var firstReady = await first.WaitForAsync(_ => true, TestCancellationToken);
+        var firstReady = await first.WaitForAsync(_ => true, cancellationToken);
         Assert.True(firstReady);
-        var secondReady = await second.WaitForAsync(_ => true, TestCancellationToken);
+        var secondReady = await second.WaitForAsync(_ => true, cancellationToken);
         Assert.True(secondReady);
 
         await ConcurrentRun.RunAsync(
             ConcurrentRun.Steps,
-            async (client, index, cancellationToken) =>
+            async (client, index, stepToken) =>
             {
                 var payload = string.Create(CultureInfo.InvariantCulture, $"{client}-{index}");
                 var bytes = HistoryValues.Encode(payload);
@@ -297,11 +301,11 @@ public abstract class NotificationContractTests : ProviderContractTests
                     partition,
                     new NotificationCall(payload),
                     token => notifications.PublishAsync(topic, bytes, null, token),
-                    cancellationToken
+                    stepToken
                 );
             },
             fault,
-            TestCancellationToken
+            cancellationToken
         );
 
         var lastBytes = HistoryValues.Encode(NotificationCall.Last);
@@ -310,7 +314,7 @@ public abstract class NotificationContractTests : ProviderContractTests
             partition,
             new NotificationCall(NotificationCall.Last),
             token => notifications.PublishAsync(topic, lastBytes, null, token),
-            TestCancellationToken
+            cancellationToken
         );
         Assert.Equal(HistoryOutcome.Returned, last.Outcome);
 
@@ -325,8 +329,8 @@ public abstract class NotificationContractTests : ProviderContractTests
             return string.Equals(payload, NotificationCall.Last, StringComparison.Ordinal);
         }
 
-        var firstDone = await first.WaitForAsync(IsLastOrResync, TestCancellationToken);
-        var secondDone = await second.WaitForAsync(IsLastOrResync, TestCancellationToken);
+        var firstDone = await first.WaitForAsync(IsLastOrResync, cancellationToken);
+        var secondDone = await second.WaitForAsync(IsLastOrResync, cancellationToken);
         Assert.True(
             (firstDone && secondDone) || !gapDetection,
             "A subscriber neither received the last message nor a resync after it."

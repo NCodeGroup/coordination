@@ -957,7 +957,7 @@ public abstract class RecordContractTests : ProviderContractTests
     /// </summary>
     [Fact]
     public async Task ConcurrentRun_WhenClientsRace_KeepsALinearizableHistory() =>
-        await RunAsync(null);
+        await RunAsync(null, TestCancellationToken);
 
     /// <summary>
     /// Checks that the history stays linearizable when the provider's connections drop in the middle of the run.
@@ -966,15 +966,19 @@ public abstract class RecordContractTests : ProviderContractTests
     public async Task ConcurrentRun_WhenConnectionsDrop_KeepsALinearizableHistory()
     {
         var fault = GetDropConnections();
-        await RunAsync(fault);
+        await RunAsync(fault, TestCancellationToken);
     }
 
     /// <summary>
     /// Runs clients that use records at once, with a fault, and asserts that the history is linearizable.
     /// </summary>
     /// <param name="fault">The fault to inject once half of the steps are done, or null for none.</param>
+    /// <param name="cancellationToken">A token that cancels the run.</param>
     /// <returns>A task that completes when the history has been checked.</returns>
-    private async Task RunAsync(Func<CancellationToken, ValueTask>? fault)
+    private async ValueTask RunAsync(
+        Func<CancellationToken, ValueTask>? fault,
+        CancellationToken cancellationToken
+    )
     {
         SkipUnlessLinearizable(Primitives.Record);
         var recorder = new HistoryRecorder();
@@ -985,7 +989,7 @@ public abstract class RecordContractTests : ProviderContractTests
             ConcurrentRun.Steps,
             script.StepAsync,
             fault,
-            TestCancellationToken
+            cancellationToken
         );
 
         var history = recorder.ToHistory();
