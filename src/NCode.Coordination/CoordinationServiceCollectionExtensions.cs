@@ -53,6 +53,7 @@ public static class CoordinationServiceCollectionExtensions
             services.TryAddSingleton<IClaimService, DefaultClaimService>();
             services.TryAddSingleton<IRecordService, DefaultRecordService>();
             services.TryAddSingleton<IRecordWatchService, DefaultRecordWatchService>();
+            services.TryAddSingleton<ITransactionService, DefaultTransactionService>();
             return services;
         }
     }
