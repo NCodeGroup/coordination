@@ -243,6 +243,7 @@ NCode.Coordination.Testing.SetContractTests.AddAsync_WhenOptionsCarryAnUnknownEx
 NCode.Coordination.Testing.SetContractTests.AddAsync_WhenTheSetIsFull_ThrowsLimitExceeded() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.SetContractTests.AddAsync_WhenTheSetIsFullAndMemberIsPresent_ReturnsFalse() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.SetContractTests.ClearAsync_WhenSetHasMembers_RemovesEach() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.SetContractTests.ConcurrentRun_WhenClientsRace_KeepsALinearizableHistory() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.SetContractTests.ListAsync_WhenSetIsAbsent_ReturnsEmpty() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.SetContractTests.ListAsync_WhenTokenIsCanceled_ThrowsOperationCanceledException() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.SetContractTests.RemoveAsync_WhenMemberIsAbsent_ReturnsFalse() -> System.Threading.Tasks.Task!
