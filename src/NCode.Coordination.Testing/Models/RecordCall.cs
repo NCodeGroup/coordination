@@ -6,7 +6,7 @@ namespace NCode.Coordination.Testing.Models;
 /// <summary>
 /// A call on a record that a history records.
 /// </summary>
-/// <param name="Operation">The operation: <see cref="Create"/>, <see cref="Read"/>, <see cref="CompareAndSwap"/>, <see cref="CompareAndDelete"/> or <see cref="Take"/>.</param>
+/// <param name="Operation">The operation: <see cref="Create"/>, <see cref="Read"/>, <see cref="CompareAndSwap"/>, <see cref="CompareAndDelete"/>, <see cref="Take"/> or <see cref="List"/>.</param>
 /// <param name="Value">The value the call writes, or null for an operation that writes none.</param>
 /// <param name="Expected">The revision value the call expects, or 0 for an operation that expects none.</param>
 internal sealed record RecordCall(string Operation, string? Value, long Expected)
@@ -35,4 +35,9 @@ internal sealed record RecordCall(string Operation, string? Value, long Expected
     /// The operation that reads the record and deletes it.
     /// </summary>
     public const string Take = "take";
+
+    /// <summary>
+    /// The operation that lists the records under a prefix, which spans keys.
+    /// </summary>
+    public const string List = "list";
 }
