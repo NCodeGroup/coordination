@@ -46,7 +46,10 @@ public sealed class DefaultRecordWatchServiceTests : IDisposable
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var mock = Mocks.Create<IRecordWatchService>();
-        await using var provider = BuildElsewhere(mock.Object);
+        await using var provider = TestComposition.BuildElsewhere(
+            Primitives.RecordWatch,
+            mock.Object
+        );
         var service = provider.GetRequiredService<IRecordWatchService>();
 
         var exception = Assert.Throws<CoordinationException>(() =>
@@ -87,20 +90,4 @@ public sealed class DefaultRecordWatchServiceTests : IDisposable
     }
 
     #endregion
-
-    private static ServiceProvider BuildElsewhere(IRecordWatchService implementation)
-    {
-        var support = PrimitiveSupport.Supported(Primitives.RecordWatch);
-        var declaration = new ProviderDeclaration(TestComposition.ProviderName, support);
-        var binding = new ProviderBinding(TestComposition.ProviderName)
-        {
-            Keyspace = new Keyspace("elsewhere"),
-        };
-        var services = new ServiceCollection();
-        services.AddMetrics();
-        services.AddCoordination(b =>
-            b.AddProvider(_ => new TestProvider(declaration, implementation)).Bind(binding)
-        );
-        return services.BuildServiceProvider();
-    }
 }

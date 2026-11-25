@@ -9,10 +9,6 @@ namespace NCode.Coordination.Routing.Tests;
 
 public sealed class DefaultElectionServiceTests : IDisposable
 {
-    private MockRepository Mocks { get; } = new(MockBehavior.Strict);
-
-    public void Dispose() => Mocks.Verify();
-
     private static LeaseTerms Terms()
     {
         var ttl = TimeSpan.FromSeconds(30);
@@ -29,6 +25,10 @@ public sealed class DefaultElectionServiceTests : IDisposable
         var terms = Terms();
         return new Leadership(leader, owner, terms);
     }
+
+    private MockRepository Mocks { get; } = new(MockBehavior.Strict);
+
+    public void Dispose() => Mocks.Verify();
 
     #region TryLeadAsync Tests
 
@@ -64,7 +64,7 @@ public sealed class DefaultElectionServiceTests : IDisposable
         var cancellationToken = TestContext.Current.CancellationToken;
         var terms = Terms();
         var mock = Mocks.Create<IElectionService>();
-        await using var provider = BuildElsewhere(mock.Object);
+        await using var provider = TestComposition.BuildElsewhere(Primitives.Election, mock.Object);
         var service = provider.GetRequiredService<IElectionService>();
 
         var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
@@ -173,20 +173,4 @@ public sealed class DefaultElectionServiceTests : IDisposable
     }
 
     #endregion
-
-    private static ServiceProvider BuildElsewhere(IElectionService implementation)
-    {
-        var support = PrimitiveSupport.Supported(Primitives.Election);
-        var declaration = new ProviderDeclaration(TestComposition.ProviderName, support);
-        var binding = new ProviderBinding(TestComposition.ProviderName)
-        {
-            Keyspace = new Keyspace("elsewhere"),
-        };
-        var services = new ServiceCollection();
-        services.AddMetrics();
-        services.AddCoordination(b =>
-            b.AddProvider(_ => new TestProvider(declaration, implementation)).Bind(binding)
-        );
-        return services.BuildServiceProvider();
-    }
 }

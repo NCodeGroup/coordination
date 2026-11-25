@@ -48,7 +48,7 @@ public sealed class DefaultCounterServiceTests : IDisposable
         var ttl = TimeSpan.FromMinutes(1);
         var timeToLive = new TimeToLive(ttl);
         var mock = Mocks.Create<ICounterService>();
-        await using var provider = BuildElsewhere(mock.Object);
+        await using var provider = TestComposition.BuildElsewhere(Primitives.Counter, mock.Object);
         var service = provider.GetRequiredService<ICounterService>();
 
         var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
@@ -169,20 +169,4 @@ public sealed class DefaultCounterServiceTests : IDisposable
     }
 
     #endregion
-
-    private static ServiceProvider BuildElsewhere(ICounterService implementation)
-    {
-        var support = PrimitiveSupport.Supported(Primitives.Counter);
-        var declaration = new ProviderDeclaration(TestComposition.ProviderName, support);
-        var binding = new ProviderBinding(TestComposition.ProviderName)
-        {
-            Keyspace = new Keyspace("elsewhere"),
-        };
-        var services = new ServiceCollection();
-        services.AddMetrics();
-        services.AddCoordination(b =>
-            b.AddProvider(_ => new TestProvider(declaration, implementation)).Bind(binding)
-        );
-        return services.BuildServiceProvider();
-    }
 }

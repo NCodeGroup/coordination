@@ -38,7 +38,10 @@ public sealed class DefaultMembershipServiceTests : IDisposable
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var mock = Mocks.Create<IMembershipService>();
-        await using var provider = BuildElsewhere(mock.Object);
+        await using var provider = TestComposition.BuildElsewhere(
+            Primitives.Membership,
+            mock.Object
+        );
         var service = provider.GetRequiredService<IMembershipService>();
         var sessionId = new SessionId(TestComposition.Keyspace, "1");
         var member = new Member(sessionId, "node-1", "10.0.0.4:5000");
@@ -120,20 +123,4 @@ public sealed class DefaultMembershipServiceTests : IDisposable
     }
 
     #endregion
-
-    private static ServiceProvider BuildElsewhere(IMembershipService implementation)
-    {
-        var support = PrimitiveSupport.Supported(Primitives.Membership);
-        var declaration = new ProviderDeclaration(TestComposition.ProviderName, support);
-        var binding = new ProviderBinding(TestComposition.ProviderName)
-        {
-            Keyspace = new Keyspace("elsewhere"),
-        };
-        var services = new ServiceCollection();
-        services.AddMetrics();
-        services.AddCoordination(b =>
-            b.AddProvider(_ => new TestProvider(declaration, implementation)).Bind(binding)
-        );
-        return services.BuildServiceProvider();
-    }
 }

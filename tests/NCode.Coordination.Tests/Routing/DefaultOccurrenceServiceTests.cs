@@ -45,7 +45,10 @@ public sealed class DefaultOccurrenceServiceTests : IDisposable
         var ttl = TimeSpan.FromMinutes(1);
         var timeToLive = new TimeToLive(ttl);
         var mock = Mocks.Create<IOccurrenceService>();
-        await using var provider = BuildElsewhere(mock.Object);
+        await using var provider = TestComposition.BuildElsewhere(
+            Primitives.Occurrence,
+            mock.Object
+        );
         var service = provider.GetRequiredService<IOccurrenceService>();
 
         var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
@@ -56,20 +59,4 @@ public sealed class DefaultOccurrenceServiceTests : IDisposable
     }
 
     #endregion
-
-    private static ServiceProvider BuildElsewhere(IOccurrenceService implementation)
-    {
-        var support = PrimitiveSupport.Supported(Primitives.Occurrence);
-        var declaration = new ProviderDeclaration(TestComposition.ProviderName, support);
-        var binding = new ProviderBinding(TestComposition.ProviderName)
-        {
-            Keyspace = new Keyspace("elsewhere"),
-        };
-        var services = new ServiceCollection();
-        services.AddMetrics();
-        services.AddCoordination(b =>
-            b.AddProvider(_ => new TestProvider(declaration, implementation)).Bind(binding)
-        );
-        return services.BuildServiceProvider();
-    }
 }

@@ -9,10 +9,6 @@ namespace NCode.Coordination.Routing.Tests;
 
 public sealed class DefaultRecordServiceTests : IDisposable
 {
-    private MockRepository Mocks { get; } = new(MockBehavior.Strict);
-
-    public void Dispose() => Mocks.Verify();
-
     private static StoredRecord Stored()
     {
         ReadOnlyMemory<byte> value = (byte[])[1];
@@ -26,6 +22,10 @@ public sealed class DefaultRecordServiceTests : IDisposable
         var timeToLive = new TimeToLive(ttl);
         return RecordLifetime.ForTimeToLive(timeToLive);
     }
+
+    private MockRepository Mocks { get; } = new(MockBehavior.Strict);
+
+    public void Dispose() => Mocks.Verify();
 
     #region CreateAsync Tests
 
@@ -63,7 +63,7 @@ public sealed class DefaultRecordServiceTests : IDisposable
         var cancellationToken = TestContext.Current.CancellationToken;
         var lifetime = Lifetime();
         var mock = Mocks.Create<IRecordService>();
-        await using var provider = BuildElsewhere(mock.Object);
+        await using var provider = TestComposition.BuildElsewhere(Primitives.Record, mock.Object);
         var service = provider.GetRequiredService<IRecordService>();
 
         var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
@@ -218,20 +218,4 @@ public sealed class DefaultRecordServiceTests : IDisposable
     }
 
     #endregion
-
-    private static ServiceProvider BuildElsewhere(IRecordService implementation)
-    {
-        var support = PrimitiveSupport.Supported(Primitives.Record);
-        var declaration = new ProviderDeclaration(TestComposition.ProviderName, support);
-        var binding = new ProviderBinding(TestComposition.ProviderName)
-        {
-            Keyspace = new Keyspace("elsewhere"),
-        };
-        var services = new ServiceCollection();
-        services.AddMetrics();
-        services.AddCoordination(b =>
-            b.AddProvider(_ => new TestProvider(declaration, implementation)).Bind(binding)
-        );
-        return services.BuildServiceProvider();
-    }
 }

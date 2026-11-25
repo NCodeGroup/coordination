@@ -51,7 +51,7 @@ public sealed class DefaultSetServiceTests : IDisposable
         var ttl = TimeSpan.FromMinutes(1);
         var timeToLive = new TimeToLive(ttl);
         var mock = Mocks.Create<ISetService>();
-        await using var provider = BuildElsewhere(mock.Object);
+        await using var provider = TestComposition.BuildElsewhere(Primitives.Set, mock.Object);
         var service = provider.GetRequiredService<ISetService>();
 
         var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
@@ -128,20 +128,4 @@ public sealed class DefaultSetServiceTests : IDisposable
     }
 
     #endregion
-
-    private static ServiceProvider BuildElsewhere(ISetService implementation)
-    {
-        var support = PrimitiveSupport.Supported(Primitives.Set);
-        var declaration = new ProviderDeclaration(TestComposition.ProviderName, support);
-        var binding = new ProviderBinding(TestComposition.ProviderName)
-        {
-            Keyspace = new Keyspace("elsewhere"),
-        };
-        var services = new ServiceCollection();
-        services.AddMetrics();
-        services.AddCoordination(b =>
-            b.AddProvider(_ => new TestProvider(declaration, implementation)).Bind(binding)
-        );
-        return services.BuildServiceProvider();
-    }
 }

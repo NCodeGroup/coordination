@@ -45,7 +45,7 @@ public sealed class DefaultSessionServiceTests : IDisposable
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var mock = Mocks.Create<ISessionService>();
-        await using var provider = BuildElsewhere(mock.Object);
+        await using var provider = TestComposition.BuildElsewhere(Primitives.Session, mock.Object);
         var service = provider.GetRequiredService<ISessionService>();
         var ttl = TimeSpan.FromSeconds(30);
         var timeToLive = new TimeToLive(ttl);
@@ -120,20 +120,4 @@ public sealed class DefaultSessionServiceTests : IDisposable
     }
 
     #endregion
-
-    private static ServiceProvider BuildElsewhere(ISessionService implementation)
-    {
-        var support = PrimitiveSupport.Supported(Primitives.Session);
-        var declaration = new ProviderDeclaration(TestComposition.ProviderName, support);
-        var binding = new ProviderBinding(TestComposition.ProviderName)
-        {
-            Keyspace = new Keyspace("elsewhere"),
-        };
-        var services = new ServiceCollection();
-        services.AddMetrics();
-        services.AddCoordination(b =>
-            b.AddProvider(_ => new TestProvider(declaration, implementation)).Bind(binding)
-        );
-        return services.BuildServiceProvider();
-    }
 }

@@ -36,7 +36,7 @@ public sealed class DefaultSequenceServiceTests : IDisposable
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var mock = Mocks.Create<ISequenceService>();
-        await using var provider = BuildElsewhere(mock.Object);
+        await using var provider = TestComposition.BuildElsewhere(Primitives.Sequence, mock.Object);
         var service = provider.GetRequiredService<ISequenceService>();
 
         var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
@@ -68,20 +68,4 @@ public sealed class DefaultSequenceServiceTests : IDisposable
     }
 
     #endregion
-
-    private static ServiceProvider BuildElsewhere(ISequenceService implementation)
-    {
-        var support = PrimitiveSupport.Supported(Primitives.Sequence);
-        var declaration = new ProviderDeclaration(TestComposition.ProviderName, support);
-        var binding = new ProviderBinding(TestComposition.ProviderName)
-        {
-            Keyspace = new Keyspace("elsewhere"),
-        };
-        var services = new ServiceCollection();
-        services.AddMetrics();
-        services.AddCoordination(b =>
-            b.AddProvider(_ => new TestProvider(declaration, implementation)).Bind(binding)
-        );
-        return services.BuildServiceProvider();
-    }
 }

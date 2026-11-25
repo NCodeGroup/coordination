@@ -47,6 +47,29 @@ internal static class TestComposition
     }
 
     /// <summary>
+    /// Builds services whose only provider serves a primitive with the given implementation, bound to the keyspace
+    /// <c>elsewhere</c> only, so no binding covers <see cref="Keyspace" />.
+    /// </summary>
+    /// <typeparam name="TService">The primitive's interface.</typeparam>
+    /// <param name="primitive">The primitive.</param>
+    /// <param name="service">The implementation the provider serves.</param>
+    /// <returns>The built service provider.</returns>
+    public static ServiceProvider BuildElsewhere<TService>(Primitive primitive, TService service)
+        where TService : class
+    {
+        var support = PrimitiveSupport.Supported(primitive);
+        var declaration = new ProviderDeclaration(ProviderName, support);
+        var elsewhere = new Keyspace("elsewhere");
+        var binding = new ProviderBinding(ProviderName) { Keyspace = elsewhere };
+        var services = new ServiceCollection();
+        services.AddMetrics();
+        services.AddCoordination(b =>
+            b.AddProvider(_ => new TestProvider(declaration, service)).Bind(binding)
+        );
+        return services.BuildServiceProvider();
+    }
+
+    /// <summary>
     /// Streams items, yielding to the scheduler before each.
     /// </summary>
     /// <typeparam name="T">The type of the items.</typeparam>

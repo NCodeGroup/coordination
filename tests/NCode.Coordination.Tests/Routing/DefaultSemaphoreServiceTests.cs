@@ -9,10 +9,6 @@ namespace NCode.Coordination.Routing.Tests;
 
 public sealed class DefaultSemaphoreServiceTests : IDisposable
 {
-    private MockRepository Mocks { get; } = new(MockBehavior.Strict);
-
-    public void Dispose() => Mocks.Verify();
-
     private static LeaseTerms Terms()
     {
         var ttl = TimeSpan.FromSeconds(30);
@@ -27,6 +23,10 @@ public sealed class DefaultSemaphoreServiceTests : IDisposable
         var terms = Terms();
         return new SemaphoreGrant(TestComposition.Key, 2, token, owner, terms);
     }
+
+    private MockRepository Mocks { get; } = new(MockBehavior.Strict);
+
+    public void Dispose() => Mocks.Verify();
 
     #region TryAcquireAsync Tests
 
@@ -61,7 +61,10 @@ public sealed class DefaultSemaphoreServiceTests : IDisposable
         var cancellationToken = TestContext.Current.CancellationToken;
         var terms = Terms();
         var mock = Mocks.Create<ISemaphoreService>();
-        await using var provider = BuildElsewhere(mock.Object);
+        await using var provider = TestComposition.BuildElsewhere(
+            Primitives.Semaphore,
+            mock.Object
+        );
         var service = provider.GetRequiredService<ISemaphoreService>();
 
         var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
@@ -134,20 +137,4 @@ public sealed class DefaultSemaphoreServiceTests : IDisposable
     }
 
     #endregion
-
-    private static ServiceProvider BuildElsewhere(ISemaphoreService implementation)
-    {
-        var support = PrimitiveSupport.Supported(Primitives.Semaphore);
-        var declaration = new ProviderDeclaration(TestComposition.ProviderName, support);
-        var binding = new ProviderBinding(TestComposition.ProviderName)
-        {
-            Keyspace = new Keyspace("elsewhere"),
-        };
-        var services = new ServiceCollection();
-        services.AddMetrics();
-        services.AddCoordination(b =>
-            b.AddProvider(_ => new TestProvider(declaration, implementation)).Bind(binding)
-        );
-        return services.BuildServiceProvider();
-    }
 }
