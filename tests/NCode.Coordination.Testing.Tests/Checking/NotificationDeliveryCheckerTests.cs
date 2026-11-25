@@ -62,7 +62,10 @@ public sealed class NotificationDeliveryCheckerTests
 
         var violations = NotificationDeliveryChecker.Check(history, [subscriber], false);
 
-        Assert.Equal(["Subscriber 0 received 'x', which no call published before it."], violations);
+        Assert.Equal<string>(
+            ["Subscriber 0 received 'x', which no call published before it."],
+            violations
+        );
     }
 
     [Fact]
@@ -77,7 +80,10 @@ public sealed class NotificationDeliveryCheckerTests
 
         var violations = NotificationDeliveryChecker.Check(history, [subscriber], false);
 
-        Assert.Equal(["Subscriber 0 received 'a', which no call published before it."], violations);
+        Assert.Equal<string>(
+            ["Subscriber 0 received 'a', which no call published before it."],
+            violations
+        );
     }
 
     [Fact]
@@ -92,7 +98,10 @@ public sealed class NotificationDeliveryCheckerTests
 
         var violations = NotificationDeliveryChecker.Check(history, [subscriber], false);
 
-        Assert.Equal(["Subscriber 0 received 'a', which no call published before it."], violations);
+        Assert.Equal<string>(
+            ["Subscriber 0 received 'a', which no call published before it."],
+            violations
+        );
     }
 
     [Fact]
@@ -112,12 +121,12 @@ public sealed class NotificationDeliveryCheckerTests
     {
         HistoryOperation[] history = [Publish("a"), Publish("b")];
         var firstMessage = Message(3, 2, "a");
-        var secondMessage = Message(4, 2, "b");
+        var secondMessage = Message(4, 1, "b");
         var subscriber = Subscriber(firstMessage, secondMessage);
 
         var violations = NotificationDeliveryChecker.Check(history, [subscriber], false);
 
-        Assert.Contains("Subscriber 0 received message 2 after message 2.", violations);
+        Assert.Equal<string>(["Subscriber 0 received message 1 after message 2."], violations);
     }
 
     [Fact]
@@ -130,7 +139,7 @@ public sealed class NotificationDeliveryCheckerTests
 
         var violations = NotificationDeliveryChecker.Check(history, [subscriber], true);
 
-        Assert.Equal(
+        Assert.Equal<string>(
             ["Subscriber 0 received message 3 after message 1 without a resync."],
             violations
         );
@@ -159,7 +168,10 @@ public sealed class NotificationDeliveryCheckerTests
 
         var violations = NotificationDeliveryChecker.Check(history, [subscriber], true);
 
-        Assert.Equal(["Subscriber 0 received a resync carrying 2 after message 1."], violations);
+        Assert.Equal<string>(
+            ["Subscriber 0 received a resync carrying 2 after message 1."],
+            violations
+        );
     }
 
     [Fact]
@@ -186,7 +198,7 @@ public sealed class NotificationDeliveryCheckerTests
 
         var violations = NotificationDeliveryChecker.Check(history, [first, second], true);
 
-        Assert.Equal(["Message 1 carried 'a' and 'b'."], violations);
+        Assert.Equal<string>(["Message 1 carried 'a' and 'b'."], violations);
     }
 
     [Fact]
@@ -200,7 +212,7 @@ public sealed class NotificationDeliveryCheckerTests
 
         var violations = NotificationDeliveryChecker.Check(history, [first, second], false);
 
-        Assert.Equal(["'a' was numbered 1 and 2."], violations);
+        Assert.Equal<string>(["'a' was numbered 1 and 2."], violations);
     }
 
     #endregion

@@ -118,7 +118,7 @@ public sealed class RecordWatchDeliveryCheckerTests
 
         var violations = RecordWatchDeliveryChecker.Check(history, changes, NoClosing, false);
 
-        Assert.Equal(["The watch resynced at revision 2 after revision 3."], violations);
+        Assert.Equal<string>(["The watch resynced at revision 2 after revision 3."], violations);
     }
 
     [Fact]
@@ -135,7 +135,7 @@ public sealed class RecordWatchDeliveryCheckerTests
 
         var violations = RecordWatchDeliveryChecker.Check(history, changes, NoClosing, false);
 
-        Assert.Equal(["The watch received revision 2 after revision 2."], violations);
+        Assert.Equal<string>(["The watch received revision 2 after revision 2."], violations);
     }
 
     [Fact]
@@ -147,7 +147,7 @@ public sealed class RecordWatchDeliveryCheckerTests
 
         var violations = RecordWatchDeliveryChecker.Check(history, changes, NoClosing, false);
 
-        Assert.Equal(
+        Assert.Equal<string>(
             [$"The watch received 'x' at revision 1 for {Name}, which no write produced."],
             violations
         );
@@ -162,7 +162,7 @@ public sealed class RecordWatchDeliveryCheckerTests
 
         var violations = RecordWatchDeliveryChecker.Check(history, changes, NoClosing, false);
 
-        Assert.Equal(
+        Assert.Equal<string>(
             [$"The watch received 'a' at revision 2 for {Name}, which no write produced."],
             violations
         );
@@ -189,7 +189,7 @@ public sealed class RecordWatchDeliveryCheckerTests
 
         var violations = RecordWatchDeliveryChecker.Check(history, changes, NoClosing, false);
 
-        Assert.Equal(
+        Assert.Equal<string>(
             [$"The watch received 'a' at revision 1 for {Name}, which no write produced."],
             violations
         );
@@ -217,7 +217,10 @@ public sealed class RecordWatchDeliveryCheckerTests
 
         var violations = RecordWatchDeliveryChecker.Check(history, changes, NoClosing, false);
 
-        Assert.Single(violations);
+        Assert.Equal<string>(
+            [$"The watch received 'a' at revision 1 for {Name}, which no write produced."],
+            violations
+        );
     }
 
     [Fact]
@@ -238,7 +241,10 @@ public sealed class RecordWatchDeliveryCheckerTests
 
         var violations = RecordWatchDeliveryChecker.Check(history, changes, NoClosing, false);
 
-        Assert.Single(violations);
+        Assert.Equal<string>(
+            [$"The watch received 'a' at revision 1 for {Name}, which no write produced."],
+            violations
+        );
     }
 
     [Fact]
@@ -274,7 +280,7 @@ public sealed class RecordWatchDeliveryCheckerTests
 
         var violations = RecordWatchDeliveryChecker.Check(history, changes, NoClosing, false);
 
-        Assert.Equal(
+        Assert.Equal<string>(
             [$"The watch received a deletion of {Name} at revision 2, which no call made."],
             violations
         );
@@ -333,7 +339,10 @@ public sealed class RecordWatchDeliveryCheckerTests
 
         var violations = RecordWatchDeliveryChecker.Check(history, changes, NoClosing, false);
 
-        Assert.Single(violations);
+        Assert.Equal<string>(
+            [$"The watch received a deletion of {Name} at revision 2, which no call made."],
+            violations
+        );
     }
 
     [Fact]
@@ -350,7 +359,7 @@ public sealed class RecordWatchDeliveryCheckerTests
 
         var violations = RecordWatchDeliveryChecker.Check(history, changes, closing, true);
 
-        Assert.Equal(
+        Assert.Equal<string>(
             [
                 $"The watch received neither the last write to {Name}, at revision 2, nor a resync after it.",
             ],
@@ -386,7 +395,12 @@ public sealed class RecordWatchDeliveryCheckerTests
 
         var violations = RecordWatchDeliveryChecker.Check(history, changes, closing, true);
 
-        Assert.Single(violations);
+        Assert.Equal<string>(
+            [
+                $"The watch received neither the last write to {Name}, at revision 3, nor a resync after it.",
+            ],
+            violations
+        );
     }
 
     [Fact]
