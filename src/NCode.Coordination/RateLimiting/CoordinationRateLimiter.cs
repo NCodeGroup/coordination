@@ -22,7 +22,14 @@ internal abstract class CoordinationRateLimiter(TimeProvider time, int permitLim
     /// </summary>
     protected static TimeSpan SkewAllowance { get; } = TimeSpan.FromMinutes(1);
 
+    /// <summary>
+    /// The timestamp of the latest request, which the idle time is measured from.
+    /// </summary>
     private long _lastUsed = time.GetTimestamp();
+
+    /// <summary>
+    /// Whether the limiter has been disposed: 1 after disposal, otherwise 0.
+    /// </summary>
     private int _disposed;
 
     /// <summary>
@@ -30,6 +37,9 @@ internal abstract class CoordinationRateLimiter(TimeProvider time, int permitLim
     /// </summary>
     protected TimeProvider Time { get; } = time;
 
+    /// <summary>
+    /// Gets the most permits one request may ask for.
+    /// </summary>
     private int PermitLimit { get; } = permitLimit;
 
     /// <inheritdoc />
@@ -86,6 +96,12 @@ internal abstract class CoordinationRateLimiter(TimeProvider time, int permitLim
         CancellationToken cancellationToken
     );
 
+    /// <summary>
+    /// Throws when the limiter is disposed or the number of permits is outside the range a request may ask for.
+    /// </summary>
+    /// <param name="permitCount">The number of permits the request asks for.</param>
+    /// <exception cref="ObjectDisposedException">The limiter is disposed.</exception>
+    /// <exception cref="ArgumentOutOfRangeException">The permit count is less than 1 or more than the limit.</exception>
     private void ThrowIfInvalid(int permitCount)
     {
         var disposed = Volatile.Read(ref _disposed) != 0;

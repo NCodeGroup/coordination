@@ -13,10 +13,19 @@ namespace NCode.Coordination.SingleFlight;
 internal class DefaultSingleFlightService(IRecordService records, ILeaseService leases)
     : ISingleFlightService
 {
+    /// <summary>
+    /// Gets the segment of the key that names the lease the fetching caller holds.
+    /// </summary>
     private static KeySegment FetchSegment { get; } = KeySegment.FromString("fetch");
 
+    /// <summary>
+    /// Gets the record operations that store the value.
+    /// </summary>
     private IRecordService Records { get; } = records;
 
+    /// <summary>
+    /// Gets the lease operations that give one caller the turn to fetch.
+    /// </summary>
     private ILeaseService Leases { get; } = leases;
 
     /// <inheritdoc />

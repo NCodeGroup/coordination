@@ -13,8 +13,14 @@ namespace NCode.Coordination.Barriers;
 internal class DefaultBarrierService(IRecordService records, IRecordWatchService watches)
     : IBarrierService
 {
+    /// <summary>
+    /// Gets the record operations that write and list the arrivals.
+    /// </summary>
     private IRecordService Records { get; } = records;
 
+    /// <summary>
+    /// Gets the record watches that report the arrivals of the other parties.
+    /// </summary>
     private IRecordWatchService Watches { get; } = watches;
 
     /// <inheritdoc />
@@ -84,6 +90,14 @@ internal class DefaultBarrierService(IRecordService records, IRecordWatchService
         throw new InvalidOperationException("The watch ended without a failure.");
     }
 
+    /// <summary>
+    /// Lists the arrival records of a barrier and adds each arrived party to the set.
+    /// </summary>
+    /// <param name="barrier">The barrier whose arrivals to list.</param>
+    /// <param name="arrived">The set of arrival keys to add the listed arrivals to.</param>
+    /// <param name="options">Options for the listing, or null for none.</param>
+    /// <param name="cancellationToken">The token that cancels the listing.</param>
+    /// <returns>The page that was listed, whose revision a watch can resume from.</returns>
     private async ValueTask<RecordPage> ListArrivalsAsync(
         CoordinationKey barrier,
         HashSet<CoordinationKey> arrived,

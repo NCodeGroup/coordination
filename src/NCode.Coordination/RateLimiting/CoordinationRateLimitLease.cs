@@ -12,12 +12,20 @@ namespace NCode.Coordination.RateLimiting;
 /// </summary>
 internal sealed class CoordinationRateLimitLease : RateLimitLease
 {
+    /// <summary>
+    /// Initializes a lease.
+    /// </summary>
+    /// <param name="isAcquired">Whether the permits were granted.</param>
+    /// <param name="retryAfter">How long to wait before trying again, or null when there is no time to report.</param>
     private CoordinationRateLimitLease(bool isAcquired, TimeSpan? retryAfter)
     {
         IsAcquired = isAcquired;
         RetryAfter = retryAfter;
     }
 
+    /// <summary>
+    /// Gets how long to wait before trying again, or null when the lease reports no time.
+    /// </summary>
     private TimeSpan? RetryAfter { get; }
 
     /// <summary>

@@ -18,10 +18,19 @@ internal class DefaultRateLimiterFactory(
     TimeProvider time
 ) : IRateLimiterFactory
 {
+    /// <summary>
+    /// Gets the counter operations that the window limiters are built on.
+    /// </summary>
     private ICounterService Counters { get; } = counters;
 
+    /// <summary>
+    /// Gets the record operations that the token bucket limiters are built on.
+    /// </summary>
     private IRecordService Records { get; } = records;
 
+    /// <summary>
+    /// Gets the clock that dates each request.
+    /// </summary>
     private TimeProvider Time { get; } = time;
 
     /// <inheritdoc />

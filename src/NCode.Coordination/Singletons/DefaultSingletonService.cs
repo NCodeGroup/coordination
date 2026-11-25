@@ -10,6 +10,9 @@ namespace NCode.Coordination.Singletons;
 /// <param name="elections">The election operations the singleton is built on.</param>
 internal class DefaultSingletonService(IElectionService elections) : ISingletonService
 {
+    /// <summary>
+    /// Gets the election operations that choose and watch the leader of a role.
+    /// </summary>
     private IElectionService Elections { get; } = elections;
 
     /// <inheritdoc />

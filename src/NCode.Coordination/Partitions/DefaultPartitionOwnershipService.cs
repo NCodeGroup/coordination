@@ -12,6 +12,9 @@ namespace NCode.Coordination.Partitions;
 internal class DefaultPartitionOwnershipService(IMembershipService membership)
     : IPartitionOwnershipService
 {
+    /// <summary>
+    /// Gets the membership operations that read and watch the members of a group.
+    /// </summary>
     private IMembershipService Membership { get; } = membership;
 
     /// <inheritdoc />

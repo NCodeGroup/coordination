@@ -20,6 +20,13 @@ public sealed class PartitionAssignment
     /// </summary>
     public const int MaxPartitions = 4_096;
 
+    /// <summary>
+    /// Initializes an assignment from the owner of each partition.
+    /// </summary>
+    /// <param name="group">The group the assignment is of.</param>
+    /// <param name="revision">The revision of the membership the assignment was computed from.</param>
+    /// <param name="partitionCount">The number of partitions.</param>
+    /// <param name="owners">The owner of each partition, indexed by partition number.</param>
     private PartitionAssignment(
         CoordinationKey group,
         Revision revision,
@@ -48,6 +55,9 @@ public sealed class PartitionAssignment
     /// </summary>
     public int PartitionCount { get; }
 
+    /// <summary>
+    /// Gets the owner of each partition, indexed by partition number, with null for a partition that has no owner.
+    /// </summary>
     private ImmutableArray<Member?> Owners { get; }
 
     /// <summary>

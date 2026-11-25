@@ -17,19 +17,40 @@ internal class DefaultReadWriteLockService(
     IRecordWatchService watches
 ) : IReadWriteLockService
 {
+    /// <summary>
+    /// Gets the segment of the resource's key that names the writer's lease.
+    /// </summary>
     private static KeySegment WriterSegment { get; } = KeySegment.FromString("writer");
 
     // A reader holds the probe only while it writes its registration, so 30 seconds is far more than it needs.
+    /// <summary>
+    /// Gets how long the lease that a reader holds while it writes its registration lasts.
+    /// </summary>
     private static TimeSpan ProbeLength { get; } = TimeSpan.FromSeconds(30);
 
+    /// <summary>
+    /// Gets the time to live of the lease that a reader holds while it writes its registration.
+    /// </summary>
     private static TimeToLive ProbeTimeToLive { get; } = new(ProbeLength);
 
+    /// <summary>
+    /// Gets the terms of the lease that a reader holds while it writes its registration.
+    /// </summary>
     private static LeaseTerms ProbeTerms { get; } = LeaseTerms.ForTimeToLive(ProbeTimeToLive);
 
+    /// <summary>
+    /// Gets the lease operations that hold the writer's lock and the readers' probe.
+    /// </summary>
     private ILeaseService Leases { get; } = leases;
 
+    /// <summary>
+    /// Gets the record operations that write, list and delete the readers' registrations.
+    /// </summary>
     private IRecordService Records { get; } = records;
 
+    /// <summary>
+    /// Gets the record watches that report a reader leaving.
+    /// </summary>
     private IRecordWatchService Watches { get; } = watches;
 
     /// <inheritdoc />
@@ -186,6 +207,14 @@ internal class DefaultReadWriteLockService(
         return await Leases.ReleaseAsync(grant, options, cancellationToken).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Acquires the writer's lease, waiting for its release while another writer holds it.
+    /// </summary>
+    /// <param name="writer">The key of the writer's lease.</param>
+    /// <param name="terms">The terms of the lease.</param>
+    /// <param name="options">Options for this call, or null for none.</param>
+    /// <param name="cancellationToken">The token that cancels the wait.</param>
+    /// <returns>The grant, or null when the session the terms name has ended.</returns>
     private async ValueTask<LeaseGrant?> AcquireWriterAsync(
         CoordinationKey writer,
         LeaseTerms terms,
@@ -214,6 +243,14 @@ internal class DefaultReadWriteLockService(
         }
     }
 
+    /// <summary>
+    /// Waits until no reader has a registration under the resource.
+    /// </summary>
+    /// <param name="resource">The resource whose readers to wait for.</param>
+    /// <param name="options">Options for this call, or null for none.</param>
+    /// <param name="cancellationToken">The token that cancels the wait.</param>
+    /// <returns>A task that completes when the resource has no readers.</returns>
+    /// <exception cref="InvalidOperationException">The watch ended without a failure.</exception>
     private async ValueTask WaitForNoReadersAsync(
         CoordinationKey resource,
         OperationOptions? options,
@@ -257,6 +294,12 @@ internal class DefaultReadWriteLockService(
         throw new InvalidOperationException("The watch ended without a failure.");
     }
 
+    /// <summary>
+    /// Determines whether a page of records holds a reader's registration.
+    /// </summary>
+    /// <param name="page">The page of records listed under the resource.</param>
+    /// <param name="resource">The resource whose readers to look for.</param>
+    /// <returns>True when a record sits below the resource's own key; otherwise false.</returns>
     private static bool HasReader(RecordPage page, CoordinationKey resource)
     {
         foreach (var record in page.Records)

@@ -130,12 +130,22 @@ internal readonly record struct TokenBucketState(long Tokens, long ReplenishedAt
         return TimeSpan.FromMilliseconds(milliseconds);
     }
 
+    /// <summary>
+    /// Gets how many replenishment periods the bucket needs to hold the full token limit again.
+    /// </summary>
+    /// <param name="limit">The limit of the bucket.</param>
+    /// <returns>Zero when the bucket is full, otherwise the number of periods that return the missing tokens.</returns>
     private long GetPeriodsToFull(TokenBucketLimit limit)
     {
         var missing = limit.TokenLimit - Tokens;
         return missing <= 0 ? 0 : (missing + limit.TokensPerPeriod - 1) / limit.TokensPerPeriod;
     }
 
+    /// <summary>
+    /// Gets the length of one replenishment period in milliseconds.
+    /// </summary>
+    /// <param name="limit">The limit of the bucket.</param>
+    /// <returns>The length of the replenishment period, in milliseconds.</returns>
     private static long GetPeriodMilliseconds(TokenBucketLimit limit) =>
         limit.ReplenishmentPeriod.Ticks / TimeSpan.TicksPerMillisecond;
 }

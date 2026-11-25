@@ -9,6 +9,9 @@ namespace NCode.Coordination.Locks;
 /// <param name="leases">The lease operations the lock is built on.</param>
 internal class DefaultLockService(ILeaseService leases) : ILockService
 {
+    /// <summary>
+    /// Gets the lease operations that acquire the lock and wait for its release.
+    /// </summary>
     private ILeaseService Leases { get; } = leases;
 
     /// <inheritdoc />

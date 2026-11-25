@@ -10,6 +10,9 @@ namespace NCode.Coordination.Caching;
 internal class DefaultCacheInvalidationService(INotificationService notifications)
     : ICacheInvalidationService
 {
+    /// <summary>
+    /// Gets the notification operations that publish and receive the invalidations.
+    /// </summary>
     private INotificationService Notifications { get; } = notifications;
 
     /// <inheritdoc />

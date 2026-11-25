@@ -24,10 +24,19 @@ internal class CoordinationTokenBucketLimiter(
     TokenBucketLimit limit
 ) : CoordinationRateLimiter(time, limit.TokenLimit)
 {
+    /// <summary>
+    /// Gets the record operations that read and write the record that holds the bucket.
+    /// </summary>
     private IRecordService Records { get; } = records;
 
+    /// <summary>
+    /// Gets the key of the record that holds the bucket.
+    /// </summary>
     private CoordinationKey Key { get; } = key;
 
+    /// <summary>
+    /// Gets the limit of the limiter.
+    /// </summary>
     private TokenBucketLimit Limit { get; } = limit;
 
     /// <inheritdoc />

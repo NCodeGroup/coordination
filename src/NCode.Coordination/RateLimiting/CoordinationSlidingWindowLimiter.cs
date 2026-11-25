@@ -25,10 +25,19 @@ internal class CoordinationSlidingWindowLimiter(
     SlidingWindowLimit limit
 ) : CoordinationRateLimiter(time, limit.PermitLimit)
 {
+    /// <summary>
+    /// Gets the counter operations that count the permits of each window.
+    /// </summary>
     private ICounterService Counters { get; } = counters;
 
+    /// <summary>
+    /// Gets the key the limiter keeps its counters under.
+    /// </summary>
     private CoordinationKey Key { get; } = key;
 
+    /// <summary>
+    /// Gets the limit of the limiter.
+    /// </summary>
     private SlidingWindowLimit Limit { get; } = limit;
 
     /// <inheritdoc />
