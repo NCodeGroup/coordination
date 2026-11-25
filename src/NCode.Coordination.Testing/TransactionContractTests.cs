@@ -293,6 +293,35 @@ public abstract class TransactionContractTests : ProviderContractTests
     }
 
     /// <summary>
+    /// Checks that a transaction whose applied writes bind a record to a session that has ended writes nothing and
+    /// reports that the session ended.
+    /// </summary>
+    [Fact]
+    public async Task ExecuteAsync_WhenTheAppliedBranchBindsToAnEndedSession_ReturnsSessionEnded()
+    {
+        var plainKey = CreateKey("k1");
+        var boundKey = CreateKey("k2");
+        var one = "one"u8.ToArray();
+        var session = await ContractSessions.OpenEndedAsync(
+            Sessions,
+            Keyspace,
+            TestCancellationToken
+        );
+        var lifetime = RecordLifetime.ForSession(session);
+        var putPlain = Put(plainKey, one);
+        var putBound = RecordWrite.Put(boundKey, one, lifetime);
+        var transaction = new RecordTransaction([], [putPlain, putBound]);
+
+        var result = await Transactions.ExecuteAsync(transaction, null, TestCancellationToken);
+
+        Assert.Equal(TransactionStatus.SessionEnded, result.Status);
+        var plain = await ReadValueAsync(plainKey, TestCancellationToken);
+        var bound = await ReadValueAsync(boundKey, TestCancellationToken);
+        Assert.Null(plain);
+        Assert.Null(bound);
+    }
+
+    /// <summary>
     /// Checks that an absence condition holds for a record whose time to live has ended.
     /// </summary>
     [Fact]

@@ -14,11 +14,6 @@ namespace NCode.Coordination.InProcess;
 internal class InProcessTransactionService(InProcessSessionTable sessions) : ITransactionService
 {
     /// <summary>
-    /// The error code of a transaction that writes a record bound to a session that has ended.
-    /// </summary>
-    internal const string SessionEndedCode = "in-process.session-ended";
-
-    /// <summary>
     /// Gets the record table, shared with the record service.
     /// </summary>
     private InProcessRecordTable Table => Sessions.Records;
@@ -47,18 +42,18 @@ internal class InProcessTransactionService(InProcessSessionTable sessions) : ITr
             {
                 if (write.Lifetime?.Session is { } session && !Sessions.IsLive(session))
                 {
-                    throw new CoordinationException(
-                        SessionEndedCode,
-                        outcomeUnknown: false,
-                        "A record the transaction writes is bound to a session that has ended."
-                    );
+                    var ended = Table.Current(transaction.Keyspace);
+                    var endedResult = new TransactionResult(TransactionStatus.SessionEnded, ended);
+                    return ValueTask.FromResult(endedResult);
                 }
             }
+
+            var status = succeeded ? TransactionStatus.Succeeded : TransactionStatus.Failed;
 
             if (writes.IsEmpty)
             {
                 var current = Table.Current(transaction.Keyspace);
-                var unchanged = new TransactionResult(succeeded, current);
+                var unchanged = new TransactionResult(status, current);
                 return ValueTask.FromResult(unchanged);
             }
 
@@ -77,7 +72,7 @@ internal class InProcessTransactionService(InProcessSessionTable sessions) : ITr
                 }
             }
 
-            var result = new TransactionResult(succeeded, revision);
+            var result = new TransactionResult(status, revision);
             return ValueTask.FromResult(result);
         }
     }

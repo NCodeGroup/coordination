@@ -243,6 +243,7 @@ NCode.Coordination.Testing.TransactionContractTests.ExecuteAsync_WhenKeysSpanPar
 NCode.Coordination.Testing.TransactionContractTests.ExecuteAsync_WhenKeysSpanPartitionsAndOnlyAtomicityWithinPartitionIsDeclared_ThrowsUnsupported() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.TransactionContractTests.ExecuteAsync_WhenNoConditionIsGiven_Succeeds() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.TransactionContractTests.ExecuteAsync_WhenOptionsCarryAnUnknownExtension_ThrowsUnsupported() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.TransactionContractTests.ExecuteAsync_WhenTheAppliedBranchBindsToAnEndedSession_ReturnsSessionEnded() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.TransactionContractTests.ExecuteAsync_WhenTokenIsCanceled_ThrowsOperationCanceledException() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.TransactionContractTests.ExecuteAsync_WhenValueEqualsDiffers_Fails() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.TransactionContractTests.ExecuteAsync_WhenValueEqualsHolds_Succeeds() -> System.Threading.Tasks.Task!

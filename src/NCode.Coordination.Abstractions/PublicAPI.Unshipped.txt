@@ -415,8 +415,13 @@ NCode.Coordination.TimeWindow.TimeWindow(System.DateTimeOffset start, System.Tim
 NCode.Coordination.TimeWindow.TryCreateTimeToLive(System.DateTimeOffset now, System.TimeSpan skewAllowance, out NCode.Coordination.TimeToLive? timeToLive) -> bool
 NCode.Coordination.TransactionResult
 NCode.Coordination.TransactionResult.Revision.get -> NCode.Coordination.Revision!
+NCode.Coordination.TransactionResult.Status.get -> NCode.Coordination.TransactionStatus
 NCode.Coordination.TransactionResult.Succeeded.get -> bool
-NCode.Coordination.TransactionResult.TransactionResult(bool succeeded, NCode.Coordination.Revision! revision) -> void
+NCode.Coordination.TransactionResult.TransactionResult(NCode.Coordination.TransactionStatus status, NCode.Coordination.Revision! revision) -> void
+NCode.Coordination.TransactionStatus
+NCode.Coordination.TransactionStatus.Failed = 1 -> NCode.Coordination.TransactionStatus
+NCode.Coordination.TransactionStatus.SessionEnded = 2 -> NCode.Coordination.TransactionStatus
+NCode.Coordination.TransactionStatus.Succeeded = 0 -> NCode.Coordination.TransactionStatus
 override NCode.Coordination.CoordinationKey.Equals(object? obj) -> bool
 override NCode.Coordination.CoordinationKey.GetHashCode() -> int
 override NCode.Coordination.CoordinationKey.ToString() -> string!

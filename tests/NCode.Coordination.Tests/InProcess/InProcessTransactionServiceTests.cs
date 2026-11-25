@@ -8,7 +8,7 @@ public sealed class InProcessTransactionServiceTests
     #region ExecuteAsync Tests
 
     [Fact]
-    public async Task ExecuteAsync_WhenTheAppliedBranchBindsToAnEndedSession_ThrowsSessionEnded()
+    public async Task ExecuteAsync_WhenTheAppliedBranchBindsToAnEndedSession_ReturnsSessionEnded()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var time = InProcessTesting.CreateTime();
@@ -24,12 +24,10 @@ public sealed class InProcessTransactionServiceTests
         var boundPut = RecordWrite.Put(boundKey, value, session);
         var transaction = new RecordTransaction([], [plainPut, boundPut]);
 
-        var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
-            await service.ExecuteAsync(transaction, null, cancellationToken)
-        );
+        var result = await service.ExecuteAsync(transaction, null, cancellationToken);
 
-        Assert.Equal(InProcessTransactionService.SessionEndedCode, exception.Code);
-        Assert.False(exception.OutcomeUnknown);
+        Assert.Equal(TransactionStatus.SessionEnded, result.Status);
+        Assert.False(result.Succeeded);
     }
 
     [Fact]
@@ -50,9 +48,7 @@ public sealed class InProcessTransactionServiceTests
         var boundPut = RecordWrite.Put(boundKey, value, session);
         var transaction = new RecordTransaction([], [plainPut, boundPut]);
 
-        await Assert.ThrowsAsync<CoordinationException>(async () =>
-            await service.ExecuteAsync(transaction, null, cancellationToken)
-        );
+        await service.ExecuteAsync(transaction, null, cancellationToken);
 
         var plain = await records.ReadAsync(plainKey, null, cancellationToken);
         var bound = await records.ReadAsync(boundKey, null, cancellationToken);
