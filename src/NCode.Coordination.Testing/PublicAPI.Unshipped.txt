@@ -150,6 +150,19 @@ NCode.Coordination.Testing.RecordContractTests.ReadAsync_WhenOptionsCarryAnUnkno
 NCode.Coordination.Testing.RecordContractTests.RecordContractTests() -> void
 NCode.Coordination.Testing.RecordContractTests.TakeAsync_WhenKeyIsAbsent_ReturnsNull() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.RecordContractTests.TakeAsync_WhenKeyIsPresent_ReturnsAndDeletesTheRecord() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.RecordWatchContractTests
+NCode.Coordination.Testing.RecordWatchContractTests.RecordWatchContractTests() -> void
+NCode.Coordination.Testing.RecordWatchContractTests.WatchKeyAsync_WhenAnotherKeyIsWritten_YieldsNothingForIt() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.RecordWatchContractTests.WatchKeyAsync_WhenChangesFollow_YieldsThemInRevisionOrder() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.RecordWatchContractTests.WatchKeyAsync_WhenOptionsCarryAnUnknownExtension_ThrowsUnsupported() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.RecordWatchContractTests.WatchKeyAsync_WhenResumedAfterARevision_ConvergesOnTheStore() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.RecordWatchContractTests.WatchKeyAsync_WhenStartedWithoutARevision_YieldsAResyncFirst() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.RecordWatchContractTests.WatchKeyAsync_WhenTheRecordExpires_YieldsADelete() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.RecordWatchContractTests.WatchKeyAsync_WhenTheRecordIsDeleted_YieldsTheDelete() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.RecordWatchContractTests.WatchKeyAsync_WhenTheRecordIsWritten_YieldsTheWrite() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.RecordWatchContractTests.WatchKeyAsync_WhenTheRecordsSessionEnds_YieldsADelete() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.RecordWatchContractTests.WatchPrefixAsync_WhenAKeyIsOutsideThePrefix_YieldsNothingForIt() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.RecordWatchContractTests.WatchPrefixAsync_WhenRecordsChange_ConvergesOnTheStore() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.SemaphoreContractTests
 NCode.Coordination.Testing.SemaphoreContractTests.ReleaseAsync_WhenGrantEnded_ReturnsFalse() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.SemaphoreContractTests.ReleaseAsync_WhenGrantHolds_ReturnsTrueAndFreesTheSlot() -> System.Threading.Tasks.Task!
