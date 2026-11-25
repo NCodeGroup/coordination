@@ -5,6 +5,16 @@ NCode.Coordination.Testing.ConformanceTarget.AdvanceClock.get -> System.Func<Sys
 NCode.Coordination.Testing.ConformanceTarget.AdvanceClock.init -> void
 NCode.Coordination.Testing.ConformanceTarget.ConformanceTarget(NCode.Coordination.ICoordinationProvider! provider) -> void
 NCode.Coordination.Testing.ConformanceTarget.Provider.get -> NCode.Coordination.ICoordinationProvider!
+NCode.Coordination.Testing.OccurrenceContractTests
+NCode.Coordination.Testing.OccurrenceContractTests.OccurrenceContractTests() -> void
+NCode.Coordination.Testing.OccurrenceContractTests.TryRecordAsync_WhenKeyIsNew_ReturnsRecorded() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.OccurrenceContractTests.TryRecordAsync_WhenKeysDiffer_RecordsEach() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.OccurrenceContractTests.TryRecordAsync_WhenKeyWasRecorded_ReturnsDuplicate() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.OccurrenceContractTests.TryRecordAsync_WhenOptionsCarryAnUnknownExtension_ThrowsUnsupported() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.OccurrenceContractTests.TryRecordAsync_WhenPartitionDepthsDiffer_RecordsEach() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.OccurrenceContractTests.TryRecordAsync_WhenTimeToLiveHasNotPassed_ReturnsDuplicate() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.OccurrenceContractTests.TryRecordAsync_WhenTimeToLivePassed_ReturnsRecordedAgain() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.OccurrenceContractTests.TryRecordAsync_WhenTokenIsCanceled_ThrowsOperationCanceledException() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.ProviderContractTests
 NCode.Coordination.Testing.ProviderContractTests.AdvanceClockAsync(System.TimeSpan duration) -> System.Threading.Tasks.ValueTask
 NCode.Coordination.Testing.ProviderContractTests.CreateKey(params System.Collections.Generic.IEnumerable<NCode.Coordination.KeySegment!>! segments) -> NCode.Coordination.CoordinationKey!
