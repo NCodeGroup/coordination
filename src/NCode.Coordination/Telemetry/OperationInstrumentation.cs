@@ -3,6 +3,7 @@
 
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
+using System.Runtime.CompilerServices;
 using NCode.Coordination.Composition;
 
 namespace NCode.Coordination.Telemetry;
@@ -89,6 +90,68 @@ internal class OperationInstrumentation(IMeterFactory meterFactory, TimeProvider
         {
             Complete(measurement, exception);
             throw;
+        }
+    }
+
+    /// <summary>
+    /// Opens a provider's stream, then traces and measures it from its first read to its end. A consumer that stops
+    /// early counts as a success.
+    /// </summary>
+    /// <typeparam name="TService">The primitive's interface.</typeparam>
+    /// <typeparam name="TItem">The type of each item.</typeparam>
+    /// <param name="target">The bound provider's implementation.</param>
+    /// <param name="operation">The operation.</param>
+    /// <param name="open">Opens the stream on the implementation.</param>
+    /// <param name="cancellationToken">Cancels the stream.</param>
+    /// <returns>The stream's items.</returns>
+    public async IAsyncEnumerable<TItem> MeasureStream<TService, TItem>(
+        BoundService<TService> target,
+        Operation operation,
+        Func<TService, IAsyncEnumerable<TItem>> open,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default
+    )
+        where TService : class
+    {
+        var measurement = Start(target, operation);
+        Exception? failure = null;
+        IAsyncEnumerator<TItem>? enumerator = null;
+        try
+        {
+            while (true)
+            {
+                TItem item;
+                try
+                {
+                    enumerator ??= open(target.Service).GetAsyncEnumerator(cancellationToken);
+                    if (!await enumerator.MoveNextAsync().ConfigureAwait(false))
+                    {
+                        yield break;
+                    }
+
+                    item = enumerator.Current;
+                }
+                catch (Exception exception)
+                {
+                    failure = exception;
+                    throw;
+                }
+
+                yield return item;
+            }
+        }
+        finally
+        {
+            try
+            {
+                if (enumerator is not null)
+                {
+                    await enumerator.DisposeAsync().ConfigureAwait(false);
+                }
+            }
+            finally
+            {
+                Complete(measurement, failure);
+            }
         }
     }
 

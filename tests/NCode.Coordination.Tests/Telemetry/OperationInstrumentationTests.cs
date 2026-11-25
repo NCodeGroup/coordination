@@ -162,6 +162,161 @@ public sealed class OperationInstrumentationTests
 
     #endregion
 
+    #region MeasureStream Tests
+
+    [Fact]
+    public async Task MeasureStream_WhenTheStreamEnds_YieldsEveryItemAndRecordsSuccess()
+    {
+        using var fixture = new Fixture();
+        var cancellationToken = TestContext.Current.CancellationToken;
+        List<string> items = [];
+
+        await foreach (
+            var item in fixture.Instrumentation.MeasureStream(
+                Target,
+                Operation,
+                _ => Items(["a", "b"]),
+                cancellationToken
+            )
+        )
+        {
+            items.Add(item);
+        }
+
+        Assert.Equal(["a", "b"], items);
+        var measurement = Assert.Single(fixture.Collector.GetMeasurementSnapshot());
+        Assert.Equal("success", measurement.Tags["ncode.coordination.outcome"]);
+        Assert.False(measurement.Tags.ContainsKey("error.type"));
+        var span = Assert.Single(fixture.Spans);
+        Assert.Equal("success", span.GetTagItem("ncode.coordination.outcome"));
+        Assert.Equal(ActivityStatusCode.Unset, span.Status);
+    }
+
+    [Fact]
+    public async Task MeasureStream_WhenTheConsumerStopsEarly_RecordsSuccess()
+    {
+        using var fixture = new Fixture();
+        var cancellationToken = TestContext.Current.CancellationToken;
+
+        await foreach (
+            var item in fixture.Instrumentation.MeasureStream(
+                Target,
+                Operation,
+                _ => Items(["a", "b"]),
+                cancellationToken
+            )
+        )
+        {
+            Assert.Equal("a", item);
+            break;
+        }
+
+        var measurement = Assert.Single(fixture.Collector.GetMeasurementSnapshot());
+        Assert.Equal("success", measurement.Tags["ncode.coordination.outcome"]);
+        var span = Assert.Single(fixture.Spans);
+        Assert.Equal(ActivityStatusCode.Unset, span.Status);
+    }
+
+    [Fact]
+    public async Task MeasureStream_WhenTheStreamFails_RecordsFailureAndRethrows()
+    {
+        using var fixture = new Fixture();
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var thrown = new CoordinationException(
+            CoordinationErrorCodes.Unsupported,
+            outcomeUnknown: false,
+            "down"
+        );
+        List<string> items = [];
+
+        var caught = await Assert.ThrowsAsync<CoordinationException>(async () =>
+        {
+            await foreach (
+                var item in fixture.Instrumentation.MeasureStream(
+                    Target,
+                    Operation,
+                    _ => Failing(thrown),
+                    cancellationToken
+                )
+            )
+            {
+                items.Add(item);
+            }
+        });
+
+        Assert.Same(thrown, caught);
+        Assert.Equal(["a"], items);
+        var measurement = Assert.Single(fixture.Collector.GetMeasurementSnapshot());
+        Assert.Equal("failure", measurement.Tags["ncode.coordination.outcome"]);
+        Assert.Equal(thrown.Code, measurement.Tags["error.type"]);
+        var span = Assert.Single(fixture.Spans);
+        Assert.Equal(ActivityStatusCode.Error, span.Status);
+        Assert.Equal(thrown.Code, span.GetTagItem("error.type"));
+    }
+
+    [Fact]
+    public async Task MeasureStream_WhenOpeningFails_RecordsFailure()
+    {
+        using var fixture = new Fixture();
+        var cancellationToken = TestContext.Current.CancellationToken;
+
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        {
+            await foreach (
+                var item in fixture.Instrumentation.MeasureStream<string, string>(
+                    Target,
+                    Operation,
+                    _ => throw new InvalidOperationException("secret"),
+                    cancellationToken
+                )
+            )
+            {
+                Assert.Fail($"The stream yielded {item}.");
+            }
+        });
+
+        var measurement = Assert.Single(fixture.Collector.GetMeasurementSnapshot());
+        Assert.Equal("failure", measurement.Tags["ncode.coordination.outcome"]);
+        Assert.Equal("System.InvalidOperationException", measurement.Tags["error.type"]);
+        var span = Assert.Single(fixture.Spans);
+        Assert.Equal(ActivityStatusCode.Error, span.Status);
+    }
+
+    [Fact]
+    public void MeasureStream_BeforeTheFirstRead_RecordsNothing()
+    {
+        using var fixture = new Fixture();
+        var cancellationToken = TestContext.Current.CancellationToken;
+
+        _ = fixture.Instrumentation.MeasureStream(
+            Target,
+            Operation,
+            _ => Items(["a"]),
+            cancellationToken
+        );
+
+        Assert.Empty(fixture.Collector.GetMeasurementSnapshot());
+        Assert.Empty(fixture.Spans);
+    }
+
+    #endregion
+
+    private static async IAsyncEnumerable<string> Items(IReadOnlyList<string> items)
+    {
+        foreach (var item in items)
+        {
+            await Task.Yield();
+            yield return item;
+        }
+    }
+
+    private static async IAsyncEnumerable<string> Failing(Exception exception)
+    {
+        await Task.Yield();
+        yield return "a";
+        throw exception;
+    }
+
     private sealed class Fixture : IDisposable
     {
         private ServiceProvider Services { get; }
