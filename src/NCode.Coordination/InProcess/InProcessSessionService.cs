@@ -29,7 +29,9 @@ internal class InProcessSessionService(InProcessSessionTable sessions) : ISessio
 
         using (Sessions.Enter())
         {
-            return ValueTask.FromResult(Sessions.Open(keyspace, timeToLive));
+            var opened = Sessions.Open(keyspace, timeToLive);
+
+            return ValueTask.FromResult(opened);
         }
     }
 
@@ -45,7 +47,9 @@ internal class InProcessSessionService(InProcessSessionTable sessions) : ISessio
 
         using (Sessions.Enter())
         {
-            return ValueTask.FromResult(Sessions.KeepAlive(session));
+            var result = Sessions.KeepAlive(session);
+
+            return ValueTask.FromResult(result);
         }
     }
 

@@ -65,13 +65,17 @@ internal class InProcessElectionService : IElectionService
                 var isSameSession =
                     terms.IsBoundToSession && terms.Session.Equals(hold.Terms.Session);
 
-                return ValueTask.FromResult(
-                    isSameSession ? ElectionResult.Elected(hold.Grant) : ElectionResult.Led
-                );
+                var existing = isSameSession
+                    ? ElectionResult.Elected(hold.Grant)
+                    : ElectionResult.Led;
+
+                return ValueTask.FromResult(existing);
             }
 
-            var owner = new OwnerToken(Sessions.Issue("o"));
-            var leader = new Leader(role, Sessions.NextFencingToken(), value);
+            var ownerValue = Sessions.Issue("o");
+            var owner = new OwnerToken(ownerValue);
+            var fencingToken = Sessions.NextFencingToken();
+            var leader = new Leader(role, fencingToken, value);
             var leadership = new Leadership(leader, owner, terms);
             var created = new InProcessHold<Leadership>(leadership, owner, terms);
 
@@ -83,7 +87,9 @@ internal class InProcessElectionService : IElectionService
             Holds[role] = created;
             Notify(role);
 
-            return ValueTask.FromResult(ElectionResult.Elected(leadership));
+            var elected = ElectionResult.Elected(leadership);
+
+            return ValueTask.FromResult(elected);
         }
     }
 
@@ -161,7 +167,9 @@ internal class InProcessElectionService : IElectionService
 
         using (Sessions.Enter())
         {
-            return ValueTask.FromResult(View(role));
+            var view = View(role);
+
+            return ValueTask.FromResult(view);
         }
     }
 
@@ -225,7 +233,9 @@ internal class InProcessElectionService : IElectionService
             }
 
             queues.Add(queue);
-            queue.Post(View(role));
+            var view = View(role);
+
+            queue.Post(view);
         }
     }
 
@@ -257,8 +267,12 @@ internal class InProcessElectionService : IElectionService
     /// </summary>
     /// <param name="role">The role to view.</param>
     /// <returns>The view of the role, whose leader is null when it has none.</returns>
-    private ElectionView View(CoordinationKey role) =>
-        new(role, Holds.TryGetValue(role, out var hold) ? hold.Grant.Leader : null);
+    private ElectionView View(CoordinationKey role)
+    {
+        var leader = Holds.TryGetValue(role, out var hold) ? hold.Grant.Leader : null;
+
+        return new ElectionView(role, leader);
+    }
 
     /// <summary>
     /// Posts the current view of a role to each of its watches.
@@ -290,10 +304,12 @@ internal class InProcessElectionService : IElectionService
         CoordinationKey role,
         OwnerToken owner,
         TimeToLive timeToLive
-    ) =>
-        Sessions.Deadlines.Add(InProcessExpiry.Begin(Sessions.Time, timeToLive), () =>
-            Expire(role, owner)
-        );
+    )
+    {
+        var expiry = InProcessExpiry.Begin(Sessions.Time, timeToLive);
+
+        return Sessions.Deadlines.Add(expiry, () => Expire(role, owner));
+    }
 
     /// <summary>
     /// Removes a role's leadership and tells the role's watches.

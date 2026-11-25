@@ -109,7 +109,8 @@ internal class InProcessSessionTable
         ArgumentNullException.ThrowIfNull(keyspace);
         ArgumentNullException.ThrowIfNull(timeToLive);
 
-        var id = new SessionId(keyspace, Issue("s"));
+        var token = Issue("s");
+        var id = new SessionId(keyspace, token);
         var session = new InProcessSession(id, timeToLive);
 
         Sessions[id] = session;

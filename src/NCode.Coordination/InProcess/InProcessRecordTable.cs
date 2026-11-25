@@ -179,7 +179,9 @@ internal class InProcessRecordTable : IDisposable
             Bind(session, key);
         }
 
-        Publish(key, RecordChange.Written(record));
+        var change = RecordChange.Written(record);
+
+        Publish(key, change);
     }
 
     /// <summary>
@@ -200,7 +202,9 @@ internal class InProcessRecordTable : IDisposable
 
         Deadlines.Cancel(entry.Deadline);
         Unbind(entry.Session, key);
-        Publish(key, RecordChange.Deleted(key, revision));
+        var change = RecordChange.Deleted(key, revision);
+
+        Publish(key, change);
         return true;
     }
 
@@ -225,7 +229,9 @@ internal class InProcessRecordTable : IDisposable
                 && session.Equals(entry.Session)
             )
             {
-                Remove(key, Advance(key.Keyspace));
+                var revision = Advance(key.Keyspace);
+
+                Remove(key, revision);
             }
         }
     }
@@ -253,7 +259,9 @@ internal class InProcessRecordTable : IDisposable
         var log = GetLog(keyspace);
         if (after is null || after > current || !log.Covers(after))
         {
-            watcher.Queue.Post(RecordChange.Resync(current));
+            var resync = RecordChange.Resync(current);
+
+            watcher.Queue.Post(resync);
             return;
         }
 
@@ -266,11 +274,15 @@ internal class InProcessRecordTable : IDisposable
 
             if (logged.IsDelete)
             {
-                watcher.Queue.Post(RecordChange.Deleted(logged.Key, logged.Revision));
+                var deleted = RecordChange.Deleted(logged.Key, logged.Revision);
+
+                watcher.Queue.Post(deleted);
             }
             else if (Find(logged.Key) is { } record && record.Revision == logged.Revision)
             {
-                watcher.Queue.Post(RecordChange.Written(record));
+                var written = RecordChange.Written(record);
+
+                watcher.Queue.Post(written);
             }
         }
     }
@@ -334,7 +346,9 @@ internal class InProcessRecordTable : IDisposable
             && entry.Sequence == sequence
         )
         {
-            Remove(key, Advance(key.Keyspace));
+            var revision = Advance(key.Keyspace);
+
+            Remove(key, revision);
         }
     }
 

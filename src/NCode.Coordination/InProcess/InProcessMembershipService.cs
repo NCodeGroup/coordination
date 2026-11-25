@@ -121,7 +121,9 @@ internal class InProcessMembershipService : IMembershipService
 
         using (Sessions.Enter())
         {
-            return ValueTask.FromResult(View(group));
+            var view = View(group);
+
+            return ValueTask.FromResult(view);
         }
     }
 
@@ -185,7 +187,9 @@ internal class InProcessMembershipService : IMembershipService
             }
 
             queues.Add(queue);
-            queue.Post(View(group));
+            var view = View(group);
+
+            queue.Post(view);
         }
     }
 
@@ -217,12 +221,13 @@ internal class InProcessMembershipService : IMembershipService
     /// </summary>
     /// <param name="group">The group to view.</param>
     /// <returns>The view of the group at its keyspace's current revision, with no members when the group has none.</returns>
-    private MembershipView View(CoordinationKey group) =>
-        new(
-            group,
-            Sessions.Records.Current(group.Keyspace),
-            Groups.TryGetValue(group, out var members) ? members : []
-        );
+    private MembershipView View(CoordinationKey group)
+    {
+        var revision = Sessions.Records.Current(group.Keyspace);
+        var members = Groups.TryGetValue(group, out var found) ? found : [];
+
+        return new MembershipView(group, revision, members);
+    }
 
     /// <summary>
     /// Removes a session's entries from a group and drops the group when it is left empty.

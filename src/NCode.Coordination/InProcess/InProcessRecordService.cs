@@ -168,7 +168,9 @@ internal class InProcessRecordService(InProcessSessionTable sessions) : IRecordS
                 return ValueTask.FromResult(RecordDeleteStatus.Conflict);
             }
 
-            Table.Remove(key, Table.Advance(key.Keyspace));
+            var revision = Table.Advance(key.Keyspace);
+
+            Table.Remove(key, revision);
             return ValueTask.FromResult(RecordDeleteStatus.Deleted);
         }
     }
@@ -191,7 +193,9 @@ internal class InProcessRecordService(InProcessSessionTable sessions) : IRecordS
                 return ValueTask.FromResult<StoredRecord?>(null);
             }
 
-            Table.Remove(key, Table.Advance(key.Keyspace));
+            var revision = Table.Advance(key.Keyspace);
+
+            Table.Remove(key, revision);
             return ValueTask.FromResult<StoredRecord?>(current);
         }
     }

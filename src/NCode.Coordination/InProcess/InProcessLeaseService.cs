@@ -60,15 +60,17 @@ internal class InProcessLeaseService : ILeaseService
                 var isSameSession =
                     terms.IsBoundToSession && terms.Session.Equals(hold.Terms.Session);
 
-                return ValueTask.FromResult(
-                    isSameSession
-                        ? LeaseAcquireResult.Acquired(hold.Grant)
-                        : LeaseAcquireResult.Held
-                );
+                var existing = isSameSession
+                    ? LeaseAcquireResult.Acquired(hold.Grant)
+                    : LeaseAcquireResult.Held;
+
+                return ValueTask.FromResult(existing);
             }
 
-            var owner = new OwnerToken(Sessions.Issue("o"));
-            var grant = new LeaseGrant(resource, Sessions.NextFencingToken(), owner, terms);
+            var ownerValue = Sessions.Issue("o");
+            var owner = new OwnerToken(ownerValue);
+            var fencingToken = Sessions.NextFencingToken();
+            var grant = new LeaseGrant(resource, fencingToken, owner, terms);
             var created = new InProcessHold<LeaseGrant>(grant, owner, terms);
 
             if (!terms.IsBoundToSession)
@@ -78,7 +80,9 @@ internal class InProcessLeaseService : ILeaseService
 
             Holds[resource] = created;
 
-            return ValueTask.FromResult(LeaseAcquireResult.Acquired(grant));
+            var acquired = LeaseAcquireResult.Acquired(grant);
+
+            return ValueTask.FromResult(acquired);
         }
     }
 
@@ -190,10 +194,12 @@ internal class InProcessLeaseService : ILeaseService
         CoordinationKey resource,
         OwnerToken owner,
         TimeToLive timeToLive
-    ) =>
-        Sessions.Deadlines.Add(InProcessExpiry.Begin(Sessions.Time, timeToLive), () =>
-            Expire(resource, owner)
-        );
+    )
+    {
+        var expiry = InProcessExpiry.Begin(Sessions.Time, timeToLive);
+
+        return Sessions.Deadlines.Add(expiry, () => Expire(resource, owner));
+    }
 
     /// <summary>
     /// Removes a resource's hold and wakes the tasks that wait for its release.

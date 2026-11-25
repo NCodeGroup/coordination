@@ -74,7 +74,9 @@ internal class InProcessSemaphoreService : ISemaphoreService
 
                     if (held is not null)
                     {
-                        return ValueTask.FromResult(SemaphoreAcquireResult.Acquired(held.Grant));
+                        var existing = SemaphoreAcquireResult.Acquired(held.Grant);
+
+                        return ValueTask.FromResult(existing);
                     }
                 }
             }
@@ -90,14 +92,10 @@ internal class InProcessSemaphoreService : ISemaphoreService
                 return ValueTask.FromResult(SemaphoreAcquireResult.Full);
             }
 
-            var owner = new OwnerToken(Sessions.Issue("o"));
-            var grant = new SemaphoreGrant(
-                resource,
-                slot,
-                Sessions.NextFencingToken(),
-                owner,
-                terms
-            );
+            var ownerValue = Sessions.Issue("o");
+            var owner = new OwnerToken(ownerValue);
+            var fencingToken = Sessions.NextFencingToken();
+            var grant = new SemaphoreGrant(resource, slot, fencingToken, owner, terms);
             var created = new InProcessHold<SemaphoreGrant>(grant, owner, terms);
 
             if (!terms.IsBoundToSession)
@@ -109,7 +107,9 @@ internal class InProcessSemaphoreService : ISemaphoreService
             semaphore.Held++;
             Semaphores[resource] = semaphore;
 
-            return ValueTask.FromResult(SemaphoreAcquireResult.Acquired(grant));
+            var acquired = SemaphoreAcquireResult.Acquired(grant);
+
+            return ValueTask.FromResult(acquired);
         }
     }
 
@@ -270,10 +270,12 @@ internal class InProcessSemaphoreService : ISemaphoreService
         int slot,
         OwnerToken owner,
         TimeToLive timeToLive
-    ) =>
-        Sessions.Deadlines.Add(InProcessExpiry.Begin(Sessions.Time, timeToLive), () =>
-            Expire(resource, slot, owner)
-        );
+    )
+    {
+        var expiry = InProcessExpiry.Begin(Sessions.Time, timeToLive);
+
+        return Sessions.Deadlines.Add(expiry, () => Expire(resource, slot, owner));
+    }
 
     /// <summary>
     /// Frees a slot, removes the semaphore when no slot is held and wakes the tasks that wait for a free slot.
