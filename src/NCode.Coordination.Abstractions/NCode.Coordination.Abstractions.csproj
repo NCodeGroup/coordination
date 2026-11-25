@@ -2,7 +2,7 @@
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <RootNamespace>NCode.Coordination</RootNamespace>
-    <Description>The contracts of NCode.Coordination: an interface per primitive with its operations, outcomes and failures, structured keys, the guarantee vocabulary, expiry, and the declarations and requirements its composition checks.</Description>
+    <Description>The contracts of NCode.Coordination: an interface per primitive with its operations, outcomes and failures, structured keys, the guarantee vocabulary, expiry, the declarations and requirements its composition checks, and the builder and provider contracts a provider's configurator uses.</Description>
     <PackageTags>coordination;distributed;cluster;lease;lock;fencing;election;semaphore</PackageTags>
   </PropertyGroup>
 </Project>
