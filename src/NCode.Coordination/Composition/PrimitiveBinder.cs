@@ -11,25 +11,23 @@ namespace NCode.Coordination.Composition;
 internal static class PrimitiveBinder
 {
     /// <summary>
-    /// Binds each primitive of each binding to its provider, adding a failure for each one that cannot be bound.
+    /// Binds each primitive of each binding to its provider, returning a failure for each one that cannot be bound.
     /// </summary>
     /// <param name="bindings">The bindings, in registration order.</param>
     /// <param name="catalog">The registered providers.</param>
     /// <param name="registry">The guarantees the application can name.</param>
-    /// <param name="failures">The list that receives each failure.</param>
-    /// <returns>The bound primitives, in binding order.</returns>
-    public static ImmutableArray<BoundPrimitive> Bind(
+    /// <returns>The bound primitives, in binding order, and the failures found.</returns>
+    public static Checked<ImmutableArray<BoundPrimitive>> Bind(
         IEnumerable<ProviderBinding> bindings,
         ProviderCatalog catalog,
-        GuaranteeRegistry registry,
-        ICollection<string> failures
+        GuaranteeRegistry registry
     )
     {
         ArgumentNullException.ThrowIfNull(bindings);
         ArgumentNullException.ThrowIfNull(catalog);
         ArgumentNullException.ThrowIfNull(registry);
-        ArgumentNullException.ThrowIfNull(failures);
 
+        var failures = new List<string>();
         var bound = ImmutableArray.CreateBuilder<BoundPrimitive>();
         foreach (var binding in bindings)
         {
@@ -91,6 +89,7 @@ internal static class PrimitiveBinder
             }
         }
 
-        return bound.ToImmutable();
+        var result = bound.ToImmutable();
+        return new Checked<ImmutableArray<BoundPrimitive>>(result, [.. failures]);
     }
 }

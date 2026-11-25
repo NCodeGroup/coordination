@@ -33,7 +33,9 @@ internal static class CoordinationComposer
         }
 
         definitions.AddRange(registrations.Definitions);
-        var registry = GuaranteeRegistry.Create(definitions, failures);
+        var checkedRegistry = GuaranteeRegistry.Create(definitions);
+        var registry = checkedRegistry.Value;
+        failures.AddRange(checkedRegistry.Failures);
 
         foreach (var provider in catalog.Providers)
         {
@@ -57,15 +59,18 @@ internal static class CoordinationComposer
             }
         }
 
-        var bound = PrimitiveBinder.Bind(registrations.Bindings, catalog, registry, failures);
-        var table = BindingTable.Create(bound, failures);
-        RequirementChecker.Check(
+        var checkedBound = PrimitiveBinder.Bind(registrations.Bindings, catalog, registry);
+        failures.AddRange(checkedBound.Failures);
+        var checkedTable = BindingTable.Create(checkedBound.Value);
+        var table = checkedTable.Value;
+        failures.AddRange(checkedTable.Failures);
+        var requirementFailures = RequirementChecker.Check(
             registrations.Requirements,
             table,
             registry,
-            registrations.IsSingleNode,
-            failures
+            registrations.IsSingleNode
         );
+        failures.AddRange(requirementFailures);
 
         if (failures.Count > 0)
         {

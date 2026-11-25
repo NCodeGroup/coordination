@@ -19,19 +19,15 @@ internal sealed class GuaranteeRegistry
     private FrozenDictionary<Guarantee, GuaranteeDefinition> Definitions { get; }
 
     /// <summary>
-    /// Creates a registry from definitions, adding a failure for each conflict or undefined implication.
+    /// Creates a registry from definitions, returning a failure for each conflict or undefined implication.
     /// </summary>
     /// <param name="definitions">The definitions, in order.</param>
-    /// <param name="failures">The list that receives each failure.</param>
-    /// <returns>The registry of the accepted definitions.</returns>
-    public static GuaranteeRegistry Create(
-        IEnumerable<GuaranteeDefinition> definitions,
-        ICollection<string> failures
-    )
+    /// <returns>The registry of the accepted definitions and the failures found.</returns>
+    public static Checked<GuaranteeRegistry> Create(IEnumerable<GuaranteeDefinition> definitions)
     {
         ArgumentNullException.ThrowIfNull(definitions);
-        ArgumentNullException.ThrowIfNull(failures);
 
+        var failures = new List<string>();
         var accepted = new Dictionary<Guarantee, GuaranteeDefinition>();
         foreach (var definition in definitions)
         {
@@ -61,7 +57,8 @@ internal sealed class GuaranteeRegistry
         }
 
         var frozen = accepted.ToFrozenDictionary();
-        return new GuaranteeRegistry(frozen);
+        var registry = new GuaranteeRegistry(frozen);
+        return new Checked<GuaranteeRegistry>(registry, [.. failures]);
     }
 
     /// <summary>

@@ -16,12 +16,12 @@ public sealed class GuaranteeRegistryTests
     [Fact]
     public void Create_WhenDefinitionsAreDistinct_DefinesEach()
     {
-        var failures = new List<string>();
         GuaranteeDefinition[] definitions = [new(A, "test", "a"), new(B, "test", "b")];
 
-        var registry = GuaranteeRegistry.Create(definitions, failures);
+        var checkedRegistry = GuaranteeRegistry.Create(definitions);
+        var registry = checkedRegistry.Value;
 
-        Assert.Empty(failures);
+        Assert.Empty(checkedRegistry.Failures);
         var isDefinedA = registry.IsDefined(A);
         Assert.True(isDefinedA);
         var isDefinedB = registry.IsDefined(B);
@@ -33,7 +33,6 @@ public sealed class GuaranteeRegistryTests
     [Fact]
     public void Create_WhenANameIsDefinedTwiceTheSameWay_DefinesItOnceWithoutFailure()
     {
-        var failures = new List<string>();
         GuaranteeDefinition[] definitions =
         [
             new(A, "test", "a") { Implies = [B] },
@@ -41,9 +40,10 @@ public sealed class GuaranteeRegistryTests
             new(A, "test", "a") { Implies = [B] },
         ];
 
-        var registry = GuaranteeRegistry.Create(definitions, failures);
+        var checkedRegistry = GuaranteeRegistry.Create(definitions);
+        var registry = checkedRegistry.Value;
 
-        Assert.Empty(failures);
+        Assert.Empty(checkedRegistry.Failures);
         var isDefinedA = registry.IsDefined(A);
         Assert.True(isDefinedA);
     }
@@ -51,14 +51,14 @@ public sealed class GuaranteeRegistryTests
     [Fact]
     public void Create_WhenANameIsDefinedTwiceDifferently_Fails()
     {
-        var failures = new List<string>();
         GuaranteeDefinition[] definitions = [new(A, "test", "a"), new(A, "test", "other")];
 
-        var registry = GuaranteeRegistry.Create(definitions, failures);
+        var checkedRegistry = GuaranteeRegistry.Create(definitions);
+        var registry = checkedRegistry.Value;
 
         Assert.Equal(
             ["The guarantee 'test.a' is defined twice, with different meanings."],
-            failures
+            checkedRegistry.Failures
         );
         var isDefinedA = registry.IsDefined(A);
         Assert.True(isDefinedA);
@@ -67,23 +67,24 @@ public sealed class GuaranteeRegistryTests
     [Fact]
     public void Create_WhenAnImplicationIsUndefined_Fails()
     {
-        var failures = new List<string>();
         GuaranteeDefinition[] definitions = [new(A, "test", "a") { Implies = [B] }];
 
-        GuaranteeRegistry.Create(definitions, failures);
+        var checkedRegistry = GuaranteeRegistry.Create(definitions);
 
-        Assert.Equal(["The guarantee 'test.a' implies 'test.b', which is not defined."], failures);
+        Assert.Equal(
+            ["The guarantee 'test.a' implies 'test.b', which is not defined."],
+            checkedRegistry.Failures
+        );
     }
 
     [Fact]
     public void Create_WithTheBuiltInDefinitions_HasNoFailure()
     {
-        var failures = new List<string>();
-
-        var registry = GuaranteeRegistry.Create(Guarantees.Definitions, failures);
+        var checkedRegistry = GuaranteeRegistry.Create(Guarantees.Definitions);
+        var registry = checkedRegistry.Value;
         var closed = registry.Close([Guarantees.LinearizableAcrossFailover]);
 
-        Assert.Empty(failures);
+        Assert.Empty(checkedRegistry.Failures);
         Assert.Equal(3, closed.Count);
         Assert.Contains(Guarantees.LinearizableAcrossFailover, closed);
         Assert.Contains(Guarantees.LinearizableUntilFailover, closed);
@@ -97,14 +98,13 @@ public sealed class GuaranteeRegistryTests
     [Fact]
     public void Close_WhenImplicationsChain_IncludesEveryImpliedGuarantee()
     {
-        var failures = new List<string>();
         GuaranteeDefinition[] definitions =
         [
             new(A, "test", "a") { Implies = [B] },
             new(B, "test", "b") { Implies = [C] },
             new(C, "test", "c"),
         ];
-        var registry = GuaranteeRegistry.Create(definitions, failures);
+        var registry = GuaranteeRegistry.Create(definitions).Value;
 
         var closed = registry.Close([A]);
 
@@ -117,13 +117,12 @@ public sealed class GuaranteeRegistryTests
     [Fact]
     public void Close_WhenImplicationsCycle_Ends()
     {
-        var failures = new List<string>();
         GuaranteeDefinition[] definitions =
         [
             new(A, "test", "a") { Implies = [B] },
             new(B, "test", "b") { Implies = [A] },
         ];
-        var registry = GuaranteeRegistry.Create(definitions, failures);
+        var registry = GuaranteeRegistry.Create(definitions).Value;
 
         var closed = registry.Close([A]);
 
@@ -135,10 +134,9 @@ public sealed class GuaranteeRegistryTests
     [Fact]
     public void Close_WhenAGuaranteeIsUndefined_KeepsItAlone()
     {
-        var failures = new List<string>();
         GuaranteeDefinition[] definitions = [new(A, "test", "a")];
 
-        var registry = GuaranteeRegistry.Create(definitions, failures);
+        var registry = GuaranteeRegistry.Create(definitions).Value;
 
         var closed = registry.Close([C]);
 

@@ -1,6 +1,8 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using System.Collections.Immutable;
+
 namespace NCode.Coordination.Composition.Tests;
 
 public sealed class RequirementCheckerTests
@@ -8,7 +10,7 @@ public sealed class RequirementCheckerTests
     private static Keyspace Tenant { get; } = new("prod", "cell-1");
 
     private static GuaranteeRegistry Registry { get; } =
-        GuaranteeRegistry.Create(Guarantees.Definitions, []);
+        GuaranteeRegistry.Create(Guarantees.Definitions).Value;
 
     private static BoundPrimitive Bound(
         string provider,
@@ -22,17 +24,15 @@ public sealed class RequirementCheckerTests
     }
 
     private static BindingTable Build(params BoundPrimitive[] bound) =>
-        BindingTable.Create(bound, []);
+        BindingTable.Create(bound).Value;
 
-    private static List<string> Check(
+    private static ImmutableArray<string> Check(
         BindingTable table,
         bool singleNode,
         params FeatureRequirement[] requirements
     )
     {
-        var failures = new List<string>();
-        RequirementChecker.Check(requirements, table, Registry, singleNode, failures);
-        return failures;
+        return RequirementChecker.Check(requirements, table, Registry, singleNode);
     }
 
     #region Check Tests
@@ -245,7 +245,7 @@ public sealed class RequirementCheckerTests
 
         var failures = Check(table, false, first, second);
 
-        Assert.Equal(2, failures.Count);
+        Assert.Equal(2, failures.Length);
         Assert.StartsWith("The feature 'replay' requires 'durability.durable'", failures[0]);
         Assert.StartsWith("The feature 'locks' requires the primitive 'lease'", failures[1]);
     }

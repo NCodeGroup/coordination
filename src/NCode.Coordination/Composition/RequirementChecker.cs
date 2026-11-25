@@ -1,6 +1,8 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using System.Collections.Immutable;
+
 namespace NCode.Coordination.Composition;
 
 /// <summary>
@@ -9,26 +11,25 @@ namespace NCode.Coordination.Composition;
 internal static class RequirementChecker
 {
     /// <summary>
-    /// Checks every requirement, adding a failure for each one a binding cannot keep.
+    /// Checks every requirement, returning a failure for each one a binding cannot keep.
     /// </summary>
     /// <param name="requirements">The requirements, in registration order.</param>
     /// <param name="table">The bindings.</param>
     /// <param name="registry">The defined guarantees.</param>
     /// <param name="singleNode">Whether the host runs as a single node.</param>
-    /// <param name="failures">Receives a message for each failure.</param>
-    public static void Check(
+    /// <returns>A message for each failure, in the order found.</returns>
+    public static ImmutableArray<string> Check(
         IEnumerable<FeatureRequirement> requirements,
         BindingTable table,
         GuaranteeRegistry registry,
-        bool singleNode,
-        ICollection<string> failures
+        bool singleNode
     )
     {
         ArgumentNullException.ThrowIfNull(requirements);
         ArgumentNullException.ThrowIfNull(table);
         ArgumentNullException.ThrowIfNull(registry);
-        ArgumentNullException.ThrowIfNull(failures);
 
+        var failures = new List<string>();
         foreach (var requirement in requirements)
         {
             var feature = requirement.Feature;
@@ -78,6 +79,8 @@ internal static class RequirementChecker
                 $"The feature '{feature}' requires {list} on the primitive '{primitive}' {scope}, which the provider '{bound.Provider}' does not keep."
             );
         }
+
+        return [.. failures];
     }
 
     private static bool IsKept(BoundPrimitive bound, Guarantee guarantee, bool singleNode)

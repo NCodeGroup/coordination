@@ -16,19 +16,15 @@ internal sealed class BindingTable
     private Dictionary<Primitive, List<BoundPrimitive>> Entries { get; }
 
     /// <summary>
-    /// Creates a table, adding a failure for each primitive bound twice for one scope.
+    /// Creates a table, returning a failure for each primitive bound twice for one scope.
     /// </summary>
     /// <param name="bound">The bound primitives, in registration order.</param>
-    /// <param name="failures">Receives a message for each failure.</param>
-    /// <returns>The table of the accepted entries.</returns>
-    public static BindingTable Create(
-        IEnumerable<BoundPrimitive> bound,
-        ICollection<string> failures
-    )
+    /// <returns>The table of the accepted entries and the failures found.</returns>
+    public static Checked<BindingTable> Create(IEnumerable<BoundPrimitive> bound)
     {
         ArgumentNullException.ThrowIfNull(bound);
-        ArgumentNullException.ThrowIfNull(failures);
 
+        var failures = new List<string>();
         var entries = new Dictionary<Primitive, List<BoundPrimitive>>();
 
         foreach (var entry in bound)
@@ -52,7 +48,8 @@ internal sealed class BindingTable
             list.Add(entry);
         }
 
-        return new BindingTable(entries);
+        var table = new BindingTable(entries);
+        return new Checked<BindingTable>(table, [.. failures]);
     }
 
     /// <summary>

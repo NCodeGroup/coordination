@@ -20,10 +20,9 @@ public sealed class BindingTableTests
 
     private static BindingTable Build(params BoundPrimitive[] bound)
     {
-        var failures = new List<string>();
-        var table = BindingTable.Create(bound, failures);
-        Assert.Empty(failures);
-        return table;
+        var checkedTable = BindingTable.Create(bound);
+        Assert.Empty(checkedTable.Failures);
+        return checkedTable.Value;
     }
 
     #region Find Tests
@@ -124,50 +123,44 @@ public sealed class BindingTableTests
     [Fact]
     public void Create_WhenTwoDefaultsBindAPrimitive_Fails()
     {
-        var failures = new List<string>();
-
         var first = Bound("a", Primitives.Lease, null);
         var second = Bound("b", Primitives.Lease, null);
 
-        BindingTable.Create([first, second], failures);
+        var checkedTable = BindingTable.Create([first, second]);
 
         Assert.Equal(
             ["The primitive 'lease' is bound twice by default: to 'a' and to 'b'."],
-            failures
+            checkedTable.Failures
         );
     }
 
     [Fact]
     public void Create_WhenTwoBindingsShareAKeyspace_Fails()
     {
-        var failures = new List<string>();
-
         var sameCell = new Keyspace("prod", "cell-1");
         var first = Bound("a", Primitives.Lease, Cell);
         var second = Bound("b", Primitives.Lease, sameCell);
 
-        BindingTable.Create([first, second], failures);
+        var checkedTable = BindingTable.Create([first, second]);
 
         Assert.Equal(
             [
                 "The primitive 'lease' is bound twice for the keyspace 'prod/cell-1': to 'a' and to 'b'.",
             ],
-            failures
+            checkedTable.Failures
         );
     }
 
     [Fact]
     public void Create_WhenOneScopeNestsInAnother_DoesNotFail()
     {
-        var failures = new List<string>();
-
         var first = Bound("a", Primitives.Lease, null);
         var second = Bound("b", Primitives.Lease, Prod);
         var third = Bound("c", Primitives.Lease, Cell);
 
-        BindingTable.Create([first, second, third], failures);
+        var checkedTable = BindingTable.Create([first, second, third]);
 
-        Assert.Empty(failures);
+        Assert.Empty(checkedTable.Failures);
     }
 
     #endregion
