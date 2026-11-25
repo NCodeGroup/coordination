@@ -110,6 +110,7 @@ NCode.Coordination.Testing.NotificationContractTests.PublishAsync_WhenTwoSubscri
 NCode.Coordination.Testing.NotificationContractTests.SubscribeAsync_WhenStarted_YieldsAResyncFirst() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.NotificationContractTests.SubscribeAsync_WhenTokenIsCanceled_ThrowsOperationCanceledException() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.OccurrenceContractTests
+NCode.Coordination.Testing.OccurrenceContractTests.ConcurrentRun_WhenClientsRace_KeepsALinearizableHistory() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.OccurrenceContractTests.OccurrenceContractTests() -> void
 NCode.Coordination.Testing.OccurrenceContractTests.TryRecordAsync_WhenKeyIsNew_ReturnsRecorded() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.OccurrenceContractTests.TryRecordAsync_WhenKeysDiffer_RecordsEach() -> System.Threading.Tasks.Task!
