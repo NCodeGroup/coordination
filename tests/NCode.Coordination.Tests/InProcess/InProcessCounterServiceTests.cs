@@ -5,8 +5,6 @@ namespace NCode.Coordination.InProcess.Tests;
 
 public sealed class InProcessCounterServiceTests
 {
-    private static Keyspace Keyspace { get; } = new("test");
-
     private static TimeToLive TwoSeconds { get; } = new(TimeSpan.FromSeconds(2));
 
     #region IncrementBatchAsync Tests
@@ -17,8 +15,8 @@ public sealed class InProcessCounterServiceTests
         var cancellationToken = TestContext.Current.CancellationToken;
         var time = new SteppingTimeProvider();
         var service = new InProcessCounterService(time);
-        var first = Keyspace.CreateKey("first");
-        var second = Keyspace.CreateKey("second");
+        var first = InProcessTesting.Keyspace.CreateKey("first");
+        var second = InProcessTesting.Keyspace.CreateKey("second");
         await service.IncrementAsync(first, 1, TwoSeconds, null, cancellationToken);
 
         var firstIncrement = new CounterIncrement(first, 1, 10, TwoSeconds);

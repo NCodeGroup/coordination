@@ -1,17 +1,13 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
-using Microsoft.Extensions.Time.Testing;
-
 namespace NCode.Coordination.InProcess.Tests;
 
 public sealed class InProcessProviderTests
 {
-    private static DateTimeOffset Start { get; } = new(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
-
     private static InProcessProvider CreateProvider()
     {
-        var time = new FakeTimeProvider(Start);
+        var time = InProcessTesting.CreateTime();
         return new InProcessProvider(time);
     }
 

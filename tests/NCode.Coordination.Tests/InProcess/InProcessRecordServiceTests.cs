@@ -1,26 +1,20 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
-using Microsoft.Extensions.Time.Testing;
-
 namespace NCode.Coordination.InProcess.Tests;
 
 public sealed class InProcessRecordServiceTests
 {
-    private static DateTimeOffset Start { get; } = new(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
-
-    private static Keyspace Keyspace { get; } = new("test");
-
     private static InProcessRecordService CreateService()
     {
-        var time = new FakeTimeProvider(Start);
+        var time = InProcessTesting.CreateTime();
         var table = new InProcessRecordTable(time);
         return new InProcessRecordService(table);
     }
 
     private static RecordLifetime SessionLifetime()
     {
-        var sessionId = new SessionId(Keyspace, "s1");
+        var sessionId = new SessionId(InProcessTesting.Keyspace, "s1");
         return RecordLifetime.ForSession(sessionId);
     }
 
@@ -31,7 +25,7 @@ public sealed class InProcessRecordServiceTests
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var service = CreateService();
-        var key = Keyspace.CreateKey("a");
+        var key = InProcessTesting.Keyspace.CreateKey("a");
         ReadOnlyMemory<byte> value = (byte[])[1];
         var lifetime = SessionLifetime();
 
@@ -48,7 +42,7 @@ public sealed class InProcessRecordServiceTests
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var service = CreateService();
-        var key = Keyspace.CreateKey("a");
+        var key = InProcessTesting.Keyspace.CreateKey("a");
         ReadOnlyMemory<byte> value = (byte[])[1];
 
         var result = await service.CreateAsync(
@@ -74,7 +68,7 @@ public sealed class InProcessRecordServiceTests
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var service = CreateService();
-        var key = Keyspace.CreateKey("a");
+        var key = InProcessTesting.Keyspace.CreateKey("a");
         ReadOnlyMemory<byte> value = (byte[])[1];
         var created = await service.CreateAsync(
             key,
@@ -114,7 +108,7 @@ public sealed class InProcessRecordServiceTests
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var service = CreateService();
-        var prefix = Keyspace.CreateKey("a");
+        var prefix = InProcessTesting.Keyspace.CreateKey("a");
         var page = new RecordPageRequest(10) { ContinuationToken = token };
 
         var exception = await Assert.ThrowsAsync<ArgumentException>(async () =>
@@ -129,7 +123,7 @@ public sealed class InProcessRecordServiceTests
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var service = CreateService();
-        var prefix = Keyspace.CreateKey("a");
+        var prefix = InProcessTesting.Keyspace.CreateKey("a");
         var page = new RecordPageRequest(10);
 
         var result = await service.ListAsync(prefix, page, null, cancellationToken);

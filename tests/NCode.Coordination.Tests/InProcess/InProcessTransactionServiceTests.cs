@@ -1,30 +1,24 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
-using Microsoft.Extensions.Time.Testing;
-
 namespace NCode.Coordination.InProcess.Tests;
 
 public sealed class InProcessTransactionServiceTests
 {
-    private static DateTimeOffset Start { get; } = new(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
-
-    private static Keyspace Keyspace { get; } = new("test");
-
     #region ExecuteAsync Tests
 
     [Fact]
     public async Task ExecuteAsync_WhenTheAppliedBranchBindsToASession_ThrowsUnsupportedAndWritesNothing()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        var time = new FakeTimeProvider(Start);
+        var time = InProcessTesting.CreateTime();
         var table = new InProcessRecordTable(time);
         var records = new InProcessRecordService(table);
         var service = new InProcessTransactionService(table);
-        var plainKey = Keyspace.CreateKey("plain");
-        var boundKey = Keyspace.CreateKey("bound");
+        var plainKey = InProcessTesting.Keyspace.CreateKey("plain");
+        var boundKey = InProcessTesting.Keyspace.CreateKey("bound");
         ReadOnlyMemory<byte> value = (byte[])[1];
-        var sessionId = new SessionId(Keyspace, "s1");
+        var sessionId = new SessionId(InProcessTesting.Keyspace, "s1");
         var session = RecordLifetime.ForSession(sessionId);
         var plainPut = RecordWrite.Put(plainKey, value, RecordLifetime.Persistent);
         var boundPut = RecordWrite.Put(boundKey, value, session);
@@ -47,12 +41,12 @@ public sealed class InProcessTransactionServiceTests
     public async Task ExecuteAsync_WhenTheBranchIsEmpty_ReturnsTheCurrentRevision()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        var time = new FakeTimeProvider(Start);
+        var time = InProcessTesting.CreateTime();
         var table = new InProcessRecordTable(time);
         var records = new InProcessRecordService(table);
         var service = new InProcessTransactionService(table);
-        var existingKey = Keyspace.CreateKey("existing");
-        var otherKey = Keyspace.CreateKey("other");
+        var existingKey = InProcessTesting.Keyspace.CreateKey("existing");
+        var otherKey = InProcessTesting.Keyspace.CreateKey("other");
         ReadOnlyMemory<byte> value = (byte[])[1];
         var created = await records.CreateAsync(
             existingKey,

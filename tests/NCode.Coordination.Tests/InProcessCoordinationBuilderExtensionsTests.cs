@@ -2,14 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Time.Testing;
+using NCode.Coordination.InProcess.Tests;
 
 namespace NCode.Coordination.Tests;
 
 public sealed class InProcessCoordinationBuilderExtensionsTests
 {
-    private static DateTimeOffset Start { get; } = new(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
-
     private static ServiceCollection CreateServices()
     {
         var services = new ServiceCollection();
@@ -56,7 +54,7 @@ public sealed class InProcessCoordinationBuilderExtensionsTests
     public async Task AddInProcessProvider_WhenATimeProviderIsRegistered_ExpiresOnIt()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        var time = new FakeTimeProvider(Start);
+        var time = InProcessTesting.CreateTime();
         var services = CreateServices();
         services.AddSingleton<TimeProvider>(time);
         AddInProcess(services);

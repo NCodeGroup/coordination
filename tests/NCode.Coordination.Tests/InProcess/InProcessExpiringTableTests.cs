@@ -1,8 +1,6 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
-using Microsoft.Extensions.Time.Testing;
-
 namespace NCode.Coordination.InProcess.Tests;
 
 public sealed class InProcessExpiringTableTests
@@ -15,12 +13,6 @@ public sealed class InProcessExpiringTableTests
 
     private static TimeSpan FourHundredDays { get; } = TimeSpan.FromDays(400);
 
-    private static FakeTimeProvider CreateTime()
-    {
-        var start = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
-        return new FakeTimeProvider(start);
-    }
-
     private static InProcessExpiry TwoSecondExpiry(TimeProvider time)
     {
         var timeToLive = new TimeToLive(TwoSeconds);
@@ -32,7 +24,7 @@ public sealed class InProcessExpiringTableTests
     [Fact]
     public void TryGet_WhenEntryIsLive_ReturnsTheValue()
     {
-        var time = CreateTime();
+        var time = InProcessTesting.CreateTime();
         var table = new InProcessExpiringTable<string, int>(time);
         var expiry = TwoSecondExpiry(time);
         table.Set("a", 7, expiry);
@@ -47,7 +39,7 @@ public sealed class InProcessExpiringTableTests
     [Fact]
     public void TryGet_WhenEntryEnded_ReturnsFalseAndRemovesIt()
     {
-        var time = CreateTime();
+        var time = InProcessTesting.CreateTime();
         var table = new InProcessExpiringTable<string, int>(time);
         var expiry = TwoSecondExpiry(time);
         table.Set("a", 7, expiry);
@@ -63,7 +55,7 @@ public sealed class InProcessExpiringTableTests
     [Fact]
     public void TryGet_WhenEntryHasNoExpiry_NeverEnds()
     {
-        var time = CreateTime();
+        var time = InProcessTesting.CreateTime();
         var table = new InProcessExpiringTable<string, int>(time);
         table.Set("a", 7, null);
 
@@ -81,7 +73,7 @@ public sealed class InProcessExpiringTableTests
     [Fact]
     public void Update_WhenEntryIsLive_KeepsItsExpiry()
     {
-        var time = CreateTime();
+        var time = InProcessTesting.CreateTime();
         var table = new InProcessExpiringTable<string, int>(time);
         var expiry = TwoSecondExpiry(time);
         table.Set("a", 7, expiry);
@@ -102,7 +94,7 @@ public sealed class InProcessExpiringTableTests
     [Fact]
     public void Update_WhenKeyIsAbsent_ThrowsInvalidOperationException()
     {
-        var time = CreateTime();
+        var time = InProcessTesting.CreateTime();
         var table = new InProcessExpiringTable<string, int>(time);
 
         Assert.Throws<InvalidOperationException>(() => table.Update("a", 8));
@@ -115,7 +107,7 @@ public sealed class InProcessExpiringTableTests
     [Fact]
     public void Remove_WhenEntryIsLive_ReturnsTrue()
     {
-        var time = CreateTime();
+        var time = InProcessTesting.CreateTime();
         var table = new InProcessExpiringTable<string, int>(time);
         var expiry = TwoSecondExpiry(time);
         table.Set("a", 7, expiry);
@@ -129,7 +121,7 @@ public sealed class InProcessExpiringTableTests
     [Fact]
     public void Remove_WhenEntryEnded_ReturnsFalse()
     {
-        var time = CreateTime();
+        var time = InProcessTesting.CreateTime();
         var table = new InProcessExpiringTable<string, int>(time);
         var expiry = TwoSecondExpiry(time);
         table.Set("a", 7, expiry);
@@ -148,7 +140,7 @@ public sealed class InProcessExpiringTableTests
     [Fact]
     public void ListLive_WhenAnEntryEnded_LeavesItOut()
     {
-        var time = CreateTime();
+        var time = InProcessTesting.CreateTime();
         var table = new InProcessExpiringTable<string, int>(time);
         var expiry = TwoSecondExpiry(time);
         table.Set("short", 1, expiry);
@@ -169,7 +161,7 @@ public sealed class InProcessExpiringTableTests
     [Fact]
     public void Set_WhenWritesReachTheSweepFloor_RemovesEndedEntries()
     {
-        var time = CreateTime();
+        var time = InProcessTesting.CreateTime();
         var table = new InProcessExpiringTable<string, int>(time);
         var expiry = TwoSecondExpiry(time);
         table.Set("old", 0, expiry);
