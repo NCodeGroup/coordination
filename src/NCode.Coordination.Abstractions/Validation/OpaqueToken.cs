@@ -40,4 +40,21 @@ internal static class OpaqueToken
 
         return value;
     }
+
+    /// <summary>
+    /// Checks that a value is null or a token.
+    /// </summary>
+    /// <param name="value">The value to check.</param>
+    /// <param name="maxLength">The longest token, in characters.</param>
+    /// <param name="paramName">The name of the parameter or property that holds the value.</param>
+    /// <returns>The value: null, or a token.</returns>
+    public static string? ValidateOptional(string? value, int maxLength, string paramName)
+    {
+        if (value is null)
+        {
+            return null;
+        }
+
+        return Validate(value, maxLength, paramName);
+    }
 }

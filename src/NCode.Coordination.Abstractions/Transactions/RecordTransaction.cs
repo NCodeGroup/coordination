@@ -11,10 +11,12 @@ namespace NCode.Coordination;
 /// not.
 /// </summary>
 /// <remarks>
-/// Every key of a transaction is in one keyspace. A branch writes each key at most once.
+/// All keys of a transaction share one keyspace. A branch writes each key at most once.
 /// </remarks>
 public sealed class RecordTransaction
 {
+    private const string OneKeyspaceMessage = "Every key of a transaction is in one keyspace.";
+
     /// <summary>
     /// Creates a transaction.
     /// </summary>
@@ -54,10 +56,7 @@ public sealed class RecordTransaction
         {
             if (!Keyspace.Equals(condition.Key.Keyspace))
             {
-                throw new ArgumentException(
-                    "Every key of a transaction is in one keyspace.",
-                    nameof(conditions)
-                );
+                throw new ArgumentException(OneKeyspaceMessage, nameof(conditions));
             }
         }
 
@@ -113,7 +112,7 @@ public sealed class RecordTransaction
             );
         }
 
-        var keys = new HashSet<CoordinationKey>();
+        var keys = new HashSet<CoordinationKey>(writes.Length);
 
         foreach (var write in writes)
         {
@@ -130,10 +129,7 @@ public sealed class RecordTransaction
         {
             if (!Keyspace.Equals(write.Key.Keyspace))
             {
-                throw new ArgumentException(
-                    "Every key of a transaction is in one keyspace.",
-                    paramName
-                );
+                throw new ArgumentException(OneKeyspaceMessage, paramName);
             }
         }
     }

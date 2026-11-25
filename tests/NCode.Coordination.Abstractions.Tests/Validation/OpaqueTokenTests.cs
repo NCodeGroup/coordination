@@ -79,4 +79,42 @@ public sealed class OpaqueTokenTests
     }
 
     #endregion
+
+    #region ValidateOptional Tests
+
+    [Fact]
+    public void ValidateOptional_WhenValueIsNull_ReturnsNull()
+    {
+        const int maxLength = 8;
+
+        var result = OpaqueToken.ValidateOptional(null, maxLength, "name");
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void ValidateOptional_WhenValueIsAToken_ReturnsIt()
+    {
+        const string value = "abc-123";
+        const int maxLength = 8;
+
+        var result = OpaqueToken.ValidateOptional(value, maxLength, "name");
+
+        Assert.Equal(value, result);
+    }
+
+    [Fact]
+    public void ValidateOptional_WhenValueIsNotAToken_Throws()
+    {
+        const string value = "a b";
+        const int maxLength = 8;
+
+        var exception = Assert.Throws<ArgumentException>(() =>
+            OpaqueToken.ValidateOptional(value, maxLength, "name")
+        );
+
+        Assert.Equal("name", exception.ParamName);
+    }
+
+    #endregion
 }

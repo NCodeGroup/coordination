@@ -45,13 +45,11 @@ public sealed class RecordPage
         get;
         init
         {
-            field = value is null
-                ? null
-                : OpaqueToken.Validate(
-                    value,
-                    CoordinationLimits.MaxContinuationTokenLength,
-                    nameof(ContinuationToken)
-                );
+            field = OpaqueToken.ValidateOptional(
+                value,
+                CoordinationLimits.MaxContinuationTokenLength,
+                nameof(ContinuationToken)
+            );
         }
     }
 }
