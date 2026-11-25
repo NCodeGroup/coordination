@@ -21,9 +21,20 @@ public sealed record KeySegment
     /// </summary>
     public const int MaxTextLength = 256;
 
+    /// <summary>
+    /// Gets the UTF-8 encoding that throws on an unpaired surrogate, which <see cref="FromString"/> uses to refuse text
+    /// that is not well-formed UTF-16.
+    /// </summary>
     private static UTF8Encoding StrictUtf8 { get; } =
         new(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
 
+    /// <summary>
+    /// Creates a segment of one kind, whose value is the one argument that is not null.
+    /// </summary>
+    /// <param name="kind">The kind of the segment.</param>
+    /// <param name="text">The text of a text segment, and null for any other kind.</param>
+    /// <param name="number">The value of a number segment, and null for any other kind.</param>
+    /// <param name="uuid">The value of a UUID segment, and null for any other kind.</param>
     private KeySegment(KeySegmentKind kind, string? text, long? number, Guid? uuid)
     {
         Kind = kind;

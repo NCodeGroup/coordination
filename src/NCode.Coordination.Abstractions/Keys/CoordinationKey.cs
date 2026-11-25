@@ -26,7 +26,9 @@ public sealed record CoordinationKey
     /// Creates a key.
     /// </summary>
     /// <param name="keyspace">The keyspace the key belongs to.</param>
-    /// <param name="segments">The segments after the keyspace: at least one, at most <see cref="MaxSegments"/>, none null.</param>
+    /// <param name="segments">
+    /// The segments after the keyspace: at least one, at most <see cref="MaxSegments"/>, none null.
+    /// </param>
     /// <exception cref="ArgumentNullException">The keyspace or the segments are null.</exception>
     /// <exception cref="ArgumentException">
     /// A segment is null, or there are no segments or more than <see cref="MaxSegments"/> of them.

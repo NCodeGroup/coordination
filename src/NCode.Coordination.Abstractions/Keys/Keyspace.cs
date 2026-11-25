@@ -28,6 +28,13 @@ public sealed partial record Keyspace
     public const int MaxSegments = 8;
 
     /// <summary>
+    /// Matches a cluster name: 1 to 63 lowercase letters, digits and '-', starting and ending with a letter or digit.
+    /// </summary>
+    /// <returns>The regular expression.</returns>
+    [GeneratedRegex(@"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\z", RegexOptions.CultureInvariant)]
+    private static partial Regex ClusterPattern();
+
+    /// <summary>
     /// Creates a keyspace.
     /// </summary>
     /// <param name="cluster">
@@ -74,9 +81,6 @@ public sealed partial record Keyspace
     /// Gets the segments after the cluster, which may be none.
     /// </summary>
     public ImmutableArray<KeySegment> Segments { get; }
-
-    [GeneratedRegex(@"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\z", RegexOptions.CultureInvariant)]
-    private static partial Regex ClusterPattern();
 
     /// <summary>
     /// Creates a key in this keyspace.
