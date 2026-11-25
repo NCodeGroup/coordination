@@ -24,6 +24,12 @@
     <PackageVersion Include="xunit.v3.mtp-off" Version="4.0.3" />
   </ItemGroup>
 
+  <!-- The conformance kit (NCode.Coordination.Testing): xUnit.net v3's extensibility core and assertions, which a library of tests references instead of xunit.v3. -->
+  <ItemGroup>
+    <PackageVersion Include="xunit.v3.extensibility.core" Version="4.0.3" />
+    <PackageVersion Include="xunit.v3.assert" Version="4.0.3" />
+  </ItemGroup>
+
   <!-- The composition (NCode.Coordination): the Microsoft.Extensions abstractions only. -->
   <ItemGroup>
     <PackageVersion
@@ -33,12 +39,13 @@
     <PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="11.0.0" />
   </ItemGroup>
 
-  <!-- The composition's tests: the real container, metrics and host, the metric collector, and Moq. -->
+  <!-- The composition's tests: the real container, metrics and host, the metric collector, the fake clock, and Moq. -->
   <ItemGroup>
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="11.0.0" />
     <PackageVersion Include="Microsoft.Extensions.Diagnostics" Version="11.0.0" />
     <PackageVersion Include="Microsoft.Extensions.Diagnostics.Testing" Version="11.0.1" />
     <PackageVersion Include="Microsoft.Extensions.Hosting" Version="11.0.0" />
+    <PackageVersion Include="Microsoft.Extensions.TimeProvider.Testing" Version="11.0.1" />
     <PackageVersion Include="Moq" Version="4.21.0" />
   </ItemGroup>
 </Project>

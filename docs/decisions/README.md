@@ -82,3 +82,4 @@ records are indexed in [project-template/](project-template/README.md).
 | [1014](1014-records-carry-a-keyspace-wide-revision-and-watches-and-transactions-are-written-in-it.md) | Records carry a keyspace-wide revision, and watches and transactions are written in it | Proposed |
 | [1015](1015-occurrences-fail-closed-windows-align-to-the-epoch-and-notifications-number-each-topics-messages.md) | Occurrences fail closed, windows align to the epoch, and notifications number each topic's messages | Proposed |
 | [1016](1016-a-host-binds-providers-by-primitive-and-keyspace-and-its-start-fails-on-every-requirement-a-binding-cannot-keep.md) | A host binds providers by primitive and keyspace, and its start fails on every requirement a binding cannot keep | Proposed |
+| [1017](1017-the-conformance-kit-is-a-set-of-xunit-contract-classes-a-providers-tests-derive-from.md) | The conformance kit is a set of xUnit contract classes a provider's tests derive from | Proposed |
