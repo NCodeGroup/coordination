@@ -44,8 +44,13 @@ public sealed class CoordinationStartupCheckTests : IDisposable
         var cancellationToken = TestContext.Current.CancellationToken;
         var check = Create("missing");
 
-        await Assert.ThrowsAsync<CoordinationCompositionException>(() =>
+        var thrown = await Assert.ThrowsAsync<CoordinationCompositionException>(() =>
             check.StartingAsync(cancellationToken)
+        );
+
+        Assert.Equal<string>(
+            ["A binding names the provider 'missing', which is not registered."],
+            thrown.Failures
         );
     }
 
@@ -78,18 +83,66 @@ public sealed class CoordinationStartupCheckTests : IDisposable
 
     #endregion
 
-    #region Other Lifecycle Tests
+    #region StartAsync Tests
 
     [Fact]
-    public async Task OtherLifecycleMethods_Complete()
+    public async Task StartAsync_WhenCalled_Completes()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var check = Create("missing");
 
         await check.StartAsync(cancellationToken);
+    }
+
+    #endregion
+
+    #region StartedAsync Tests
+
+    [Fact]
+    public async Task StartedAsync_WhenCalled_Completes()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var check = Create("missing");
+
         await check.StartedAsync(cancellationToken);
+    }
+
+    #endregion
+
+    #region StoppingAsync Tests
+
+    [Fact]
+    public async Task StoppingAsync_WhenCalled_Completes()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var check = Create("missing");
+
         await check.StoppingAsync(cancellationToken);
+    }
+
+    #endregion
+
+    #region StopAsync Tests
+
+    [Fact]
+    public async Task StopAsync_WhenCalled_Completes()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var check = Create("missing");
+
         await check.StopAsync(cancellationToken);
+    }
+
+    #endregion
+
+    #region StoppedAsync Tests
+
+    [Fact]
+    public async Task StoppedAsync_WhenCalled_Completes()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var check = Create("missing");
+
         await check.StoppedAsync(cancellationToken);
     }
 

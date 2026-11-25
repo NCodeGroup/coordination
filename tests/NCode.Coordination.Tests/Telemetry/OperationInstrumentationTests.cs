@@ -46,6 +46,8 @@ public sealed class OperationInstrumentationTests
         );
 
         Assert.Equal("service!", result);
+        var unit = fixture.Collector.Instrument?.Unit;
+        Assert.Equal("s", unit);
         var measurements = fixture.Collector.GetMeasurementSnapshot();
         var measurement = Assert.Single(measurements);
         Assert.True(measurement.Value >= 0);

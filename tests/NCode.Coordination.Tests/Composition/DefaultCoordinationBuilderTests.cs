@@ -14,7 +14,19 @@ public sealed class DefaultCoordinationBuilderTests
     #region AddProvider Tests
 
     [Fact]
-    public void AddProvider_AppendsTheFactoryAndReturnsTheBuilder()
+    public void AddProvider_WhenCalled_RecordsTheFactory()
+    {
+        var builder = CreateBuilder();
+        var declaration = new ProviderDeclaration("memory");
+        Func<IServiceProvider, ICoordinationProvider> factory = _ => new TestProvider(declaration);
+
+        builder.AddProvider(factory);
+
+        Assert.Equal([factory], Registrations.ProviderFactories);
+    }
+
+    [Fact]
+    public void AddProvider_WhenCalled_ReturnsTheBuilder()
     {
         var builder = CreateBuilder();
         var declaration = new ProviderDeclaration("memory");
@@ -23,7 +35,6 @@ public sealed class DefaultCoordinationBuilderTests
         var result = builder.AddProvider(factory);
 
         Assert.Same(builder, result);
-        Assert.Equal([factory], Registrations.ProviderFactories);
     }
 
     [Fact]
@@ -39,7 +50,18 @@ public sealed class DefaultCoordinationBuilderTests
     #region Bind Tests
 
     [Fact]
-    public void Bind_AppendsTheBindingAndReturnsTheBuilder()
+    public void Bind_WhenCalled_RecordsTheBinding()
+    {
+        var builder = CreateBuilder();
+        var binding = new ProviderBinding("memory");
+
+        builder.Bind(binding);
+
+        Assert.Equal([binding], Registrations.Bindings);
+    }
+
+    [Fact]
+    public void Bind_WhenCalled_ReturnsTheBuilder()
     {
         var builder = CreateBuilder();
         var binding = new ProviderBinding("memory");
@@ -47,7 +69,6 @@ public sealed class DefaultCoordinationBuilderTests
         var result = builder.Bind(binding);
 
         Assert.Same(builder, result);
-        Assert.Equal([binding], Registrations.Bindings);
     }
 
     [Fact]
@@ -63,7 +84,19 @@ public sealed class DefaultCoordinationBuilderTests
     #region Require Tests
 
     [Fact]
-    public void Require_AppendsTheRequirementAndReturnsTheBuilder()
+    public void Require_WhenCalled_RecordsTheRequirement()
+    {
+        var builder = CreateBuilder();
+        var primitive = new Primitive("occurrence");
+        var requirement = new FeatureRequirement("replay", primitive);
+
+        builder.Require(requirement);
+
+        Assert.Equal([requirement], Registrations.Requirements);
+    }
+
+    [Fact]
+    public void Require_WhenCalled_ReturnsTheBuilder()
     {
         var builder = CreateBuilder();
         var primitive = new Primitive("occurrence");
@@ -72,7 +105,6 @@ public sealed class DefaultCoordinationBuilderTests
         var result = builder.Require(requirement);
 
         Assert.Same(builder, result);
-        Assert.Equal([requirement], Registrations.Requirements);
     }
 
     [Fact]
@@ -88,7 +120,19 @@ public sealed class DefaultCoordinationBuilderTests
     #region Define Tests
 
     [Fact]
-    public void Define_AppendsTheDefinitionAndReturnsTheBuilder()
+    public void Define_WhenCalled_RecordsTheDefinition()
+    {
+        var builder = CreateBuilder();
+        var guarantee = new Guarantee("custom.strong");
+        var definition = new GuaranteeDefinition(guarantee, "custom", "A custom guarantee.");
+
+        builder.Define(definition);
+
+        Assert.Equal([definition], Registrations.Definitions);
+    }
+
+    [Fact]
+    public void Define_WhenCalled_ReturnsTheBuilder()
     {
         var builder = CreateBuilder();
         var guarantee = new Guarantee("custom.strong");
@@ -97,7 +141,6 @@ public sealed class DefaultCoordinationBuilderTests
         var result = builder.Define(definition);
 
         Assert.Same(builder, result);
-        Assert.Equal([definition], Registrations.Definitions);
     }
 
     [Fact]
@@ -113,14 +156,23 @@ public sealed class DefaultCoordinationBuilderTests
     #region UseSingleNode Tests
 
     [Fact]
-    public void UseSingleNode_SetsSingleNode()
+    public void UseSingleNode_WhenCalled_SetsSingleNode()
+    {
+        var builder = CreateBuilder();
+
+        builder.UseSingleNode();
+
+        Assert.True(Registrations.IsSingleNode);
+    }
+
+    [Fact]
+    public void UseSingleNode_WhenCalled_ReturnsTheBuilder()
     {
         var builder = CreateBuilder();
 
         var result = builder.UseSingleNode();
 
         Assert.Same(builder, result);
-        Assert.True(Registrations.IsSingleNode);
     }
 
     #endregion

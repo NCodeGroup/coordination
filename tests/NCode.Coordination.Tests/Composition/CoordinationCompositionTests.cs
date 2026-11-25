@@ -89,7 +89,12 @@ public sealed class CoordinationCompositionTests : IDisposable
         var registrations = Register(provider, binding);
         var composition = new CoordinationComposition(registrations, Services);
 
-        Assert.Throws<CoordinationCompositionException>(composition.EnsureComposed);
+        var thrown = Assert.Throws<CoordinationCompositionException>(composition.EnsureComposed);
+
+        Assert.Equal<string>(
+            ["A binding names the provider 'missing', which is not registered."],
+            thrown.Failures
+        );
     }
 
     [Fact]
@@ -123,7 +128,7 @@ public sealed class CoordinationCompositionTests : IDisposable
     #region EnsureStartedAsync Tests
 
     [Fact]
-    public async Task EnsureStartedAsync_ProbesEveryProviderInRegistrationOrder()
+    public async Task EnsureStartedAsync_WhenValid_ProbesEveryProviderInRegistrationOrder()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var probed = new List<string>();
@@ -194,6 +199,31 @@ public sealed class CoordinationCompositionTests : IDisposable
     }
 
     [Fact]
+    public async Task EnsureStartedAsync_WhenCanceled_ThrowsOperationCanceled()
+    {
+        var service = Mocks.Create<IOccurrenceService>().Object;
+        var declaration = Declare("memory");
+        var provider = new TestProvider(declaration, service)
+        {
+            Probe = token =>
+            {
+                token.ThrowIfCancellationRequested();
+                return ValueTask.CompletedTask;
+            },
+        };
+        var binding = new ProviderBinding("memory");
+        var registrations = Register(provider, binding);
+        var composition = new CoordinationComposition(registrations, Services);
+        using var source = new CancellationTokenSource();
+        await source.CancelAsync();
+        var cancellationToken = source.Token;
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+            await composition.EnsureStartedAsync(cancellationToken)
+        );
+    }
+
+    [Fact]
     public async Task EnsureStartedAsync_WhenTheCompositionIsInvalid_ThrowsWithoutProbing()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
@@ -211,10 +241,14 @@ public sealed class CoordinationCompositionTests : IDisposable
         var registrations = Register(provider, binding);
         var composition = new CoordinationComposition(registrations, Services);
 
-        await Assert.ThrowsAsync<CoordinationCompositionException>(async () =>
+        var thrown = await Assert.ThrowsAsync<CoordinationCompositionException>(async () =>
             await composition.EnsureStartedAsync(cancellationToken)
         );
 
+        Assert.Equal<string>(
+            ["A binding names the provider 'missing', which is not registered."],
+            thrown.Failures
+        );
         Assert.False(probed);
     }
 
@@ -223,7 +257,7 @@ public sealed class CoordinationCompositionTests : IDisposable
     #region Dispose Tests
 
     [Fact]
-    public async Task DisposeAsync_DisposesEachProvider()
+    public async Task DisposeAsync_WhenComposed_DisposesEachProvider()
     {
         var service = Mocks.Create<IOccurrenceService>().Object;
         var syncDeclaration = Declare("sync");

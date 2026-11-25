@@ -65,6 +65,37 @@ public sealed class GuaranteeRegistryTests
     }
 
     [Fact]
+    public void Create_WhenANameIsDefinedTwiceWithAnotherDimension_Fails()
+    {
+        GuaranteeDefinition[] definitions = [new(A, "test", "a"), new(A, "other", "a")];
+
+        var checkedRegistry = GuaranteeRegistry.Create(definitions);
+
+        Assert.Equal(
+            ["The guarantee 'test.a' is defined twice, with different meanings."],
+            checkedRegistry.Failures
+        );
+    }
+
+    [Fact]
+    public void Create_WhenANameIsDefinedTwiceWithOtherImplications_Fails()
+    {
+        GuaranteeDefinition[] definitions =
+        [
+            new(A, "test", "a") { Implies = [B] },
+            new(B, "test", "b"),
+            new(A, "test", "a"),
+        ];
+
+        var checkedRegistry = GuaranteeRegistry.Create(definitions);
+
+        Assert.Equal(
+            ["The guarantee 'test.a' is defined twice, with different meanings."],
+            checkedRegistry.Failures
+        );
+    }
+
+    [Fact]
     public void Create_WhenAnImplicationIsUndefined_Fails()
     {
         GuaranteeDefinition[] definitions = [new(A, "test", "a") { Implies = [B] }];
