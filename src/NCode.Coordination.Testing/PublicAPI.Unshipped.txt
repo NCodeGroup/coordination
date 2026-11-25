@@ -84,6 +84,21 @@ NCode.Coordination.Testing.SequenceContractTests.ReserveAsync_WhenCountIsAboveTh
 NCode.Coordination.Testing.SequenceContractTests.ReserveAsync_WhenCountIsZero_ThrowsArgumentOutOfRangeException() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.SequenceContractTests.ReserveAsync_WhenSequenceIsNew_StartsAtOne() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.SequenceContractTests.SequenceContractTests() -> void
+NCode.Coordination.Testing.SessionContractTests
+NCode.Coordination.Testing.SessionContractTests.CloseAsync_WhenSessionHasEnded_Succeeds() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.SessionContractTests.KeepAliveAsync_WhenRenewedBeforeExpiry_MeasuresTheTimeToLiveFromTheRenewal() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.SessionContractTests.KeepAliveAsync_WhenSessionIsLive_ReturnsRenewed() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.SessionContractTests.KeepAliveAsync_WhenSessionIsUnknown_ReturnsEnded() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.SessionContractTests.KeepAliveAsync_WhenSessionWasClosed_ReturnsEnded() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.SessionContractTests.KeepAliveAsync_WhenTimeToLivePassed_ReturnsEnded() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.SessionContractTests.OpenAsync_WhenCalled_GrantsAtLeastTheRequestedTimeToLive() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.SessionContractTests.OpenAsync_WhenCalledTwice_GivesEachSessionItsOwnId() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.SessionContractTests.OpenAsync_WhenOptionsCarryAnUnknownExtension_ThrowsUnsupported() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.SessionContractTests.SessionContractTests() -> void
+NCode.Coordination.Testing.SessionContractTests.WaitForEndAsync_WhenSessionHasEnded_CompletesAtOnce() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.SessionContractTests.WaitForEndAsync_WhenTheSessionIsClosed_Completes() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.SessionContractTests.WaitForEndAsync_WhenTimeToLivePasses_Completes() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.SessionContractTests.WaitForEndAsync_WhenTokenIsCanceled_ThrowsOperationCanceledException() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.SetContractTests
 NCode.Coordination.Testing.SetContractTests.AddAsync_WhenEveryMemberOfAFullSetExpired_AddsTheMember() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.SetContractTests.AddAsync_WhenMemberIsAbsent_ReturnsTrueAndListsIt() -> System.Threading.Tasks.Task!
