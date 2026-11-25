@@ -198,4 +198,187 @@ public sealed class InProcessConcurrencyTests
     }
 
     #endregion
+
+    #region TryAcquireAsync Tests
+
+    [Fact]
+    public async Task TryAcquireAsync_WhenCallersRace_GrantsOneLease()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        using var provider = CreateProvider();
+        var leases = GetService<ILeaseService>(provider);
+        var resource = Keyspace.CreateKey("lease");
+        var ttl = TimeSpan.FromSeconds(30);
+        var terms = LeaseTerms.ForTimeToLive(new TimeToLive(ttl));
+
+        var results = await RunCallersAsync(
+            RacingCallers,
+            _ => leases.TryAcquireAsync(resource, terms, null, cancellationToken),
+            cancellationToken
+        );
+
+        var held = results.Count(x => x.Status == LeaseAcquireStatus.Held);
+
+        Assert.Single(results, x => x.IsAcquired);
+        Assert.Equal(RacingCallers - 1, held);
+    }
+
+    [Fact]
+    public async Task TryAcquireAsync_WhenCallersRaceForASemaphore_FillsEachSlotOnce()
+    {
+        const int capacity = 4;
+        var cancellationToken = TestContext.Current.CancellationToken;
+        using var provider = CreateProvider();
+        var semaphores = GetService<ISemaphoreService>(provider);
+        var resource = Keyspace.CreateKey("semaphore");
+        var ttl = TimeSpan.FromSeconds(30);
+        var terms = LeaseTerms.ForTimeToLive(new TimeToLive(ttl));
+
+        var results = await RunCallersAsync(
+            RacingCallers,
+            _ => semaphores.TryAcquireAsync(resource, capacity, terms, null, cancellationToken),
+            cancellationToken
+        );
+
+        var slots = results
+            .Where(x => x.IsAcquired)
+            .Select(x => x.Grant is { } grant ? grant.Slot : -1);
+        var full = results.Count(x => x.Status == SemaphoreAcquireStatus.Full);
+
+        Assert.Equal([0, 1, 2, 3], slots.Order());
+        Assert.Equal(RacingCallers - capacity, full);
+    }
+
+    #endregion
+
+    #region TryLeadAsync Tests
+
+    [Fact]
+    public async Task TryLeadAsync_WhenCallersRace_ElectsOne()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        using var provider = CreateProvider();
+        var elections = GetService<IElectionService>(provider);
+        var role = Keyspace.CreateKey("role");
+        var ttl = TimeSpan.FromSeconds(30);
+        var terms = LeaseTerms.ForTimeToLive(new TimeToLive(ttl));
+
+        var results = await RunCallersAsync(
+            RacingCallers,
+            index =>
+            {
+                var value = BitConverter.GetBytes(index);
+                return elections.TryLeadAsync(role, value, terms, null, cancellationToken);
+            },
+            cancellationToken
+        );
+
+        var led = results.Count(x => x.Status == ElectionStatus.Led);
+
+        Assert.Single(results, x => x.IsElected);
+        Assert.Equal(RacingCallers - 1, led);
+    }
+
+    #endregion
+
+    #region TryClaimAsync Tests
+
+    [Fact]
+    public async Task TryClaimAsync_WhenCallersRace_ClaimsOnce()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        using var provider = CreateProvider();
+        var claims = GetService<IClaimService>(provider);
+        var name = Keyspace.CreateKey("claim");
+        var window = new TimeWindow(DateTimeOffset.UnixEpoch, TimeSpan.FromHours(1));
+        var ttl = TimeSpan.FromSeconds(30);
+        var timeToLive = new TimeToLive(ttl);
+
+        var results = await RunCallersAsync(
+            RacingCallers,
+            _ => claims.TryClaimAsync(name, window, timeToLive, null, cancellationToken),
+            cancellationToken
+        );
+
+        var taken = results.Count(x => x == ClaimStatus.Taken);
+
+        Assert.Single(results, x => x == ClaimStatus.Claimed);
+        Assert.Equal(RacingCallers - 1, taken);
+    }
+
+    #endregion
+
+    #region JoinAsync Tests
+
+    [Fact]
+    public async Task JoinAsync_WhenSessionsRaceForANodeId_JoinsOne()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        using var provider = CreateProvider();
+        var sessions = GetService<ISessionService>(provider);
+        var memberships = GetService<IMembershipService>(provider);
+        var group = Keyspace.CreateKey("group");
+        var ttl = TimeSpan.FromSeconds(30);
+        var timeToLive = new TimeToLive(ttl);
+        var members = new Member[RacingCallers];
+        for (var index = 0; index < RacingCallers; index++)
+        {
+            var grant = await sessions.OpenAsync(Keyspace, timeToLive, null, cancellationToken);
+            members[index] = new Member(grant.Id, "node", "host:1");
+        }
+
+        var results = await RunCallersAsync(
+            RacingCallers,
+            index => memberships.JoinAsync(group, members[index], null, cancellationToken),
+            cancellationToken
+        );
+
+        var taken = results.Count(x => x == MembershipJoinStatus.NodeIdTaken);
+
+        Assert.Single(results, x => x == MembershipJoinStatus.Joined);
+        Assert.Equal(RacingCallers - 1, taken);
+    }
+
+    #endregion
+
+    #region PublishAsync Tests
+
+    [Fact]
+    public async Task PublishAsync_WhenCallersRace_NumbersEachMessageOnce()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        using var provider = CreateProvider();
+        var notifications = GetService<INotificationService>(provider);
+        var topic = Keyspace.CreateKey("topic");
+        await using var stream = notifications
+            .SubscribeAsync(topic, null, cancellationToken)
+            .GetAsyncEnumerator(cancellationToken);
+        Assert.True(await stream.MoveNextAsync());
+        Assert.True(stream.Current.IsResync);
+
+        await RunCallersAsync(
+            CountingCallers,
+            async index =>
+            {
+                var payload = BitConverter.GetBytes(index);
+                await notifications.PublishAsync(topic, payload, null, cancellationToken);
+                return true;
+            },
+            cancellationToken
+        );
+
+        var sequences = new List<long>();
+        for (var index = 0; index < CountingCallers; index++)
+        {
+            Assert.True(await stream.MoveNextAsync());
+            Assert.False(stream.Current.IsResync);
+            sequences.Add(stream.Current.Sequence);
+        }
+
+        var expected = Enumerable.Range(1, CountingCallers).Select(x => (long)x);
+
+        Assert.Equal(expected, sequences);
+    }
+
+    #endregion
 }
