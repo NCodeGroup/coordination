@@ -18,12 +18,15 @@ public sealed class DefaultSingletonServiceTests
     public async Task RunAsync_WhenTwoCandidatesRun_RunsTheWorkOneAtATime()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await using var services = RecipeTesting.Build(InProcessTesting.CreateTime());
+        var time = InProcessTesting.CreateTime();
+        await using var services = RecipeTesting.Build(time);
         var elections = services.GetRequiredService<IElectionService>();
         var singletons = new DefaultSingletonService(elections);
         var role = CreateRole();
         var first = await RecipeTesting.OpenSessionAsync(services, cancellationToken);
         var second = await RecipeTesting.OpenSessionAsync(services, cancellationToken);
+        var firstCandidate = new SingletonCandidate(first);
+        var secondCandidate = new SingletonCandidate(second);
         var events = new ConcurrentQueue<string>();
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -35,29 +38,32 @@ public sealed class DefaultSingletonServiceTests
         }
 
         var firstTask = singletons
-            .RunAsync(role, new SingletonCandidate(first), Work, null, cancellationToken)
+            .RunAsync(role, firstCandidate, Work, null, cancellationToken)
             .AsTask();
         var secondTask = singletons
-            .RunAsync(role, new SingletonCandidate(second), Work, null, cancellationToken)
+            .RunAsync(role, secondCandidate, Work, null, cancellationToken)
             .AsTask();
 
         await RecipeTesting.WaitUntilAsync(() => !events.IsEmpty);
         release.SetResult();
         var results = await Task.WhenAll(firstTask, secondTask);
+        var recorded = events.ToArray();
 
         Assert.All(results, Assert.True);
-        Assert.Equal(["start", "end", "start", "end"], events.ToArray());
+        Assert.Equal(["start", "end", "start", "end"], recorded);
     }
 
     [Fact]
     public async Task RunAsync_WhenTheLeadershipIsLost_CancelsTheWorkAndCampaignsAgain()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await using var services = RecipeTesting.Build(InProcessTesting.CreateTime());
+        var time = InProcessTesting.CreateTime();
+        await using var services = RecipeTesting.Build(time);
         var elections = services.GetRequiredService<IElectionService>();
         var singletons = new DefaultSingletonService(elections);
         var role = CreateRole();
         var session = await RecipeTesting.OpenSessionAsync(services, cancellationToken);
+        var candidate = new SingletonCandidate(session);
         var calls = new int[1];
         Leadership? firstLeadership = null;
         var firstToken = CancellationToken.None;
@@ -74,18 +80,19 @@ public sealed class DefaultSingletonServiceTests
             await Task.Delay(Timeout.InfiniteTimeSpan, token);
         }
 
-        var task = singletons
-            .RunAsync(role, new SingletonCandidate(session), Work, null, cancellationToken)
-            .AsTask();
+        var task = singletons.RunAsync(role, candidate, Work, null, cancellationToken).AsTask();
 
-        await RecipeTesting.WaitUntilAsync(() => Volatile.Read(ref firstLeadership) is not null);
-        var leadership = Assert.IsType<Leadership>(Volatile.Read(ref firstLeadership));
+        Func<bool> hasLeadership = () => Volatile.Read(ref firstLeadership) is not null;
+        await RecipeTesting.WaitUntilAsync(hasLeadership);
+        var observed = Volatile.Read(ref firstLeadership);
+        var leadership = Assert.IsType<Leadership>(observed);
         var resigned = await elections.ResignAsync(leadership, null, cancellationToken);
         var completed = await task;
+        var totalCalls = Volatile.Read(ref calls[0]);
 
         Assert.True(resigned);
         Assert.True(completed);
-        Assert.Equal(2, Volatile.Read(ref calls[0]));
+        Assert.Equal(2, totalCalls);
         Assert.True(firstToken.IsCancellationRequested);
     }
 
@@ -93,18 +100,20 @@ public sealed class DefaultSingletonServiceTests
     public async Task RunAsync_WhenTheSessionHasEnded_ReturnsFalse()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await using var services = RecipeTesting.Build(InProcessTesting.CreateTime());
+        var time = InProcessTesting.CreateTime();
+        await using var services = RecipeTesting.Build(time);
         var elections = services.GetRequiredService<IElectionService>();
         var sessions = services.GetRequiredService<ISessionService>();
         var singletons = new DefaultSingletonService(elections);
         var role = CreateRole();
         var session = await RecipeTesting.OpenSessionAsync(services, cancellationToken);
         await sessions.CloseAsync(session, null, cancellationToken);
+        var candidate = new SingletonCandidate(session);
         var calls = new int[1];
 
         var completed = await singletons.RunAsync(
             role,
-            new SingletonCandidate(session),
+            candidate,
             (_, _) =>
             {
                 Interlocked.Increment(ref calls[0]);
@@ -113,27 +122,30 @@ public sealed class DefaultSingletonServiceTests
             null,
             cancellationToken
         );
+        var totalCalls = Volatile.Read(ref calls[0]);
 
         Assert.False(completed);
-        Assert.Equal(0, Volatile.Read(ref calls[0]));
+        Assert.Equal(0, totalCalls);
     }
 
     [Fact]
     public async Task RunAsync_WhenCancelledWhileLeading_ResignsAndThrows()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await using var services = RecipeTesting.Build(InProcessTesting.CreateTime());
+        var time = InProcessTesting.CreateTime();
+        await using var services = RecipeTesting.Build(time);
         var elections = services.GetRequiredService<IElectionService>();
         var singletons = new DefaultSingletonService(elections);
         var role = CreateRole();
         var session = await RecipeTesting.OpenSessionAsync(services, cancellationToken);
+        var candidate = new SingletonCandidate(session);
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
         var task = singletons
             .RunAsync(
                 role,
-                new SingletonCandidate(session),
+                candidate,
                 async (_, token) =>
                 {
                     started.SetResult();

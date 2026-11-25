@@ -23,15 +23,19 @@ public sealed class DefaultBarrierServiceTests
     public async Task ArriveAndWaitAsync_WhenAPartyIsMissing_WaitsUntilItArrives()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await using var services = RecipeTesting.Build(InProcessTesting.CreateTime());
+        var time = InProcessTesting.CreateTime();
+        await using var services = RecipeTesting.Build(time);
         var barriers = CreateBarriers(services);
         var barrier = CreateBarrier();
         var terms = new BarrierTerms(3, RecordLifetime.Persistent);
+        var partyA = KeySegment.FromString("a");
+        var partyB = KeySegment.FromString("b");
+        var partyC = KeySegment.FromString("c");
         var first = barriers
-            .ArriveAndWaitAsync(barrier, KeySegment.FromString("a"), terms, null, cancellationToken)
+            .ArriveAndWaitAsync(barrier, partyA, terms, null, cancellationToken)
             .AsTask();
         var second = barriers
-            .ArriveAndWaitAsync(barrier, KeySegment.FromString("b"), terms, null, cancellationToken)
+            .ArriveAndWaitAsync(barrier, partyB, terms, null, cancellationToken)
             .AsTask();
 
         Assert.False(first.IsCompleted);
@@ -39,7 +43,7 @@ public sealed class DefaultBarrierServiceTests
 
         var third = await barriers.ArriveAndWaitAsync(
             barrier,
-            KeySegment.FromString("c"),
+            partyC,
             terms,
             null,
             cancellationToken
@@ -54,7 +58,8 @@ public sealed class DefaultBarrierServiceTests
     public async Task ArriveAndWaitAsync_WhenEveryPartyArrivesAtOnce_PassesThemAll()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await using var services = RecipeTesting.Build(InProcessTesting.CreateTime());
+        var time = InProcessTesting.CreateTime();
+        await using var services = RecipeTesting.Build(time);
         var barriers = CreateBarriers(services);
         var barrier = CreateBarrier();
         var terms = new BarrierTerms(8, RecordLifetime.Persistent);
@@ -62,13 +67,10 @@ public sealed class DefaultBarrierServiceTests
         var results = await RecipeTesting.RunConcurrentlyAsync(
             8,
             index =>
-                barriers.ArriveAndWaitAsync(
-                    barrier,
-                    KeySegment.FromInt64(index),
-                    terms,
-                    null,
-                    cancellationToken
-                ),
+            {
+                var party = KeySegment.FromInt64(index);
+                return barriers.ArriveAndWaitAsync(barrier, party, terms, null, cancellationToken);
+            },
             cancellationToken
         );
 
@@ -79,15 +81,18 @@ public sealed class DefaultBarrierServiceTests
     public async Task ArriveAndWaitAsync_WhenAParticipantArrivesTwice_CountsItOnce()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await using var services = RecipeTesting.Build(InProcessTesting.CreateTime());
+        var time = InProcessTesting.CreateTime();
+        await using var services = RecipeTesting.Build(time);
         var barriers = CreateBarriers(services);
         var barrier = CreateBarrier();
         var terms = new BarrierTerms(2, RecordLifetime.Persistent);
+        var partyA = KeySegment.FromString("a");
+        var partyB = KeySegment.FromString("b");
         var first = barriers
-            .ArriveAndWaitAsync(barrier, KeySegment.FromString("a"), terms, null, cancellationToken)
+            .ArriveAndWaitAsync(barrier, partyA, terms, null, cancellationToken)
             .AsTask();
         var again = barriers
-            .ArriveAndWaitAsync(barrier, KeySegment.FromString("a"), terms, null, cancellationToken)
+            .ArriveAndWaitAsync(barrier, partyA, terms, null, cancellationToken)
             .AsTask();
 
         Assert.False(first.IsCompleted);
@@ -95,7 +100,7 @@ public sealed class DefaultBarrierServiceTests
 
         var other = await barriers.ArriveAndWaitAsync(
             barrier,
-            KeySegment.FromString("b"),
+            partyB,
             terms,
             null,
             cancellationToken
@@ -110,17 +115,20 @@ public sealed class DefaultBarrierServiceTests
     public async Task ArriveAndWaitAsync_WhenTheSessionHasEnded_ReturnsFalse()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await using var services = RecipeTesting.Build(InProcessTesting.CreateTime());
+        var time = InProcessTesting.CreateTime();
+        await using var services = RecipeTesting.Build(time);
         var sessions = services.GetRequiredService<ISessionService>();
         var barriers = CreateBarriers(services);
         var barrier = CreateBarrier();
         var session = await RecipeTesting.OpenSessionAsync(services, cancellationToken);
         await sessions.CloseAsync(session, null, cancellationToken);
-        var terms = new BarrierTerms(1, RecordLifetime.ForSession(session));
+        var lifetime = RecordLifetime.ForSession(session);
+        var terms = new BarrierTerms(1, lifetime);
+        var party = KeySegment.FromString("a");
 
         var passed = await barriers.ArriveAndWaitAsync(
             barrier,
-            KeySegment.FromString("a"),
+            party,
             terms,
             null,
             cancellationToken
@@ -133,7 +141,8 @@ public sealed class DefaultBarrierServiceTests
     public async Task ArriveAndWaitAsync_WhenTheBarrierHasTheMostSegments_Throws()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await using var services = RecipeTesting.Build(InProcessTesting.CreateTime());
+        var time = InProcessTesting.CreateTime();
+        await using var services = RecipeTesting.Build(time);
         var barriers = CreateBarriers(services);
         var segments = new KeySegment[CoordinationKey.MaxSegments];
         for (var i = 0; i < segments.Length; i++)
@@ -143,15 +152,10 @@ public sealed class DefaultBarrierServiceTests
 
         var barrier = new CoordinationKey(RecipeTesting.Keyspace, segments);
         var terms = new BarrierTerms(1, RecordLifetime.Persistent);
+        var party = KeySegment.FromString("a");
 
         var exception = await Assert.ThrowsAsync<ArgumentException>(async () =>
-            await barriers.ArriveAndWaitAsync(
-                barrier,
-                KeySegment.FromString("a"),
-                terms,
-                null,
-                cancellationToken
-            )
+            await barriers.ArriveAndWaitAsync(barrier, party, terms, null, cancellationToken)
         );
 
         Assert.Equal("barrier", exception.ParamName);

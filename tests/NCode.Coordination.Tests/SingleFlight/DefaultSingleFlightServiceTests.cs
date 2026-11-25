@@ -12,8 +12,15 @@ public sealed class DefaultSingleFlightServiceTests
 {
     private const int RacingCallers = 16;
 
-    private static SingleFlightTerms Terms { get; } =
-        new(new TimeToLive(TimeSpan.FromMinutes(1)), new TimeToLive(TimeSpan.FromSeconds(30)));
+    private static TimeSpan ValueLength { get; } = TimeSpan.FromMinutes(1);
+
+    private static TimeToLive ValueTimeToLive { get; } = new(ValueLength);
+
+    private static TimeSpan FetchLength { get; } = TimeSpan.FromSeconds(30);
+
+    private static TimeToLive FetchTimeToLive { get; } = new(FetchLength);
+
+    private static SingleFlightTerms Terms { get; } = new(ValueTimeToLive, FetchTimeToLive);
 
     private static ReadOnlyMemory<byte> Value { get; } = Encoding.UTF8.GetBytes("fetched");
 
@@ -31,7 +38,8 @@ public sealed class DefaultSingleFlightServiceTests
     public async Task GetOrFetchAsync_WhenTheValueIsStored_ReturnsItWithoutFetching()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await using var services = RecipeTesting.Build(InProcessTesting.CreateTime());
+        var time = InProcessTesting.CreateTime();
+        await using var services = RecipeTesting.Build(time);
         var records = services.GetRequiredService<IRecordService>();
         var flights = CreateService(services);
         var key = CreateKey();
@@ -55,9 +63,11 @@ public sealed class DefaultSingleFlightServiceTests
             null,
             cancellationToken
         );
+        var expected = Value.ToArray();
+        var storedBytes = stored.Value.ToArray();
 
         Assert.Equal(0, fetches);
-        Assert.Equal(Value.ToArray(), stored.Value.ToArray());
+        Assert.Equal(expected, storedBytes);
         Assert.Equal(created.Revision, stored.Revision);
     }
 
@@ -65,23 +75,28 @@ public sealed class DefaultSingleFlightServiceTests
     public async Task GetOrFetchAsync_WhenAbsent_FetchesAndStoresTheValue()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await using var services = RecipeTesting.Build(InProcessTesting.CreateTime());
+        var time = InProcessTesting.CreateTime();
+        await using var services = RecipeTesting.Build(time);
         var records = services.GetRequiredService<IRecordService>();
         var flights = CreateService(services);
         var key = CreateKey();
+        var fetched = ValueTask.FromResult(Value);
 
         var stored = await flights.GetOrFetchAsync(
             key,
             Terms,
-            _ => ValueTask.FromResult(Value),
+            _ => fetched,
             null,
             cancellationToken
         );
 
         var read = await records.ReadAsync(key, null, cancellationToken);
         Assert.NotNull(read);
-        Assert.Equal(Value.ToArray(), stored.Value.ToArray());
-        Assert.Equal(Value.ToArray(), read.Value.ToArray());
+        var expected = Value.ToArray();
+        var storedBytes = stored.Value.ToArray();
+        var readBytes = read.Value.ToArray();
+        Assert.Equal(expected, storedBytes);
+        Assert.Equal(expected, readBytes);
         Assert.Equal(read.Revision, stored.Revision);
     }
 
@@ -89,7 +104,8 @@ public sealed class DefaultSingleFlightServiceTests
     public async Task GetOrFetchAsync_WhenCallersRace_FetchesOnce()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await using var services = RecipeTesting.Build(InProcessTesting.CreateTime());
+        var time = InProcessTesting.CreateTime();
+        await using var services = RecipeTesting.Build(time);
         var flights = CreateService(services);
         var key = CreateKey();
         var fetches = 0;
@@ -123,17 +139,19 @@ public sealed class DefaultSingleFlightServiceTests
         await fetchStarted.Task.WaitAsync(cancellationToken);
         release.SetResult();
         var values = await callers;
+        var expectedHex = Convert.ToHexString(Value.Span);
 
         Assert.Equal(1, fetches);
         Assert.Equal(RacingCallers, values.Length);
-        Assert.All(values, value => Assert.Equal(Convert.ToHexString(Value.Span), value));
+        Assert.All(values, value => Assert.Equal(expectedHex, value));
     }
 
     [Fact]
     public async Task GetOrFetchAsync_WhenTheFetchFails_LetsTheNextCallerFetch()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await using var services = RecipeTesting.Build(InProcessTesting.CreateTime());
+        var time = InProcessTesting.CreateTime();
+        await using var services = RecipeTesting.Build(time);
         var flights = CreateService(services);
         var key = CreateKey();
         var fetches = 0;
@@ -162,9 +180,11 @@ public sealed class DefaultSingleFlightServiceTests
             null,
             cancellationToken
         );
+        var expected = Value.ToArray();
+        var storedBytes = stored.Value.ToArray();
 
         Assert.Equal(2, fetches);
-        Assert.Equal(Value.ToArray(), stored.Value.ToArray());
+        Assert.Equal(expected, storedBytes);
     }
 
     [Fact]
@@ -176,6 +196,7 @@ public sealed class DefaultSingleFlightServiceTests
         var flights = CreateService(services);
         var key = CreateKey();
         var fetches = 0;
+        var elapsed = TimeSpan.FromMinutes(2);
         ValueTask<ReadOnlyMemory<byte>> Fetch(CancellationToken token)
         {
             Interlocked.Increment(ref fetches);
@@ -183,7 +204,7 @@ public sealed class DefaultSingleFlightServiceTests
         }
 
         await flights.GetOrFetchAsync(key, Terms, Fetch, null, cancellationToken);
-        time.Advance(TimeSpan.FromMinutes(2));
+        time.Advance(elapsed);
         await flights.GetOrFetchAsync(key, Terms, Fetch, null, cancellationToken);
 
         Assert.Equal(2, fetches);
@@ -193,7 +214,8 @@ public sealed class DefaultSingleFlightServiceTests
     public async Task GetOrFetchAsync_WhenTheKeyHasTheMostSegments_Throws()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await using var services = RecipeTesting.Build(InProcessTesting.CreateTime());
+        var time = InProcessTesting.CreateTime();
+        await using var services = RecipeTesting.Build(time);
         var flights = CreateService(services);
         var segments = new KeySegment[CoordinationKey.MaxSegments];
         for (var i = 0; i < segments.Length; i++)
@@ -202,15 +224,10 @@ public sealed class DefaultSingleFlightServiceTests
         }
 
         var key = new CoordinationKey(RecipeTesting.Keyspace, segments);
+        var fetched = ValueTask.FromResult(Value);
 
         var exception = await Assert.ThrowsAsync<ArgumentException>(async () =>
-            await flights.GetOrFetchAsync(
-                key,
-                Terms,
-                _ => ValueTask.FromResult(Value),
-                null,
-                cancellationToken
-            )
+            await flights.GetOrFetchAsync(key, Terms, _ => fetched, null, cancellationToken)
         );
 
         Assert.Equal("key", exception.ParamName);

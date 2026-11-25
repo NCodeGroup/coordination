@@ -19,55 +19,66 @@ public sealed class DefaultCacheInvalidationServiceTests
     public async Task RunAsync_WhenRunning_ClearsFirstThenInvalidatesEachEntry()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await using var services = RecipeTesting.Build(InProcessTesting.CreateTime());
+        var time = InProcessTesting.CreateTime();
+        await using var services = RecipeTesting.Build(time);
         var notifications = services.GetRequiredService<INotificationService>();
         var cache = new DefaultCacheInvalidationService(notifications);
         var topic = CreateTopic();
         var handler = new RecordingHandler();
         using var stop = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        Func<bool> hasCleared = () => handler.Entries.Contains("clear");
+        Func<bool> hasInvalidated = () => handler.Entries.Contains("invalidate:0102");
 
         var task = cache.RunAsync(topic, handler, null, stop.Token).AsTask();
 
-        await RecipeTesting.WaitUntilAsync(() => handler.Entries.Contains("clear"));
+        await RecipeTesting.WaitUntilAsync(hasCleared);
         await cache.InvalidateAsync(topic, new byte[] { 1, 2 }, null, cancellationToken);
-        await RecipeTesting.WaitUntilAsync(() => handler.Entries.Contains("invalidate:0102"));
+        await RecipeTesting.WaitUntilAsync(hasInvalidated);
         await stop.CancelAsync();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => task);
+        var entries = handler.Entries.ToArray();
 
-        Assert.Equal(["clear", "invalidate:0102", "clear"], handler.Entries.ToArray());
+        Assert.Equal(["clear", "invalidate:0102", "clear"], entries);
     }
 
     [Fact]
     public async Task RunAsync_WhenCancelled_ClearsTheCache()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await using var services = RecipeTesting.Build(InProcessTesting.CreateTime());
+        var time = InProcessTesting.CreateTime();
+        await using var services = RecipeTesting.Build(time);
         var notifications = services.GetRequiredService<INotificationService>();
         var cache = new DefaultCacheInvalidationService(notifications);
+        var topic = CreateTopic();
         var handler = new RecordingHandler();
         using var stop = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        Func<bool> hasCleared = () => handler.Entries.Contains("clear");
 
-        var task = cache.RunAsync(CreateTopic(), handler, null, stop.Token).AsTask();
+        var task = cache.RunAsync(topic, handler, null, stop.Token).AsTask();
 
-        await RecipeTesting.WaitUntilAsync(() => handler.Entries.Contains("clear"));
+        await RecipeTesting.WaitUntilAsync(hasCleared);
         await stop.CancelAsync();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => task);
+        var lastEntry = handler.Entries.Last();
 
-        Assert.Equal("clear", handler.Entries.Last());
+        Assert.Equal("clear", lastEntry);
     }
 
     [Fact]
     public async Task RunAsync_WhenTheSubscriptionFails_ClearsTheCacheAndThrows()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        var cache = new DefaultCacheInvalidationService(new FailingNotifications());
+        var failing = new FailingNotifications();
+        var cache = new DefaultCacheInvalidationService(failing);
+        var topic = CreateTopic();
         var handler = new RecordingHandler();
 
         await Assert.ThrowsAsync<CoordinationException>(() =>
-            cache.RunAsync(CreateTopic(), handler, null, cancellationToken).AsTask()
+            cache.RunAsync(topic, handler, null, cancellationToken).AsTask()
         );
+        var entries = handler.Entries.ToArray();
 
-        Assert.Equal(["clear", "clear"], handler.Entries.ToArray());
+        Assert.Equal(["clear", "clear"], entries);
     }
 
     #endregion
@@ -81,7 +92,8 @@ public sealed class DefaultCacheInvalidationServiceTests
             CancellationToken cancellationToken
         )
         {
-            Entries.Enqueue($"invalidate:{Convert.ToHexString(entry.Span)}");
+            var hex = Convert.ToHexString(entry.Span);
+            Entries.Enqueue($"invalidate:{hex}");
             return ValueTask.CompletedTask;
         }
 

@@ -11,8 +11,11 @@ public sealed class DefaultLockServiceTests
 {
     private const int RacingCallers = 32;
 
-    private static LeaseTerms Terms { get; } =
-        LeaseTerms.ForTimeToLive(new TimeToLive(TimeSpan.FromSeconds(30)));
+    private static TimeSpan TermsLength { get; } = TimeSpan.FromSeconds(30);
+
+    private static TimeToLive TermsTimeToLive { get; } = new(TermsLength);
+
+    private static LeaseTerms Terms { get; } = LeaseTerms.ForTimeToLive(TermsTimeToLive);
 
     private static CoordinationKey CreateResource() => RecipeTesting.Keyspace.CreateKey("resource");
 
@@ -22,7 +25,8 @@ public sealed class DefaultLockServiceTests
     public async Task AcquireAsync_WhenFree_ReturnsAGrant()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await using var services = RecipeTesting.Build(InProcessTesting.CreateTime());
+        var time = InProcessTesting.CreateTime();
+        await using var services = RecipeTesting.Build(time);
         var leases = services.GetRequiredService<ILeaseService>();
         var locks = new DefaultLockService(leases);
         var resource = CreateResource();
@@ -36,7 +40,8 @@ public sealed class DefaultLockServiceTests
     public async Task AcquireAsync_WhenHeld_WaitsForTheRelease()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await using var services = RecipeTesting.Build(InProcessTesting.CreateTime());
+        var time = InProcessTesting.CreateTime();
+        await using var services = RecipeTesting.Build(time);
         var leases = services.GetRequiredService<ILeaseService>();
         var locks = new DefaultLockService(leases);
         var resource = CreateResource();
@@ -59,20 +64,17 @@ public sealed class DefaultLockServiceTests
     public async Task AcquireAsync_WhenTheSessionHasEnded_ReturnsNull()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await using var services = RecipeTesting.Build(InProcessTesting.CreateTime());
+        var time = InProcessTesting.CreateTime();
+        await using var services = RecipeTesting.Build(time);
         var leases = services.GetRequiredService<ILeaseService>();
         var sessions = services.GetRequiredService<ISessionService>();
         var locks = new DefaultLockService(leases);
         var resource = CreateResource();
         var session = await RecipeTesting.OpenSessionAsync(services, cancellationToken);
         await sessions.CloseAsync(session, null, cancellationToken);
+        var terms = LeaseTerms.ForSession(session);
 
-        var grant = await locks.AcquireAsync(
-            resource,
-            LeaseTerms.ForSession(session),
-            null,
-            cancellationToken
-        );
+        var grant = await locks.AcquireAsync(resource, terms, null, cancellationToken);
 
         Assert.Null(grant);
     }
@@ -81,7 +83,8 @@ public sealed class DefaultLockServiceTests
     public async Task AcquireAsync_WhenCallersRace_HoldsTheLockOneAtATime()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await using var services = RecipeTesting.Build(InProcessTesting.CreateTime());
+        var time = InProcessTesting.CreateTime();
+        await using var services = RecipeTesting.Build(time);
         var leases = services.GetRequiredService<ILeaseService>();
         var locks = new DefaultLockService(leases);
         var resource = CreateResource();
@@ -107,7 +110,9 @@ public sealed class DefaultLockServiceTests
             cancellationToken
         );
 
-        Assert.Equal(RacingCallers, tokens.Distinct().Count());
+        var distinctTokens = tokens.Distinct().Count();
+
+        Assert.Equal(RacingCallers, distinctTokens);
     }
 
     #endregion
