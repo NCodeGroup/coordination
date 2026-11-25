@@ -267,6 +267,12 @@ NCode.Coordination.PrimitiveSupport.Guarantees.get -> System.Collections.Immutab
 NCode.Coordination.PrimitiveSupport.IsSupported.get -> bool
 NCode.Coordination.PrimitiveSupport.Primitive.get -> NCode.Coordination.Primitive!
 NCode.Coordination.PrimitiveSupport.UnsupportedReason.get -> string?
+NCode.Coordination.ProviderBinding
+NCode.Coordination.ProviderBinding.Keyspace.get -> NCode.Coordination.Keyspace?
+NCode.Coordination.ProviderBinding.Keyspace.init -> void
+NCode.Coordination.ProviderBinding.Primitives.get -> System.Collections.Immutable.ImmutableArray<NCode.Coordination.Primitive!>
+NCode.Coordination.ProviderBinding.Provider.get -> string!
+NCode.Coordination.ProviderBinding.ProviderBinding(string! provider, params System.Collections.Generic.IEnumerable<NCode.Coordination.Primitive!>! primitives) -> void
 NCode.Coordination.ProviderDeclaration
 NCode.Coordination.ProviderDeclaration.Definitions.get -> System.Collections.Immutable.ImmutableArray<NCode.Coordination.GuaranteeDefinition!>
 NCode.Coordination.ProviderDeclaration.Definitions.init -> void
