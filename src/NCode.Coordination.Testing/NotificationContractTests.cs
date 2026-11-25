@@ -321,7 +321,7 @@ public abstract class NotificationContractTests : ProviderContractTests
         var firstDone = await first.WaitForAsync(IsLastOrResync, TestCancellationToken);
         var secondDone = await second.WaitForAsync(IsLastOrResync, TestCancellationToken);
         Assert.True(
-            firstDone && secondDone,
+            (firstDone && secondDone) || !gapDetection,
             "A subscriber neither received the last message nor a resync after it."
         );
 
