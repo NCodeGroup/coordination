@@ -124,6 +124,8 @@ NCode.Coordination.ISessionService.CloseAsync(NCode.Coordination.SessionId! sess
 NCode.Coordination.ISessionService.KeepAliveAsync(NCode.Coordination.SessionId! session, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.KeepAliveResult!>
 NCode.Coordination.ISessionService.OpenAsync(NCode.Coordination.Keyspace! keyspace, NCode.Coordination.TimeToLive! timeToLive, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.SessionGrant!>
 NCode.Coordination.ISessionService.WaitForEndAsync(NCode.Coordination.SessionId! session, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
+NCode.Coordination.ITransactionService
+NCode.Coordination.ITransactionService.ExecuteAsync(NCode.Coordination.RecordTransaction! transaction, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.TransactionResult!>
 NCode.Coordination.KeepAliveResult
 NCode.Coordination.KeepAliveResult.IsRenewed.get -> bool
 NCode.Coordination.KeepAliveResult.Status.get -> NCode.Coordination.KeepAliveStatus
@@ -270,6 +272,13 @@ NCode.Coordination.RecordPageRequest.ContinuationToken.get -> string?
 NCode.Coordination.RecordPageRequest.ContinuationToken.init -> void
 NCode.Coordination.RecordPageRequest.Limit.get -> int
 NCode.Coordination.RecordPageRequest.RecordPageRequest(int limit) -> void
+NCode.Coordination.RecordTransaction
+NCode.Coordination.RecordTransaction.Conditions.get -> System.Collections.Immutable.ImmutableArray<NCode.Coordination.RecordCondition!>
+NCode.Coordination.RecordTransaction.Keyspace.get -> NCode.Coordination.Keyspace!
+NCode.Coordination.RecordTransaction.OnFailure.get -> System.Collections.Immutable.ImmutableArray<NCode.Coordination.RecordWrite!>
+NCode.Coordination.RecordTransaction.OnFailure.init -> void
+NCode.Coordination.RecordTransaction.OnSuccess.get -> System.Collections.Immutable.ImmutableArray<NCode.Coordination.RecordWrite!>
+NCode.Coordination.RecordTransaction.RecordTransaction(System.Collections.Generic.IEnumerable<NCode.Coordination.RecordCondition!>! conditions, System.Collections.Generic.IEnumerable<NCode.Coordination.RecordWrite!>! onSuccess) -> void
 NCode.Coordination.RecordWrite
 NCode.Coordination.RecordWrite.Key.get -> NCode.Coordination.CoordinationKey!
 NCode.Coordination.RecordWrite.Kind.get -> NCode.Coordination.RecordWriteKind
@@ -338,6 +347,10 @@ NCode.Coordination.TimeWindow.Segment.get -> NCode.Coordination.KeySegment!
 NCode.Coordination.TimeWindow.Start.get -> System.DateTimeOffset
 NCode.Coordination.TimeWindow.TimeWindow(System.DateTimeOffset start, System.TimeSpan length) -> void
 NCode.Coordination.TimeWindow.TryCreateTimeToLive(System.DateTimeOffset now, System.TimeSpan skewAllowance, out NCode.Coordination.TimeToLive? timeToLive) -> bool
+NCode.Coordination.TransactionResult
+NCode.Coordination.TransactionResult.Revision.get -> NCode.Coordination.Revision!
+NCode.Coordination.TransactionResult.Succeeded.get -> bool
+NCode.Coordination.TransactionResult.TransactionResult(bool succeeded, NCode.Coordination.Revision! revision) -> void
 override NCode.Coordination.CoordinationKey.Equals(object? obj) -> bool
 override NCode.Coordination.CoordinationKey.GetHashCode() -> int
 override NCode.Coordination.CoordinationKey.ToString() -> string!
