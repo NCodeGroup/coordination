@@ -17,7 +17,10 @@ namespace NCode.Coordination.Testing.Runs;
 /// <param name="records">The record service to call.</param>
 /// <param name="recorder">The recorder that records every call.</param>
 /// <param name="keys">The keys of the records the run uses.</param>
-/// <param name="listPrefix">The prefix that lists every key of the run, or null for a run that keeps each key in a partition of its own and never lists.</param>
+/// <param name="listPrefix">
+/// The prefix that lists every key of the run, or null for a run that keeps each key in a partition of its own and
+/// never lists.
+/// </param>
 internal sealed class RecordRunScript(
     IRecordService records,
     HistoryRecorder recorder,
