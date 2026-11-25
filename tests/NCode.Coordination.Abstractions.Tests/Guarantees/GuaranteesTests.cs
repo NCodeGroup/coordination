@@ -17,6 +17,8 @@ public sealed class GuaranteesTests
         Guarantees.CallerClock,
         Guarantees.AtMostOnceWithGapDetection,
         Guarantees.AtMostOnce,
+        Guarantees.AtomicAcrossPartitions,
+        Guarantees.AtomicWithinPartition,
     ];
 
     private static Guarantee[] Weakest { get; } =
@@ -25,6 +27,7 @@ public sealed class GuaranteesTests
         Guarantees.Volatile,
         Guarantees.CallerClock,
         Guarantees.AtMostOnce,
+        Guarantees.AtomicWithinPartition,
     ];
 
     private static GuaranteeDefinition DefinitionOf(Guarantee guarantee) =>
@@ -60,6 +63,7 @@ public sealed class GuaranteesTests
             GuaranteeDimensions.Durability,
             GuaranteeDimensions.Expiry,
             GuaranteeDimensions.Delivery,
+            GuaranteeDimensions.Atomicity,
         ];
 
         Assert.All(Guarantees.Definitions, d => Assert.Contains(d.Dimension, dimensions));
@@ -131,6 +135,14 @@ public sealed class GuaranteesTests
         var implies = DefinitionOf(Guarantees.AtMostOnceWithGapDetection).Implies;
 
         Assert.Equal<Guarantee>([Guarantees.AtMostOnce], implies);
+    }
+
+    [Fact]
+    public void Definitions_WhenAtomicAcrossPartitions_ImpliesAtomicWithinPartition()
+    {
+        var implies = DefinitionOf(Guarantees.AtomicAcrossPartitions).Implies;
+
+        Assert.Equal<Guarantee>([Guarantees.AtomicWithinPartition], implies);
     }
 
     [Fact]

@@ -70,6 +70,18 @@ public static class Guarantees
     public static Guarantee AtMostOnce { get; } = new("delivery.at-most-once");
 
     /// <summary>
+    /// Gets the guarantee that the writes of one operation apply together or not at all, whichever partitions their keys
+    /// belong to.
+    /// </summary>
+    public static Guarantee AtomicAcrossPartitions { get; } = new("atomicity.across-partitions");
+
+    /// <summary>
+    /// Gets the guarantee that the writes of one operation apply together or not at all when their keys share one
+    /// partition.
+    /// </summary>
+    public static Guarantee AtomicWithinPartition { get; } = new("atomicity.within-partition");
+
+    /// <summary>
     /// Gets the definition of each built-in guarantee, including the guarantees each one implies.
     /// </summary>
     public static ImmutableArray<GuaranteeDefinition> Definitions { get; } =
@@ -141,6 +153,19 @@ public static class Guarantees
             AtMostOnce,
             GuaranteeDimensions.Delivery,
             "Each subscriber receives a notification at most once; one it misses can go unnoticed."
+        ),
+        new GuaranteeDefinition(
+            AtomicAcrossPartitions,
+            GuaranteeDimensions.Atomicity,
+            "The writes of one operation apply together or not at all, whichever partitions their keys belong to."
+        )
+        {
+            Implies = [AtomicWithinPartition],
+        },
+        new GuaranteeDefinition(
+            AtomicWithinPartition,
+            GuaranteeDimensions.Atomicity,
+            "The writes of one operation apply together or not at all when their keys share one partition; the provider refuses an operation across partitions."
         ),
     ];
 }

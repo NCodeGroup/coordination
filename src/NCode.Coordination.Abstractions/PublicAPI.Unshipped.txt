@@ -20,6 +20,7 @@ const NCode.Coordination.CoordinationLimits.MaxTokenLength = 128 -> int
 const NCode.Coordination.CoordinationLimits.MaxTransactionConditions = 64 -> int
 const NCode.Coordination.CoordinationLimits.MaxTransactionWrites = 64 -> int
 const NCode.Coordination.CoordinationLimits.MaxValueLength = 65536 -> int
+const NCode.Coordination.GuaranteeDimensions.Atomicity = "atomicity" -> string!
 const NCode.Coordination.GuaranteeDimensions.Consistency = "consistency" -> string!
 const NCode.Coordination.GuaranteeDimensions.Delivery = "delivery" -> string!
 const NCode.Coordination.GuaranteeDimensions.Durability = "durability" -> string!
@@ -187,6 +188,8 @@ static NCode.Coordination.Guarantee.operator !=(NCode.Coordination.Guarantee? le
 static NCode.Coordination.Guarantee.operator ==(NCode.Coordination.Guarantee? left, NCode.Coordination.Guarantee? right) -> bool
 static NCode.Coordination.Guarantees.AtMostOnce.get -> NCode.Coordination.Guarantee!
 static NCode.Coordination.Guarantees.AtMostOnceWithGapDetection.get -> NCode.Coordination.Guarantee!
+static NCode.Coordination.Guarantees.AtomicAcrossPartitions.get -> NCode.Coordination.Guarantee!
+static NCode.Coordination.Guarantees.AtomicWithinPartition.get -> NCode.Coordination.Guarantee!
 static NCode.Coordination.Guarantees.CallerClock.get -> NCode.Coordination.Guarantee!
 static NCode.Coordination.Guarantees.Definitions.get -> System.Collections.Immutable.ImmutableArray<NCode.Coordination.GuaranteeDefinition!>
 static NCode.Coordination.Guarantees.Durable.get -> NCode.Coordination.Guarantee!

@@ -31,4 +31,9 @@ public static class GuaranteeDimensions
     /// The dimension of how often a notification reaches its receivers.
     /// </summary>
     public const string Delivery = "delivery";
+
+    /// <summary>
+    /// The dimension of which writes of one operation apply together.
+    /// </summary>
+    public const string Atomicity = "atomicity";
 }
