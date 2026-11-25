@@ -16,6 +16,9 @@ namespace NCode.Coordination;
 /// </remarks>
 public sealed class PrimitiveSupport
 {
+    /// <summary>
+    /// Creates the support for a primitive; <see cref="Supported"/> and <see cref="Unsupported"/> call it.
+    /// </summary>
     private PrimitiveSupport(
         Primitive primitive,
         ImmutableArray<Guarantee> guarantees,
@@ -43,7 +46,7 @@ public sealed class PrimitiveSupport
     public string? UnsupportedReason { get; }
 
     /// <summary>
-    /// Gets a value that tells whether the provider supports the primitive.
+    /// Gets a value indicating whether the provider supports the primitive.
     /// </summary>
     [MemberNotNullWhen(false, nameof(UnsupportedReason))]
     public bool IsSupported => UnsupportedReason is null;

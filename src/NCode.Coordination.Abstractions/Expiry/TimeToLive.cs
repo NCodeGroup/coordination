@@ -6,6 +6,8 @@ using System.Globalization;
 
 namespace NCode.Coordination;
 
+// A sealed record class, not a readonly record struct: a struct's default instance would skip the
+// constructor's validation.
 /// <summary>
 /// How long a stored state lasts: a duration above zero and at most <see cref="MaxDuration"/>.
 /// </summary>
@@ -17,7 +19,7 @@ namespace NCode.Coordination;
 public sealed record TimeToLive
 {
     /// <summary>
-    /// Gets the longest time to live: 366 days, longer than any calendar window plus its allowance for clock skew.
+    /// Gets the longest time to live, 366 days.
     /// </summary>
     public static TimeSpan MaxDuration { get; } = TimeSpan.FromDays(366);
 

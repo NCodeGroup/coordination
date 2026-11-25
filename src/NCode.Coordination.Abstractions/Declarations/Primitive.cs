@@ -5,6 +5,8 @@ using NCode.Coordination.Validation;
 
 namespace NCode.Coordination;
 
+// A sealed record class, not a readonly record struct: a struct's default instance would skip the
+// constructor's validation.
 /// <summary>
 /// One kind of coordination a provider can offer, named by an open vocabulary.
 /// </summary>
