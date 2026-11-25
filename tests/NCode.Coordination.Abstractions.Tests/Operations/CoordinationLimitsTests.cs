@@ -29,7 +29,9 @@ public sealed class CoordinationLimitsTests
         var field = typeof(CoordinationLimits).GetField(name);
 
         Assert.NotNull(field);
-        Assert.Equal(expected, field.GetRawConstantValue());
+        var actual = field.GetRawConstantValue();
+
+        Assert.Equal(expected, actual);
     }
 
     [Fact]

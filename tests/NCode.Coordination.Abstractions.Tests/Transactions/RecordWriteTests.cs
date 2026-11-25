@@ -20,14 +20,18 @@ public sealed class RecordWriteTests
 
         Assert.Equal(RecordWriteKind.Put, write.Kind);
         Assert.Same(key, write.Key);
-        Assert.True(write.Value.Span.SequenceEqual(value));
+        var matches = write.Value.Span.SequenceEqual(value);
+
+        Assert.True(matches);
         Assert.Same(lifetime, write.Lifetime);
     }
 
     [Fact]
     public void Put_WhenValueHasLimitLength_Accepts()
     {
-        var write = RecordWrite.Put(Key(), new byte[65_536], RecordLifetime.Persistent);
+        var key = Key();
+
+        var write = RecordWrite.Put(key, new byte[65_536], RecordLifetime.Persistent);
 
         Assert.Equal(65_536, write.Value.Length);
     }
@@ -35,8 +39,10 @@ public sealed class RecordWriteTests
     [Fact]
     public void Put_WhenValueIsOverLimit_Throws()
     {
+        var key = Key();
+
         var exception = Assert.Throws<ArgumentException>(() =>
-            RecordWrite.Put(Key(), new byte[65_537], RecordLifetime.Persistent)
+            RecordWrite.Put(key, new byte[65_537], RecordLifetime.Persistent)
         );
 
         Assert.Equal("value", exception.ParamName);
@@ -55,8 +61,10 @@ public sealed class RecordWriteTests
     [Fact]
     public void Put_WhenLifetimeIsNull_Throws()
     {
+        var key = Key();
+
         var exception = Assert.Throws<ArgumentNullException>(() =>
-            RecordWrite.Put(Key(), ReadOnlyMemory<byte>.Empty, null!)
+            RecordWrite.Put(key, ReadOnlyMemory<byte>.Empty, null!)
         );
 
         Assert.Equal("lifetime", exception.ParamName);

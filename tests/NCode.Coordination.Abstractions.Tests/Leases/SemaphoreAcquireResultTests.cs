@@ -5,14 +5,18 @@ namespace NCode.Coordination.Tests;
 
 public sealed class SemaphoreAcquireResultTests
 {
-    private static SemaphoreGrant Grant() =>
-        new(
+    private static SemaphoreGrant Grant()
+    {
+        var timeToLive = new TimeToLive(TimeSpan.FromSeconds(30));
+        var terms = LeaseTerms.ForTimeToLive(timeToLive);
+        return new SemaphoreGrant(
             new CoordinationKey(new Keyspace("prod"), "pool"),
             2,
             new FencingToken(5),
             new OwnerToken("o-1"),
-            LeaseTerms.ForTimeToLive(new TimeToLive(TimeSpan.FromSeconds(30)))
+            terms
         );
+    }
 
     #region Acquired Tests
 
@@ -104,7 +108,9 @@ public sealed class SemaphoreAcquireResultTests
     [Fact]
     public void IsAcquired_WhenAcquired_ReturnsTrue()
     {
-        Assert.True(SemaphoreAcquireResult.Acquired(Grant()).IsAcquired);
+        var result = SemaphoreAcquireResult.Acquired(Grant());
+
+        Assert.True(result.IsAcquired);
     }
 
     [Fact]

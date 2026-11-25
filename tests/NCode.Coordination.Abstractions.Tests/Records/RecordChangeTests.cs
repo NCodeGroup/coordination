@@ -12,7 +12,8 @@ public sealed class RecordChangeTests
     [Fact]
     public void Written_WhenRecordIsGiven_TakesKeyAndRevisionFromIt()
     {
-        var record = new StoredRecord(Key(), "payload"u8.ToArray(), new Revision(9));
+        var key = Key();
+        var record = new StoredRecord(key, "payload"u8.ToArray(), new Revision(9));
 
         var change = RecordChange.Written(record);
 
@@ -61,8 +62,10 @@ public sealed class RecordChangeTests
     [Fact]
     public void Deleted_WhenRevisionIsNull_Throws()
     {
+        var key = Key();
+
         var exception = Assert.Throws<ArgumentNullException>(() =>
-            RecordChange.Deleted(Key(), null!)
+            RecordChange.Deleted(key, null!)
         );
 
         Assert.Equal("revision", exception.ParamName);
@@ -100,21 +103,28 @@ public sealed class RecordChangeTests
     [Fact]
     public void IsResync_WhenResync_ReturnsTrue()
     {
-        Assert.True(RecordChange.Resync(new Revision(11)).IsResync);
+        var change = RecordChange.Resync(new Revision(11));
+
+        Assert.True(change.IsResync);
     }
 
     [Fact]
     public void IsResync_WhenWritten_ReturnsFalse()
     {
-        var record = new StoredRecord(Key(), ReadOnlyMemory<byte>.Empty, new Revision(9));
+        var key = Key();
+        var record = new StoredRecord(key, ReadOnlyMemory<byte>.Empty, new Revision(9));
+        var change = RecordChange.Written(record);
 
-        Assert.False(RecordChange.Written(record).IsResync);
+        Assert.False(change.IsResync);
     }
 
     [Fact]
     public void IsResync_WhenDeleted_ReturnsFalse()
     {
-        Assert.False(RecordChange.Deleted(Key(), new Revision(10)).IsResync);
+        var key = Key();
+        var change = RecordChange.Deleted(key, new Revision(10));
+
+        Assert.False(change.IsResync);
     }
 
     #endregion

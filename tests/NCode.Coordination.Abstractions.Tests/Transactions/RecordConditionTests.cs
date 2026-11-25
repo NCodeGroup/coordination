@@ -61,8 +61,10 @@ public sealed class RecordConditionTests
     [Fact]
     public void RevisionEquals_WhenRevisionIsNull_Throws()
     {
+        var key = Key();
+
         var exception = Assert.Throws<ArgumentNullException>(() =>
-            RecordCondition.RevisionEquals(Key(), null!)
+            RecordCondition.RevisionEquals(key, null!)
         );
 
         Assert.Equal("revision", exception.ParamName);
@@ -83,13 +85,17 @@ public sealed class RecordConditionTests
         Assert.Equal(RecordConditionKind.ValueEquals, condition.Kind);
         Assert.Same(key, condition.Key);
         Assert.Null(condition.Revision);
-        Assert.True(condition.Value.Span.SequenceEqual(value));
+        var matches = condition.Value.Span.SequenceEqual(value);
+
+        Assert.True(matches);
     }
 
     [Fact]
     public void ValueEquals_WhenValueHasLimitLength_Accepts()
     {
-        var condition = RecordCondition.ValueEquals(Key(), new byte[65_536]);
+        var key = Key();
+
+        var condition = RecordCondition.ValueEquals(key, new byte[65_536]);
 
         Assert.Equal(65_536, condition.Value.Length);
     }
@@ -97,8 +103,10 @@ public sealed class RecordConditionTests
     [Fact]
     public void ValueEquals_WhenValueIsOverLimit_Throws()
     {
+        var key = Key();
+
         var exception = Assert.Throws<ArgumentException>(() =>
-            RecordCondition.ValueEquals(Key(), new byte[65_537])
+            RecordCondition.ValueEquals(key, new byte[65_537])
         );
 
         Assert.Equal("value", exception.ParamName);

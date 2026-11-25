@@ -32,7 +32,8 @@ public sealed class TimeWindowTests
     [Fact]
     public void Constructor_WhenStartIsNotUtc_Throws()
     {
-        var start = Ten.ToOffset(TimeSpan.FromHours(1));
+        var offset = TimeSpan.FromHours(1);
+        var start = Ten.ToOffset(offset);
 
         var exception = Assert.Throws<ArgumentException>(() => new TimeWindow(start, OneHour));
 
@@ -66,8 +67,10 @@ public sealed class TimeWindowTests
     [Fact]
     public void Constructor_WhenLengthIsZero_Throws()
     {
+        var length = TimeSpan.Zero;
+
         var exception = Assert.Throws<ArgumentOutOfRangeException>(() =>
-            new TimeWindow(Ten, TimeSpan.Zero)
+            new TimeWindow(Ten, length)
         );
 
         Assert.Equal("length", exception.ParamName);
@@ -76,8 +79,10 @@ public sealed class TimeWindowTests
     [Fact]
     public void Constructor_WhenLengthIsNegative_Throws()
     {
+        var length = -OneHour;
+
         var exception = Assert.Throws<ArgumentOutOfRangeException>(() =>
-            new TimeWindow(Ten, -OneHour)
+            new TimeWindow(Ten, length)
         );
 
         Assert.Equal("length", exception.ParamName);
@@ -117,17 +122,22 @@ public sealed class TimeWindowTests
         var window = TimeWindow.Containing(instant, OneHour);
 
         Assert.Equal(Ten, window.Start);
-        Assert.Equal(Ten.AddHours(1), window.End);
+        var expectedEnd = Ten.AddHours(1);
+
+        Assert.Equal(expectedEnd, window.End);
     }
 
     [Fact]
     public void Containing_WhenInstantHasAnOffset_ReturnsTheSameWindow()
     {
-        var instant = new DateTimeOffset(2026, 11, 25, 12, 7, 30, TimeSpan.FromHours(2));
+        var offset = TimeSpan.FromHours(2);
+        var instant = new DateTimeOffset(2026, 11, 25, 12, 7, 30, offset);
+        var utcInstant = Ten.AddMinutes(7).AddSeconds(30);
+        var expected = TimeWindow.Containing(utcInstant, OneHour);
 
         var window = TimeWindow.Containing(instant, OneHour);
 
-        Assert.Equal(TimeWindow.Containing(Ten.AddMinutes(7).AddSeconds(30), OneHour), window);
+        Assert.Equal(expected, window);
     }
 
     [Fact]
@@ -153,8 +163,10 @@ public sealed class TimeWindowTests
     [Fact]
     public void Containing_WhenLengthIsZero_Throws()
     {
+        var length = TimeSpan.Zero;
+
         var exception = Assert.Throws<ArgumentOutOfRangeException>(() =>
-            TimeWindow.Containing(Ten, TimeSpan.Zero)
+            TimeWindow.Containing(Ten, length)
         );
 
         Assert.Equal("length", exception.ParamName);
@@ -163,9 +175,9 @@ public sealed class TimeWindowTests
     [Fact]
     public void Containing_WhenLengthIsNotWholeMilliseconds_Throws()
     {
-        var exception = Assert.Throws<ArgumentException>(() =>
-            TimeWindow.Containing(Ten, TimeSpan.FromTicks(15_000))
-        );
+        var length = TimeSpan.FromTicks(15_000);
+
+        var exception = Assert.Throws<ArgumentException>(() => TimeWindow.Containing(Ten, length));
 
         Assert.Equal("length", exception.ParamName);
     }
@@ -179,7 +191,10 @@ public sealed class TimeWindowTests
     {
         var window = new TimeWindow(Ten, OneHour);
 
-        Assert.Equal(KeySegment.FromInt64(Ten.ToUnixTimeMilliseconds()), window.Segment);
+        var milliseconds = Ten.ToUnixTimeMilliseconds();
+        var expected = KeySegment.FromInt64(milliseconds);
+
+        Assert.Equal(expected, window.Segment);
     }
 
     #endregion
@@ -191,15 +206,15 @@ public sealed class TimeWindowTests
     {
         var window = new TimeWindow(Ten, OneHour);
 
-        var created = window.TryCreateTimeToLive(
-            Ten.AddMinutes(30),
-            TimeSpan.FromMinutes(1),
-            out var timeToLive
-        );
+        var now = Ten.AddMinutes(30);
+        var allowance = TimeSpan.FromMinutes(1);
+        var expectedDuration = TimeSpan.FromMinutes(31);
+
+        var created = window.TryCreateTimeToLive(now, allowance, out var timeToLive);
 
         Assert.True(created);
         Assert.NotNull(timeToLive);
-        Assert.Equal(TimeSpan.FromMinutes(31), timeToLive.Duration);
+        Assert.Equal(expectedDuration, timeToLive.Duration);
     }
 
     [Fact]
@@ -207,11 +222,10 @@ public sealed class TimeWindowTests
     {
         var window = new TimeWindow(Ten, OneHour);
 
-        var created = window.TryCreateTimeToLive(
-            Ten.AddHours(1).AddMinutes(2),
-            TimeSpan.FromMinutes(1),
-            out var timeToLive
-        );
+        var now = Ten.AddHours(1).AddMinutes(2);
+        var allowance = TimeSpan.FromMinutes(1);
+
+        var created = window.TryCreateTimeToLive(now, allowance, out var timeToLive);
 
         Assert.False(created);
         Assert.Null(timeToLive);
@@ -227,8 +241,11 @@ public sealed class TimeWindowTests
         var left = new TimeWindow(Ten, OneHour);
         var right = TimeWindow.Containing(Ten.AddMinutes(5), OneHour);
 
+        var leftHash = left.GetHashCode();
+        var rightHash = right.GetHashCode();
+
         Assert.Equal(left, right);
-        Assert.Equal(left.GetHashCode(), right.GetHashCode());
+        Assert.Equal(leftHash, rightHash);
     }
 
     #endregion
@@ -240,7 +257,9 @@ public sealed class TimeWindowTests
     {
         var window = new TimeWindow(Ten, OneHour);
 
-        Assert.Equal("2026-11-25T10:00:00.0000000+00:00/01:00:00", window.ToString());
+        var text = window.ToString();
+
+        Assert.Equal("2026-11-25T10:00:00.0000000+00:00/01:00:00", text);
     }
 
     #endregion

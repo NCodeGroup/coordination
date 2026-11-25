@@ -12,11 +12,18 @@ public sealed class RecordTransactionTests
     private static CoordinationKey Key(string name, Keyspace? keyspace = null) =>
         new(keyspace ?? Prod, name);
 
-    private static RecordWrite Put(string name, Keyspace? keyspace = null) =>
-        RecordWrite.Put(Key(name, keyspace), "v"u8.ToArray(), RecordLifetime.Persistent);
+    private static RecordWrite Put(string name, Keyspace? keyspace = null)
+    {
+        var key = Key(name, keyspace);
+        var value = "v"u8.ToArray();
+        return RecordWrite.Put(key, value, RecordLifetime.Persistent);
+    }
 
-    private static RecordCondition Absent(string name, Keyspace? keyspace = null) =>
-        RecordCondition.Absent(Key(name, keyspace));
+    private static RecordCondition Absent(string name, Keyspace? keyspace = null)
+    {
+        var key = Key(name, keyspace);
+        return RecordCondition.Absent(key);
+    }
 
     #region Constructor Tests
 
@@ -36,7 +43,9 @@ public sealed class RecordTransactionTests
     [Fact]
     public void Constructor_WhenThereAreNoConditions_Accepts()
     {
-        var transaction = new RecordTransaction([], [Put("b")]);
+        var write = Put("b");
+
+        var transaction = new RecordTransaction([], [write]);
 
         Assert.Empty(transaction.Conditions);
     }
@@ -56,8 +65,10 @@ public sealed class RecordTransactionTests
     [Fact]
     public void Constructor_WhenConditionsAreNull_Throws()
     {
+        var write = Put("b");
+
         var exception = Assert.Throws<ArgumentNullException>(() =>
-            new RecordTransaction(null!, [Put("b")])
+            new RecordTransaction(null!, [write])
         );
 
         Assert.Equal("conditions", exception.ParamName);
@@ -66,8 +77,10 @@ public sealed class RecordTransactionTests
     [Fact]
     public void Constructor_WhenAConditionIsNull_Throws()
     {
+        var write = Put("b");
+
         var exception = Assert.Throws<ArgumentException>(() =>
-            new RecordTransaction([null!], [Put("b")])
+            new RecordTransaction([null!], [write])
         );
 
         Assert.Equal("conditions", exception.ParamName);
@@ -77,9 +90,10 @@ public sealed class RecordTransactionTests
     public void Constructor_WhenThereAreSixtyFiveConditions_Throws()
     {
         var conditions = Enumerable.Range(0, 65).Select(i => Absent($"c{i}")).ToArray();
+        var write = Put("b");
 
         var exception = Assert.Throws<ArgumentException>(() =>
-            new RecordTransaction(conditions, [Put("b")])
+            new RecordTransaction(conditions, [write])
         );
 
         Assert.Equal("conditions", exception.ParamName);
@@ -89,9 +103,11 @@ public sealed class RecordTransactionTests
     public void Constructor_WhenAConditionIsInAnotherKeyspace_Throws()
     {
         var other = new Keyspace("test");
+        var condition = Absent("a", other);
+        var write = Put("b");
 
         var exception = Assert.Throws<ArgumentException>(() =>
-            new RecordTransaction([Absent("a", other)], [Put("b")])
+            new RecordTransaction([condition], [write])
         );
 
         Assert.Equal("conditions", exception.ParamName);
@@ -136,8 +152,12 @@ public sealed class RecordTransactionTests
     [Fact]
     public void Constructor_WhenAKeyIsWrittenTwice_Throws()
     {
+        var put = Put("a");
+        var key = Key("a");
+        var delete = RecordWrite.Delete(key);
+
         var exception = Assert.Throws<ArgumentException>(() =>
-            new RecordTransaction([], [Put("a"), RecordWrite.Delete(Key("a"))])
+            new RecordTransaction([], [put, delete])
         );
 
         Assert.Equal("onSuccess", exception.ParamName);
@@ -147,9 +167,11 @@ public sealed class RecordTransactionTests
     public void Constructor_WhenAWriteIsInAnotherKeyspace_Throws()
     {
         var other = new Keyspace("test");
+        var first = Put("a");
+        var second = Put("b", other);
 
         var exception = Assert.Throws<ArgumentException>(() =>
-            new RecordTransaction([], [Put("a"), Put("b", other)])
+            new RecordTransaction([], [first, second])
         );
 
         Assert.Equal("onSuccess", exception.ParamName);
@@ -162,7 +184,9 @@ public sealed class RecordTransactionTests
     [Fact]
     public void OnFailure_ByDefault_IsEmpty()
     {
-        var transaction = new RecordTransaction([], [Put("a")]);
+        var write = Put("a");
+
+        var transaction = new RecordTransaction([], [write]);
 
         Assert.Empty(transaction.OnFailure);
     }
@@ -171,8 +195,9 @@ public sealed class RecordTransactionTests
     public void OnFailure_WhenWritesAreValid_KeepsThem()
     {
         var write = Put("a");
+        var success = Put("b");
 
-        var transaction = new RecordTransaction([], [Put("b")]) { OnFailure = [write] };
+        var transaction = new RecordTransaction([], [success]) { OnFailure = [write] };
 
         Assert.Equal<RecordWrite>([write], transaction.OnFailure);
     }
@@ -180,7 +205,10 @@ public sealed class RecordTransactionTests
     [Fact]
     public void OnFailure_WhenAKeyIsWrittenInBothBranches_Accepts()
     {
-        var transaction = new RecordTransaction([], [Put("a")]) { OnFailure = [Put("a")] };
+        var success = Put("a");
+        var failure = Put("a");
+
+        var transaction = new RecordTransaction([], [success]) { OnFailure = [failure] };
 
         Assert.Single(transaction.OnFailure);
     }
@@ -188,8 +216,10 @@ public sealed class RecordTransactionTests
     [Fact]
     public void OnFailure_WhenArrayIsDefault_Throws()
     {
+        var success = Put("a");
+
         var exception = Assert.Throws<ArgumentException>(() =>
-            new RecordTransaction([], [Put("a")]) { OnFailure = default }
+            new RecordTransaction([], [success]) { OnFailure = default }
         );
 
         Assert.Equal("OnFailure", exception.ParamName);
@@ -198,8 +228,10 @@ public sealed class RecordTransactionTests
     [Fact]
     public void OnFailure_WhenAWriteIsNull_Throws()
     {
+        var success = Put("a");
+
         var exception = Assert.Throws<ArgumentException>(() =>
-            new RecordTransaction([], [Put("a")]) { OnFailure = [null!] }
+            new RecordTransaction([], [success]) { OnFailure = [null!] }
         );
 
         Assert.Equal("OnFailure", exception.ParamName);
@@ -209,9 +241,10 @@ public sealed class RecordTransactionTests
     public void OnFailure_WhenThereAreSixtyFiveWrites_Throws()
     {
         ImmutableArray<RecordWrite> writes = [.. Enumerable.Range(0, 65).Select(i => Put($"w{i}"))];
+        var success = Put("a");
 
         var exception = Assert.Throws<ArgumentException>(() =>
-            new RecordTransaction([], [Put("a")]) { OnFailure = writes }
+            new RecordTransaction([], [success]) { OnFailure = writes }
         );
 
         Assert.Equal("OnFailure", exception.ParamName);
@@ -220,8 +253,12 @@ public sealed class RecordTransactionTests
     [Fact]
     public void OnFailure_WhenAKeyIsWrittenTwice_Throws()
     {
+        var success = Put("a");
+        var first = Put("b");
+        var second = Put("b");
+
         var exception = Assert.Throws<ArgumentException>(() =>
-            new RecordTransaction([], [Put("a")]) { OnFailure = [Put("b"), Put("b")] }
+            new RecordTransaction([], [success]) { OnFailure = [first, second] }
         );
 
         Assert.Equal("OnFailure", exception.ParamName);
@@ -231,9 +268,11 @@ public sealed class RecordTransactionTests
     public void OnFailure_WhenAWriteIsInAnotherKeyspace_Throws()
     {
         var other = new Keyspace("test");
+        var success = Put("a");
+        var failure = Put("b", other);
 
         var exception = Assert.Throws<ArgumentException>(() =>
-            new RecordTransaction([], [Put("a")]) { OnFailure = [Put("b", other)] }
+            new RecordTransaction([], [success]) { OnFailure = [failure] }
         );
 
         Assert.Equal("OnFailure", exception.ParamName);

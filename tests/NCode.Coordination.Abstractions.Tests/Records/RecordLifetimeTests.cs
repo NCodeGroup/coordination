@@ -85,7 +85,8 @@ public sealed class RecordLifetimeTests
     [Fact]
     public void IsPersistent_WhenForTimeToLive_ReturnsFalse()
     {
-        var lifetime = RecordLifetime.ForTimeToLive(new TimeToLive(TimeSpan.FromSeconds(30)));
+        var timeToLive = new TimeToLive(TimeSpan.FromSeconds(30));
+        var lifetime = RecordLifetime.ForTimeToLive(timeToLive);
 
         Assert.False(lifetime.IsPersistent);
     }
@@ -93,7 +94,8 @@ public sealed class RecordLifetimeTests
     [Fact]
     public void IsPersistent_WhenForSession_ReturnsFalse()
     {
-        var lifetime = RecordLifetime.ForSession(new SessionId(new Keyspace("prod"), "7"));
+        var session = new SessionId(new Keyspace("prod"), "7");
+        var lifetime = RecordLifetime.ForSession(session);
 
         Assert.False(lifetime.IsPersistent);
     }

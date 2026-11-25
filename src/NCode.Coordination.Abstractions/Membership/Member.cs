@@ -17,7 +17,7 @@ public sealed class Member
     /// <param name="session">The session that keeps the member alive.</param>
     /// <param name="nodeId">The identity of the node, a token.</param>
     /// <param name="address">The address of the node, such as <c>10.0.0.4:5000</c>.</param>
-    /// <exception cref="ArgumentNullException">The session or the node id is null.</exception>
+    /// <exception cref="ArgumentNullException">The session, the node id or the address is null.</exception>
     /// <exception cref="ArgumentException">
     /// The node id is not a token, or the address is empty, whitespace or longer than the limit.
     /// </exception>

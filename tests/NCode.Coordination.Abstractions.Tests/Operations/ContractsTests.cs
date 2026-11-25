@@ -61,7 +61,9 @@ public sealed class ContractsTests
         {
             var operations = Operations.Definitions.Count(d => d.Primitive == primitive);
 
-            Assert.Equal(operations, contract.GetMethods().Length);
+            var methods = contract.GetMethods();
+
+            Assert.Equal(operations, methods.Length);
         }
     }
 
@@ -75,7 +77,9 @@ public sealed class ContractsTests
             Assert.True(parameters.Length >= 2, method.Name);
             Assert.Equal(typeof(OperationOptions), parameters[^2].ParameterType);
             Assert.Equal(typeof(CancellationToken), parameters[^1].ParameterType);
-            Assert.True(IsAllowedReturnType(method.ReturnType), method.Name);
+            var isAllowed = IsAllowedReturnType(method.ReturnType);
+
+            Assert.True(isAllowed, method.Name);
         }
     }
 

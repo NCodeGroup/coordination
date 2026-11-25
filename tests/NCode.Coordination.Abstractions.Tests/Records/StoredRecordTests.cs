@@ -20,13 +20,17 @@ public sealed class StoredRecordTests
 
         Assert.Same(key, record.Key);
         Assert.Same(revision, record.Revision);
-        Assert.Equal<byte>(value, record.Value.ToArray());
+        var kept = record.Value.ToArray();
+
+        Assert.Equal<byte>(value, kept);
     }
 
     [Fact]
     public void Constructor_WhenValueIsEmpty_Accepts()
     {
-        var record = new StoredRecord(Key(), ReadOnlyMemory<byte>.Empty, new Revision(9));
+        var key = Key();
+
+        var record = new StoredRecord(key, ReadOnlyMemory<byte>.Empty, new Revision(9));
 
         Assert.True(record.Value.IsEmpty);
     }
@@ -36,7 +40,9 @@ public sealed class StoredRecordTests
     {
         var value = new byte[CoordinationLimits.MaxValueLength];
 
-        var record = new StoredRecord(Key(), value, new Revision(9));
+        var key = Key();
+
+        var record = new StoredRecord(key, value, new Revision(9));
 
         Assert.Equal(65_536, record.Value.Length);
     }
@@ -45,9 +51,10 @@ public sealed class StoredRecordTests
     public void Constructor_WhenValueIsAboveTheLimit_Throws()
     {
         var value = new byte[CoordinationLimits.MaxValueLength + 1];
+        var key = Key();
 
         var exception = Assert.Throws<ArgumentException>(() =>
-            new StoredRecord(Key(), value, new Revision(9))
+            new StoredRecord(key, value, new Revision(9))
         );
 
         Assert.Equal("value", exception.ParamName);
@@ -66,8 +73,10 @@ public sealed class StoredRecordTests
     [Fact]
     public void Constructor_WhenRevisionIsNull_Throws()
     {
+        var key = Key();
+
         var exception = Assert.Throws<ArgumentNullException>(() =>
-            new StoredRecord(Key(), ReadOnlyMemory<byte>.Empty, null!)
+            new StoredRecord(key, ReadOnlyMemory<byte>.Empty, null!)
         );
 
         Assert.Equal("revision", exception.ParamName);

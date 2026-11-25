@@ -92,7 +92,9 @@ public sealed class RecordWriteResultTests
     [Fact]
     public void IsWritten_WhenWritten_ReturnsTrue()
     {
-        Assert.True(RecordWriteResult.Written(new Revision(9)).IsWritten);
+        var result = RecordWriteResult.Written(new Revision(9));
+
+        Assert.True(result.IsWritten);
     }
 
     [Fact]

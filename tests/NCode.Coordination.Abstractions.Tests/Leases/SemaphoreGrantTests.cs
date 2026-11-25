@@ -9,8 +9,11 @@ public sealed class SemaphoreGrantTests
 
     private static CoordinationKey Resource() => new(ProdKeyspace, "pool");
 
-    private static LeaseTerms Terms() =>
-        LeaseTerms.ForTimeToLive(new TimeToLive(TimeSpan.FromSeconds(30)));
+    private static LeaseTerms Terms()
+    {
+        var timeToLive = new TimeToLive(TimeSpan.FromSeconds(30));
+        return LeaseTerms.ForTimeToLive(timeToLive);
+    }
 
     #region Constructor Tests
 
@@ -34,12 +37,15 @@ public sealed class SemaphoreGrantTests
     [Fact]
     public void Constructor_WhenSlotIsZero_Accepts()
     {
+        var resource = Resource();
+        var terms = Terms();
+
         var grant = new SemaphoreGrant(
-            Resource(),
+            resource,
             0,
             new FencingToken(5),
             new OwnerToken("o-1"),
-            Terms()
+            terms
         );
 
         Assert.Equal(0, grant.Slot);
@@ -48,12 +54,15 @@ public sealed class SemaphoreGrantTests
     [Fact]
     public void Constructor_WhenSlotIsTheLargestCapacityLessOne_Accepts()
     {
+        var resource = Resource();
+        var terms = Terms();
+
         var grant = new SemaphoreGrant(
-            Resource(),
+            resource,
             CoordinationLimits.MaxSemaphoreCapacity - 1,
             new FencingToken(5),
             new OwnerToken("o-1"),
-            Terms()
+            terms
         );
 
         Assert.Equal(1_023, grant.Slot);
@@ -62,8 +71,10 @@ public sealed class SemaphoreGrantTests
     [Fact]
     public void Constructor_WhenResourceIsNull_Throws()
     {
+        var terms = Terms();
+
         var exception = Assert.Throws<ArgumentNullException>(() =>
-            new SemaphoreGrant(null!, 0, new FencingToken(5), new OwnerToken("o-1"), Terms())
+            new SemaphoreGrant(null!, 0, new FencingToken(5), new OwnerToken("o-1"), terms)
         );
 
         Assert.Equal("resource", exception.ParamName);
@@ -72,8 +83,11 @@ public sealed class SemaphoreGrantTests
     [Fact]
     public void Constructor_WhenSlotIsNegative_Throws()
     {
+        var resource = Resource();
+        var terms = Terms();
+
         var exception = Assert.Throws<ArgumentOutOfRangeException>(() =>
-            new SemaphoreGrant(Resource(), -1, new FencingToken(5), new OwnerToken("o-1"), Terms())
+            new SemaphoreGrant(resource, -1, new FencingToken(5), new OwnerToken("o-1"), terms)
         );
 
         Assert.Equal("slot", exception.ParamName);
@@ -82,14 +96,11 @@ public sealed class SemaphoreGrantTests
     [Fact]
     public void Constructor_WhenSlotIsTheLargestCapacity_Throws()
     {
+        var resource = Resource();
+        var terms = Terms();
+
         var exception = Assert.Throws<ArgumentOutOfRangeException>(() =>
-            new SemaphoreGrant(
-                Resource(),
-                1_024,
-                new FencingToken(5),
-                new OwnerToken("o-1"),
-                Terms()
-            )
+            new SemaphoreGrant(resource, 1_024, new FencingToken(5), new OwnerToken("o-1"), terms)
         );
 
         Assert.Equal("slot", exception.ParamName);
@@ -98,8 +109,11 @@ public sealed class SemaphoreGrantTests
     [Fact]
     public void Constructor_WhenFencingTokenIsNull_Throws()
     {
+        var resource = Resource();
+        var terms = Terms();
+
         var exception = Assert.Throws<ArgumentNullException>(() =>
-            new SemaphoreGrant(Resource(), 0, null!, new OwnerToken("o-1"), Terms())
+            new SemaphoreGrant(resource, 0, null!, new OwnerToken("o-1"), terms)
         );
 
         Assert.Equal("fencingToken", exception.ParamName);
@@ -108,8 +122,11 @@ public sealed class SemaphoreGrantTests
     [Fact]
     public void Constructor_WhenOwnerIsNull_Throws()
     {
+        var resource = Resource();
+        var terms = Terms();
+
         var exception = Assert.Throws<ArgumentNullException>(() =>
-            new SemaphoreGrant(Resource(), 0, new FencingToken(5), null!, Terms())
+            new SemaphoreGrant(resource, 0, new FencingToken(5), null!, terms)
         );
 
         Assert.Equal("owner", exception.ParamName);
@@ -118,8 +135,10 @@ public sealed class SemaphoreGrantTests
     [Fact]
     public void Constructor_WhenTermsAreNull_Throws()
     {
+        var resource = Resource();
+
         var exception = Assert.Throws<ArgumentNullException>(() =>
-            new SemaphoreGrant(Resource(), 0, new FencingToken(5), new OwnerToken("o-1"), null!)
+            new SemaphoreGrant(resource, 0, new FencingToken(5), new OwnerToken("o-1"), null!)
         );
 
         Assert.Equal("terms", exception.ParamName);

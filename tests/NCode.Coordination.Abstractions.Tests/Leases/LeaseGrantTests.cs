@@ -9,8 +9,11 @@ public sealed class LeaseGrantTests
 
     private static CoordinationKey Resource() => new(ProdKeyspace, "job");
 
-    private static LeaseTerms Terms() =>
-        LeaseTerms.ForTimeToLive(new TimeToLive(TimeSpan.FromSeconds(30)));
+    private static LeaseTerms Terms()
+    {
+        var timeToLive = new TimeToLive(TimeSpan.FromSeconds(30));
+        return LeaseTerms.ForTimeToLive(timeToLive);
+    }
 
     #region Constructor Tests
 
@@ -33,8 +36,10 @@ public sealed class LeaseGrantTests
     [Fact]
     public void Constructor_WhenResourceIsNull_Throws()
     {
+        var terms = Terms();
+
         var exception = Assert.Throws<ArgumentNullException>(() =>
-            new LeaseGrant(null!, new FencingToken(5), new OwnerToken("o-1"), Terms())
+            new LeaseGrant(null!, new FencingToken(5), new OwnerToken("o-1"), terms)
         );
 
         Assert.Equal("resource", exception.ParamName);
@@ -43,8 +48,11 @@ public sealed class LeaseGrantTests
     [Fact]
     public void Constructor_WhenFencingTokenIsNull_Throws()
     {
+        var resource = Resource();
+        var terms = Terms();
+
         var exception = Assert.Throws<ArgumentNullException>(() =>
-            new LeaseGrant(Resource(), null!, new OwnerToken("o-1"), Terms())
+            new LeaseGrant(resource, null!, new OwnerToken("o-1"), terms)
         );
 
         Assert.Equal("fencingToken", exception.ParamName);
@@ -53,8 +61,11 @@ public sealed class LeaseGrantTests
     [Fact]
     public void Constructor_WhenOwnerIsNull_Throws()
     {
+        var resource = Resource();
+        var terms = Terms();
+
         var exception = Assert.Throws<ArgumentNullException>(() =>
-            new LeaseGrant(Resource(), new FencingToken(5), null!, Terms())
+            new LeaseGrant(resource, new FencingToken(5), null!, terms)
         );
 
         Assert.Equal("owner", exception.ParamName);
@@ -63,8 +74,10 @@ public sealed class LeaseGrantTests
     [Fact]
     public void Constructor_WhenTermsAreNull_Throws()
     {
+        var resource = Resource();
+
         var exception = Assert.Throws<ArgumentNullException>(() =>
-            new LeaseGrant(Resource(), new FencingToken(5), new OwnerToken("o-1"), null!)
+            new LeaseGrant(resource, new FencingToken(5), new OwnerToken("o-1"), null!)
         );
 
         Assert.Equal("terms", exception.ParamName);

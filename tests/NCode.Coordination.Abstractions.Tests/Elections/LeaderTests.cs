@@ -20,7 +20,9 @@ public sealed class LeaderTests
 
         Assert.Same(role, leader.Role);
         Assert.Same(term, leader.Term);
-        Assert.Equal<byte>(value, leader.Value.ToArray());
+        var kept = leader.Value.ToArray();
+
+        Assert.Equal<byte>(value, kept);
     }
 
     [Fact]

@@ -20,14 +20,18 @@ public sealed class NotificationTests
         Assert.Equal(NotificationKind.Message, notification.Kind);
         Assert.Same(topic, notification.Topic);
         Assert.Equal(7, notification.Sequence);
-        Assert.Equal<byte>(payload, notification.Payload.ToArray());
+        var kept = notification.Payload.ToArray();
+
+        Assert.Equal<byte>(payload, kept);
         Assert.False(notification.IsResync);
     }
 
     [Fact]
     public void Message_WhenPayloadHasTheMaximumLength_Accepts()
     {
-        var notification = Notification.Message(Topic(), 1, new byte[4_096]);
+        var topic = Topic();
+
+        var notification = Notification.Message(topic, 1, new byte[4_096]);
 
         Assert.Equal(4_096, notification.Payload.Length);
     }
@@ -35,8 +39,10 @@ public sealed class NotificationTests
     [Fact]
     public void Message_WhenPayloadIsTooLong_Throws()
     {
+        var topic = Topic();
+
         var exception = Assert.Throws<ArgumentException>(() =>
-            Notification.Message(Topic(), 1, new byte[4_097])
+            Notification.Message(topic, 1, new byte[4_097])
         );
 
         Assert.Equal("payload", exception.ParamName);
@@ -45,8 +51,10 @@ public sealed class NotificationTests
     [Fact]
     public void Message_WhenSequenceIsZero_Throws()
     {
+        var topic = Topic();
+
         var exception = Assert.Throws<ArgumentOutOfRangeException>(() =>
-            Notification.Message(Topic(), 0, ReadOnlyMemory<byte>.Empty)
+            Notification.Message(topic, 0, ReadOnlyMemory<byte>.Empty)
         );
 
         Assert.Equal("sequence", exception.ParamName);
@@ -83,7 +91,9 @@ public sealed class NotificationTests
     [Fact]
     public void Resync_WhenSequenceIsZero_Accepts()
     {
-        var notification = Notification.Resync(Topic(), 0);
+        var topic = Topic();
+
+        var notification = Notification.Resync(topic, 0);
 
         Assert.Equal(0, notification.Sequence);
     }
@@ -91,8 +101,10 @@ public sealed class NotificationTests
     [Fact]
     public void Resync_WhenSequenceIsNegative_Throws()
     {
+        var topic = Topic();
+
         var exception = Assert.Throws<ArgumentOutOfRangeException>(() =>
-            Notification.Resync(Topic(), -1)
+            Notification.Resync(topic, -1)
         );
 
         Assert.Equal("sequence", exception.ParamName);

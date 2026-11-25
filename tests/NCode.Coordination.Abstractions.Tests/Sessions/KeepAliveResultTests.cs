@@ -52,7 +52,8 @@ public sealed class KeepAliveResultTests
     [Fact]
     public void IsRenewed_WhenRenewed_ReturnsTrue()
     {
-        var result = KeepAliveResult.Renewed(new TimeToLive(TimeSpan.FromSeconds(30)));
+        var timeToLive = new TimeToLive(TimeSpan.FromSeconds(30));
+        var result = KeepAliveResult.Renewed(timeToLive);
 
         Assert.True(result.IsRenewed);
     }

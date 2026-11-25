@@ -37,9 +37,11 @@ public sealed class ElectionViewTests
     [Fact]
     public void Constructor_WhenLeaderLeadsAnotherRole_Throws()
     {
-        var leader = Leader(Role("other"));
+        var other = Role("other");
+        var leader = Leader(other);
+        var role = Role();
 
-        var exception = Assert.Throws<ArgumentException>(() => new ElectionView(Role(), leader));
+        var exception = Assert.Throws<ArgumentException>(() => new ElectionView(role, leader));
 
         Assert.Equal("leader", exception.ParamName);
     }

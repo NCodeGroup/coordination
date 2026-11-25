@@ -82,7 +82,14 @@ public sealed record TimeWindow
     /// <summary>
     /// Gets the key segment that names the window: its start in Unix milliseconds.
     /// </summary>
-    public KeySegment Segment => KeySegment.FromInt64(Start.ToUnixTimeMilliseconds());
+    public KeySegment Segment
+    {
+        get
+        {
+            var milliseconds = Start.ToUnixTimeMilliseconds();
+            return KeySegment.FromInt64(milliseconds);
+        }
+    }
 
     /// <summary>
     /// Creates the window of a length that contains an instant.

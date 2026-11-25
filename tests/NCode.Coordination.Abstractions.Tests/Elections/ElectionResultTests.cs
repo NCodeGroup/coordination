@@ -5,16 +5,17 @@ namespace NCode.Coordination.Tests;
 
 public sealed class ElectionResultTests
 {
-    private static Leadership Leadership() =>
-        new(
-            new Leader(
-                new CoordinationKey(new Keyspace("prod"), "workers"),
-                new FencingToken(7),
-                ReadOnlyMemory<byte>.Empty
-            ),
-            new OwnerToken("o-1"),
-            LeaseTerms.ForTimeToLive(new TimeToLive(TimeSpan.FromSeconds(30)))
+    private static Leadership Leadership()
+    {
+        var leader = new Leader(
+            new CoordinationKey(new Keyspace("prod"), "workers"),
+            new FencingToken(7),
+            ReadOnlyMemory<byte>.Empty
         );
+        var timeToLive = new TimeToLive(TimeSpan.FromSeconds(30));
+        var terms = LeaseTerms.ForTimeToLive(timeToLive);
+        return new Leadership(leader, new OwnerToken("o-1"), terms);
+    }
 
     #region Elected Tests
 
@@ -82,7 +83,9 @@ public sealed class ElectionResultTests
     [Fact]
     public void IsElected_WhenElected_ReturnsTrue()
     {
-        Assert.True(ElectionResult.Elected(Leadership()).IsElected);
+        var result = ElectionResult.Elected(Leadership());
+
+        Assert.True(result.IsElected);
     }
 
     [Fact]

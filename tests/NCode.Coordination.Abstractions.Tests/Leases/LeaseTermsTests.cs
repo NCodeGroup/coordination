@@ -56,7 +56,8 @@ public sealed class LeaseTermsTests
     [Fact]
     public void IsBoundToSession_WhenForSession_ReturnsTrue()
     {
-        var terms = LeaseTerms.ForSession(new SessionId(new Keyspace("prod"), "7"));
+        var session = new SessionId(new Keyspace("prod"), "7");
+        var terms = LeaseTerms.ForSession(session);
 
         Assert.True(terms.IsBoundToSession);
     }
@@ -64,7 +65,8 @@ public sealed class LeaseTermsTests
     [Fact]
     public void IsBoundToSession_WhenForTimeToLive_ReturnsFalse()
     {
-        var terms = LeaseTerms.ForTimeToLive(new TimeToLive(TimeSpan.FromSeconds(30)));
+        var timeToLive = new TimeToLive(TimeSpan.FromSeconds(30));
+        var terms = LeaseTerms.ForTimeToLive(timeToLive);
 
         Assert.False(terms.IsBoundToSession);
     }
