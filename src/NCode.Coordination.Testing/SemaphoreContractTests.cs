@@ -378,6 +378,26 @@ public abstract class SemaphoreContractTests : ProviderContractTests
     }
 
     /// <summary>
+    /// Checks that renewing a grant that has ended returns false.
+    /// </summary>
+    [Fact]
+    public async Task RenewAsync_WhenGrantEnded_ReturnsFalse()
+    {
+        var resource = CreateKey("resource");
+        var grant = await AcquireAsync(resource, 1, LongTimeToLive);
+        await Semaphores.ReleaseAsync(grant, null, TestCancellationToken);
+
+        var renewed = await Semaphores.RenewAsync(
+            grant,
+            LongTimeToLive,
+            null,
+            TestCancellationToken
+        );
+
+        Assert.False(renewed);
+    }
+
+    /// <summary>
     /// Checks that renewing a grant bound to a session throws an argument error, since it lives as its session does.
     /// </summary>
     [Fact]
@@ -442,6 +462,26 @@ public abstract class SemaphoreContractTests : ProviderContractTests
         var released = await Semaphores.ReleaseAsync(grant, null, TestCancellationToken);
 
         Assert.False(released);
+    }
+
+    /// <summary>
+    /// Checks that releasing a stale grant whose slot another holder took again returns false and keeps the new
+    /// holder.
+    /// </summary>
+    [Fact]
+    public async Task ReleaseAsync_WhenTheSlotWasGrantedAgain_ReturnsFalseAndKeepsIt()
+    {
+        var resource = CreateKey("resource");
+        var first = await AcquireAsync(resource, 1, LongTimeToLive);
+        await Semaphores.ReleaseAsync(first, null, TestCancellationToken);
+        await AcquireAsync(resource, 1, LongTimeToLive);
+
+        var released = await Semaphores.ReleaseAsync(first, null, TestCancellationToken);
+
+        Assert.False(released);
+
+        var result = await TryAcquireAsync(resource, 1, LongTimeToLive);
+        Assert.Equal(SemaphoreAcquireStatus.Full, result.Status);
     }
 
     #endregion

@@ -169,12 +169,33 @@ public abstract class ElectionContractTests : ProviderContractTests
         var role = CreateKey("role");
         var value = new byte[CoordinationLimits.MaxValueLength + 1];
 
-        await Assert.ThrowsAnyAsync<ArgumentException>(async () =>
+        var exception = await Assert.ThrowsAnyAsync<ArgumentException>(async () =>
             await TryLeadAsync(role, value, LongTimeToLive)
         );
 
+        Assert.Equal("value", exception.ParamName);
+
         var view = await Elections.ReadAsync(role, null, TestCancellationToken);
         Assert.Null(view.Leader);
+    }
+
+    /// <summary>
+    /// Checks that trying to lead with a value of exactly the limit elects the caller and that followers read a value
+    /// of that length.
+    /// </summary>
+    [Fact]
+    public async Task TryLeadAsync_WhenValueIsAtTheLimit_Leads()
+    {
+        var role = CreateKey("role");
+        var value = new byte[CoordinationLimits.MaxValueLength];
+
+        var result = await TryLeadAsync(role, value, LongTimeToLive);
+
+        Assert.Equal(ElectionStatus.Elected, result.Status);
+
+        var view = await Elections.ReadAsync(role, null, TestCancellationToken);
+        var leader = Assert.IsType<Leader>(view.Leader);
+        Assert.Equal(CoordinationLimits.MaxValueLength, leader.Value.Length);
     }
 
     /// <summary>
@@ -332,6 +353,27 @@ public abstract class ElectionContractTests : ProviderContractTests
 
         var after = await Elections.ReadAsync(role, null, TestCancellationToken);
         Assert.Null(after.Leader);
+    }
+
+    /// <summary>
+    /// Checks that renewing a leadership that has ended returns false.
+    /// </summary>
+    [Fact]
+    public async Task RenewAsync_WhenLeadershipEnded_ReturnsFalse()
+    {
+        var role = CreateKey("role");
+        var value = "node-a"u8.ToArray();
+        var leadership = await LeadAsync(role, value, LongTimeToLive);
+        await Elections.ResignAsync(leadership, null, TestCancellationToken);
+
+        var renewed = await Elections.RenewAsync(
+            leadership,
+            LongTimeToLive,
+            null,
+            TestCancellationToken
+        );
+
+        Assert.False(renewed);
     }
 
     /// <summary>

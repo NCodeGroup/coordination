@@ -176,9 +176,31 @@ public abstract class NotificationContractTests : ProviderContractTests
         var topic = CreateKey("topic");
         var payload = new byte[CoordinationLimits.MaxPayloadLength + 1];
 
-        await Assert.ThrowsAnyAsync<ArgumentException>(async () =>
+        var exception = await Assert.ThrowsAnyAsync<ArgumentException>(async () =>
             await Notifications.PublishAsync(topic, payload, null, TestCancellationToken)
         );
+
+        Assert.Equal("payload", exception.ParamName);
+    }
+
+    /// <summary>
+    /// Checks that publishing a payload of exactly the limit delivers a message of that length.
+    /// </summary>
+    [Fact]
+    public async Task PublishAsync_WhenPayloadIsAtTheLimit_Publishes()
+    {
+        var topic = CreateKey("topic");
+        var subscription = Notifications.SubscribeAsync(topic, null, TestCancellationToken);
+        await using var stream = ContractStreams.Open(subscription);
+        await ContractStreams.NextAsync(stream);
+
+        var payload = new byte[CoordinationLimits.MaxPayloadLength];
+
+        await Notifications.PublishAsync(topic, payload, null, TestCancellationToken);
+
+        var message = await ContractStreams.NextAsync(stream);
+        Assert.False(message.IsResync);
+        Assert.Equal(CoordinationLimits.MaxPayloadLength, message.Payload.Length);
     }
 
     /// <summary>

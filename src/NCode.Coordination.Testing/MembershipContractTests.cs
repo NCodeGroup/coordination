@@ -18,6 +18,11 @@ public abstract class MembershipContractTests : ProviderContractTests
     private const string Address = "10.0.0.4:5000";
 
     /// <summary>
+    /// The address that a member carries when its session joins again with a replacement.
+    /// </summary>
+    private const string ReplacementAddress = "10.0.0.5:5001";
+
+    /// <summary>
     /// Creates a member of the suite.
     /// </summary>
     /// <param name="session">The session that keeps the member alive.</param>
@@ -116,7 +121,7 @@ public abstract class MembershipContractTests : ProviderContractTests
             TestCancellationToken
         );
         var first = CreateMember(session, "a");
-        var second = new Member(session, "b", "10.0.0.5:5001");
+        var second = new Member(session, "b", ReplacementAddress);
         await Members.JoinAsync(group, first, null, TestCancellationToken);
 
         var status = await Members.JoinAsync(group, second, null, TestCancellationToken);
@@ -126,7 +131,7 @@ public abstract class MembershipContractTests : ProviderContractTests
         var view = await Members.ReadAsync(group, null, TestCancellationToken);
         var listed = Assert.Single(view.Members);
         Assert.Equal("b", listed.NodeId);
-        Assert.Equal("10.0.0.5:5001", listed.Address);
+        Assert.Equal(ReplacementAddress, listed.Address);
     }
 
     /// <summary>

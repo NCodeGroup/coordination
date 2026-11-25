@@ -40,6 +40,7 @@ NCode.Coordination.Testing.ElectionContractTests
 NCode.Coordination.Testing.ElectionContractTests.ElectionContractTests() -> void
 NCode.Coordination.Testing.ElectionContractTests.ReadAsync_WhenRoleHasALeader_ReturnsItsTermAndValue() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.ElectionContractTests.ReadAsync_WhenRoleHasNoLeader_ReturnsNoLeader() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.ElectionContractTests.RenewAsync_WhenLeadershipEnded_ReturnsFalse() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.ElectionContractTests.RenewAsync_WhenLeadershipHolds_ExtendsItFromTheRenewal() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.ElectionContractTests.RenewAsync_WhenLeadershipIsBoundToASession_ThrowsArgumentException() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.ElectionContractTests.ResignAsync_WhenLeading_ReturnsTrueAndVacatesTheRole() -> System.Threading.Tasks.Task!
@@ -52,6 +53,7 @@ NCode.Coordination.Testing.ElectionContractTests.TryLeadAsync_WhenSessionHasEnde
 NCode.Coordination.Testing.ElectionContractTests.TryLeadAsync_WhenTheLeadershipExpires_VacatesTheRole() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.ElectionContractTests.TryLeadAsync_WhenTheSameSessionLeadsAgain_ReturnsItsLeadership() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.ElectionContractTests.TryLeadAsync_WhenTheSessionCloses_VacatesTheRole() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.ElectionContractTests.TryLeadAsync_WhenValueIsAtTheLimit_Leads() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.ElectionContractTests.TryLeadAsync_WhenValueIsTooLong_ThrowsArgumentException() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.ElectionContractTests.WatchAsync_WhenALeaderIsElected_YieldsItsTerm() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.ElectionContractTests.WatchAsync_WhenStarted_YieldsTheCurrentViewFirst() -> System.Threading.Tasks.Task!
@@ -96,6 +98,7 @@ NCode.Coordination.Testing.MembershipContractTests.WatchAsync_WhenStarted_Yields
 NCode.Coordination.Testing.NotificationContractTests
 NCode.Coordination.Testing.NotificationContractTests.NotificationContractTests() -> void
 NCode.Coordination.Testing.NotificationContractTests.PublishAsync_WhenOptionsCarryAnUnknownExtension_ThrowsUnsupported() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.NotificationContractTests.PublishAsync_WhenPayloadIsAtTheLimit_Publishes() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.NotificationContractTests.PublishAsync_WhenPayloadIsTooLong_ThrowsArgumentException() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.NotificationContractTests.PublishAsync_WhenPublishedTwice_NumbersTheMessagesConsecutively() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.NotificationContractTests.PublishAsync_WhenSubscribed_DeliversTheMessage() -> System.Threading.Tasks.Task!
@@ -172,6 +175,8 @@ NCode.Coordination.Testing.RecordWatchContractTests.WatchPrefixAsync_WhenRecords
 NCode.Coordination.Testing.SemaphoreContractTests
 NCode.Coordination.Testing.SemaphoreContractTests.ReleaseAsync_WhenGrantEnded_ReturnsFalse() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.SemaphoreContractTests.ReleaseAsync_WhenGrantHolds_ReturnsTrueAndFreesTheSlot() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.SemaphoreContractTests.ReleaseAsync_WhenTheSlotWasGrantedAgain_ReturnsFalseAndKeepsIt() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.SemaphoreContractTests.RenewAsync_WhenGrantEnded_ReturnsFalse() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.SemaphoreContractTests.RenewAsync_WhenGrantHolds_ExtendsItFromTheRenewal() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.SemaphoreContractTests.RenewAsync_WhenGrantIsBoundToASession_ThrowsArgumentException() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.SemaphoreContractTests.SemaphoreContractTests() -> void
