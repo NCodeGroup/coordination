@@ -83,6 +83,9 @@ public abstract class ProviderContractTests : IAsyncLifetime
     /// </summary>
     protected Keyspace Keyspace { get; } = CreateUniqueKeyspace();
 
+    /// <summary>
+    /// Gets or sets the target that the running test created, or null before the test starts.
+    /// </summary>
     private ConformanceTarget? CurrentTarget { get; set; }
 
     /// <summary>

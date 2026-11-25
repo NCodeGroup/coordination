@@ -14,6 +14,12 @@ namespace NCode.Coordination.InProcess;
 /// </remarks>
 internal class InProcessRecordService(InProcessRecordTable table) : IRecordService
 {
+    /// <summary>
+    /// Reads the position that the continuation token of a page request names.
+    /// </summary>
+    /// <param name="page">The page request.</param>
+    /// <returns>The write sequence after which the page starts, or 0 when the request has no token.</returns>
+    /// <exception cref="ArgumentException">The provider did not issue the continuation token.</exception>
     private static long ParseContinuationToken(RecordPageRequest page)
     {
         if (page.ContinuationToken is null)
@@ -236,6 +242,13 @@ internal class InProcessRecordService(InProcessRecordTable table) : IRecordServi
         }
     }
 
+    /// <summary>
+    /// Stores a record at the next revision of its keyspace, replacing any record of the key.
+    /// </summary>
+    /// <param name="key">The key of the record.</param>
+    /// <param name="value">The value of the record.</param>
+    /// <param name="lifetime">How long the record lives.</param>
+    /// <returns>The result that reports the revision the record was written at.</returns>
     private RecordWriteResult Write(
         CoordinationKey key,
         ReadOnlyMemory<byte> value,

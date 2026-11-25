@@ -24,11 +24,20 @@ internal class InProcessRecordTable(TimeProvider time)
     /// </summary>
     public Lock Gate { get; } = new();
 
+    /// <summary>
+    /// Gets the live records by key, each with the sequence of its write.
+    /// </summary>
     private InProcessExpiringTable<CoordinationKey, InProcessRecordEntry> Records { get; } =
         new(time);
 
+    /// <summary>
+    /// Gets the latest revision of each keyspace that was written.
+    /// </summary>
     private Dictionary<Keyspace, long> Revisions { get; } = [];
 
+    /// <summary>
+    /// Gets or sets the sequence of the latest write.
+    /// </summary>
     private long WriteSequence { get; set; }
 
     /// <summary>

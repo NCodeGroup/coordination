@@ -29,8 +29,14 @@ internal class InProcessExpiringTable<TKey, TValue>(TimeProvider time)
     /// </summary>
     private TimeProvider Time { get; } = time;
 
+    /// <summary>
+    /// Gets the entries by key, each with its value and its expiry, which is null when the entry never ends.
+    /// </summary>
     private Dictionary<TKey, (TValue Value, InProcessExpiry? Expiry)> Entries { get; } = [];
 
+    /// <summary>
+    /// Gets or sets the number of writes since the last sweep.
+    /// </summary>
     private int WritesSinceSweep { get; set; }
 
     /// <summary>
@@ -163,6 +169,11 @@ internal class InProcessExpiringTable<TKey, TValue>(TimeProvider time)
         }
     }
 
+    /// <summary>
+    /// Checks whether an optional expiry has ended on the table's clock.
+    /// </summary>
+    /// <param name="expiry">The expiry, or null when the entry never ends.</param>
+    /// <returns>True when the expiry exists and has ended.</returns>
     private bool HasEnded(InProcessExpiry? expiry)
     {
         return expiry is { } value && value.HasEnded(Time);
