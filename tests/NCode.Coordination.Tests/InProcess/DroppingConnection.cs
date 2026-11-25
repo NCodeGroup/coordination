@@ -15,6 +15,11 @@ internal sealed class DroppingConnection
     public const int FailedCalls = 3;
 
     /// <summary>
+    /// The call of an outage, counted from 1, that reaches the provider and applies before it fails.
+    /// </summary>
+    private const int AppliedCall = 2;
+
+    /// <summary>
     /// Creates the failure of a call in flight when the connection dropped.
     /// </summary>
     /// <returns>An exception that tells the caller that the outcome is unknown.</returns>
@@ -136,22 +141,15 @@ internal sealed class DroppingConnection
     public async ValueTask CallAsync(
         Func<CancellationToken, ValueTask> call,
         CancellationToken cancellationToken
-    )
-    {
-        var fails = TryFail(out var applies);
-
-        if (fails && !applies)
-        {
-            throw CreateFailure();
-        }
-
-        await call(cancellationToken);
-
-        if (fails)
-        {
-            throw CreateFailure();
-        }
-    }
+    ) =>
+        await CallAsync<object?>(
+            async token =>
+            {
+                await call(token);
+                return null;
+            },
+            cancellationToken
+        );
 
     /// <summary>
     /// Takes one call of the outage, when there is one.
@@ -170,7 +168,7 @@ internal sealed class DroppingConnection
 
         Remaining--;
         Failed++;
-        applies = Failed % 2 == 0;
+        applies = Failed == AppliedCall;
         return true;
     }
 }

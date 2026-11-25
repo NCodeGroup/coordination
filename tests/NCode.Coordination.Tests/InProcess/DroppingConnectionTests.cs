@@ -128,6 +128,40 @@ public sealed class DroppingConnectionTests
         Assert.Equal<int>([0, 1, 1, 1, 2, 2], runsAfterEachCall);
     }
 
+    [Fact]
+    public async Task CallAsync_WhenDroppedDuringAnOutage_StartsTheOutageOver()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var connection = new DroppingConnection();
+        var runs = 0;
+        ValueTask<int> Call(CancellationToken token)
+        {
+            runs++;
+            return ValueTask.FromResult(7);
+        }
+        var runsAfterEachCall = new List<int>();
+        await connection.DropAsync(cancellationToken);
+        await Assert.ThrowsAsync<CoordinationException>(async () =>
+            await connection.CallAsync(Call, cancellationToken)
+        );
+        runsAfterEachCall.Add(runs);
+
+        await connection.DropAsync(cancellationToken);
+
+        for (var attempt = 0; attempt < DroppingConnection.FailedCalls; attempt++)
+        {
+            await Assert.ThrowsAsync<CoordinationException>(async () =>
+                await connection.CallAsync(Call, cancellationToken)
+            );
+            runsAfterEachCall.Add(runs);
+        }
+
+        var result = await connection.CallAsync(Call, cancellationToken);
+
+        Assert.Equal<int>([0, 0, 1, 1], runsAfterEachCall);
+        Assert.Equal(7, result);
+    }
+
     #endregion
 
     #region Subscribe Tests
