@@ -70,6 +70,17 @@ NCode.Coordination.Testing.RecordContractTests.ReadAsync_WhenOptionsCarryAnUnkno
 NCode.Coordination.Testing.RecordContractTests.RecordContractTests() -> void
 NCode.Coordination.Testing.RecordContractTests.TakeAsync_WhenKeyIsAbsent_ReturnsNull() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.RecordContractTests.TakeAsync_WhenKeyIsPresent_ReturnsAndDeletesTheRecord() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.SequenceContractTests
+NCode.Coordination.Testing.SequenceContractTests.NextAsync_WhenCalledAgain_ReturnsTheNextNumber() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.SequenceContractTests.NextAsync_WhenOptionsCarryAnUnknownExtension_ThrowsUnsupported() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.SequenceContractTests.NextAsync_WhenSequenceIsNew_ReturnsOne() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.SequenceContractTests.NextAsync_WhenSequencesDiffer_CountsEachOnItsOwn() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.SequenceContractTests.NextAsync_WhenTokenIsCanceled_ThrowsOperationCanceledException() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.SequenceContractTests.ReserveAsync_AfterNext_StartsAfterTheLastNumber() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.SequenceContractTests.ReserveAsync_WhenCountIsAboveTheLimit_ThrowsArgumentOutOfRangeException() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.SequenceContractTests.ReserveAsync_WhenCountIsZero_ThrowsArgumentOutOfRangeException() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.SequenceContractTests.ReserveAsync_WhenSequenceIsNew_StartsAtOne() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.SequenceContractTests.SequenceContractTests() -> void
 NCode.Coordination.Testing.SetContractTests
 NCode.Coordination.Testing.SetContractTests.AddAsync_WhenMemberIsAbsent_ReturnsTrueAndListsIt() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.SetContractTests.AddAsync_WhenMemberIsPresent_ReplacesItsExpiry() -> System.Threading.Tasks.Task!
