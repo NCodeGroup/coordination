@@ -12,7 +12,8 @@ namespace NCode.Coordination.InProcess;
 /// <see cref="Enter"/> and <see cref="Dispose"/>, is called inside <see cref="Enter"/>. A keyspace's revision is 1
 /// before its first write. Each keyspace's records are held in a dictionary of their own, which, like the keyspace's
 /// revision, stays once written. A record's expiry is a delete at a new revision of its keyspace. Each keyspace keeps a
-/// log of its latest changes, and every change is posted to the watches that cover its key.
+/// log of its latest changes, and every change is posted to the watches that cover its key. The keys of the records
+/// bound to each session are indexed, so a session's end deletes them without a scan.
 /// </remarks>
 internal class InProcessRecordTable : IDisposable
 {
@@ -65,6 +66,11 @@ internal class InProcessRecordTable : IDisposable
     /// Gets the watches of each keyspace that has any.
     /// </summary>
     private Dictionary<Keyspace, List<InProcessRecordWatcher>> Watchers { get; } = [];
+
+    /// <summary>
+    /// Gets the keys of the live records bound to each session that has any.
+    /// </summary>
+    private Dictionary<SessionId, HashSet<CoordinationKey>> KeysBySession { get; } = [];
 
     /// <summary>
     /// Gets or sets the sequence of the latest write.
@@ -154,6 +160,7 @@ internal class InProcessRecordTable : IDisposable
         if (records.TryGetValue(record.Key, out var replaced))
         {
             Deadlines.Cancel(replaced.Deadline);
+            Unbind(replaced.Session, record.Key);
         }
 
         var sequence = ++WriteSequence;
@@ -166,6 +173,11 @@ internal class InProcessRecordTable : IDisposable
         }
 
         records[key] = new InProcessRecordEntry(record, sequence, lifetime.Session, deadline);
+
+        if (lifetime.Session is { } session)
+        {
+            Bind(session, key);
+        }
 
         Publish(key, RecordChange.Written(record));
     }
@@ -187,8 +199,35 @@ internal class InProcessRecordTable : IDisposable
         }
 
         Deadlines.Cancel(entry.Deadline);
+        Unbind(entry.Session, key);
         Publish(key, RecordChange.Deleted(key, revision));
         return true;
+    }
+
+    /// <summary>
+    /// Deletes every live record bound to a session, each as a delete at a new revision of its keyspace.
+    /// </summary>
+    /// <param name="session">The session that ended.</param>
+    public void DeleteBoundTo(SessionId session)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+
+        if (!KeysBySession.Remove(session, out var keys))
+        {
+            return;
+        }
+
+        foreach (var key in keys)
+        {
+            if (
+                RecordsByKeyspace.TryGetValue(key.Keyspace, out var records)
+                && records.TryGetValue(key, out var entry)
+                && session.Equals(entry.Session)
+            )
+            {
+                Remove(key, Advance(key.Keyspace));
+            }
+        }
     }
 
     /// <summary>
@@ -296,6 +335,41 @@ internal class InProcessRecordTable : IDisposable
         )
         {
             Remove(key, Advance(key.Keyspace));
+        }
+    }
+
+    /// <summary>
+    /// Records that a record is bound to a session.
+    /// </summary>
+    /// <param name="session">The session the record is bound to.</param>
+    /// <param name="key">The key of the record.</param>
+    private void Bind(SessionId session, CoordinationKey key)
+    {
+        if (!KeysBySession.TryGetValue(session, out var keys))
+        {
+            keys = [];
+            KeysBySession[session] = keys;
+        }
+
+        keys.Add(key);
+    }
+
+    /// <summary>
+    /// Removes the binding of a record to a session.
+    /// </summary>
+    /// <param name="session">The session the record was bound to, or null when it was bound to none.</param>
+    /// <param name="key">The key of the record.</param>
+    private void Unbind(SessionId? session, CoordinationKey key)
+    {
+        if (session is null || !KeysBySession.TryGetValue(session, out var keys))
+        {
+            return;
+        }
+
+        keys.Remove(key);
+        if (keys.Count == 0)
+        {
+            KeysBySession.Remove(session);
         }
     }
 
