@@ -38,8 +38,9 @@ public interface ICoordinationBuilder
     ICoordinationBuilder Define(GuaranteeDefinition definition);
 
     /// <summary>
-    /// Declares the application a single node: every caller is in this process, so a provider linearizable within one
-    /// process meets a requirement of linearizability.
+    /// Declares the application a single node: every caller is in this process, so a provider whose consistency is
+    /// <c>consistency.linearizable-within-process</c> meets a requirement of
+    /// <c>consistency.linearizable-until-failover</c> or <c>consistency.linearizable-across-failover</c>.
     /// </summary>
     /// <returns>This builder, so calls chain.</returns>
     ICoordinationBuilder UseSingleNode();

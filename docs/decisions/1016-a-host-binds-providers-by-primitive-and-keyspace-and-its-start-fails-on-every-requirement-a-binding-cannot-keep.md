@@ -74,8 +74,9 @@ keys.**
     `ncode.coordination.operation.duration`, in seconds, records each operation, and one client span,
     `ncode.coordination.operation`, traces it. Their attributes are the provider, the primitive, the operation and the
     outcome (`success`, `failure` or `canceled`), and on a failure `error.type`, which is the exception's code or its
-    type's full name. A cancellation sets no `error.type` and no error status. A failure sets the span's status to error
-    with no description. No exception message, key, segment, value or payload is recorded. A stream is measured from its
+    type's full name. The outcome is `canceled` when the caller's token canceled the operation, and it sets no
+    `error.type` and no error status; any other exception, a provider's own timeout included, is a `failure`. A failure
+    sets the span's status to error with no description. No exception message, key, segment, value or payload is recorded. A stream is measured from its
     first read to its end, and a consumer that stops early counts as a success.
 11. **Dependencies.** `NCode.Coordination` depends on the dependency injection and hosting abstractions packages only.
     It does not register `IMeterFactory`, whose default implementation is not in an abstractions package and which

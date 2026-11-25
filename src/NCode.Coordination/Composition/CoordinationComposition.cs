@@ -128,7 +128,6 @@ internal class CoordinationComposition(
             }
         }
 
-        GC.SuppressFinalize(this);
         ThrowCaught(exceptions);
     }
 
@@ -158,7 +157,6 @@ internal class CoordinationComposition(
             }
         }
 
-        GC.SuppressFinalize(this);
         ThrowCaught(exceptions);
     }
 }

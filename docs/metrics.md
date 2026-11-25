@@ -34,7 +34,7 @@ One row per instrument; an empty table means NCode.Coordination defines none.
 
 | Name | Type | Unit | Attributes and their values | Owner |
 | --- | --- | --- | --- | --- |
-| `ncode.coordination.operation.duration` | Histogram | `s` | `ncode.coordination.provider`: a registered provider's name; `ncode.coordination.primitive`: a primitive's name; `ncode.coordination.operation`: an operation's name; `ncode.coordination.outcome`: `success`, `failure` or `canceled`; `error.type`, on a failure only: the coordination error code, or the exception type's full name | Meter `NCode.Coordination`, every operation of a primitive service |
+| `ncode.coordination.operation.duration` | Histogram | `s` | `ncode.coordination.provider`: a registered provider's name; `ncode.coordination.primitive`: a primitive's name; `ncode.coordination.operation`: an operation's name; `ncode.coordination.outcome`: `success`, `failure` or `canceled`, where `canceled` means the caller's token canceled the operation and any other exception, a provider's own timeout included, is a `failure`; `error.type`, on a failure only: the coordination error code, or the exception type's full name | Meter `NCode.Coordination`, every operation of a primitive service |
 
 ## Activity Sources and Spans
 

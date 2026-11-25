@@ -52,12 +52,12 @@ internal class OperationInstrumentation(IMeterFactory meterFactory, TimeProvider
     private const string SuccessOutcome = "success";
 
     /// <summary>
-    /// The outcome value of an operation that threw an exception other than a cancellation.
+    /// The outcome value of an operation that threw an exception other than a cancellation the caller requested.
     /// </summary>
     private const string FailureOutcome = "failure";
 
     /// <summary>
-    /// The outcome value of an operation that was canceled.
+    /// The outcome value of an operation that the caller's token canceled.
     /// </summary>
     private const string CanceledOutcome = "canceled";
 
@@ -134,12 +134,12 @@ internal class OperationInstrumentation(IMeterFactory meterFactory, TimeProvider
         try
         {
             var result = await call(target.Service, cancellationToken).ConfigureAwait(false);
-            Complete(measurement, null);
+            Complete(measurement, null, cancellationToken);
             return result;
         }
         catch (Exception exception)
         {
-            Complete(measurement, exception);
+            Complete(measurement, exception, cancellationToken);
             throw;
         }
     }
@@ -165,11 +165,11 @@ internal class OperationInstrumentation(IMeterFactory meterFactory, TimeProvider
         try
         {
             await call(target.Service, cancellationToken).ConfigureAwait(false);
-            Complete(measurement, null);
+            Complete(measurement, null, cancellationToken);
         }
         catch (Exception exception)
         {
-            Complete(measurement, exception);
+            Complete(measurement, exception, cancellationToken);
             throw;
         }
     }
@@ -232,7 +232,7 @@ internal class OperationInstrumentation(IMeterFactory meterFactory, TimeProvider
             }
             finally
             {
-                Complete(measurement, failure);
+                Complete(measurement, failure, cancellationToken);
             }
         }
     }
@@ -271,7 +271,12 @@ internal class OperationInstrumentation(IMeterFactory meterFactory, TimeProvider
     /// </summary>
     /// <param name="measurement">The measurement that <c>Start</c> returned.</param>
     /// <param name="exception">The exception the operation ended with, or null for a success.</param>
-    private void Complete(OperationMeasurement measurement, Exception? exception)
+    /// <param name="cancellationToken">The caller's token; a cancellation counts as canceled only when it is canceled.</param>
+    private void Complete(
+        OperationMeasurement measurement,
+        Exception? exception,
+        CancellationToken cancellationToken
+    )
     {
         string? errorType = null;
         string outcome;
@@ -280,7 +285,7 @@ internal class OperationInstrumentation(IMeterFactory meterFactory, TimeProvider
             case null:
                 outcome = SuccessOutcome;
                 break;
-            case OperationCanceledException:
+            case OperationCanceledException when cancellationToken.IsCancellationRequested:
                 outcome = CanceledOutcome;
                 break;
             case CoordinationException coordinationException:

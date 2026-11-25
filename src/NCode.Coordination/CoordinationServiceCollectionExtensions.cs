@@ -59,9 +59,11 @@ public static class CoordinationServiceCollectionExtensions
             services.TryAddSingleton(TimeProvider.System);
             services.TryAddSingleton<CoordinationComposition>();
             services.TryAddSingleton<OperationInstrumentation>();
-            services.TryAddEnumerable(
-                ServiceDescriptor.Singleton<IHostedService, CoordinationStartupCheck>()
-            );
+            var startupCheck = ServiceDescriptor.Singleton<
+                IHostedService,
+                CoordinationStartupCheck
+            >();
+            services.TryAddEnumerable(startupCheck);
 
             // Each primitive's service routes its calls to the bound provider.
             services.TryAddSingleton<ISessionService, DefaultSessionService>();

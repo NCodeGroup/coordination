@@ -157,7 +157,9 @@ public sealed class OperationInstrumentationTests
     public async Task MeasureAsync_WhenCanceled_RecordsCanceledWithoutErrorType()
     {
         using var fixture = new Fixture();
-        var cancellationToken = TestContext.Current.CancellationToken;
+        using var source = new CancellationTokenSource();
+        await source.CancelAsync();
+        var cancellationToken = source.Token;
 
         var thrown = new OperationCanceledException();
         await Assert.ThrowsAsync<OperationCanceledException>(async () =>
@@ -180,6 +182,33 @@ public sealed class OperationInstrumentationTests
         Assert.Equal("canceled", outcome);
         var errorType = span.GetTagItem("error.type");
         Assert.Null(errorType);
+    }
+
+    [Fact]
+    public async Task MeasureAsync_WhenTheProviderCancelsOnItsOwn_RecordsFailure()
+    {
+        using var fixture = new Fixture();
+        var cancellationToken = TestContext.Current.CancellationToken;
+
+        var thrown = new TaskCanceledException();
+        await Assert.ThrowsAsync<TaskCanceledException>(async () =>
+            await fixture.Instrumentation.MeasureAsync(
+                Target,
+                Operation,
+                (_, _) => ValueTask.FromException<string>(thrown),
+                cancellationToken
+            )
+        );
+
+        var measurements = fixture.Collector.GetMeasurementSnapshot();
+        var measurement = Assert.Single(measurements);
+        Assert.Equal("failure", measurement.Tags["ncode.coordination.outcome"]);
+        Assert.Equal(
+            "System.Threading.Tasks.TaskCanceledException",
+            measurement.Tags["error.type"]
+        );
+        var span = Assert.Single(fixture.Spans);
+        Assert.Equal(ActivityStatusCode.Error, span.Status);
     }
 
     [Fact]
