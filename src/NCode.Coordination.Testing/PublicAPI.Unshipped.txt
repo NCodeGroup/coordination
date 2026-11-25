@@ -147,6 +147,8 @@ NCode.Coordination.Testing.RecordContractTests.CompareAndSwapAsync_WhenRevisionD
 NCode.Coordination.Testing.RecordContractTests.CompareAndSwapAsync_WhenRevisionMatches_WritesALaterRevision() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.RecordContractTests.CompareAndSwapAsync_WhenTheLifetimeLeavesTheSession_KeepsTheRecordAfterTheSessionEnds() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.RecordContractTests.CompareAndSwapAsync_WhenTheSessionHasEnded_ReturnsSessionEnded() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.RecordContractTests.ConcurrentRun_WhenClientsRace_KeepsALinearizableHistory() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.RecordContractTests.ConcurrentRun_WhenConnectionsDrop_KeepsALinearizableHistory() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.RecordContractTests.CreateAsync_WhenAnotherKeyIsWritten_GivesALaterRevision() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.RecordContractTests.CreateAsync_WhenBoundToALiveSession_WritesTheRecord() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.RecordContractTests.CreateAsync_WhenKeyIsAbsent_WritesTheRecord() -> System.Threading.Tasks.Task!
