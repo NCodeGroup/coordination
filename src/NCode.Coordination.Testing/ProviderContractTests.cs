@@ -68,6 +68,17 @@ public abstract class ProviderContractTests : IAsyncLifetime
         TestContext.Current.CancellationToken;
 
     /// <summary>
+    /// Creates a keyspace that no other test uses.
+    /// </summary>
+    /// <returns>The keyspace.</returns>
+    protected static Keyspace CreateUniqueKeyspace()
+    {
+        var id = Guid.NewGuid();
+        var segment = KeySegment.FromGuid(id);
+        return new Keyspace("conformance", segment);
+    }
+
+    /// <summary>
     /// Gets the keyspace of this test, which no other test uses, so tests that share a server never meet.
     /// </summary>
     protected Keyspace Keyspace { get; } = CreateUniqueKeyspace();
@@ -111,17 +122,6 @@ public abstract class ProviderContractTests : IAsyncLifetime
         }
 
         GC.SuppressFinalize(this);
-    }
-
-    /// <summary>
-    /// Creates a keyspace that no other test uses.
-    /// </summary>
-    /// <returns>The keyspace.</returns>
-    private static Keyspace CreateUniqueKeyspace()
-    {
-        var id = Guid.NewGuid();
-        var segment = KeySegment.FromGuid(id);
-        return new Keyspace("conformance", segment);
     }
 
     /// <summary>

@@ -12,6 +12,15 @@ namespace NCode.Coordination.Testing;
 public abstract class TransactionContractTests : ProviderContractTests
 {
     /// <summary>
+    /// Creates a persistent put of a value.
+    /// </summary>
+    /// <param name="key">The key to write.</param>
+    /// <param name="value">The value to store.</param>
+    /// <returns>The write.</returns>
+    private static RecordWrite Put(CoordinationKey key, byte[] value) =>
+        RecordWrite.Put(key, value, RecordLifetime.Persistent);
+
+    /// <summary>
     /// Gets the provider's transaction service, and skips the test when the provider does not support transactions.
     /// </summary>
     private ITransactionService Transactions =>
@@ -42,15 +51,6 @@ public abstract class TransactionContractTests : ProviderContractTests
         Assert.True(result.IsWritten);
         return result.Revision;
     }
-
-    /// <summary>
-    /// Creates a persistent put of a value.
-    /// </summary>
-    /// <param name="key">The key to write.</param>
-    /// <param name="value">The value to store.</param>
-    /// <returns>The write.</returns>
-    private static RecordWrite Put(CoordinationKey key, byte[] value) =>
-        RecordWrite.Put(key, value, RecordLifetime.Persistent);
 
     /// <summary>
     /// Reads the value of a record, or null when the key is absent.

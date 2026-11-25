@@ -110,6 +110,7 @@ NCode.Coordination.Testing.TransactionContractTests.ExecuteAsync_WhenTokenIsCanc
 NCode.Coordination.Testing.TransactionContractTests.ExecuteAsync_WhenValueEqualsDiffers_Fails() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.TransactionContractTests.ExecuteAsync_WhenValueEqualsHolds_Succeeds() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.TransactionContractTests.TransactionContractTests() -> void
+static NCode.Coordination.Testing.ProviderContractTests.CreateUniqueKeyspace() -> NCode.Coordination.Keyspace!
 static NCode.Coordination.Testing.ProviderContractTests.LongTimeToLive.get -> NCode.Coordination.TimeToLive!
 static NCode.Coordination.Testing.ProviderContractTests.PastExpiry.get -> System.TimeSpan
 static NCode.Coordination.Testing.ProviderContractTests.ShortDuration.get -> System.TimeSpan

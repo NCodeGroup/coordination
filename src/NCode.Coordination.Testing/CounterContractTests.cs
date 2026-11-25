@@ -304,9 +304,7 @@ public abstract class CounterContractTests : ProviderContractTests
     [Fact]
     public async Task IncrementBatchAsync_WhenKeyspacesDiffer_ThrowsArgumentException()
     {
-        var id = Guid.NewGuid();
-        var segment = KeySegment.FromGuid(id);
-        var other = new Keyspace("conformance", segment);
+        var other = CreateUniqueKeyspace();
         var key1 = CreateKey("k1");
         var key2 = other.CreateKey("k2");
         var first = new CounterIncrement(key1, 1, 10, LongTimeToLive);
