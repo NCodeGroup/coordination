@@ -15,6 +15,17 @@ NCode.Coordination.ILockService.AcquireAsync(NCode.Coordination.CoordinationKey!
 NCode.Coordination.InProcessCoordinationBuilderExtensions
 NCode.Coordination.InProcessCoordinationBuilderExtensions.extension(NCode.Coordination.ICoordinationBuilder!)
 NCode.Coordination.InProcessCoordinationBuilderExtensions.extension(NCode.Coordination.ICoordinationBuilder!).AddInProcessProvider() -> NCode.Coordination.ICoordinationBuilder!
+NCode.Coordination.IReadWriteLockService
+NCode.Coordination.IReadWriteLockService.AcquireReadAsync(NCode.Coordination.CoordinationKey! resource, NCode.Coordination.LeaseTerms! terms, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.ReadLockGrant?>
+NCode.Coordination.IReadWriteLockService.AcquireWriteAsync(NCode.Coordination.CoordinationKey! resource, NCode.Coordination.LeaseTerms! terms, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.LeaseGrant?>
+NCode.Coordination.IReadWriteLockService.ReleaseReadAsync(NCode.Coordination.ReadLockGrant! grant, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<bool>
+NCode.Coordination.IReadWriteLockService.ReleaseWriteAsync(NCode.Coordination.LeaseGrant! grant, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<bool>
+NCode.Coordination.ReadLockGrant
+NCode.Coordination.ReadLockGrant.FencingToken.get -> NCode.Coordination.FencingToken!
+NCode.Coordination.ReadLockGrant.ReadLockGrant(NCode.Coordination.CoordinationKey! resource, NCode.Coordination.CoordinationKey! registration, NCode.Coordination.Revision! revision, NCode.Coordination.FencingToken! fencingToken) -> void
+NCode.Coordination.ReadLockGrant.Registration.get -> NCode.Coordination.CoordinationKey!
+NCode.Coordination.ReadLockGrant.Resource.get -> NCode.Coordination.CoordinationKey!
+NCode.Coordination.ReadLockGrant.Revision.get -> NCode.Coordination.Revision!
 NCode.Coordination.Recipe
 NCode.Coordination.Recipe.Name.get -> string!
 NCode.Coordination.Recipe.Needs.get -> System.Collections.Immutable.ImmutableArray<NCode.Coordination.RecipeNeed!>
