@@ -71,6 +71,18 @@ NCode.Coordination.GuaranteeDefinition.Implies.get -> System.Collections.Immutab
 NCode.Coordination.GuaranteeDefinition.Implies.init -> void
 NCode.Coordination.GuaranteeDimensions
 NCode.Coordination.Guarantees
+NCode.Coordination.ISessionService
+NCode.Coordination.ISessionService.CloseAsync(NCode.Coordination.SessionId! session, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
+NCode.Coordination.ISessionService.KeepAliveAsync(NCode.Coordination.SessionId! session, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.KeepAliveResult!>
+NCode.Coordination.ISessionService.OpenAsync(NCode.Coordination.Keyspace! keyspace, NCode.Coordination.TimeToLive! timeToLive, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.SessionGrant!>
+NCode.Coordination.ISessionService.WaitForEndAsync(NCode.Coordination.SessionId! session, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
+NCode.Coordination.KeepAliveResult
+NCode.Coordination.KeepAliveResult.IsRenewed.get -> bool
+NCode.Coordination.KeepAliveResult.Status.get -> NCode.Coordination.KeepAliveStatus
+NCode.Coordination.KeepAliveResult.TimeToLive.get -> NCode.Coordination.TimeToLive?
+NCode.Coordination.KeepAliveStatus
+NCode.Coordination.KeepAliveStatus.Ended = 1 -> NCode.Coordination.KeepAliveStatus
+NCode.Coordination.KeepAliveStatus.Renewed = 0 -> NCode.Coordination.KeepAliveStatus
 NCode.Coordination.KeySegment
 NCode.Coordination.KeySegment.<Clone>$() -> NCode.Coordination.KeySegment!
 NCode.Coordination.KeySegment.Equals(NCode.Coordination.KeySegment? other) -> bool
@@ -134,6 +146,10 @@ NCode.Coordination.Revision.CompareTo(NCode.Coordination.Revision? other) -> int
 NCode.Coordination.Revision.Equals(NCode.Coordination.Revision? other) -> bool
 NCode.Coordination.Revision.Revision(long value) -> void
 NCode.Coordination.Revision.Value.get -> long
+NCode.Coordination.SessionGrant
+NCode.Coordination.SessionGrant.Id.get -> NCode.Coordination.SessionId!
+NCode.Coordination.SessionGrant.SessionGrant(NCode.Coordination.SessionId! id, NCode.Coordination.TimeToLive! timeToLive) -> void
+NCode.Coordination.SessionGrant.TimeToLive.get -> NCode.Coordination.TimeToLive!
 NCode.Coordination.SessionId
 NCode.Coordination.SessionId.<Clone>$() -> NCode.Coordination.SessionId!
 NCode.Coordination.SessionId.Equals(NCode.Coordination.SessionId? other) -> bool
@@ -213,6 +229,8 @@ static NCode.Coordination.Guarantees.LinearizableWithinProcess.get -> NCode.Coor
 static NCode.Coordination.Guarantees.ReplicatedAsynchronously.get -> NCode.Coordination.Guarantee!
 static NCode.Coordination.Guarantees.ServerClock.get -> NCode.Coordination.Guarantee!
 static NCode.Coordination.Guarantees.Volatile.get -> NCode.Coordination.Guarantee!
+static NCode.Coordination.KeepAliveResult.Ended.get -> NCode.Coordination.KeepAliveResult!
+static NCode.Coordination.KeepAliveResult.Renewed(NCode.Coordination.TimeToLive! timeToLive) -> NCode.Coordination.KeepAliveResult!
 static NCode.Coordination.KeySegment.FromGuid(System.Guid value) -> NCode.Coordination.KeySegment!
 static NCode.Coordination.KeySegment.FromInt64(long value) -> NCode.Coordination.KeySegment!
 static NCode.Coordination.KeySegment.FromString(string! text) -> NCode.Coordination.KeySegment!
