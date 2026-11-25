@@ -222,6 +222,23 @@ NCode.Coordination.ProviderDeclaration.Profile.get -> string?
 NCode.Coordination.ProviderDeclaration.Profile.init -> void
 NCode.Coordination.ProviderDeclaration.Provider.get -> string!
 NCode.Coordination.ProviderDeclaration.ProviderDeclaration(string! provider, params System.Collections.Generic.IEnumerable<NCode.Coordination.PrimitiveSupport!>! primitives) -> void
+NCode.Coordination.RecordDeleteStatus
+NCode.Coordination.RecordDeleteStatus.Conflict = 1 -> NCode.Coordination.RecordDeleteStatus
+NCode.Coordination.RecordDeleteStatus.Deleted = 0 -> NCode.Coordination.RecordDeleteStatus
+NCode.Coordination.RecordDeleteStatus.NotFound = 2 -> NCode.Coordination.RecordDeleteStatus
+NCode.Coordination.RecordLifetime
+NCode.Coordination.RecordLifetime.IsPersistent.get -> bool
+NCode.Coordination.RecordLifetime.Session.get -> NCode.Coordination.SessionId?
+NCode.Coordination.RecordLifetime.TimeToLive.get -> NCode.Coordination.TimeToLive?
+NCode.Coordination.RecordWriteResult
+NCode.Coordination.RecordWriteResult.IsWritten.get -> bool
+NCode.Coordination.RecordWriteResult.Revision.get -> NCode.Coordination.Revision?
+NCode.Coordination.RecordWriteResult.Status.get -> NCode.Coordination.RecordWriteStatus
+NCode.Coordination.RecordWriteStatus
+NCode.Coordination.RecordWriteStatus.Conflict = 1 -> NCode.Coordination.RecordWriteStatus
+NCode.Coordination.RecordWriteStatus.NotFound = 2 -> NCode.Coordination.RecordWriteStatus
+NCode.Coordination.RecordWriteStatus.SessionEnded = 3 -> NCode.Coordination.RecordWriteStatus
+NCode.Coordination.RecordWriteStatus.Written = 0 -> NCode.Coordination.RecordWriteStatus
 NCode.Coordination.Revision
 NCode.Coordination.Revision.<Clone>$() -> NCode.Coordination.Revision!
 NCode.Coordination.Revision.CompareTo(NCode.Coordination.Revision? other) -> int
@@ -254,6 +271,11 @@ NCode.Coordination.SessionId.Equals(NCode.Coordination.SessionId? other) -> bool
 NCode.Coordination.SessionId.Keyspace.get -> NCode.Coordination.Keyspace!
 NCode.Coordination.SessionId.SessionId(NCode.Coordination.Keyspace! keyspace, string! value) -> void
 NCode.Coordination.SessionId.Value.get -> string!
+NCode.Coordination.StoredRecord
+NCode.Coordination.StoredRecord.Key.get -> NCode.Coordination.CoordinationKey!
+NCode.Coordination.StoredRecord.Revision.get -> NCode.Coordination.Revision!
+NCode.Coordination.StoredRecord.StoredRecord(NCode.Coordination.CoordinationKey! key, System.ReadOnlyMemory<byte> value, NCode.Coordination.Revision! revision) -> void
+NCode.Coordination.StoredRecord.Value.get -> System.ReadOnlyMemory<byte>
 NCode.Coordination.TimeToLive
 NCode.Coordination.TimeToLive.<Clone>$() -> NCode.Coordination.TimeToLive!
 NCode.Coordination.TimeToLive.Duration.get -> System.TimeSpan
@@ -415,6 +437,13 @@ static NCode.Coordination.Primitives.Set.get -> NCode.Coordination.Primitive!
 static NCode.Coordination.Primitives.Transaction.get -> NCode.Coordination.Primitive!
 static NCode.Coordination.PrimitiveSupport.Supported(NCode.Coordination.Primitive! primitive, params System.Collections.Generic.IEnumerable<NCode.Coordination.Guarantee!>! guarantees) -> NCode.Coordination.PrimitiveSupport!
 static NCode.Coordination.PrimitiveSupport.Unsupported(NCode.Coordination.Primitive! primitive, string! reason) -> NCode.Coordination.PrimitiveSupport!
+static NCode.Coordination.RecordLifetime.ForSession(NCode.Coordination.SessionId! session) -> NCode.Coordination.RecordLifetime!
+static NCode.Coordination.RecordLifetime.ForTimeToLive(NCode.Coordination.TimeToLive! timeToLive) -> NCode.Coordination.RecordLifetime!
+static NCode.Coordination.RecordLifetime.Persistent.get -> NCode.Coordination.RecordLifetime!
+static NCode.Coordination.RecordWriteResult.Conflict.get -> NCode.Coordination.RecordWriteResult!
+static NCode.Coordination.RecordWriteResult.NotFound.get -> NCode.Coordination.RecordWriteResult!
+static NCode.Coordination.RecordWriteResult.SessionEnded.get -> NCode.Coordination.RecordWriteResult!
+static NCode.Coordination.RecordWriteResult.Written(NCode.Coordination.Revision! revision) -> NCode.Coordination.RecordWriteResult!
 static NCode.Coordination.Revision.operator !=(NCode.Coordination.Revision? left, NCode.Coordination.Revision? right) -> bool
 static NCode.Coordination.Revision.operator <(NCode.Coordination.Revision? left, NCode.Coordination.Revision? right) -> bool
 static NCode.Coordination.Revision.operator <=(NCode.Coordination.Revision? left, NCode.Coordination.Revision? right) -> bool
