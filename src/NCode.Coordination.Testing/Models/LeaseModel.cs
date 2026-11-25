@@ -18,6 +18,119 @@ internal class LeaseModel : ISequentialModel<LeaseState>
     /// </summary>
     public const string UnknownOwner = "?";
 
+    /// <summary>
+    /// Determines whether the lease has a holder whose hold has not ended at the state's clock.
+    /// </summary>
+    /// <param name="state">The state.</param>
+    /// <returns>True when the lease is held.</returns>
+    private static bool IsHeld(LeaseState state) =>
+        state.Owner is not null && state.Until > state.Now;
+
+    /// <summary>
+    /// Applies an acquire.
+    /// </summary>
+    /// <param name="state">The state before the call.</param>
+    /// <param name="operation">The recorded call.</param>
+    /// <param name="call">The call.</param>
+    /// <param name="next">The state after the call.</param>
+    /// <returns>True when the output is one the state allows.</returns>
+    private static bool TryAcquire(
+        LeaseState state,
+        HistoryOperation operation,
+        LeaseCall call,
+        out LeaseState next
+    )
+    {
+        next = state;
+
+        var held = IsHeld(state);
+
+        if (operation.IsIndeterminate)
+        {
+            if (!held)
+            {
+                next = new LeaseState(
+                    UnknownOwner,
+                    0,
+                    state.Floor,
+                    state.Now,
+                    state.Now + call.TimeToLive
+                );
+            }
+
+            return true;
+        }
+
+        if (operation.Output is not LeaseAcquireResult result)
+        {
+            return false;
+        }
+
+        if (result.Status == LeaseAcquireStatus.Acquired && !held)
+        {
+            var grant = result.Grant;
+            if (grant is null || grant.FencingToken.Value <= state.Floor)
+            {
+                return false;
+            }
+
+            var token = grant.FencingToken.Value;
+            next = new LeaseState(
+                grant.Owner.Value,
+                token,
+                token,
+                state.Now,
+                state.Now + call.TimeToLive
+            );
+            return true;
+        }
+
+        return result.Status == LeaseAcquireStatus.Held && held;
+    }
+
+    /// <summary>
+    /// Applies a renew or a release.
+    /// </summary>
+    /// <param name="state">The state before the call.</param>
+    /// <param name="operation">The recorded call.</param>
+    /// <param name="call">The call.</param>
+    /// <param name="next">The state after the call.</param>
+    /// <returns>True when the output is one the state allows.</returns>
+    private static bool TryRenewOrRelease(
+        LeaseState state,
+        HistoryOperation operation,
+        LeaseCall call,
+        out LeaseState next
+    )
+    {
+        next = state;
+
+        var held = IsHeld(state);
+
+        var matches = held && state.Owner == call.Owner && state.Token == call.Token;
+        if (!operation.IsIndeterminate && !(operation.Output is bool b && b == matches))
+        {
+            return false;
+        }
+
+        if (matches)
+        {
+            next =
+                call.Operation == LeaseCall.Renew
+                    ? state with
+                    {
+                        Until = state.Now + call.TimeToLive,
+                    }
+                    : state with
+                    {
+                        Owner = null,
+                        Token = 0,
+                    };
+        }
+
+        return true;
+    }
+
     /// <inheritdoc />
     public LeaseState Initial { get; } = new(null, 0, 0, TimeSpan.Zero, TimeSpan.Zero);
 
@@ -41,77 +154,14 @@ internal class LeaseModel : ISequentialModel<LeaseState>
             return false;
         }
 
-        var held = state.Owner is not null && state.Until > state.Now;
-
         switch (call.Operation)
         {
             case LeaseCall.Acquire:
-                if (operation.IsIndeterminate)
-                {
-                    if (!held)
-                    {
-                        next = new LeaseState(
-                            UnknownOwner,
-                            0,
-                            state.Floor,
-                            state.Now,
-                            state.Now + call.TimeToLive
-                        );
-                    }
-
-                    return true;
-                }
-
-                if (operation.Output is not LeaseAcquireResult result)
-                {
-                    return false;
-                }
-
-                if (result.Status == LeaseAcquireStatus.Acquired && !held)
-                {
-                    var grant = result.Grant;
-                    if (grant is null || grant.FencingToken.Value <= state.Floor)
-                    {
-                        return false;
-                    }
-
-                    var token = grant.FencingToken.Value;
-                    next = new LeaseState(
-                        grant.Owner.Value,
-                        token,
-                        token,
-                        state.Now,
-                        state.Now + call.TimeToLive
-                    );
-                    return true;
-                }
-
-                return result.Status == LeaseAcquireStatus.Held && held;
+                return TryAcquire(state, operation, call, out next);
 
             case LeaseCall.Renew:
             case LeaseCall.Release:
-                var matches = held && state.Owner == call.Owner && state.Token == call.Token;
-                if (!operation.IsIndeterminate && !(operation.Output is bool b && b == matches))
-                {
-                    return false;
-                }
-
-                if (matches)
-                {
-                    next =
-                        call.Operation == LeaseCall.Renew
-                            ? state with
-                            {
-                                Until = state.Now + call.TimeToLive,
-                            }
-                            : state with
-                            {
-                                Owner = null,
-                                Token = 0,
-                            };
-                }
-
-                return true;
+                return TryRenewOrRelease(state, operation, call, out next);
 
             default:
                 return false;
