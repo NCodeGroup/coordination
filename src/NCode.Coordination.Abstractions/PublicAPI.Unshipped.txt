@@ -81,6 +81,11 @@ NCode.Coordination.IMembershipService.JoinAsync(NCode.Coordination.CoordinationK
 NCode.Coordination.IMembershipService.LeaveAsync(NCode.Coordination.CoordinationKey! group, NCode.Coordination.SessionId! session, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
 NCode.Coordination.IMembershipService.ReadAsync(NCode.Coordination.CoordinationKey! group, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.MembershipView!>
 NCode.Coordination.IMembershipService.WatchAsync(NCode.Coordination.CoordinationKey! group, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Collections.Generic.IAsyncEnumerable<NCode.Coordination.MembershipView!>!
+NCode.Coordination.ISemaphoreService
+NCode.Coordination.ISemaphoreService.ReleaseAsync(NCode.Coordination.SemaphoreGrant! grant, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<bool>
+NCode.Coordination.ISemaphoreService.RenewAsync(NCode.Coordination.SemaphoreGrant! grant, NCode.Coordination.TimeToLive! timeToLive, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<bool>
+NCode.Coordination.ISemaphoreService.TryAcquireAsync(NCode.Coordination.CoordinationKey! resource, int capacity, NCode.Coordination.LeaseTerms! terms, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.SemaphoreAcquireResult!>
+NCode.Coordination.ISemaphoreService.WaitForReleaseAsync(NCode.Coordination.CoordinationKey! resource, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
 NCode.Coordination.ISessionService
 NCode.Coordination.ISessionService.CloseAsync(NCode.Coordination.SessionId! session, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
 NCode.Coordination.ISessionService.KeepAliveAsync(NCode.Coordination.SessionId! session, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.KeepAliveResult!>
@@ -190,6 +195,22 @@ NCode.Coordination.Revision.CompareTo(NCode.Coordination.Revision? other) -> int
 NCode.Coordination.Revision.Equals(NCode.Coordination.Revision? other) -> bool
 NCode.Coordination.Revision.Revision(long value) -> void
 NCode.Coordination.Revision.Value.get -> long
+NCode.Coordination.SemaphoreAcquireResult
+NCode.Coordination.SemaphoreAcquireResult.Grant.get -> NCode.Coordination.SemaphoreGrant?
+NCode.Coordination.SemaphoreAcquireResult.IsAcquired.get -> bool
+NCode.Coordination.SemaphoreAcquireResult.Status.get -> NCode.Coordination.SemaphoreAcquireStatus
+NCode.Coordination.SemaphoreAcquireStatus
+NCode.Coordination.SemaphoreAcquireStatus.Acquired = 0 -> NCode.Coordination.SemaphoreAcquireStatus
+NCode.Coordination.SemaphoreAcquireStatus.CapacityConflict = 2 -> NCode.Coordination.SemaphoreAcquireStatus
+NCode.Coordination.SemaphoreAcquireStatus.Full = 1 -> NCode.Coordination.SemaphoreAcquireStatus
+NCode.Coordination.SemaphoreAcquireStatus.SessionEnded = 3 -> NCode.Coordination.SemaphoreAcquireStatus
+NCode.Coordination.SemaphoreGrant
+NCode.Coordination.SemaphoreGrant.FencingToken.get -> NCode.Coordination.FencingToken!
+NCode.Coordination.SemaphoreGrant.Owner.get -> NCode.Coordination.OwnerToken!
+NCode.Coordination.SemaphoreGrant.Resource.get -> NCode.Coordination.CoordinationKey!
+NCode.Coordination.SemaphoreGrant.SemaphoreGrant(NCode.Coordination.CoordinationKey! resource, int slot, NCode.Coordination.FencingToken! fencingToken, NCode.Coordination.OwnerToken! owner, NCode.Coordination.LeaseTerms! terms) -> void
+NCode.Coordination.SemaphoreGrant.Slot.get -> int
+NCode.Coordination.SemaphoreGrant.Terms.get -> NCode.Coordination.LeaseTerms!
 NCode.Coordination.SessionGrant
 NCode.Coordination.SessionGrant.Id.get -> NCode.Coordination.SessionId!
 NCode.Coordination.SessionGrant.SessionGrant(NCode.Coordination.SessionId! id, NCode.Coordination.TimeToLive! timeToLive) -> void
@@ -364,6 +385,10 @@ static NCode.Coordination.Revision.operator <=(NCode.Coordination.Revision? left
 static NCode.Coordination.Revision.operator ==(NCode.Coordination.Revision? left, NCode.Coordination.Revision? right) -> bool
 static NCode.Coordination.Revision.operator >(NCode.Coordination.Revision? left, NCode.Coordination.Revision? right) -> bool
 static NCode.Coordination.Revision.operator >=(NCode.Coordination.Revision? left, NCode.Coordination.Revision? right) -> bool
+static NCode.Coordination.SemaphoreAcquireResult.Acquired(NCode.Coordination.SemaphoreGrant! grant) -> NCode.Coordination.SemaphoreAcquireResult!
+static NCode.Coordination.SemaphoreAcquireResult.CapacityConflict.get -> NCode.Coordination.SemaphoreAcquireResult!
+static NCode.Coordination.SemaphoreAcquireResult.Full.get -> NCode.Coordination.SemaphoreAcquireResult!
+static NCode.Coordination.SemaphoreAcquireResult.SessionEnded.get -> NCode.Coordination.SemaphoreAcquireResult!
 static NCode.Coordination.SessionId.operator !=(NCode.Coordination.SessionId? left, NCode.Coordination.SessionId? right) -> bool
 static NCode.Coordination.SessionId.operator ==(NCode.Coordination.SessionId? left, NCode.Coordination.SessionId? right) -> bool
 static NCode.Coordination.TimeToLive.MaxDuration.get -> System.TimeSpan
