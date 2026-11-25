@@ -12,6 +12,16 @@ namespace NCode.Coordination.Testing.Models;
 /// </summary>
 internal class CounterBatchModel() : PairModel<long>(new CounterModel())
 {
+    /// <summary>
+    /// Checks that a batch result holds exactly the expected counts and exceeded index.
+    /// </summary>
+    /// <param name="result">The result that the call returned.</param>
+    /// <param name="counts">The counts that the specification allows.</param>
+    /// <param name="exceededIndex">The exceeded index that the specification allows.</param>
+    /// <returns>True when the result is the one the specification allows.</returns>
+    private static bool IsCounts(CounterBatchResult result, long[] counts, int? exceededIndex) =>
+        result.Counts.AsSpan().SequenceEqual(counts) && result.ExceededIndex == exceededIndex;
+
     /// <inheritdoc />
     protected override bool TryApplySpanning(
         PairState<long> state,
@@ -49,14 +59,4 @@ internal class CounterBatchModel() : PairModel<long>(new CounterModel())
         int? exceededIndex = second > call.Limit ? 1 : null;
         return IsCounts(result, [first, second], exceededIndex);
     }
-
-    /// <summary>
-    /// Checks that a batch result holds exactly the expected counts and exceeded index.
-    /// </summary>
-    /// <param name="result">The result that the call returned.</param>
-    /// <param name="counts">The counts that the specification allows.</param>
-    /// <param name="exceededIndex">The exceeded index that the specification allows.</param>
-    /// <returns>True when the result is the one the specification allows.</returns>
-    private static bool IsCounts(CounterBatchResult result, long[] counts, int? exceededIndex) =>
-        result.Counts.AsSpan().SequenceEqual(counts) && result.ExceededIndex == exceededIndex;
 }

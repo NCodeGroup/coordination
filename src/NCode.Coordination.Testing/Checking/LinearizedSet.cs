@@ -14,6 +14,14 @@ internal sealed class LinearizedSet : IEquatable<LinearizedSet>
     private const int WordBits = 64;
 
     /// <summary>
+    /// Creates a set that holds no index, sized for a number of calls.
+    /// </summary>
+    /// <param name="count">The number of calls whose indexes the set may hold.</param>
+    /// <returns>An empty set.</returns>
+    public static LinearizedSet Empty(int count) =>
+        new(new ulong[(count + WordBits - 1) / WordBits]);
+
+    /// <summary>
     /// Creates a set over bits that the caller leaves unchanged.
     /// </summary>
     /// <param name="words">The bits of the set, which the set takes without copying.</param>
@@ -26,14 +34,6 @@ internal sealed class LinearizedSet : IEquatable<LinearizedSet>
     /// Gets the bits of the set, which are never mutated after construction.
     /// </summary>
     private ulong[] Words { get; }
-
-    /// <summary>
-    /// Creates a set that holds no index, sized for a number of calls.
-    /// </summary>
-    /// <param name="count">The number of calls whose indexes the set may hold.</param>
-    /// <returns>An empty set.</returns>
-    public static LinearizedSet Empty(int count) =>
-        new(new ulong[(count + WordBits - 1) / WordBits]);
 
     /// <summary>
     /// Determines whether the set holds an index.

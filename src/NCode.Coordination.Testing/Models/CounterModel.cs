@@ -12,6 +12,26 @@ namespace NCode.Coordination.Testing.Models;
 /// </summary>
 internal class CounterModel : ISequentialModel<long>
 {
+    /// <summary>
+    /// Checks that the output is the result of a batch of one increment that brought the count to the sum.
+    /// </summary>
+    /// <param name="output">The output that the call returned.</param>
+    /// <param name="sum">The count after the increment.</param>
+    /// <param name="limit">The limit the batch checked the count against.</param>
+    /// <returns>True when the output is the result the specification allows.</returns>
+    private static bool IsBatchResult(object? output, long sum, long limit)
+    {
+        if (output is not CounterBatchResult result)
+        {
+            return false;
+        }
+
+        var expectedExceeded = sum > limit ? 0 : (int?)null;
+        return result.Counts.Length == 1
+            && result.Counts[0] == sum
+            && result.ExceededIndex == expectedExceeded;
+    }
+
     /// <inheritdoc />
     public long Initial => 0;
 
@@ -54,25 +74,5 @@ internal class CounterModel : ISequentialModel<long>
             default:
                 return false;
         }
-    }
-
-    /// <summary>
-    /// Checks that the output is the result of a batch of one increment that brought the count to the sum.
-    /// </summary>
-    /// <param name="output">The output that the call returned.</param>
-    /// <param name="sum">The count after the increment.</param>
-    /// <param name="limit">The limit the batch checked the count against.</param>
-    /// <returns>True when the output is the result the specification allows.</returns>
-    private static bool IsBatchResult(object? output, long sum, long limit)
-    {
-        if (output is not CounterBatchResult result)
-        {
-            return false;
-        }
-
-        var expectedExceeded = sum > limit ? 0 : (int?)null;
-        return result.Counts.Length == 1
-            && result.Counts[0] == sum
-            && result.ExceededIndex == expectedExceeded;
     }
 }

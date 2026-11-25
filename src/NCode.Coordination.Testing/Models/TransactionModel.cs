@@ -13,36 +13,6 @@ namespace NCode.Coordination.Testing.Models;
 /// </summary>
 internal class TransactionModel : ISequentialModel<TransactionState>
 {
-    /// <inheritdoc />
-    public TransactionState Initial { get; } = new(null, null);
-
-    /// <inheritdoc />
-    public bool TryApply(
-        TransactionState state,
-        HistoryOperation operation,
-        [MaybeNullWhen(false)] out TransactionState next
-    )
-    {
-        next = state;
-
-        if (operation.Input is not TransactionCall call)
-        {
-            return false;
-        }
-
-        switch (call.Operation)
-        {
-            case TransactionCall.Read:
-                return TryRead(state, operation, call);
-
-            case TransactionCall.Execute:
-                return TryExecute(state, operation, call, out next);
-
-            default:
-                return false;
-        }
-    }
-
     /// <summary>
     /// Applies a read, which changes nothing.
     /// </summary>
@@ -127,6 +97,36 @@ internal class TransactionModel : ISequentialModel<TransactionState>
 
             case TransactionStatus.Failed:
                 return !holds;
+
+            default:
+                return false;
+        }
+    }
+
+    /// <inheritdoc />
+    public TransactionState Initial { get; } = new(null, null);
+
+    /// <inheritdoc />
+    public bool TryApply(
+        TransactionState state,
+        HistoryOperation operation,
+        [MaybeNullWhen(false)] out TransactionState next
+    )
+    {
+        next = state;
+
+        if (operation.Input is not TransactionCall call)
+        {
+            return false;
+        }
+
+        switch (call.Operation)
+        {
+            case TransactionCall.Read:
+                return TryRead(state, operation, call);
+
+            case TransactionCall.Execute:
+                return TryExecute(state, operation, call, out next);
 
             default:
                 return false;

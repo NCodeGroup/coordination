@@ -14,6 +14,46 @@ namespace NCode.Coordination.Testing.Runs;
 internal sealed class RunSubscriber<T> : IAsyncDisposable
 {
     /// <summary>
+    /// Reads the subscription until it ends or the token cancels, writing each item to the channel with its stamp, and
+    /// completes the channel.
+    /// </summary>
+    /// <param name="subscribe">The call that opens the subscription, given a token that stops it.</param>
+    /// <param name="recorder">The recorder whose clock stamps each item.</param>
+    /// <param name="writer">The writer of the channel that carries each item.</param>
+    /// <param name="cancellationToken">A token that stops the reading.</param>
+    /// <returns>A task that completes when the reading has ended.</returns>
+    private static async ValueTask ReadAsync(
+        Func<CancellationToken, IAsyncEnumerable<T>> subscribe,
+        HistoryRecorder recorder,
+        ChannelWriter<Delivery<T>> writer,
+        CancellationToken cancellationToken
+    )
+    {
+        try
+        {
+            await foreach (
+                var item in subscribe(cancellationToken).WithCancellation(cancellationToken)
+            )
+            {
+                var stamp = recorder.Stamp();
+                writer.TryWrite(new Delivery<T>(stamp, item));
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // The run stopped the subscriber.
+        }
+        catch (CoordinationException)
+        {
+            // The subscription failed and its reading ends here: a provider that keeps gap detection resyncs instead.
+        }
+        finally
+        {
+            writer.Complete();
+        }
+    }
+
+    /// <summary>
     /// Starts reading a subscription, with <see cref="ContractStreams.Timeout"/> as the time limit on each wait.
     /// </summary>
     /// <param name="subscribe">The call that opens the subscription, given a token that stops it.</param>
@@ -141,46 +181,6 @@ internal sealed class RunSubscriber<T> : IAsyncDisposable
         finally
         {
             Stop.Dispose();
-        }
-    }
-
-    /// <summary>
-    /// Reads the subscription until it ends or the token cancels, writing each item to the channel with its stamp, and
-    /// completes the channel.
-    /// </summary>
-    /// <param name="subscribe">The call that opens the subscription, given a token that stops it.</param>
-    /// <param name="recorder">The recorder whose clock stamps each item.</param>
-    /// <param name="writer">The writer of the channel that carries each item.</param>
-    /// <param name="cancellationToken">A token that stops the reading.</param>
-    /// <returns>A task that completes when the reading has ended.</returns>
-    private static async ValueTask ReadAsync(
-        Func<CancellationToken, IAsyncEnumerable<T>> subscribe,
-        HistoryRecorder recorder,
-        ChannelWriter<Delivery<T>> writer,
-        CancellationToken cancellationToken
-    )
-    {
-        try
-        {
-            await foreach (
-                var item in subscribe(cancellationToken).WithCancellation(cancellationToken)
-            )
-            {
-                var stamp = recorder.Stamp();
-                writer.TryWrite(new Delivery<T>(stamp, item));
-            }
-        }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-        {
-            // The run stopped the subscriber.
-        }
-        catch (CoordinationException)
-        {
-            // The subscription failed and its reading ends here: a provider that keeps gap detection resyncs instead.
-        }
-        finally
-        {
-            writer.Complete();
         }
     }
 }

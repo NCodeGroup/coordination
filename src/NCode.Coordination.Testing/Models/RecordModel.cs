@@ -13,45 +13,6 @@ namespace NCode.Coordination.Testing.Models;
 /// </summary>
 internal class RecordModel : ISequentialModel<RecordState>
 {
-    /// <inheritdoc />
-    public RecordState Initial { get; } = new(null, 0, 0);
-
-    /// <inheritdoc />
-    public bool TryApply(
-        RecordState state,
-        HistoryOperation operation,
-        [MaybeNullWhen(false)] out RecordState next
-    )
-    {
-        next = state;
-
-        if (operation.Input is not RecordCall call)
-        {
-            return false;
-        }
-
-        switch (call.Operation)
-        {
-            case RecordCall.Create:
-                return TryCreate(state, operation, call, out next);
-
-            case RecordCall.Read:
-                return TryRead(state, operation, out next);
-
-            case RecordCall.CompareAndSwap:
-                return TryCompareAndSwap(state, operation, call, out next);
-
-            case RecordCall.CompareAndDelete:
-                return TryCompareAndDelete(state, operation, call, out next);
-
-            case RecordCall.Take:
-                return TryTake(state, operation, out next);
-
-            default:
-                return false;
-        }
-    }
-
     /// <summary>
     /// Applies a create.
     /// </summary>
@@ -313,4 +274,43 @@ internal class RecordModel : ISequentialModel<RecordState>
     /// <returns>True when the call may find another revision than it expects.</returns>
     private static bool Differs(RecordState state, RecordCall call) =>
         state.Value is not null && (state.Revision == 0 || state.Revision != call.Expected);
+
+    /// <inheritdoc />
+    public RecordState Initial { get; } = new(null, 0, 0);
+
+    /// <inheritdoc />
+    public bool TryApply(
+        RecordState state,
+        HistoryOperation operation,
+        [MaybeNullWhen(false)] out RecordState next
+    )
+    {
+        next = state;
+
+        if (operation.Input is not RecordCall call)
+        {
+            return false;
+        }
+
+        switch (call.Operation)
+        {
+            case RecordCall.Create:
+                return TryCreate(state, operation, call, out next);
+
+            case RecordCall.Read:
+                return TryRead(state, operation, out next);
+
+            case RecordCall.CompareAndSwap:
+                return TryCompareAndSwap(state, operation, call, out next);
+
+            case RecordCall.CompareAndDelete:
+                return TryCompareAndDelete(state, operation, call, out next);
+
+            case RecordCall.Take:
+                return TryTake(state, operation, out next);
+
+            default:
+                return false;
+        }
+    }
 }

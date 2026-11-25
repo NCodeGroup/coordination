@@ -18,6 +18,50 @@ internal class SemaphoreModel : ISequentialModel<SemaphoreState>
     /// </summary>
     public const int Capacity = 2;
 
+    /// <summary>
+    /// Reads the owner, token and floor of a slot.
+    /// </summary>
+    /// <param name="state">The state to read.</param>
+    /// <param name="slot">The slot, 0 or 1.</param>
+    /// <returns>The owner, fencing token value and highest token value granted of the slot.</returns>
+    private static (string? Owner, long Token, long Floor) ReadSlot(
+        SemaphoreState state,
+        int slot
+    ) =>
+        slot == 0
+            ? (state.FirstOwner, state.FirstToken, state.FirstFloor)
+            : (state.SecondOwner, state.SecondToken, state.SecondFloor);
+
+    /// <summary>
+    /// Replaces the owner, token and floor of a slot.
+    /// </summary>
+    /// <param name="state">The state to change.</param>
+    /// <param name="slot">The slot, 0 or 1.</param>
+    /// <param name="owner">The new owner value, or null when the slot becomes free.</param>
+    /// <param name="token">The new fencing token value.</param>
+    /// <param name="floor">The new highest token value granted.</param>
+    /// <returns>The state with the slot replaced.</returns>
+    private static SemaphoreState WriteSlot(
+        SemaphoreState state,
+        int slot,
+        string? owner,
+        long token,
+        long floor
+    ) =>
+        slot == 0
+            ? state with
+            {
+                FirstOwner = owner,
+                FirstToken = token,
+                FirstFloor = floor,
+            }
+            : state with
+            {
+                SecondOwner = owner,
+                SecondToken = token,
+                SecondFloor = floor,
+            };
+
     /// <inheritdoc />
     public SemaphoreState Initial { get; } = new(null, 0, 0, null, 0, 0, 0);
 
@@ -114,48 +158,4 @@ internal class SemaphoreModel : ISequentialModel<SemaphoreState>
                 return false;
         }
     }
-
-    /// <summary>
-    /// Reads the owner, token and floor of a slot.
-    /// </summary>
-    /// <param name="state">The state to read.</param>
-    /// <param name="slot">The slot, 0 or 1.</param>
-    /// <returns>The owner, fencing token value and highest token value granted of the slot.</returns>
-    private static (string? Owner, long Token, long Floor) ReadSlot(
-        SemaphoreState state,
-        int slot
-    ) =>
-        slot == 0
-            ? (state.FirstOwner, state.FirstToken, state.FirstFloor)
-            : (state.SecondOwner, state.SecondToken, state.SecondFloor);
-
-    /// <summary>
-    /// Replaces the owner, token and floor of a slot.
-    /// </summary>
-    /// <param name="state">The state to change.</param>
-    /// <param name="slot">The slot, 0 or 1.</param>
-    /// <param name="owner">The new owner value, or null when the slot becomes free.</param>
-    /// <param name="token">The new fencing token value.</param>
-    /// <param name="floor">The new highest token value granted.</param>
-    /// <returns>The state with the slot replaced.</returns>
-    private static SemaphoreState WriteSlot(
-        SemaphoreState state,
-        int slot,
-        string? owner,
-        long token,
-        long floor
-    ) =>
-        slot == 0
-            ? state with
-            {
-                FirstOwner = owner,
-                FirstToken = token,
-                FirstFloor = floor,
-            }
-            : state with
-            {
-                SecondOwner = owner,
-                SecondToken = token,
-                SecondFloor = floor,
-            };
 }

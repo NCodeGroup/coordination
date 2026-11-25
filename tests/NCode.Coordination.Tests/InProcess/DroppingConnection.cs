@@ -15,6 +15,17 @@ internal sealed class DroppingConnection
     public const int FailedCalls = 3;
 
     /// <summary>
+    /// Creates the failure of a call in flight when the connection dropped.
+    /// </summary>
+    /// <returns>An exception that tells the caller that the outcome is unknown.</returns>
+    private static CoordinationException CreateFailure() =>
+        new(
+            CoordinationErrorCodes.Unavailable,
+            true,
+            "The connection dropped while the call was in flight."
+        );
+
+    /// <summary>
     /// Gets the lock that guards the outage and the subscriptions.
     /// </summary>
     private Lock Gate { get; } = new();
@@ -162,15 +173,4 @@ internal sealed class DroppingConnection
         applies = Failed % 2 == 0;
         return true;
     }
-
-    /// <summary>
-    /// Creates the failure of a call in flight when the connection dropped.
-    /// </summary>
-    /// <returns>An exception that tells the caller that the outcome is unknown.</returns>
-    private static CoordinationException CreateFailure() =>
-        new(
-            CoordinationErrorCodes.Unavailable,
-            true,
-            "The connection dropped while the call was in flight."
-        );
 }
