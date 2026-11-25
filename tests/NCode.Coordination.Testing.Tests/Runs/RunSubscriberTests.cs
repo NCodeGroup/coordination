@@ -28,11 +28,15 @@ public sealed class RunSubscriberTests
         }
     }
 
-    private static async ValueTask WriteAsync(Channel<int> channel, params int[] items)
+    private static async ValueTask WriteAsync(
+        Channel<int> channel,
+        IReadOnlyList<int> items,
+        CancellationToken cancellationToken
+    )
     {
         foreach (var item in items)
         {
-            await channel.Writer.WriteAsync(item, Token);
+            await channel.Writer.WriteAsync(item, cancellationToken);
         }
     }
 
@@ -47,7 +51,7 @@ public sealed class RunSubscriberTests
             new HistoryRecorder(),
             Token
         );
-        await WriteAsync(channel, 1, 2);
+        await WriteAsync(channel, [1, 2], Token);
 
         var found = await subscriber.WaitForAsync(delivery => delivery.Item == 1, Token);
 
@@ -64,7 +68,7 @@ public sealed class RunSubscriberTests
             new HistoryRecorder(),
             Token
         );
-        await WriteAsync(channel, 1, 2, 3);
+        await WriteAsync(channel, [1, 2, 3], Token);
 
         var found = await subscriber.WaitForAsync(delivery => delivery.Item == 3, Token);
 
@@ -82,13 +86,15 @@ public sealed class RunSubscriberTests
             new HistoryRecorder(),
             Token
         );
-        await WriteAsync(channel, 1, 2);
+        await WriteAsync(channel, [1, 2], Token);
         var receivedFirst = await subscriber.WaitForAsync(delivery => delivery.Item == 1, Token);
         Assert.True(receivedFirst);
 
         var found = await subscriber.WaitForAsync(delivery => delivery.Item == 1, Token);
 
         Assert.True(found);
+        var received = Assert.Single(subscriber.Deliveries);
+        Assert.Equal(1, received.Item);
     }
 
     [Fact]
@@ -100,7 +106,7 @@ public sealed class RunSubscriberTests
             new HistoryRecorder(),
             Token
         );
-        await WriteAsync(channel, 1);
+        await WriteAsync(channel, [1], Token);
         channel.Writer.Complete();
 
         var found = await subscriber.WaitForAsync(delivery => delivery.Item == 9, Token);
@@ -108,6 +114,24 @@ public sealed class RunSubscriberTests
         Assert.False(found);
         var received = Assert.Single(subscriber.Deliveries);
         Assert.Equal(1, received.Item);
+    }
+
+    [Fact]
+    public async ValueTask WaitForAsync_WhenNothingArrivesWithinTheTimeout_ReturnsFalse()
+    {
+        var channel = Channel.CreateUnbounded<int>();
+        var timeout = TimeSpan.FromMilliseconds(50);
+        await using var subscriber = new RunSubscriber<int>(
+            token => StreamAsync(channel, null, token),
+            new HistoryRecorder(),
+            timeout,
+            Token
+        );
+
+        var found = await subscriber.WaitForAsync(_ => true, Token);
+
+        Assert.False(found);
+        Assert.Empty(subscriber.Deliveries);
     }
 
     [Fact]
@@ -119,7 +143,7 @@ public sealed class RunSubscriberTests
             new HistoryRecorder(),
             Token
         );
-        await WriteAsync(channel, 1, 2, 3);
+        await WriteAsync(channel, [1, 2, 3], Token);
         channel.Writer.Complete();
 
         var found = await subscriber.WaitForAsync(delivery => delivery.Item == 9, Token);
@@ -141,7 +165,7 @@ public sealed class RunSubscriberTests
             new HistoryRecorder(),
             Token
         );
-        await WriteAsync(channel, 1);
+        await WriteAsync(channel, [1], Token);
         channel.Writer.Complete();
 
         var found = await subscriber.WaitForAsync(delivery => delivery.Item == 9, Token);

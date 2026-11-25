@@ -14,7 +14,7 @@ namespace NCode.Coordination.Testing.Runs;
 internal sealed class RunSubscriber<T> : IAsyncDisposable
 {
     /// <summary>
-    /// Starts reading a subscription.
+    /// Starts reading a subscription, with <see cref="ContractStreams.Timeout"/> as the time limit on each wait.
     /// </summary>
     /// <param name="subscribe">The call that opens the subscription, given a token that stops it.</param>
     /// <param name="recorder">The recorder whose clock stamps each item.</param>
@@ -24,7 +24,23 @@ internal sealed class RunSubscriber<T> : IAsyncDisposable
         HistoryRecorder recorder,
         CancellationToken cancellationToken
     )
+        : this(subscribe, recorder, ContractStreams.Timeout, cancellationToken) { }
+
+    /// <summary>
+    /// Starts reading a subscription, with a time limit on each wait.
+    /// </summary>
+    /// <param name="subscribe">The call that opens the subscription, given a token that stops it.</param>
+    /// <param name="recorder">The recorder whose clock stamps each item.</param>
+    /// <param name="waitTimeout">How long <see cref="WaitForAsync"/> waits for an item that matches.</param>
+    /// <param name="cancellationToken">A token that cancels the run.</param>
+    public RunSubscriber(
+        Func<CancellationToken, IAsyncEnumerable<T>> subscribe,
+        HistoryRecorder recorder,
+        TimeSpan waitTimeout,
+        CancellationToken cancellationToken
+    )
     {
+        WaitTimeout = waitTimeout;
         Items = Channel.CreateUnbounded<Delivery<T>>();
         Stop = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         Received = [];
@@ -36,6 +52,11 @@ internal sealed class RunSubscriber<T> : IAsyncDisposable
             CancellationToken.None
         );
     }
+
+    /// <summary>
+    /// Gets how long <see cref="WaitForAsync"/> waits for an item that matches.
+    /// </summary>
+    public TimeSpan WaitTimeout { get; }
 
     /// <summary>
     /// Gets the channel that carries each item from the reading task to <see cref="WaitForAsync"/>.
@@ -63,7 +84,7 @@ internal sealed class RunSubscriber<T> : IAsyncDisposable
     public ImmutableArray<Delivery<T>> Deliveries => [.. Received];
 
     /// <summary>
-    /// Waits until an item that matches arrives, the subscription ends, or <see cref="ContractStreams.Timeout"/> passes.
+    /// Waits until an item that matches arrives, the subscription ends, or <see cref="WaitTimeout"/> passes.
     /// </summary>
     /// <param name="match">The predicate that tells the item that is wanted.</param>
     /// <param name="cancellationToken">A token that cancels the wait.</param>
@@ -79,7 +100,7 @@ internal sealed class RunSubscriber<T> : IAsyncDisposable
         }
 
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeout.CancelAfter(ContractStreams.Timeout);
+        timeout.CancelAfter(WaitTimeout);
 
         var reader = Items.Reader;
 
