@@ -1,5 +1,21 @@
 #nullable enable
 const NCode.Coordination.CoordinationKey.MaxSegments = 16 -> int
+const NCode.Coordination.CoordinationLimits.MaxAddressLength = 256 -> int
+const NCode.Coordination.CoordinationLimits.MaxBatchIncrements = 16 -> int
+const NCode.Coordination.CoordinationLimits.MaxContinuationTokenLength = 1024 -> int
+const NCode.Coordination.CoordinationLimits.MaxExtensions = 32 -> int
+const NCode.Coordination.CoordinationLimits.MaxExtensionValueLength = 1024 -> int
+const NCode.Coordination.CoordinationLimits.MaxMetadataEntries = 64 -> int
+const NCode.Coordination.CoordinationLimits.MaxMetadataValueLength = 512 -> int
+const NCode.Coordination.CoordinationLimits.MaxPageSize = 1000 -> int
+const NCode.Coordination.CoordinationLimits.MaxPayloadLength = 4096 -> int
+const NCode.Coordination.CoordinationLimits.MaxSemaphoreCapacity = 1024 -> int
+const NCode.Coordination.CoordinationLimits.MaxSequenceBlock = 65536 -> int
+const NCode.Coordination.CoordinationLimits.MaxSetMembers = 10000 -> int
+const NCode.Coordination.CoordinationLimits.MaxTokenLength = 128 -> int
+const NCode.Coordination.CoordinationLimits.MaxTransactionConditions = 64 -> int
+const NCode.Coordination.CoordinationLimits.MaxTransactionWrites = 64 -> int
+const NCode.Coordination.CoordinationLimits.MaxValueLength = 65536 -> int
 const NCode.Coordination.GuaranteeDimensions.Consistency = "consistency" -> string!
 const NCode.Coordination.GuaranteeDimensions.Delivery = "delivery" -> string!
 const NCode.Coordination.GuaranteeDimensions.Durability = "durability" -> string!
@@ -16,6 +32,7 @@ NCode.Coordination.CoordinationKey.Keyspace.get -> NCode.Coordination.Keyspace!
 NCode.Coordination.CoordinationKey.PartitionDepth.get -> int
 NCode.Coordination.CoordinationKey.PartitionDepth.init -> void
 NCode.Coordination.CoordinationKey.Segments.get -> System.Collections.Immutable.ImmutableArray<NCode.Coordination.KeySegment!>
+NCode.Coordination.CoordinationLimits
 NCode.Coordination.FeatureRequirement
 NCode.Coordination.FeatureRequirement.Feature.get -> string!
 NCode.Coordination.FeatureRequirement.FeatureRequirement(string! feature, NCode.Coordination.Primitive! primitive, params System.Collections.Generic.IEnumerable<NCode.Coordination.Guarantee!>! guarantees) -> void
@@ -61,6 +78,11 @@ NCode.Coordination.Keyspace.CreateKey(params System.Collections.Generic.IEnumera
 NCode.Coordination.Keyspace.Equals(NCode.Coordination.Keyspace? other) -> bool
 NCode.Coordination.Keyspace.Keyspace(string! cluster, params System.Collections.Generic.IEnumerable<NCode.Coordination.KeySegment!>! segments) -> void
 NCode.Coordination.Keyspace.Segments.get -> System.Collections.Immutable.ImmutableArray<NCode.Coordination.KeySegment!>
+NCode.Coordination.OwnerToken
+NCode.Coordination.OwnerToken.<Clone>$() -> NCode.Coordination.OwnerToken!
+NCode.Coordination.OwnerToken.Equals(NCode.Coordination.OwnerToken? other) -> bool
+NCode.Coordination.OwnerToken.OwnerToken(string! value) -> void
+NCode.Coordination.OwnerToken.Value.get -> string!
 NCode.Coordination.Primitive
 NCode.Coordination.Primitive.<Clone>$() -> NCode.Coordination.Primitive!
 NCode.Coordination.Primitive.Equals(NCode.Coordination.Primitive? other) -> bool
@@ -86,6 +108,12 @@ NCode.Coordination.Revision.CompareTo(NCode.Coordination.Revision? other) -> int
 NCode.Coordination.Revision.Equals(NCode.Coordination.Revision? other) -> bool
 NCode.Coordination.Revision.Revision(long value) -> void
 NCode.Coordination.Revision.Value.get -> long
+NCode.Coordination.SessionId
+NCode.Coordination.SessionId.<Clone>$() -> NCode.Coordination.SessionId!
+NCode.Coordination.SessionId.Equals(NCode.Coordination.SessionId? other) -> bool
+NCode.Coordination.SessionId.Keyspace.get -> NCode.Coordination.Keyspace!
+NCode.Coordination.SessionId.SessionId(NCode.Coordination.Keyspace! keyspace, string! value) -> void
+NCode.Coordination.SessionId.Value.get -> string!
 NCode.Coordination.TimeToLive
 NCode.Coordination.TimeToLive.<Clone>$() -> NCode.Coordination.TimeToLive!
 NCode.Coordination.TimeToLive.Duration.get -> System.TimeSpan
@@ -106,12 +134,18 @@ override NCode.Coordination.KeySegment.ToString() -> string!
 override NCode.Coordination.Keyspace.Equals(object? obj) -> bool
 override NCode.Coordination.Keyspace.GetHashCode() -> int
 override NCode.Coordination.Keyspace.ToString() -> string!
+override NCode.Coordination.OwnerToken.Equals(object? obj) -> bool
+override NCode.Coordination.OwnerToken.GetHashCode() -> int
+override NCode.Coordination.OwnerToken.ToString() -> string!
 override NCode.Coordination.Primitive.Equals(object? obj) -> bool
 override NCode.Coordination.Primitive.GetHashCode() -> int
 override NCode.Coordination.Primitive.ToString() -> string!
 override NCode.Coordination.Revision.Equals(object? obj) -> bool
 override NCode.Coordination.Revision.GetHashCode() -> int
 override NCode.Coordination.Revision.ToString() -> string!
+override NCode.Coordination.SessionId.Equals(object? obj) -> bool
+override NCode.Coordination.SessionId.GetHashCode() -> int
+override NCode.Coordination.SessionId.ToString() -> string!
 override NCode.Coordination.TimeToLive.Equals(object? obj) -> bool
 override NCode.Coordination.TimeToLive.GetHashCode() -> int
 override NCode.Coordination.TimeToLive.ToString() -> string!
@@ -146,6 +180,8 @@ static NCode.Coordination.KeySegment.operator !=(NCode.Coordination.KeySegment? 
 static NCode.Coordination.KeySegment.operator ==(NCode.Coordination.KeySegment? left, NCode.Coordination.KeySegment? right) -> bool
 static NCode.Coordination.Keyspace.operator !=(NCode.Coordination.Keyspace? left, NCode.Coordination.Keyspace? right) -> bool
 static NCode.Coordination.Keyspace.operator ==(NCode.Coordination.Keyspace? left, NCode.Coordination.Keyspace? right) -> bool
+static NCode.Coordination.OwnerToken.operator !=(NCode.Coordination.OwnerToken? left, NCode.Coordination.OwnerToken? right) -> bool
+static NCode.Coordination.OwnerToken.operator ==(NCode.Coordination.OwnerToken? left, NCode.Coordination.OwnerToken? right) -> bool
 static NCode.Coordination.Primitive.operator !=(NCode.Coordination.Primitive? left, NCode.Coordination.Primitive? right) -> bool
 static NCode.Coordination.Primitive.operator ==(NCode.Coordination.Primitive? left, NCode.Coordination.Primitive? right) -> bool
 static NCode.Coordination.Primitives.All.get -> System.Collections.Immutable.ImmutableArray<NCode.Coordination.Primitive!>
@@ -171,6 +207,8 @@ static NCode.Coordination.Revision.operator <=(NCode.Coordination.Revision? left
 static NCode.Coordination.Revision.operator ==(NCode.Coordination.Revision? left, NCode.Coordination.Revision? right) -> bool
 static NCode.Coordination.Revision.operator >(NCode.Coordination.Revision? left, NCode.Coordination.Revision? right) -> bool
 static NCode.Coordination.Revision.operator >=(NCode.Coordination.Revision? left, NCode.Coordination.Revision? right) -> bool
+static NCode.Coordination.SessionId.operator !=(NCode.Coordination.SessionId? left, NCode.Coordination.SessionId? right) -> bool
+static NCode.Coordination.SessionId.operator ==(NCode.Coordination.SessionId? left, NCode.Coordination.SessionId? right) -> bool
 static NCode.Coordination.TimeToLive.MaxDuration.get -> System.TimeSpan
 static NCode.Coordination.TimeToLive.operator !=(NCode.Coordination.TimeToLive? left, NCode.Coordination.TimeToLive? right) -> bool
 static NCode.Coordination.TimeToLive.operator ==(NCode.Coordination.TimeToLive? left, NCode.Coordination.TimeToLive? right) -> bool
