@@ -22,7 +22,9 @@ public sealed class TransactionResultTests
     [Fact]
     public void Constructor_WhenConditionsFailed_IsNotSucceeded()
     {
-        var result = new TransactionResult(TransactionStatus.Failed, new Revision(1));
+        var revision = new Revision(1);
+
+        var result = new TransactionResult(TransactionStatus.Failed, revision);
 
         Assert.Equal(TransactionStatus.Failed, result.Status);
         Assert.False(result.Succeeded);
@@ -31,7 +33,9 @@ public sealed class TransactionResultTests
     [Fact]
     public void Constructor_WhenTheSessionEnded_IsNotSucceeded()
     {
-        var result = new TransactionResult(TransactionStatus.SessionEnded, new Revision(1));
+        var revision = new Revision(1);
+
+        var result = new TransactionResult(TransactionStatus.SessionEnded, revision);
 
         Assert.Equal(TransactionStatus.SessionEnded, result.Status);
         Assert.False(result.Succeeded);
@@ -40,8 +44,10 @@ public sealed class TransactionResultTests
     [Fact]
     public void Constructor_WhenStatusIsUndefined_Throws()
     {
+        var revision = new Revision(1);
+
         var exception = Assert.Throws<ArgumentOutOfRangeException>(() =>
-            new TransactionResult((TransactionStatus)99, new Revision(1))
+            new TransactionResult((TransactionStatus)99, revision)
         );
 
         Assert.Equal("status", exception.ParamName);

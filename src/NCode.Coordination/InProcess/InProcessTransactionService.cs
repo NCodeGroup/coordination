@@ -9,7 +9,8 @@ namespace NCode.Coordination.InProcess;
 /// <param name="sessions">The session table, which holds the record table that the record service shares.</param>
 /// <remarks>
 /// A transaction evaluates its conditions and applies its writes while holding the table's lock, so it is atomic across
-/// partitions and linearizable in the process. A write bound to a session that has ended is refused.
+/// partitions and linearizable in the process. When the applied writes bind a record to a session that has ended, it
+/// writes nothing and reports that the session ended.
 /// </remarks>
 internal class InProcessTransactionService(InProcessSessionTable sessions) : ITransactionService
 {
