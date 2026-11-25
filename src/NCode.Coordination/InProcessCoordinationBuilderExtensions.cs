@@ -28,9 +28,12 @@ public static class InProcessCoordinationBuilderExtensions
         {
             ArgumentNullException.ThrowIfNull(builder);
 
-            return builder.AddProvider(services => new InProcessProvider(
-                services.GetService<TimeProvider>() ?? TimeProvider.System
-            ));
+            return builder.AddProvider(services =>
+            {
+                var time = services.GetService<TimeProvider>() ?? TimeProvider.System;
+
+                return new InProcessProvider(time);
+            });
         }
     }
 }

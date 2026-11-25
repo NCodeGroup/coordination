@@ -21,7 +21,10 @@ internal readonly record struct InProcessExpiry(long Start, TimeSpan Duration)
         ArgumentNullException.ThrowIfNull(time);
         ArgumentNullException.ThrowIfNull(timeToLive);
 
-        return new InProcessExpiry(time.GetTimestamp(), timeToLive.Duration);
+        var start = time.GetTimestamp();
+        var duration = timeToLive.Duration;
+
+        return new InProcessExpiry(start, duration);
     }
 
     /// <summary>

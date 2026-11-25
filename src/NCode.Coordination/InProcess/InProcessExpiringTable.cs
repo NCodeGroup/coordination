@@ -131,7 +131,8 @@ internal class InProcessExpiringTable<TKey, TValue>(TimeProvider time)
         var list = new List<KeyValuePair<TKey, TValue>>(Entries.Count);
         foreach (var (key, entry) in Entries)
         {
-            list.Add(new KeyValuePair<TKey, TValue>(key, entry.Value));
+            var pair = new KeyValuePair<TKey, TValue>(key, entry.Value);
+            list.Add(pair);
         }
 
         return list;

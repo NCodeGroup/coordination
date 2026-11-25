@@ -18,7 +18,7 @@ public sealed class InProcessProviderTests
     private static PrimitiveSupport GetSupport(InProcessProvider provider, Primitive primitive) =>
         Assert.Single(provider.Declaration.Primitives, x => x.Primitive == primitive);
 
-    #region Declaration Tests
+    #region Declaration Property Tests
 
     [Fact]
     public void Declaration_WhenRead_ListsEveryPrimitiveOnce()

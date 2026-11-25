@@ -51,19 +51,23 @@ internal class InProcessProvider : ICoordinationProvider
                 || primitive == Primitives.Set
             )
             {
-                primitives.Add(PrimitiveSupport.Supported(primitive, state));
+                var support = PrimitiveSupport.Supported(primitive, state);
+                primitives.Add(support);
             }
             else if (primitive == Primitives.Transaction || primitive == Primitives.Counter)
             {
-                primitives.Add(PrimitiveSupport.Supported(primitive, atomicState));
+                var support = PrimitiveSupport.Supported(primitive, atomicState);
+                primitives.Add(support);
             }
             else if (primitive == Primitives.Sequence)
             {
-                primitives.Add(PrimitiveSupport.Supported(primitive, sequence));
+                var support = PrimitiveSupport.Supported(primitive, sequence);
+                primitives.Add(support);
             }
             else
             {
-                primitives.Add(PrimitiveSupport.Unsupported(primitive, UnsupportedReason));
+                var support = PrimitiveSupport.Unsupported(primitive, UnsupportedReason);
+                primitives.Add(support);
             }
         }
 
