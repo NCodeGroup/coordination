@@ -7,7 +7,9 @@ public sealed class TokenBucketStateTests
 {
     private const long S = 1767225600000;
 
-    private static TokenBucketLimit Limit { get; } = new(4, 2, TimeSpan.FromSeconds(1));
+    private static TimeSpan ReplenishmentPeriod { get; } = TimeSpan.FromSeconds(1);
+
+    private static TokenBucketLimit Limit { get; } = new(4, 2, ReplenishmentPeriod);
 
     #region Encode and Decode Tests
 
@@ -46,7 +48,9 @@ public sealed class TokenBucketStateTests
     {
         var state = new TokenBucketState(3, S);
 
-        var decoded = TokenBucketState.Decode(state.Encode());
+        var encoded = state.Encode();
+
+        var decoded = TokenBucketState.Decode(encoded);
 
         Assert.Equal(state, decoded);
     }
@@ -78,7 +82,8 @@ public sealed class TokenBucketStateTests
 
         var replenished = state.Replenish(Limit, S + 1500);
 
-        Assert.Equal(new TokenBucketState(2, S + 1000), replenished);
+        var expected = new TokenBucketState(2, S + 1000);
+        Assert.Equal(expected, replenished);
     }
 
     [Fact]
@@ -88,7 +93,8 @@ public sealed class TokenBucketStateTests
 
         var replenished = state.Replenish(Limit, S + 2500);
 
-        Assert.Equal(new TokenBucketState(4, S + 2500), replenished);
+        var expected = new TokenBucketState(4, S + 2500);
+        Assert.Equal(expected, replenished);
     }
 
     [Fact]
@@ -108,7 +114,8 @@ public sealed class TokenBucketStateTests
 
         var replenished = state.Replenish(Limit, S + 5000);
 
-        Assert.Equal(new TokenBucketState(4, S + 5000), replenished);
+        var expected = new TokenBucketState(4, S + 5000);
+        Assert.Equal(expected, replenished);
     }
 
     #endregion
@@ -122,7 +129,8 @@ public sealed class TokenBucketStateTests
 
         var retryAfter = state.GetRetryAfter(Limit, 4, S + 200);
 
-        Assert.Equal(TimeSpan.FromMilliseconds(1800), retryAfter);
+        var expected = TimeSpan.FromMilliseconds(1800);
+        Assert.Equal(expected, retryAfter);
     }
 
     [Fact]
@@ -146,7 +154,8 @@ public sealed class TokenBucketStateTests
 
         var timeUntilFull = state.GetTimeUntilFull(Limit);
 
-        Assert.Equal(TimeSpan.FromSeconds(2), timeUntilFull);
+        var expected = TimeSpan.FromSeconds(2);
+        Assert.Equal(expected, timeUntilFull);
     }
 
     [Fact]

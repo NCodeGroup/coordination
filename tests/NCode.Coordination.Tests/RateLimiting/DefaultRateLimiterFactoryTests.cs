@@ -25,14 +25,13 @@ public sealed class DefaultRateLimiterFactoryTests
         DefaultRateLimiterFactory factory
     )
     {
-        return PartitionedRateLimiter.Create<string, string>(id =>
-            RateLimitPartition.Get(id, x =>
-                factory.CreateFixedWindowLimiter(
-                    RecipeTesting.Keyspace.CreateKey("api", x),
-                    new FixedWindowLimit(2, TimeSpan.FromMinutes(1))
-                )
-            )
-        );
+        var window = TimeSpan.FromMinutes(1);
+        var limit = new FixedWindowLimit(2, window);
+        return PartitionedRateLimiter.Create<string, string>(id => RateLimitPartition.Get(id, x =>
+            {
+                var key = RecipeTesting.Keyspace.CreateKey("api", x);
+                return factory.CreateFixedWindowLimiter(key, limit);
+            }));
     }
 
     #region CreateFixedWindowLimiter Tests
@@ -75,12 +74,11 @@ public sealed class DefaultRateLimiterFactoryTests
         }
 
         var key = new CoordinationKey(RecipeTesting.Keyspace, segments);
+        var window = TimeSpan.FromSeconds(2);
+        var limit = new SlidingWindowLimit(2, window, 2);
 
         var exception = Assert.Throws<ArgumentException>(() =>
-            factory.CreateSlidingWindowLimiter(
-                key,
-                new SlidingWindowLimit(2, TimeSpan.FromSeconds(2), 2)
-            )
+            factory.CreateSlidingWindowLimiter(key, limit)
         );
 
         Assert.Equal("key", exception.ParamName);
@@ -98,7 +96,8 @@ public sealed class DefaultRateLimiterFactoryTests
         await using var services = RecipeTesting.Build(time);
         var factory = CreateFactory(services, time);
         var key = RecipeTesting.Keyspace.CreateKey("bucket");
-        var limit = new TokenBucketLimit(2, 1, TimeSpan.FromSeconds(1));
+        var period = TimeSpan.FromSeconds(1);
+        var limit = new TokenBucketLimit(2, 1, period);
         using var one = factory.CreateTokenBucketLimiter(key, limit);
         using var other = factory.CreateTokenBucketLimiter(key, limit);
 

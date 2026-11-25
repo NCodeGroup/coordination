@@ -13,7 +13,9 @@ public sealed class CoordinationTokenBucketLimiterTests
 {
     private const int RacingCallers = 32;
 
-    private static TokenBucketLimit Limit { get; } = new(2, 1, TimeSpan.FromSeconds(1));
+    private static TimeSpan ReplenishmentPeriod { get; } = TimeSpan.FromSeconds(1);
+
+    private static TokenBucketLimit Limit { get; } = new(2, 1, ReplenishmentPeriod);
 
     private static CoordinationKey CreateKey() => RecipeTesting.Keyspace.CreateKey("limiter");
 
@@ -24,7 +26,8 @@ public sealed class CoordinationTokenBucketLimiterTests
     )
     {
         var records = services.GetRequiredService<IRecordService>();
-        return new CoordinationTokenBucketLimiter(records, time, CreateKey(), limit);
+        var key = CreateKey();
+        return new CoordinationTokenBucketLimiter(records, time, key, limit);
     }
 
     #region AcquireAsync Tests
@@ -40,10 +43,11 @@ public sealed class CoordinationTokenBucketLimiterTests
 
         using var second = await limiter.AcquireAsync(1, cancellationToken);
 
+        var found = second.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter);
         Assert.True(first.IsAcquired);
         Assert.False(second.IsAcquired);
-        Assert.True(second.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter));
-        Assert.Equal(TimeSpan.FromSeconds(1), retryAfter);
+        Assert.True(found);
+        Assert.Equal(ReplenishmentPeriod, retryAfter);
     }
 
     [Fact]
@@ -54,7 +58,7 @@ public sealed class CoordinationTokenBucketLimiterTests
         await using var services = RecipeTesting.Build(time);
         using var limiter = CreateLimiter(services, time, Limit);
         using var drained = await limiter.AcquireAsync(2, cancellationToken);
-        time.Advance(TimeSpan.FromSeconds(1));
+        time.Advance(ReplenishmentPeriod);
 
         using var first = await limiter.AcquireAsync(1, cancellationToken);
         using var second = await limiter.AcquireAsync(1, cancellationToken);
@@ -71,7 +75,8 @@ public sealed class CoordinationTokenBucketLimiterTests
         await using var services = RecipeTesting.Build(time);
         using var limiter = CreateLimiter(services, time, Limit);
         using var drained = await limiter.AcquireAsync(2, cancellationToken);
-        time.Advance(TimeSpan.FromSeconds(10));
+        var elapsed = TimeSpan.FromSeconds(10);
+        time.Advance(elapsed);
 
         using var first = await limiter.AcquireAsync(1, cancellationToken);
         using var second = await limiter.AcquireAsync(1, cancellationToken);
@@ -106,11 +111,9 @@ public sealed class CoordinationTokenBucketLimiterTests
         var cancellationToken = TestContext.Current.CancellationToken;
         var time = InProcessTesting.CreateTime();
         await using var services = RecipeTesting.Build(time);
-        using var limiter = CreateLimiter(
-            services,
-            time,
-            new TokenBucketLimit(10, 1, TimeSpan.FromMinutes(1))
-        );
+        var period = TimeSpan.FromMinutes(1);
+        var limit = new TokenBucketLimit(10, 1, period);
+        using var limiter = CreateLimiter(services, time, limit);
 
         var results = await RecipeTesting.RunConcurrentlyAsync<bool>(
             RacingCallers,
@@ -122,7 +125,8 @@ public sealed class CoordinationTokenBucketLimiterTests
             cancellationToken
         );
 
-        Assert.Equal(10, results.Count(acquired => acquired));
+        var acquired = results.Count(result => result);
+        Assert.Equal(10, acquired);
     }
 
     #endregion

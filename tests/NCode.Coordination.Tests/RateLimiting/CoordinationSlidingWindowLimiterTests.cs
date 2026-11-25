@@ -13,7 +13,9 @@ public sealed class CoordinationSlidingWindowLimiterTests
 {
     private const int RacingCallers = 64;
 
-    private static SlidingWindowLimit Limit { get; } = new(2, TimeSpan.FromSeconds(2), 2);
+    private static TimeSpan Window { get; } = TimeSpan.FromSeconds(2);
+
+    private static SlidingWindowLimit Limit { get; } = new(2, Window, 2);
 
     private static CoordinationKey CreateKey() => RecipeTesting.Keyspace.CreateKey("limiter");
 
@@ -24,7 +26,8 @@ public sealed class CoordinationSlidingWindowLimiterTests
     )
     {
         var counters = services.GetRequiredService<ICounterService>();
-        return new CoordinationSlidingWindowLimiter(counters, time, CreateKey(), limit);
+        var key = CreateKey();
+        return new CoordinationSlidingWindowLimiter(counters, time, key, limit);
     }
 
     #region AcquireAsync Tests
@@ -36,16 +39,20 @@ public sealed class CoordinationSlidingWindowLimiterTests
         var time = InProcessTesting.CreateTime();
         await using var services = RecipeTesting.Build(time);
         using var limiter = CreateLimiter(services, time, Limit);
-        time.Advance(TimeSpan.FromMilliseconds(1900));
+        var firstElapsed = TimeSpan.FromMilliseconds(1900);
+        time.Advance(firstElapsed);
         using var first = await limiter.AcquireAsync(2, cancellationToken);
-        time.Advance(TimeSpan.FromMilliseconds(100));
+        var secondElapsed = TimeSpan.FromMilliseconds(100);
+        time.Advance(secondElapsed);
 
         using var second = await limiter.AcquireAsync(1, cancellationToken);
 
+        var found = second.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter);
+        var expected = TimeSpan.FromSeconds(1);
         Assert.True(first.IsAcquired);
         Assert.False(second.IsAcquired);
-        Assert.True(second.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter));
-        Assert.Equal(TimeSpan.FromSeconds(1), retryAfter);
+        Assert.True(found);
+        Assert.Equal(expected, retryAfter);
     }
 
     [Fact]
@@ -56,9 +63,10 @@ public sealed class CoordinationSlidingWindowLimiterTests
         await using var services = RecipeTesting.Build(time);
         using var limiter = CreateLimiter(services, time, Limit);
         using var first = await limiter.AcquireAsync(2, cancellationToken);
-        time.Advance(TimeSpan.FromSeconds(1));
+        var elapsed = TimeSpan.FromSeconds(1);
+        time.Advance(elapsed);
         using var second = await limiter.AcquireAsync(1, cancellationToken);
-        time.Advance(TimeSpan.FromSeconds(1));
+        time.Advance(elapsed);
 
         using var third = await limiter.AcquireAsync(1, cancellationToken);
 
@@ -73,11 +81,9 @@ public sealed class CoordinationSlidingWindowLimiterTests
         var cancellationToken = TestContext.Current.CancellationToken;
         var time = InProcessTesting.CreateTime();
         await using var services = RecipeTesting.Build(time);
-        using var limiter = CreateLimiter(
-            services,
-            time,
-            new SlidingWindowLimit(10, TimeSpan.FromMinutes(1), 4)
-        );
+        var window = TimeSpan.FromMinutes(1);
+        var limit = new SlidingWindowLimit(10, window, 4);
+        using var limiter = CreateLimiter(services, time, limit);
 
         var results = await RecipeTesting.RunConcurrentlyAsync<bool>(
             RacingCallers,
@@ -89,7 +95,8 @@ public sealed class CoordinationSlidingWindowLimiterTests
             cancellationToken
         );
 
-        Assert.Equal(10, results.Count(acquired => acquired));
+        var acquired = results.Count(result => result);
+        Assert.Equal(10, acquired);
     }
 
     #endregion

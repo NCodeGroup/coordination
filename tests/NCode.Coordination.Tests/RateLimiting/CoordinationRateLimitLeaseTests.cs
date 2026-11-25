@@ -14,9 +14,10 @@ public sealed class CoordinationRateLimitLeaseTests
     {
         var lease = CoordinationRateLimitLease.Acquired;
 
+        var found = lease.TryGetMetadata(MetadataName.RetryAfter, out _);
         Assert.True(lease.IsAcquired);
         Assert.Empty(lease.MetadataNames);
-        Assert.False(lease.TryGetMetadata(MetadataName.RetryAfter, out _));
+        Assert.False(found);
     }
 
     #endregion
@@ -28,9 +29,10 @@ public sealed class CoordinationRateLimitLeaseTests
     {
         var lease = CoordinationRateLimitLease.NotAcquired;
 
+        var found = lease.TryGetMetadata(MetadataName.RetryAfter, out _);
         Assert.False(lease.IsAcquired);
         Assert.Empty(lease.MetadataNames);
-        Assert.False(lease.TryGetMetadata(MetadataName.RetryAfter, out _));
+        Assert.False(found);
     }
 
     #endregion
@@ -40,20 +42,24 @@ public sealed class CoordinationRateLimitLeaseTests
     [Fact]
     public void Denied_WhenRetryAfterIsPositive_ReportsItAsMetadata()
     {
-        var lease = CoordinationRateLimitLease.Denied(TimeSpan.FromSeconds(5));
+        var expected = TimeSpan.FromSeconds(5);
+        var lease = CoordinationRateLimitLease.Denied(expected);
 
+        var found = lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter);
         Assert.False(lease.IsAcquired);
-        Assert.True(lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter));
-        Assert.Equal(TimeSpan.FromSeconds(5), retryAfter);
+        Assert.True(found);
+        Assert.Equal(expected, retryAfter);
         Assert.Equal([MetadataName.RetryAfter.Name], lease.MetadataNames);
     }
 
     [Fact]
     public void Denied_WhenRetryAfterIsNegative_ReportsZero()
     {
-        var lease = CoordinationRateLimitLease.Denied(TimeSpan.FromSeconds(-1));
+        var negative = TimeSpan.FromSeconds(-1);
+        var lease = CoordinationRateLimitLease.Denied(negative);
 
-        Assert.True(lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter));
+        var found = lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter);
+        Assert.True(found);
         Assert.Equal(TimeSpan.Zero, retryAfter);
     }
 
@@ -64,9 +70,11 @@ public sealed class CoordinationRateLimitLeaseTests
     [Fact]
     public void TryGetMetadata_WhenTheNameIsUnknown_ReturnsFalse()
     {
-        var lease = CoordinationRateLimitLease.Denied(TimeSpan.FromSeconds(5));
+        var retryAfter = TimeSpan.FromSeconds(5);
+        var lease = CoordinationRateLimitLease.Denied(retryAfter);
 
-        Assert.False(lease.TryGetMetadata("other", out var metadata));
+        var found = lease.TryGetMetadata("other", out var metadata);
+        Assert.False(found);
         Assert.Null(metadata);
     }
 

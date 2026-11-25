@@ -10,11 +10,12 @@ public sealed class TokenBucketLimitTests
     [Fact]
     public void Constructor_WhenTheLimitIsValid_KeepsTheValues()
     {
-        var limit = new TokenBucketLimit(4, 2, TimeSpan.FromSeconds(1));
+        var period = TimeSpan.FromSeconds(1);
+        var limit = new TokenBucketLimit(4, 2, period);
 
         Assert.Equal(4, limit.TokenLimit);
         Assert.Equal(2, limit.TokensPerPeriod);
-        Assert.Equal(TimeSpan.FromSeconds(1), limit.ReplenishmentPeriod);
+        Assert.Equal(period, limit.ReplenishmentPeriod);
     }
 
     [Theory]
@@ -22,8 +23,10 @@ public sealed class TokenBucketLimitTests
     [InlineData(5)]
     public void Constructor_WhenTheTokensPerPeriodAreOutsideTheBounds_Throws(int tokensPerPeriod)
     {
+        var period = TimeSpan.FromSeconds(1);
+
         var exception = Assert.Throws<ArgumentOutOfRangeException>(() =>
-            new TokenBucketLimit(4, tokensPerPeriod, TimeSpan.FromSeconds(1))
+            new TokenBucketLimit(4, tokensPerPeriod, period)
         );
 
         Assert.Equal("tokensPerPeriod", exception.ParamName);
@@ -32,8 +35,10 @@ public sealed class TokenBucketLimitTests
     [Fact]
     public void Constructor_WhenTheBucketTakesLongerThanTheMostAllowedToFill_Throws()
     {
+        var period = TimeSpan.FromDays(1);
+
         var exception = Assert.Throws<ArgumentException>(() =>
-            new TokenBucketLimit(1_000, 1, TimeSpan.FromDays(1))
+            new TokenBucketLimit(1_000, 1, period)
         );
 
         Assert.Equal("replenishmentPeriod", exception.ParamName);
@@ -42,9 +47,10 @@ public sealed class TokenBucketLimitTests
     [Fact]
     public void Constructor_WhenTheBucketFillsInExactlyTheMostAllowed_DoesNotThrow()
     {
-        var limit = new TokenBucketLimit(180, 1, TimeSpan.FromDays(1));
+        var period = TimeSpan.FromDays(1);
+        var limit = new TokenBucketLimit(180, 1, period);
 
-        Assert.Equal(TimeSpan.FromDays(1), limit.ReplenishmentPeriod);
+        Assert.Equal(period, limit.ReplenishmentPeriod);
     }
 
     #endregion

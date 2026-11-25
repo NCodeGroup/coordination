@@ -13,7 +13,9 @@ public sealed class CoordinationFixedWindowLimiterTests
 {
     private const int RacingCallers = 64;
 
-    private static FixedWindowLimit Limit { get; } = new(2, TimeSpan.FromMinutes(1));
+    private static TimeSpan Window { get; } = TimeSpan.FromMinutes(1);
+
+    private static FixedWindowLimit Limit { get; } = new(2, Window);
 
     private static CoordinationKey CreateKey() => RecipeTesting.Keyspace.CreateKey("limiter");
 
@@ -24,7 +26,8 @@ public sealed class CoordinationFixedWindowLimiterTests
     )
     {
         var counters = services.GetRequiredService<ICounterService>();
-        return new CoordinationFixedWindowLimiter(counters, time, CreateKey(), limit);
+        var key = CreateKey();
+        return new CoordinationFixedWindowLimiter(counters, time, key, limit);
     }
 
     #region AcquireAsync Tests
@@ -53,13 +56,16 @@ public sealed class CoordinationFixedWindowLimiterTests
         using var limiter = CreateLimiter(services, time, Limit);
         using var first = await limiter.AcquireAsync(1, cancellationToken);
         using var second = await limiter.AcquireAsync(1, cancellationToken);
-        time.Advance(TimeSpan.FromSeconds(10));
+        var elapsed = TimeSpan.FromSeconds(10);
+        time.Advance(elapsed);
 
         using var third = await limiter.AcquireAsync(1, cancellationToken);
 
+        var found = third.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter);
+        var expected = TimeSpan.FromSeconds(50);
         Assert.False(third.IsAcquired);
-        Assert.True(third.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter));
-        Assert.Equal(TimeSpan.FromSeconds(50), retryAfter);
+        Assert.True(found);
+        Assert.Equal(expected, retryAfter);
     }
 
     [Fact]
@@ -70,7 +76,7 @@ public sealed class CoordinationFixedWindowLimiterTests
         await using var services = RecipeTesting.Build(time);
         using var limiter = CreateLimiter(services, time, Limit);
         using var first = await limiter.AcquireAsync(2, cancellationToken);
-        time.Advance(TimeSpan.FromMinutes(1));
+        time.Advance(Window);
 
         using var next = await limiter.AcquireAsync(1, cancellationToken);
 
@@ -129,11 +135,8 @@ public sealed class CoordinationFixedWindowLimiterTests
         var cancellationToken = TestContext.Current.CancellationToken;
         var time = InProcessTesting.CreateTime();
         await using var services = RecipeTesting.Build(time);
-        using var limiter = CreateLimiter(
-            services,
-            time,
-            new FixedWindowLimit(10, TimeSpan.FromMinutes(1))
-        );
+        var limit = new FixedWindowLimit(10, Window);
+        using var limiter = CreateLimiter(services, time, limit);
 
         var results = await RecipeTesting.RunConcurrentlyAsync<bool>(
             RacingCallers,
@@ -145,7 +148,8 @@ public sealed class CoordinationFixedWindowLimiterTests
             cancellationToken
         );
 
-        Assert.Equal(10, results.Count(acquired => acquired));
+        var acquired = results.Count(result => result);
+        Assert.Equal(10, acquired);
     }
 
     #endregion
@@ -177,9 +181,11 @@ public sealed class CoordinationFixedWindowLimiterTests
         using var limiter = CreateLimiter(services, time, Limit);
         using var lease = await limiter.AcquireAsync(1, cancellationToken);
 
-        time.Advance(TimeSpan.FromSeconds(5));
+        var elapsed = TimeSpan.FromSeconds(5);
+        time.Advance(elapsed);
 
-        Assert.Equal(TimeSpan.FromSeconds(5), limiter.IdleDuration);
+        var idle = limiter.IdleDuration;
+        Assert.Equal(elapsed, idle);
     }
 
     #endregion
