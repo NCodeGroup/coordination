@@ -58,6 +58,7 @@ public static class CoordinationServiceCollectionExtensions
             services.TryAddSingleton<ISetService, DefaultSetService>();
             services.TryAddSingleton<ICounterService, DefaultCounterService>();
             services.TryAddSingleton<ISequenceService, DefaultSequenceService>();
+            services.TryAddSingleton<INotificationService, DefaultNotificationService>();
             return services;
         }
     }
