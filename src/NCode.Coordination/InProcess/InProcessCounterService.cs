@@ -14,6 +14,19 @@ namespace NCode.Coordination.InProcess;
 internal class InProcessCounterService(TimeProvider time) : ICounterService
 {
     /// <summary>
+    /// Creates the exception of a count that would pass the largest count.
+    /// </summary>
+    /// <returns>The exception to throw.</returns>
+    private static CoordinationException CreateOverflow()
+    {
+        return new CoordinationException(
+            CoordinationErrorCodes.LimitExceeded,
+            outcomeUnknown: false,
+            "The counter would pass the largest count."
+        );
+    }
+
+    /// <summary>
     /// Gets the lock that every operation holds.
     /// </summary>
     private Lock Gate { get; } = new();
@@ -136,13 +149,14 @@ internal class InProcessCounterService(TimeProvider time) : ICounterService
         lock (Gate)
         {
             var pending = new Dictionary<CoordinationKey, long>();
-            var created = new Dictionary<CoordinationKey, TimeToLive>();
+            var timeToLives = new Dictionary<CoordinationKey, TimeToLive>();
             var counts = new List<long>(increments.Count);
             int? exceeded = null;
 
             for (var index = 0; index < increments.Count; index++)
             {
                 var increment = increments[index];
+                timeToLives.TryAdd(increment.Key, increment.TimeToLive);
 
                 long current;
                 if (
@@ -151,7 +165,6 @@ internal class InProcessCounterService(TimeProvider time) : ICounterService
                 )
                 {
                     current = 0;
-                    created[increment.Key] = increment.TimeToLive;
                 }
 
                 if (current > long.MaxValue - increment.Amount)
@@ -178,7 +191,7 @@ internal class InProcessCounterService(TimeProvider time) : ICounterService
                 }
                 else
                 {
-                    var expiry = InProcessExpiry.Begin(Time, created[key]);
+                    var expiry = InProcessExpiry.Begin(Time, timeToLives[key]);
                     Counters.Set(key, count, expiry);
                 }
             }
@@ -186,18 +199,5 @@ internal class InProcessCounterService(TimeProvider time) : ICounterService
             var result = new CounterBatchResult(counts) { ExceededIndex = exceeded };
             return ValueTask.FromResult(result);
         }
-    }
-
-    /// <summary>
-    /// Creates the exception of a count that would pass the largest count.
-    /// </summary>
-    /// <returns>The exception to throw.</returns>
-    private static CoordinationException CreateOverflow()
-    {
-        return new CoordinationException(
-            CoordinationErrorCodes.LimitExceeded,
-            outcomeUnknown: false,
-            "The counter would pass the largest count."
-        );
     }
 }

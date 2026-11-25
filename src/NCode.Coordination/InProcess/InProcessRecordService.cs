@@ -14,6 +14,32 @@ namespace NCode.Coordination.InProcess;
 /// </remarks>
 internal class InProcessRecordService(InProcessRecordTable table) : IRecordService
 {
+    private static long ParseContinuationToken(RecordPageRequest page)
+    {
+        if (page.ContinuationToken is null)
+        {
+            return 0;
+        }
+
+        if (
+            !long.TryParse(
+                page.ContinuationToken,
+                NumberStyles.None,
+                CultureInfo.InvariantCulture,
+                out var after
+            )
+            || after < 1
+        )
+        {
+            throw new ArgumentException(
+                "The continuation token was not issued by the in-process provider.",
+                nameof(page)
+            );
+        }
+
+        return after;
+    }
+
     /// <summary>
     /// Gets the record table, shared with the transaction service.
     /// </summary>
@@ -221,31 +247,5 @@ internal class InProcessRecordService(InProcessRecordTable table) : IRecordServi
         var expiry = InProcessExpiry.ForLifetime(Table.Time, lifetime);
         Table.Put(record, expiry);
         return RecordWriteResult.Written(revision);
-    }
-
-    private static long ParseContinuationToken(RecordPageRequest page)
-    {
-        if (page.ContinuationToken is null)
-        {
-            return 0;
-        }
-
-        if (
-            !long.TryParse(
-                page.ContinuationToken,
-                NumberStyles.None,
-                CultureInfo.InvariantCulture,
-                out var after
-            )
-            || after < 1
-        )
-        {
-            throw new ArgumentException(
-                "The continuation token was not issued by the in-process provider.",
-                nameof(page)
-            );
-        }
-
-        return after;
     }
 }
