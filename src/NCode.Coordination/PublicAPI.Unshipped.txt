@@ -1,0 +1,4 @@
+#nullable enable
+const NCode.Coordination.CoordinationTelemetry.ActivitySourceName = "NCode.Coordination" -> string!
+const NCode.Coordination.CoordinationTelemetry.MeterName = "NCode.Coordination" -> string!
+NCode.Coordination.CoordinationTelemetry

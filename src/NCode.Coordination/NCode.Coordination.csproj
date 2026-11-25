@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>NCode.Coordination</RootNamespace>
+    <Description>The composition of NCode.Coordination: providers registered on one builder and bound by primitive and keyspace, every requirement checked when the host starts, and every operation routed to its provider, traced and measured.</Description>
+    <PackageTags>coordination;distributed;cluster;composition;telemetry</PackageTags>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../NCode.Coordination.Abstractions/NCode.Coordination.Abstractions.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
+  </ItemGroup>
+</Project>
