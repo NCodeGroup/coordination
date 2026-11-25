@@ -29,8 +29,8 @@ requirements.
 
 CI runs the project's commands on every pull request
 (`.github/workflows/ci.yml`). `.github/workflows/originality.yml` also checks every pull request's NuGet dependencies,
-transitive ones included, against the permitted licenses, and scans its code for matches with public open-source code
-([ADR-1009](decisions/1009-ci-checks-originality-with-scanoss-snippet-matching-and-nuget-license-license-checking.md)).
+transitive ones included, against the permitted licenses
+([ADR-1009](decisions/1009-ci-checks-every-dependencys-license-and-no-snippet-scan-runs.md)).
 Releases are tagged and published as
 [ADR-0016](decisions/project-template/0016-releases-are-tagged-and-published-when-their-pull-request-merges.md)
 records. `publish.yml` tests and packs the tagged commit, pushes to nuget.org through trusted publishing once a

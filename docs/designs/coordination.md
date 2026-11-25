@@ -256,7 +256,7 @@ ownership give it up at a conservative local deadline and rely on fencing tokens
 
 1. **Foundation.** The repository, this design, the originality policy and the founding decisions.
 2. **Model.** The abstractions, the in-process provider and the conformance kit with its history checker, and the
-   snippet-scanning and license checks [ORIGINALITY.md](../../ORIGINALITY.md) requires in CI, in eight plans:
+   license check [ORIGINALITY.md](../../ORIGINALITY.md) requires in CI, in eight plans:
    the abstractions foundation with the CI checks ([#6](https://github.com/NCodeGroup/coordination/issues/6)), the
    primitives' contracts ([#7](https://github.com/NCodeGroup/coordination/issues/7)), the composition
    ([#8](https://github.com/NCodeGroup/coordination/issues/8)), the in-process provider with the kit's contract tests
