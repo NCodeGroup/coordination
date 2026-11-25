@@ -133,10 +133,16 @@ NCode.Coordination.Testing.RecordContractTests.CompareAndSwapAsync_WhenKeyIsAbse
 NCode.Coordination.Testing.RecordContractTests.CompareAndSwapAsync_WhenLifetimeIsPersistent_KeepsTheRecordPastTheEarlierTimeToLive() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.RecordContractTests.CompareAndSwapAsync_WhenRevisionDiffers_ReturnsConflict() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.RecordContractTests.CompareAndSwapAsync_WhenRevisionMatches_WritesALaterRevision() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.RecordContractTests.CompareAndSwapAsync_WhenTheLifetimeLeavesTheSession_KeepsTheRecordAfterTheSessionEnds() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.RecordContractTests.CompareAndSwapAsync_WhenTheSessionHasEnded_ReturnsSessionEnded() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.RecordContractTests.CreateAsync_WhenAnotherKeyIsWritten_GivesALaterRevision() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.RecordContractTests.CreateAsync_WhenBoundToALiveSession_WritesTheRecord() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.RecordContractTests.CreateAsync_WhenKeyIsAbsent_WritesTheRecord() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.RecordContractTests.CreateAsync_WhenKeyIsPresent_ReturnsConflict() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.RecordContractTests.CreateAsync_WhenTheRecordWasDeleted_WritesItAgain() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.RecordContractTests.CreateAsync_WhenTheSessionCloses_DeletesTheRecord() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.RecordContractTests.CreateAsync_WhenTheSessionExpires_DeletesTheRecord() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.RecordContractTests.CreateAsync_WhenTheSessionHasEnded_ReturnsSessionEnded() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.RecordContractTests.CreateAsync_WhenTimeToLivePasses_ExpiresTheRecord() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.RecordContractTests.CreateAsync_WhenTokenIsCanceled_ThrowsOperationCanceledException() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.RecordContractTests.CreateAsync_WhenValueHasTheLargestLength_WritesTheRecord() -> System.Threading.Tasks.Task!
@@ -230,6 +236,7 @@ NCode.Coordination.Testing.TransactionContractTests.ExecuteAsync_WhenAbsentMeets
 NCode.Coordination.Testing.TransactionContractTests.ExecuteAsync_WhenAConditionFails_AppliesTheFailureWrites() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.TransactionContractTests.ExecuteAsync_WhenAConditionFailsWithoutFailureWrites_ChangesNothing() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.TransactionContractTests.ExecuteAsync_WhenAPutCarriesATimeToLive_ExpiresTheRecord() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.TransactionContractTests.ExecuteAsync_WhenAPutIsBoundToALiveSession_EndsTheRecordWithTheSession() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.TransactionContractTests.ExecuteAsync_WhenEveryConditionHolds_AppliesTheSuccessWrites() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.TransactionContractTests.ExecuteAsync_WhenItWrites_GivesALaterRevision() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.TransactionContractTests.ExecuteAsync_WhenKeysSpanPartitionsAndAtomicityAcrossPartitionsIsDeclared_AppliesEveryWrite() -> System.Threading.Tasks.Task!

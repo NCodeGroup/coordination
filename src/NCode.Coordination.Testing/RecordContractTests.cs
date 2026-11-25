@@ -16,6 +16,11 @@ public abstract class RecordContractTests : ProviderContractTests
     /// </summary>
     private IRecordService Records => GetService<IRecordService>(Primitives.Record);
 
+    /// <summary>
+    /// Gets the provider's session service, and skips the test when the provider does not support sessions.
+    /// </summary>
+    private ISessionService Sessions => GetService<ISessionService>(Primitives.Session);
+
     #region CreateAsync Tests
 
     /// <summary>
@@ -193,6 +198,115 @@ public abstract class RecordContractTests : ProviderContractTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
             await Records.CreateAsync(key, value, RecordLifetime.Persistent, null, canceledToken)
         );
+    }
+
+    /// <summary>
+    /// Checks that creating a record bound to a live session writes it and returns the revision a read gives.
+    /// </summary>
+    [Fact]
+    public async Task CreateAsync_WhenBoundToALiveSession_WritesTheRecord()
+    {
+        var key = CreateKey("a");
+        var value = "one"u8.ToArray();
+        var session = await ContractSessions.OpenAsync(
+            Sessions,
+            Keyspace,
+            LongTimeToLive,
+            TestCancellationToken
+        );
+        var lifetime = RecordLifetime.ForSession(session);
+
+        var revision = await ContractRecords.CreateAsync(
+            Records,
+            key,
+            value,
+            lifetime,
+            TestCancellationToken
+        );
+
+        var record = await Records.ReadAsync(key, null, TestCancellationToken);
+        Assert.NotNull(record);
+        var actual = record.Value.ToArray();
+        Assert.Equal(value, actual);
+        Assert.Equal(revision, record.Revision);
+    }
+
+    /// <summary>
+    /// Checks that closing a session deletes the records bound to it and lets the key be created again.
+    /// </summary>
+    [Fact]
+    public async Task CreateAsync_WhenTheSessionCloses_DeletesTheRecord()
+    {
+        var key = CreateKey("a");
+        var one = "one"u8.ToArray();
+        var two = "two"u8.ToArray();
+        var session = await ContractSessions.OpenAsync(
+            Sessions,
+            Keyspace,
+            LongTimeToLive,
+            TestCancellationToken
+        );
+        var lifetime = RecordLifetime.ForSession(session);
+        await ContractRecords.CreateAsync(Records, key, one, lifetime, TestCancellationToken);
+
+        await Sessions.CloseAsync(session, null, TestCancellationToken);
+
+        var record = await Records.ReadAsync(key, null, TestCancellationToken);
+        Assert.Null(record);
+        await ContractRecords.CreateAsync(Records, key, two, TestCancellationToken);
+    }
+
+    /// <summary>
+    /// Checks that a record bound to a session is present while the session's time to live runs and is deleted once
+    /// the session has expired.
+    /// </summary>
+    [Fact]
+    public async Task CreateAsync_WhenTheSessionExpires_DeletesTheRecord()
+    {
+        var key = CreateKey("a");
+        var one = "one"u8.ToArray();
+        var session = await ContractSessions.OpenAsync(
+            Sessions,
+            Keyspace,
+            ShortTimeToLive,
+            TestCancellationToken
+        );
+        var lifetime = RecordLifetime.ForSession(session);
+        await ContractRecords.CreateAsync(Records, key, one, lifetime, TestCancellationToken);
+
+        await AdvanceClockAsync(StillAlive, TestCancellationToken);
+
+        var alive = await Records.ReadAsync(key, null, TestCancellationToken);
+        Assert.NotNull(alive);
+
+        await AdvanceClockAsync(PastExpiry, TestCancellationToken);
+
+        var expired = await Records.ReadAsync(key, null, TestCancellationToken);
+        Assert.Null(expired);
+    }
+
+    /// <summary>
+    /// Checks that creating a record bound to a session that has ended returns a session ended result and writes
+    /// nothing.
+    /// </summary>
+    [Fact]
+    public async Task CreateAsync_WhenTheSessionHasEnded_ReturnsSessionEnded()
+    {
+        var key = CreateKey("a");
+        var value = "one"u8.ToArray();
+        var session = await ContractSessions.OpenEndedAsync(
+            Sessions,
+            Keyspace,
+            TestCancellationToken
+        );
+        var lifetime = RecordLifetime.ForSession(session);
+
+        var result = await Records.CreateAsync(key, value, lifetime, null, TestCancellationToken);
+
+        Assert.False(result.IsWritten);
+        Assert.Equal(RecordWriteStatus.SessionEnded, result.Status);
+        var record = await Records.ReadAsync(key, null, TestCancellationToken);
+        Assert.Null(record);
     }
 
     #endregion
@@ -393,6 +507,84 @@ public abstract class RecordContractTests : ProviderContractTests
 
         var pastTimeToLive = TimeSpan.FromSeconds(3);
         await AdvanceClockAsync(pastTimeToLive, TestCancellationToken);
+
+        var record = await Records.ReadAsync(key, null, TestCancellationToken);
+        Assert.NotNull(record);
+        var actual = record.Value.ToArray();
+        Assert.Equal(two, actual);
+    }
+
+    /// <summary>
+    /// Checks that swapping a record with a lifetime bound to a session that has ended returns a session ended
+    /// result and keeps the stored value.
+    /// </summary>
+    [Fact]
+    public async Task CompareAndSwapAsync_WhenTheSessionHasEnded_ReturnsSessionEnded()
+    {
+        var key = CreateKey("a");
+        var one = "one"u8.ToArray();
+        var two = "two"u8.ToArray();
+        var created = await ContractRecords.CreateAsync(Records, key, one, TestCancellationToken);
+        var session = await ContractSessions.OpenEndedAsync(
+            Sessions,
+            Keyspace,
+            TestCancellationToken
+        );
+        var lifetime = RecordLifetime.ForSession(session);
+
+        var result = await Records.CompareAndSwapAsync(
+            key,
+            created,
+            two,
+            lifetime,
+            null,
+            TestCancellationToken
+        );
+
+        Assert.False(result.IsWritten);
+        Assert.Equal(RecordWriteStatus.SessionEnded, result.Status);
+        var record = await Records.ReadAsync(key, null, TestCancellationToken);
+        Assert.NotNull(record);
+        var actual = record.Value.ToArray();
+        Assert.Equal(one, actual);
+        Assert.Equal(created, record.Revision);
+    }
+
+    /// <summary>
+    /// Checks that a swap whose lifetime is persistent takes the record off its session, so the record stays after
+    /// the session ends.
+    /// </summary>
+    [Fact]
+    public async Task CompareAndSwapAsync_WhenTheLifetimeLeavesTheSession_KeepsTheRecordAfterTheSessionEnds()
+    {
+        var key = CreateKey("a");
+        var one = "one"u8.ToArray();
+        var two = "two"u8.ToArray();
+        var session = await ContractSessions.OpenAsync(
+            Sessions,
+            Keyspace,
+            LongTimeToLive,
+            TestCancellationToken
+        );
+        var bound = RecordLifetime.ForSession(session);
+        var created = await ContractRecords.CreateAsync(
+            Records,
+            key,
+            one,
+            bound,
+            TestCancellationToken
+        );
+        var result = await Records.CompareAndSwapAsync(
+            key,
+            created,
+            two,
+            RecordLifetime.Persistent,
+            null,
+            TestCancellationToken
+        );
+        Assert.True(result.IsWritten);
+
+        await Sessions.CloseAsync(session, null, TestCancellationToken);
 
         var record = await Records.ReadAsync(key, null, TestCancellationToken);
         Assert.NotNull(record);
