@@ -101,6 +101,21 @@ public sealed class CoordinationServiceCollectionExtensionsTests : IDisposable
         Assert.Same(TimeProvider.System, timeProvider);
     }
 
+    [Fact]
+    public void AddCoordination_RegistersARoutedServiceForEveryBuiltInPrimitive()
+    {
+        var services = new ServiceCollection();
+
+        services.AddCoordination(_ => { });
+
+        foreach (var serviceType in PrimitiveServiceTypes.All)
+        {
+            var descriptor = Assert.Single(services, x => x.ServiceType == serviceType);
+            Assert.Equal(ServiceLifetime.Singleton, descriptor.Lifetime);
+            Assert.Equal("NCode.Coordination.Routing", descriptor.ImplementationType?.Namespace);
+        }
+    }
+
     #endregion
 
     #region Host Tests
