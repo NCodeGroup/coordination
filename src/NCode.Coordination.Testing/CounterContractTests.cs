@@ -444,6 +444,8 @@ public abstract class CounterContractTests : ProviderContractTests
         var recorder = new HistoryRecorder();
         const string partition = "batch";
         const long limit = 6;
+        const long firstAmount = 1;
+        const long secondAmount = 2;
 
         await ConcurrentRun.RunAsync(
             async (client, index, cancellationToken) =>
@@ -478,11 +480,11 @@ public abstract class CounterContractTests : ProviderContractTests
                         );
                         break;
                     case 2:
-                        var batch = new CounterBatchCall(1, 2, limit);
+                        var batch = new CounterBatchCall(firstAmount, secondAmount, limit);
                         IReadOnlyList<CounterIncrement> increments =
                         [
-                            new CounterIncrement(first, 1, limit, LongTimeToLive),
-                            new CounterIncrement(second, 2, limit, LongTimeToLive),
+                            new CounterIncrement(first, firstAmount, limit, LongTimeToLive),
+                            new CounterIncrement(second, secondAmount, limit, LongTimeToLive),
                         ];
                         await recorder.RecordAsync(
                             client,
@@ -521,6 +523,8 @@ public abstract class CounterContractTests : ProviderContractTests
         var counters = Counters;
         var keys = CreateRunKeys();
         var recorder = new HistoryRecorder();
+        const long batchAmount = 2;
+        const long batchLimit = 10;
 
         await ConcurrentRun.RunAsync(
             async (client, index, cancellationToken) =>
@@ -552,10 +556,10 @@ public abstract class CounterContractTests : ProviderContractTests
                         );
                         break;
                     case 2:
-                        var batch = new CounterCall(CounterCall.Batch, 2, 10);
+                        var batch = new CounterCall(CounterCall.Batch, batchAmount, batchLimit);
                         IReadOnlyList<CounterIncrement> increments =
                         [
-                            new CounterIncrement(key, 2, 10, LongTimeToLive),
+                            new CounterIncrement(key, batchAmount, batchLimit, LongTimeToLive),
                         ];
                         await recorder.RecordAsync(
                             client,
