@@ -187,7 +187,8 @@ public abstract class RecordWatchContractTests : ProviderContractTests
         Assert.Equal(key, change.Key);
         Assert.Equal(revision, change.Revision);
         Assert.NotNull(change.Record);
-        Assert.Equal(value, change.Record.Value.ToArray());
+        var written = change.Record.Value.ToArray();
+        Assert.Equal(value, written);
         Assert.Equal(revision, change.Record.Revision);
     }
 
@@ -198,12 +199,8 @@ public abstract class RecordWatchContractTests : ProviderContractTests
     public async Task WatchKeyAsync_WhenTheRecordIsDeleted_YieldsTheDelete()
     {
         var key = CreateKey("a");
-        var written = await ContractRecords.CreateAsync(
-            Records,
-            key,
-            "one"u8.ToArray(),
-            TestCancellationToken
-        );
+        var value = "one"u8.ToArray();
+        var written = await ContractRecords.CreateAsync(Records, key, value, TestCancellationToken);
         var watch = Watches.WatchKeyAsync(key, null, null, TestCancellationToken);
         await using var stream = ContractStreams.Open(watch);
         await ContractStreams.NextAsync(stream);
@@ -246,14 +243,9 @@ public abstract class RecordWatchContractTests : ProviderContractTests
     public async Task WatchKeyAsync_WhenTheRecordExpires_YieldsADelete()
     {
         var key = CreateKey("a");
+        var value = "one"u8.ToArray();
         var lifetime = RecordLifetime.ForTimeToLive(ShortTimeToLive);
-        await ContractRecords.CreateAsync(
-            Records,
-            key,
-            "one"u8.ToArray(),
-            lifetime,
-            TestCancellationToken
-        );
+        await ContractRecords.CreateAsync(Records, key, value, lifetime, TestCancellationToken);
         var watch = Watches.WatchKeyAsync(key, null, null, TestCancellationToken);
         await using var stream = ContractStreams.Open(watch);
         await ContractStreams.NextAsync(stream);
@@ -280,13 +272,9 @@ public abstract class RecordWatchContractTests : ProviderContractTests
             LongTimeToLive,
             TestCancellationToken
         );
-        await ContractRecords.CreateAsync(
-            Records,
-            key,
-            "one"u8.ToArray(),
-            RecordLifetime.ForSession(session),
-            TestCancellationToken
-        );
+        var value = "one"u8.ToArray();
+        var lifetime = RecordLifetime.ForSession(session);
+        await ContractRecords.CreateAsync(Records, key, value, lifetime, TestCancellationToken);
         var watch = Watches.WatchKeyAsync(key, null, null, TestCancellationToken);
         await using var stream = ContractStreams.Open(watch);
         await ContractStreams.NextAsync(stream);
@@ -306,17 +294,15 @@ public abstract class RecordWatchContractTests : ProviderContractTests
     public async Task WatchKeyAsync_WhenChangesFollow_YieldsThemInRevisionOrder()
     {
         var key = CreateKey("a");
+        var one = "one"u8.ToArray();
+        var two = "two"u8.ToArray();
+        var three = "three"u8.ToArray();
         var watch = Watches.WatchKeyAsync(key, null, null, TestCancellationToken);
         await using var stream = ContractStreams.Open(watch);
         await ContractStreams.NextAsync(stream);
-        var first = await ContractRecords.CreateAsync(
-            Records,
-            key,
-            "one"u8.ToArray(),
-            TestCancellationToken
-        );
-        var second = await SwapAsync(key, first, "two"u8.ToArray());
-        var third = await SwapAsync(key, second, "three"u8.ToArray());
+        var first = await ContractRecords.CreateAsync(Records, key, one, TestCancellationToken);
+        var second = await SwapAsync(key, first, two);
+        var third = await SwapAsync(key, second, three);
 
         Revision? previous = null;
         while (previous is null || previous < third)
@@ -356,8 +342,9 @@ public abstract class RecordWatchContractTests : ProviderContractTests
 
         var record = Assert.Single(view).Value;
         Assert.Equal(key, record.Key);
+        var actual = record.Value.ToArray();
         Assert.Equal(second, record.Revision);
-        Assert.Equal(two, record.Value.ToArray());
+        Assert.Equal(two, actual);
     }
 
     /// <summary>
@@ -395,23 +382,28 @@ public abstract class RecordWatchContractTests : ProviderContractTests
         var keyB = CreateKey("cfg", "b");
         var keyC = CreateKey("cfg", "c");
         var other = CreateKey("other");
+        var valueA1 = "a1"u8.ToArray();
+        var valueA2 = "a2"u8.ToArray();
+        var valueB1 = "b1"u8.ToArray();
+        var valueC1 = "c1"u8.ToArray();
+        var valueO1 = "o1"u8.ToArray();
         var watch = Watches.WatchPrefixAsync(prefix, null, null, TestCancellationToken);
         await using var stream = ContractStreams.Open(watch);
         var first = await ContractStreams.NextAsync(stream);
         var createdA = await ContractRecords.CreateAsync(
             Records,
             keyA,
-            "a1"u8.ToArray(),
+            valueA1,
             TestCancellationToken
         );
-        await ContractRecords.CreateAsync(Records, keyB, "b1"u8.ToArray(), TestCancellationToken);
-        await SwapAsync(keyA, createdA, "a2"u8.ToArray());
+        await ContractRecords.CreateAsync(Records, keyB, valueB1, TestCancellationToken);
+        await SwapAsync(keyA, createdA, valueA2);
         await Records.TakeAsync(keyB, null, TestCancellationToken);
-        await ContractRecords.CreateAsync(Records, other, "o1"u8.ToArray(), TestCancellationToken);
+        await ContractRecords.CreateAsync(Records, other, valueO1, TestCancellationToken);
         var createdC = await ContractRecords.CreateAsync(
             Records,
             keyC,
-            "c1"u8.ToArray(),
+            valueC1,
             TestCancellationToken
         );
 
@@ -422,13 +414,19 @@ public abstract class RecordWatchContractTests : ProviderContractTests
         Assert.Equal(listed.Count, view.Count);
         foreach (var (key, expected) in listed)
         {
-            Assert.True(view.TryGetValue(key, out var actual));
+            var found = view.TryGetValue(key, out var actual);
+            Assert.True(found);
+            Assert.NotNull(actual);
+            var expectedValue = expected.Value.ToArray();
+            var actualValue = actual.Value.ToArray();
             Assert.Equal(expected.Revision, actual.Revision);
-            Assert.Equal(expected.Value.ToArray(), actual.Value.ToArray());
+            Assert.Equal(expectedValue, actualValue);
         }
 
-        Assert.Equal("a2"u8.ToArray(), listed[keyA].Value.ToArray());
-        Assert.Equal("c1"u8.ToArray(), listed[keyC].Value.ToArray());
+        var listedA = listed[keyA].Value.ToArray();
+        var listedC = listed[keyC].Value.ToArray();
+        Assert.Equal(valueA2, listedA);
+        Assert.Equal(valueC1, listedC);
     }
 
     /// <summary>

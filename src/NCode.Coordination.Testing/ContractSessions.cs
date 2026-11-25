@@ -41,12 +41,10 @@ internal static class ContractSessions
         CancellationToken cancellationToken
     )
     {
-        var session = await OpenAsync(
-            sessions,
-            keyspace,
-            new TimeToLive(TimeSpan.FromSeconds(30)),
-            cancellationToken
-        );
+        var duration = TimeSpan.FromSeconds(30);
+        var timeToLive = new TimeToLive(duration);
+
+        var session = await OpenAsync(sessions, keyspace, timeToLive, cancellationToken);
 
         await sessions.CloseAsync(session, null, cancellationToken);
         return session;

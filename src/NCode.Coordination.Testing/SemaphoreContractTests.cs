@@ -52,14 +52,12 @@ public abstract class SemaphoreContractTests : ProviderContractTests
         CoordinationKey resource,
         int capacity,
         TimeToLive timeToLive
-    ) =>
-        Semaphores.TryAcquireAsync(
-            resource,
-            capacity,
-            LeaseTerms.ForTimeToLive(timeToLive),
-            null,
-            TestCancellationToken
-        );
+    )
+    {
+        var terms = LeaseTerms.ForTimeToLive(timeToLive);
+
+        return Semaphores.TryAcquireAsync(resource, capacity, terms, null, TestCancellationToken);
+    }
 
     #region TryAcquireAsync Tests
 
@@ -175,10 +173,12 @@ public abstract class SemaphoreContractTests : ProviderContractTests
             TestCancellationToken
         );
 
+        var terms = LeaseTerms.ForSession(session);
+
         var result = await Semaphores.TryAcquireAsync(
             resource,
             1,
-            LeaseTerms.ForSession(session),
+            terms,
             null,
             TestCancellationToken
         );
@@ -208,6 +208,7 @@ public abstract class SemaphoreContractTests : ProviderContractTests
             TestCancellationToken
         );
         var terms = LeaseTerms.ForSession(session);
+        var otherTerms = LeaseTerms.ForSession(other);
         var first = await Semaphores.TryAcquireAsync(
             resource,
             2,
@@ -226,7 +227,7 @@ public abstract class SemaphoreContractTests : ProviderContractTests
         var third = await Semaphores.TryAcquireAsync(
             resource,
             2,
-            LeaseTerms.ForSession(other),
+            otherTerms,
             null,
             TestCancellationToken
         );
@@ -304,10 +305,11 @@ public abstract class SemaphoreContractTests : ProviderContractTests
             LongTimeToLive,
             TestCancellationToken
         );
+        var terms = LeaseTerms.ForSession(session);
         var held = await Semaphores.TryAcquireAsync(
             resource,
             1,
-            LeaseTerms.ForSession(session),
+            terms,
             null,
             TestCancellationToken
         );
@@ -388,10 +390,11 @@ public abstract class SemaphoreContractTests : ProviderContractTests
             LongTimeToLive,
             TestCancellationToken
         );
+        var terms = LeaseTerms.ForSession(session);
         var result = await Semaphores.TryAcquireAsync(
             resource,
             1,
-            LeaseTerms.ForSession(session),
+            terms,
             null,
             TestCancellationToken
         );

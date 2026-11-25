@@ -73,12 +73,15 @@ public abstract class NotificationContractTests : ProviderContractTests
         await using var stream = ContractStreams.Open(subscription);
         await ContractStreams.NextAsync(stream);
 
-        await Notifications.PublishAsync(topic, "a"u8.ToArray(), null, TestCancellationToken);
+        var payload = "a"u8.ToArray();
+
+        await Notifications.PublishAsync(topic, payload, null, TestCancellationToken);
 
         var message = await ContractStreams.NextAsync(stream);
+        var delivered = message.Payload.ToArray();
         Assert.False(message.IsResync);
         Assert.Equal(topic, message.Topic);
-        Assert.Equal("a"u8.ToArray(), message.Payload.ToArray());
+        Assert.Equal(payload, delivered);
     }
 
     /// <summary>
@@ -98,14 +101,19 @@ public abstract class NotificationContractTests : ProviderContractTests
         await using var stream = ContractStreams.Open(subscription);
         await ContractStreams.NextAsync(stream);
 
-        await Notifications.PublishAsync(topic, "a"u8.ToArray(), null, TestCancellationToken);
-        await Notifications.PublishAsync(topic, "b"u8.ToArray(), null, TestCancellationToken);
+        var payloadA = "a"u8.ToArray();
+        var payloadB = "b"u8.ToArray();
+
+        await Notifications.PublishAsync(topic, payloadA, null, TestCancellationToken);
+        await Notifications.PublishAsync(topic, payloadB, null, TestCancellationToken);
 
         var first = await ContractStreams.NextAsync(stream);
         var second = await ContractStreams.NextAsync(stream);
+        var firstDelivered = first.Payload.ToArray();
+        var secondDelivered = second.Payload.ToArray();
         Assert.Equal(first.Sequence + 1, second.Sequence);
-        Assert.Equal("a"u8.ToArray(), first.Payload.ToArray());
-        Assert.Equal("b"u8.ToArray(), second.Payload.ToArray());
+        Assert.Equal(payloadA, firstDelivered);
+        Assert.Equal(payloadB, secondDelivered);
     }
 
     /// <summary>
@@ -122,12 +130,16 @@ public abstract class NotificationContractTests : ProviderContractTests
         await ContractStreams.NextAsync(first);
         await ContractStreams.NextAsync(second);
 
-        await Notifications.PublishAsync(topic, "a"u8.ToArray(), null, TestCancellationToken);
+        var payload = "a"u8.ToArray();
+
+        await Notifications.PublishAsync(topic, payload, null, TestCancellationToken);
 
         var firstMessage = await ContractStreams.NextAsync(first);
         var secondMessage = await ContractStreams.NextAsync(second);
-        Assert.Equal("a"u8.ToArray(), firstMessage.Payload.ToArray());
-        Assert.Equal("a"u8.ToArray(), secondMessage.Payload.ToArray());
+        var firstDelivered = firstMessage.Payload.ToArray();
+        var secondDelivered = secondMessage.Payload.ToArray();
+        Assert.Equal(payload, firstDelivered);
+        Assert.Equal(payload, secondDelivered);
     }
 
     /// <summary>
@@ -142,13 +154,17 @@ public abstract class NotificationContractTests : ProviderContractTests
         await using var stream = ContractStreams.Open(subscription);
         await ContractStreams.NextAsync(stream);
 
-        await Notifications.PublishAsync(topicB, "b"u8.ToArray(), null, TestCancellationToken);
-        await Notifications.PublishAsync(topicA, "a"u8.ToArray(), null, TestCancellationToken);
+        var payloadA = "a"u8.ToArray();
+        var payloadB = "b"u8.ToArray();
+
+        await Notifications.PublishAsync(topicB, payloadB, null, TestCancellationToken);
+        await Notifications.PublishAsync(topicA, payloadA, null, TestCancellationToken);
 
         var message = await ContractStreams.NextAsync(stream);
+        var delivered = message.Payload.ToArray();
         Assert.False(message.IsResync);
         Assert.Equal(topicA, message.Topic);
-        Assert.Equal("a"u8.ToArray(), message.Payload.ToArray());
+        Assert.Equal(payloadA, delivered);
     }
 
     /// <summary>
@@ -172,11 +188,12 @@ public abstract class NotificationContractTests : ProviderContractTests
     public async Task PublishAsync_WhenOptionsCarryAnUnknownExtension_ThrowsUnsupported()
     {
         var topic = CreateKey("topic");
+        var payload = "a"u8.ToArray();
 
         var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
             await Notifications.PublishAsync(
                 topic,
-                "a"u8.ToArray(),
+                payload,
                 UnknownExtension,
                 TestCancellationToken
             )

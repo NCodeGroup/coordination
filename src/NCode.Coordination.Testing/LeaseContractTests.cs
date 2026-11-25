@@ -49,13 +49,12 @@ public abstract class LeaseContractTests : ProviderContractTests
     private ValueTask<LeaseAcquireResult> TryAcquireAsync(
         CoordinationKey resource,
         TimeToLive timeToLive
-    ) =>
-        Leases.TryAcquireAsync(
-            resource,
-            LeaseTerms.ForTimeToLive(timeToLive),
-            null,
-            TestCancellationToken
-        );
+    )
+    {
+        var terms = LeaseTerms.ForTimeToLive(timeToLive);
+
+        return Leases.TryAcquireAsync(resource, terms, null, TestCancellationToken);
+    }
 
     #region TryAcquireAsync Tests
 
@@ -134,16 +133,13 @@ public abstract class LeaseContractTests : ProviderContractTests
             LongTimeToLive,
             TestCancellationToken
         );
-        var held = await Leases.TryAcquireAsync(
-            resource,
-            LeaseTerms.ForSession(holder),
-            null,
-            TestCancellationToken
-        );
+        var holderTerms = LeaseTerms.ForSession(holder);
+        var otherTerms = LeaseTerms.ForSession(other);
+        var held = await Leases.TryAcquireAsync(resource, holderTerms, null, TestCancellationToken);
 
         var result = await Leases.TryAcquireAsync(
             resource,
-            LeaseTerms.ForSession(other),
+            otherTerms,
             null,
             TestCancellationToken
         );
@@ -165,12 +161,9 @@ public abstract class LeaseContractTests : ProviderContractTests
             TestCancellationToken
         );
 
-        var result = await Leases.TryAcquireAsync(
-            resource,
-            LeaseTerms.ForSession(session),
-            null,
-            TestCancellationToken
-        );
+        var terms = LeaseTerms.ForSession(session);
+
+        var result = await Leases.TryAcquireAsync(resource, terms, null, TestCancellationToken);
 
         Assert.Equal(LeaseAcquireStatus.SessionEnded, result.Status);
         Assert.Null(result.Grant);
@@ -225,12 +218,8 @@ public abstract class LeaseContractTests : ProviderContractTests
             LongTimeToLive,
             TestCancellationToken
         );
-        var held = await Leases.TryAcquireAsync(
-            resource,
-            LeaseTerms.ForSession(session),
-            null,
-            TestCancellationToken
-        );
+        var terms = LeaseTerms.ForSession(session);
+        var held = await Leases.TryAcquireAsync(resource, terms, null, TestCancellationToken);
 
         await Sessions.CloseAsync(session, null, TestCancellationToken);
 
@@ -312,12 +301,8 @@ public abstract class LeaseContractTests : ProviderContractTests
             LongTimeToLive,
             TestCancellationToken
         );
-        var result = await Leases.TryAcquireAsync(
-            resource,
-            LeaseTerms.ForSession(session),
-            null,
-            TestCancellationToken
-        );
+        var terms = LeaseTerms.ForSession(session);
+        var result = await Leases.TryAcquireAsync(resource, terms, null, TestCancellationToken);
         Assert.True(result.IsAcquired);
         var grant = result.Grant;
 
