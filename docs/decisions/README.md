@@ -80,3 +80,4 @@ records are indexed in [project-template/](project-template/README.md).
 | [1012](1012-each-primitive-is-an-interface-whose-operations-are-named-with-the-guarantee-dimensions-they-carry.md) | Each primitive is an interface whose operations are named with the guarantee dimensions they carry | Proposed |
 | [1013](1013-ownership-is-granted-with-a-fencing-token-and-an-owner-token-and-bound-to-a-session-or-a-time-to-live.md) | Ownership is granted with a fencing token and an owner token, and bound to a session or a time to live | Proposed |
 | [1014](1014-records-carry-a-keyspace-wide-revision-and-watches-and-transactions-are-written-in-it.md) | Records carry a keyspace-wide revision, and watches and transactions are written in it | Proposed |
+| [1015](1015-occurrences-fail-closed-windows-align-to-the-epoch-and-notifications-number-each-topics-messages.md) | Occurrences fail closed, windows align to the epoch, and notifications number each topic's messages | Proposed |
