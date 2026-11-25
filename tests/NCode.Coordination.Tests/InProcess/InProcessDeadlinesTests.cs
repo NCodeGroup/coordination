@@ -18,18 +18,16 @@ public sealed class InProcessDeadlinesTests
 
     private static void RunDue(InProcessDeadlines deadlines, Lock gate)
     {
-        using (gate.EnterScope())
-        {
-            deadlines.RunDue();
-        }
+        using var scope = gate.EnterScope();
+
+        deadlines.RunDue();
     }
 
     private static void Cancel(InProcessDeadlines deadlines, Lock gate, InProcessDeadline? deadline)
     {
-        using (gate.EnterScope())
-        {
-            deadlines.Cancel(deadline);
-        }
+        using var scope = gate.EnterScope();
+
+        deadlines.Cancel(deadline);
     }
 
     private static InProcessDeadline Add(
@@ -39,10 +37,9 @@ public sealed class InProcessDeadlinesTests
         Action expire
     )
     {
-        using (gate.EnterScope())
-        {
-            return deadlines.Add(expiry, expire);
-        }
+        using var scope = gate.EnterScope();
+
+        return deadlines.Add(expiry, expire);
     }
 
     #region RunDue Tests

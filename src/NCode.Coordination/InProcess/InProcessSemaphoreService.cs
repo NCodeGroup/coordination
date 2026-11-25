@@ -62,67 +62,66 @@ internal class InProcessSemaphoreService : ISemaphoreService
         );
         InProcessGuard.Check(options, cancellationToken);
 
-        using (Sessions.Enter())
+        using var scope = Sessions.Enter();
+
+        if (terms.IsBoundToSession && !Sessions.IsLive(terms.Session))
         {
-            if (terms.IsBoundToSession && !Sessions.IsLive(terms.Session))
-            {
-                return ValueTask.FromResult(SemaphoreAcquireResult.SessionEnded);
-            }
-
-            if (Semaphores.TryGetValue(resource, out var semaphore))
-            {
-                if (semaphore.Capacity != capacity)
-                {
-                    return ValueTask.FromResult(SemaphoreAcquireResult.CapacityConflict);
-                }
-
-                if (terms.IsBoundToSession)
-                {
-                    var held = FindHeld(semaphore, terms.Session);
-
-                    if (held is not null)
-                    {
-                        var existing = SemaphoreAcquireResult.Acquired(held.Grant);
-
-                        return ValueTask.FromResult(existing);
-                    }
-                }
-            }
-            else
-            {
-                semaphore = new InProcessSemaphore(capacity);
-            }
-
-            var slot = Array.IndexOf(semaphore.Slots, null);
-
-            if (slot < 0)
-            {
-                return ValueTask.FromResult(SemaphoreAcquireResult.Full);
-            }
-
-            var ownerValue = Sessions.Issue("o");
-            var owner = new OwnerToken(ownerValue);
-            var fencingToken = Sessions.NextFencingToken();
-            var grant = new SemaphoreGrant(resource, slot, fencingToken, owner, terms);
-            var created = new InProcessHold<SemaphoreGrant>(grant, owner, terms);
-
-            if (!terms.IsBoundToSession)
-            {
-                created.Deadline = Schedule(resource, slot, owner, terms.TimeToLive);
-            }
-            else
-            {
-                Bind(terms.Session, resource, slot);
-            }
-
-            semaphore.Slots[slot] = created;
-            semaphore.Held++;
-            Semaphores[resource] = semaphore;
-
-            var acquired = SemaphoreAcquireResult.Acquired(grant);
-
-            return ValueTask.FromResult(acquired);
+            return ValueTask.FromResult(SemaphoreAcquireResult.SessionEnded);
         }
+
+        if (Semaphores.TryGetValue(resource, out var semaphore))
+        {
+            if (semaphore.Capacity != capacity)
+            {
+                return ValueTask.FromResult(SemaphoreAcquireResult.CapacityConflict);
+            }
+
+            if (terms.IsBoundToSession)
+            {
+                var held = FindHeld(semaphore, terms.Session);
+
+                if (held is not null)
+                {
+                    var existing = SemaphoreAcquireResult.Acquired(held.Grant);
+
+                    return ValueTask.FromResult(existing);
+                }
+            }
+        }
+        else
+        {
+            semaphore = new InProcessSemaphore(capacity);
+        }
+
+        var slot = Array.IndexOf(semaphore.Slots, null);
+
+        if (slot < 0)
+        {
+            return ValueTask.FromResult(SemaphoreAcquireResult.Full);
+        }
+
+        var ownerValue = Sessions.Issue("o");
+        var owner = new OwnerToken(ownerValue);
+        var fencingToken = Sessions.NextFencingToken();
+        var grant = new SemaphoreGrant(resource, slot, fencingToken, owner, terms);
+        var created = new InProcessHold<SemaphoreGrant>(grant, owner, terms);
+
+        if (!terms.IsBoundToSession)
+        {
+            created.Deadline = Schedule(resource, slot, owner, terms.TimeToLive);
+        }
+        else
+        {
+            Bind(terms.Session, resource, slot);
+        }
+
+        semaphore.Slots[slot] = created;
+        semaphore.Held++;
+        Semaphores[resource] = semaphore;
+
+        var acquired = SemaphoreAcquireResult.Acquired(grant);
+
+        return ValueTask.FromResult(acquired);
     }
 
     /// <inheritdoc />
@@ -146,20 +145,19 @@ internal class InProcessSemaphoreService : ISemaphoreService
 
         InProcessGuard.Check(options, cancellationToken);
 
-        using (Sessions.Enter())
+        using var scope = Sessions.Enter();
+
+        var hold = FindHold(grant);
+
+        if (hold is null)
         {
-            var hold = FindHold(grant);
-
-            if (hold is null)
-            {
-                return ValueTask.FromResult(false);
-            }
-
-            Sessions.Deadlines.Cancel(hold.Deadline);
-            hold.Deadline = Schedule(grant.Resource, grant.Slot, grant.Owner, timeToLive);
-
-            return ValueTask.FromResult(true);
+            return ValueTask.FromResult(false);
         }
+
+        Sessions.Deadlines.Cancel(hold.Deadline);
+        hold.Deadline = Schedule(grant.Resource, grant.Slot, grant.Owner, timeToLive);
+
+        return ValueTask.FromResult(true);
     }
 
     /// <inheritdoc />
@@ -172,17 +170,16 @@ internal class InProcessSemaphoreService : ISemaphoreService
         ArgumentNullException.ThrowIfNull(grant);
         InProcessGuard.Check(options, cancellationToken);
 
-        using (Sessions.Enter())
+        using var scope = Sessions.Enter();
+
+        if (FindHold(grant) is null)
         {
-            if (FindHold(grant) is null)
-            {
-                return ValueTask.FromResult(false);
-            }
-
-            Free(grant.Resource, grant.Slot);
-
-            return ValueTask.FromResult(true);
+            return ValueTask.FromResult(false);
         }
+
+        Free(grant.Resource, grant.Slot);
+
+        return ValueTask.FromResult(true);
     }
 
     /// <inheritdoc />
@@ -205,26 +202,23 @@ internal class InProcessSemaphoreService : ISemaphoreService
     /// <returns>A completed task when a slot is free, and otherwise the task of the next release.</returns>
     private Task StartWait(CoordinationKey resource)
     {
-        using (Sessions.Enter())
+        using var scope = Sessions.Enter();
+
+        if (
+            !Semaphores.TryGetValue(resource, out var semaphore)
+            || semaphore.Held < semaphore.Capacity
+        )
         {
-            if (
-                !Semaphores.TryGetValue(resource, out var semaphore)
-                || semaphore.Held < semaphore.Capacity
-            )
-            {
-                return Task.CompletedTask;
-            }
-
-            if (!Waiters.TryGetValue(resource, out var waiter))
-            {
-                waiter = new TaskCompletionSource(
-                    TaskCreationOptions.RunContinuationsAsynchronously
-                );
-                Waiters[resource] = waiter;
-            }
-
-            return waiter.Task;
+            return Task.CompletedTask;
         }
+
+        if (!Waiters.TryGetValue(resource, out var waiter))
+        {
+            waiter = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            Waiters[resource] = waiter;
+        }
+
+        return waiter.Task;
     }
 
     /// <summary>

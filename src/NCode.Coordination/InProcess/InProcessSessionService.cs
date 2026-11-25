@@ -27,12 +27,11 @@ internal class InProcessSessionService(InProcessSessionTable sessions) : ISessio
         ArgumentNullException.ThrowIfNull(timeToLive);
         InProcessGuard.Check(options, cancellationToken);
 
-        using (Sessions.Enter())
-        {
-            var opened = Sessions.Open(keyspace, timeToLive);
+        using var scope = Sessions.Enter();
 
-            return ValueTask.FromResult(opened);
-        }
+        var opened = Sessions.Open(keyspace, timeToLive);
+
+        return ValueTask.FromResult(opened);
     }
 
     /// <inheritdoc />
@@ -45,12 +44,11 @@ internal class InProcessSessionService(InProcessSessionTable sessions) : ISessio
         ArgumentNullException.ThrowIfNull(session);
         InProcessGuard.Check(options, cancellationToken);
 
-        using (Sessions.Enter())
-        {
-            var result = Sessions.KeepAlive(session);
+        using var scope = Sessions.Enter();
 
-            return ValueTask.FromResult(result);
-        }
+        var result = Sessions.KeepAlive(session);
+
+        return ValueTask.FromResult(result);
     }
 
     /// <inheritdoc />
@@ -93,9 +91,8 @@ internal class InProcessSessionService(InProcessSessionTable sessions) : ISessio
     /// <returns>A completed task when the session is not live, and otherwise the task of the session's end.</returns>
     private Task StartWait(SessionId session)
     {
-        using (Sessions.Enter())
-        {
-            return Sessions.WaitForEnd(session);
-        }
+        using var scope = Sessions.Enter();
+
+        return Sessions.WaitForEnd(session);
     }
 }

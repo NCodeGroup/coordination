@@ -95,22 +95,21 @@ internal class InProcessEventQueue<T>
     /// <returns>The signal of the waiting reader to complete, or null when no reader waits.</returns>
     private TaskCompletionSource? Enqueue(T item)
     {
-        using (Gate.EnterScope())
-        {
-            if (Items.Count == Capacity)
-            {
-                Items.Clear();
-                Dropped = item;
-            }
-            else
-            {
-                Items.Enqueue(item);
-            }
+        using var scope = Gate.EnterScope();
 
-            var waiter = Waiter;
-            Waiter = null;
-            return waiter;
+        if (Items.Count == Capacity)
+        {
+            Items.Clear();
+            Dropped = item;
         }
+        else
+        {
+            Items.Enqueue(item);
+        }
+
+        var waiter = Waiter;
+        Waiter = null;
+        return waiter;
     }
 
     /// <summary>
@@ -120,24 +119,23 @@ internal class InProcessEventQueue<T>
     /// <returns>The task that completes when an item is posted, or null when an item was taken.</returns>
     private Task? TryTake(out InProcessQueued<T> queued)
     {
-        using (Gate.EnterScope())
+        using var scope = Gate.EnterScope();
+
+        if (Dropped is { } dropped)
         {
-            if (Dropped is { } dropped)
-            {
-                Dropped = null;
-                queued = new InProcessQueued<T>(dropped, Overflowed: true);
-                return null;
-            }
-
-            if (Items.TryDequeue(out var item))
-            {
-                queued = new InProcessQueued<T>(item, Overflowed: false);
-                return null;
-            }
-
-            Waiter ??= new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            queued = default;
-            return Waiter.Task;
+            Dropped = null;
+            queued = new InProcessQueued<T>(dropped, Overflowed: true);
+            return null;
         }
+
+        if (Items.TryDequeue(out var item))
+        {
+            queued = new InProcessQueued<T>(item, Overflowed: false);
+            return null;
+        }
+
+        Waiter ??= new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        queued = default;
+        return Waiter.Task;
     }
 }

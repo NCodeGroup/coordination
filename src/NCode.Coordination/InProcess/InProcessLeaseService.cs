@@ -53,46 +53,44 @@ internal class InProcessLeaseService : ILeaseService
         ArgumentNullException.ThrowIfNull(terms);
         InProcessGuard.Check(options, cancellationToken);
 
-        using (Sessions.Enter())
+        using var scope = Sessions.Enter();
+
+        if (terms.IsBoundToSession && !Sessions.IsLive(terms.Session))
         {
-            if (terms.IsBoundToSession && !Sessions.IsLive(terms.Session))
-            {
-                return ValueTask.FromResult(LeaseAcquireResult.SessionEnded);
-            }
-
-            if (Holds.TryGetValue(resource, out var hold))
-            {
-                var isSameSession =
-                    terms.IsBoundToSession && terms.Session.Equals(hold.Terms.Session);
-
-                var existing = isSameSession
-                    ? LeaseAcquireResult.Acquired(hold.Grant)
-                    : LeaseAcquireResult.Held;
-
-                return ValueTask.FromResult(existing);
-            }
-
-            var ownerValue = Sessions.Issue("o");
-            var owner = new OwnerToken(ownerValue);
-            var fencingToken = Sessions.NextFencingToken();
-            var grant = new LeaseGrant(resource, fencingToken, owner, terms);
-            var created = new InProcessHold<LeaseGrant>(grant, owner, terms);
-
-            if (!terms.IsBoundToSession)
-            {
-                created.Deadline = Schedule(resource, owner, terms.TimeToLive);
-            }
-            else
-            {
-                Bind(terms.Session, resource);
-            }
-
-            Holds[resource] = created;
-
-            var acquired = LeaseAcquireResult.Acquired(grant);
-
-            return ValueTask.FromResult(acquired);
+            return ValueTask.FromResult(LeaseAcquireResult.SessionEnded);
         }
+
+        if (Holds.TryGetValue(resource, out var hold))
+        {
+            var isSameSession = terms.IsBoundToSession && terms.Session.Equals(hold.Terms.Session);
+
+            var existing = isSameSession
+                ? LeaseAcquireResult.Acquired(hold.Grant)
+                : LeaseAcquireResult.Held;
+
+            return ValueTask.FromResult(existing);
+        }
+
+        var ownerValue = Sessions.Issue("o");
+        var owner = new OwnerToken(ownerValue);
+        var fencingToken = Sessions.NextFencingToken();
+        var grant = new LeaseGrant(resource, fencingToken, owner, terms);
+        var created = new InProcessHold<LeaseGrant>(grant, owner, terms);
+
+        if (!terms.IsBoundToSession)
+        {
+            created.Deadline = Schedule(resource, owner, terms.TimeToLive);
+        }
+        else
+        {
+            Bind(terms.Session, resource);
+        }
+
+        Holds[resource] = created;
+
+        var acquired = LeaseAcquireResult.Acquired(grant);
+
+        return ValueTask.FromResult(acquired);
     }
 
     /// <inheritdoc />
@@ -116,18 +114,17 @@ internal class InProcessLeaseService : ILeaseService
 
         InProcessGuard.Check(options, cancellationToken);
 
-        using (Sessions.Enter())
+        using var scope = Sessions.Enter();
+
+        if (!Holds.TryGetValue(grant.Resource, out var hold) || hold.Owner != grant.Owner)
         {
-            if (!Holds.TryGetValue(grant.Resource, out var hold) || hold.Owner != grant.Owner)
-            {
-                return ValueTask.FromResult(false);
-            }
-
-            Sessions.Deadlines.Cancel(hold.Deadline);
-            hold.Deadline = Schedule(grant.Resource, grant.Owner, timeToLive);
-
-            return ValueTask.FromResult(true);
+            return ValueTask.FromResult(false);
         }
+
+        Sessions.Deadlines.Cancel(hold.Deadline);
+        hold.Deadline = Schedule(grant.Resource, grant.Owner, timeToLive);
+
+        return ValueTask.FromResult(true);
     }
 
     /// <inheritdoc />
@@ -140,17 +137,16 @@ internal class InProcessLeaseService : ILeaseService
         ArgumentNullException.ThrowIfNull(grant);
         InProcessGuard.Check(options, cancellationToken);
 
-        using (Sessions.Enter())
+        using var scope = Sessions.Enter();
+
+        if (!Holds.TryGetValue(grant.Resource, out var hold) || hold.Owner != grant.Owner)
         {
-            if (!Holds.TryGetValue(grant.Resource, out var hold) || hold.Owner != grant.Owner)
-            {
-                return ValueTask.FromResult(false);
-            }
-
-            Free(grant.Resource);
-
-            return ValueTask.FromResult(true);
+            return ValueTask.FromResult(false);
         }
+
+        Free(grant.Resource);
+
+        return ValueTask.FromResult(true);
     }
 
     /// <inheritdoc />
@@ -173,23 +169,20 @@ internal class InProcessLeaseService : ILeaseService
     /// <returns>A completed task when the resource has no holder, and otherwise the task of its release.</returns>
     private Task StartWait(CoordinationKey resource)
     {
-        using (Sessions.Enter())
+        using var scope = Sessions.Enter();
+
+        if (!Holds.ContainsKey(resource))
         {
-            if (!Holds.ContainsKey(resource))
-            {
-                return Task.CompletedTask;
-            }
-
-            if (!Waiters.TryGetValue(resource, out var waiter))
-            {
-                waiter = new TaskCompletionSource(
-                    TaskCreationOptions.RunContinuationsAsynchronously
-                );
-                Waiters[resource] = waiter;
-            }
-
-            return waiter.Task;
+            return Task.CompletedTask;
         }
+
+        if (!Waiters.TryGetValue(resource, out var waiter))
+        {
+            waiter = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            Waiters[resource] = waiter;
+        }
+
+        return waiter.Task;
     }
 
     /// <summary>

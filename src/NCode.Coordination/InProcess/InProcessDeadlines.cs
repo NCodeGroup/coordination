@@ -238,15 +238,14 @@ internal class InProcessDeadlines : IDisposable
     /// </summary>
     private void OnTimer()
     {
-        using (Gate.EnterScope())
+        using var scope = Gate.EnterScope();
+
+        if (!IsDisposed)
         {
-            if (!IsDisposed)
-            {
-                // The timer has fired, so nothing is armed: RunDue arms it again, also for a deadline beyond the
-                // longest wait.
-                Armed = null;
-                RunDue();
-            }
+            // The timer has fired, so nothing is armed: RunDue arms it again, also for a deadline beyond the
+            // longest wait.
+            Armed = null;
+            RunDue();
         }
     }
 }

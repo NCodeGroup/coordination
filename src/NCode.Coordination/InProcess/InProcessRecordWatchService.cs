@@ -89,10 +89,9 @@ internal class InProcessRecordWatchService(InProcessRecordTable table) : IRecord
     /// <param name="after">The revision after which the subscriber wants the changes, or null for none.</param>
     private void Start(InProcessRecordWatcher watcher, Revision? after)
     {
-        using (Table.Enter())
-        {
-            Table.AddWatcher(watcher, after);
-        }
+        using var scope = Table.Enter();
+
+        Table.AddWatcher(watcher, after);
     }
 
     /// <summary>
@@ -101,9 +100,8 @@ internal class InProcessRecordWatchService(InProcessRecordTable table) : IRecord
     /// <param name="watcher">The watch to remove.</param>
     private void Stop(InProcessRecordWatcher watcher)
     {
-        using (Table.Enter())
-        {
-            Table.RemoveWatcher(watcher);
-        }
+        using var scope = Table.Enter();
+
+        Table.RemoveWatcher(watcher);
     }
 }

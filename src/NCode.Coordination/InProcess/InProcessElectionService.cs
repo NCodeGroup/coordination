@@ -58,48 +58,44 @@ internal class InProcessElectionService : IElectionService
         InProcessGuard.CheckValue(value, nameof(value));
         InProcessGuard.Check(options, cancellationToken);
 
-        using (Sessions.Enter())
+        using var scope = Sessions.Enter();
+
+        if (terms.IsBoundToSession && !Sessions.IsLive(terms.Session))
         {
-            if (terms.IsBoundToSession && !Sessions.IsLive(terms.Session))
-            {
-                return ValueTask.FromResult(ElectionResult.SessionEnded);
-            }
-
-            if (Holds.TryGetValue(role, out var hold))
-            {
-                var isSameSession =
-                    terms.IsBoundToSession && terms.Session.Equals(hold.Terms.Session);
-
-                var existing = isSameSession
-                    ? ElectionResult.Elected(hold.Grant)
-                    : ElectionResult.Led;
-
-                return ValueTask.FromResult(existing);
-            }
-
-            var ownerValue = Sessions.Issue("o");
-            var owner = new OwnerToken(ownerValue);
-            var fencingToken = Sessions.NextFencingToken();
-            var leader = new Leader(role, fencingToken, value);
-            var leadership = new Leadership(leader, owner, terms);
-            var created = new InProcessHold<Leadership>(leadership, owner, terms);
-
-            if (!terms.IsBoundToSession)
-            {
-                created.Deadline = Schedule(role, owner, terms.TimeToLive);
-            }
-            else
-            {
-                Bind(terms.Session, role);
-            }
-
-            Holds[role] = created;
-            Notify(role);
-
-            var elected = ElectionResult.Elected(leadership);
-
-            return ValueTask.FromResult(elected);
+            return ValueTask.FromResult(ElectionResult.SessionEnded);
         }
+
+        if (Holds.TryGetValue(role, out var hold))
+        {
+            var isSameSession = terms.IsBoundToSession && terms.Session.Equals(hold.Terms.Session);
+
+            var existing = isSameSession ? ElectionResult.Elected(hold.Grant) : ElectionResult.Led;
+
+            return ValueTask.FromResult(existing);
+        }
+
+        var ownerValue = Sessions.Issue("o");
+        var owner = new OwnerToken(ownerValue);
+        var fencingToken = Sessions.NextFencingToken();
+        var leader = new Leader(role, fencingToken, value);
+        var leadership = new Leadership(leader, owner, terms);
+        var created = new InProcessHold<Leadership>(leadership, owner, terms);
+
+        if (!terms.IsBoundToSession)
+        {
+            created.Deadline = Schedule(role, owner, terms.TimeToLive);
+        }
+        else
+        {
+            Bind(terms.Session, role);
+        }
+
+        Holds[role] = created;
+        Notify(role);
+
+        var elected = ElectionResult.Elected(leadership);
+
+        return ValueTask.FromResult(elected);
     }
 
     /// <inheritdoc />
@@ -123,20 +119,19 @@ internal class InProcessElectionService : IElectionService
 
         InProcessGuard.Check(options, cancellationToken);
 
-        using (Sessions.Enter())
+        using var scope = Sessions.Enter();
+
+        var role = leadership.Leader.Role;
+
+        if (!Holds.TryGetValue(role, out var hold) || hold.Owner != leadership.Owner)
         {
-            var role = leadership.Leader.Role;
-
-            if (!Holds.TryGetValue(role, out var hold) || hold.Owner != leadership.Owner)
-            {
-                return ValueTask.FromResult(false);
-            }
-
-            Sessions.Deadlines.Cancel(hold.Deadline);
-            hold.Deadline = Schedule(role, leadership.Owner, timeToLive);
-
-            return ValueTask.FromResult(true);
+            return ValueTask.FromResult(false);
         }
+
+        Sessions.Deadlines.Cancel(hold.Deadline);
+        hold.Deadline = Schedule(role, leadership.Owner, timeToLive);
+
+        return ValueTask.FromResult(true);
     }
 
     /// <inheritdoc />
@@ -149,19 +144,18 @@ internal class InProcessElectionService : IElectionService
         ArgumentNullException.ThrowIfNull(leadership);
         InProcessGuard.Check(options, cancellationToken);
 
-        using (Sessions.Enter())
+        using var scope = Sessions.Enter();
+
+        var role = leadership.Leader.Role;
+
+        if (!Holds.TryGetValue(role, out var hold) || hold.Owner != leadership.Owner)
         {
-            var role = leadership.Leader.Role;
-
-            if (!Holds.TryGetValue(role, out var hold) || hold.Owner != leadership.Owner)
-            {
-                return ValueTask.FromResult(false);
-            }
-
-            Vacate(role);
-
-            return ValueTask.FromResult(true);
+            return ValueTask.FromResult(false);
         }
+
+        Vacate(role);
+
+        return ValueTask.FromResult(true);
     }
 
     /// <inheritdoc />
@@ -174,12 +168,11 @@ internal class InProcessElectionService : IElectionService
         ArgumentNullException.ThrowIfNull(role);
         InProcessGuard.Check(options, cancellationToken);
 
-        using (Sessions.Enter())
-        {
-            var view = View(role);
+        using var scope = Sessions.Enter();
 
-            return ValueTask.FromResult(view);
-        }
+        var view = View(role);
+
+        return ValueTask.FromResult(view);
     }
 
     /// <inheritdoc />
@@ -233,19 +226,18 @@ internal class InProcessElectionService : IElectionService
     /// <param name="queue">The queue of the watch.</param>
     private void Start(CoordinationKey role, InProcessEventQueue<ElectionView> queue)
     {
-        using (Sessions.Enter())
+        using var scope = Sessions.Enter();
+
+        if (!Watchers.TryGetValue(role, out var queues))
         {
-            if (!Watchers.TryGetValue(role, out var queues))
-            {
-                queues = [];
-                Watchers[role] = queues;
-            }
-
-            queues.Add(queue);
-            var view = View(role);
-
-            queue.Post(view);
+            queues = [];
+            Watchers[role] = queues;
         }
+
+        queues.Add(queue);
+        var view = View(role);
+
+        queue.Post(view);
     }
 
     /// <summary>
@@ -255,19 +247,18 @@ internal class InProcessElectionService : IElectionService
     /// <param name="queue">The queue of the watch.</param>
     private void Stop(CoordinationKey role, InProcessEventQueue<ElectionView> queue)
     {
-        using (Sessions.Enter())
+        using var scope = Sessions.Enter();
+
+        if (!Watchers.TryGetValue(role, out var queues))
         {
-            if (!Watchers.TryGetValue(role, out var queues))
-            {
-                return;
-            }
+            return;
+        }
 
-            queues.Remove(queue);
+        queues.Remove(queue);
 
-            if (queues.Count == 0)
-            {
-                Watchers.Remove(role);
-            }
+        if (queues.Count == 0)
+        {
+            Watchers.Remove(role);
         }
     }
 

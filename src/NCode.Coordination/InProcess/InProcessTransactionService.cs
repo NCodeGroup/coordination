@@ -34,48 +34,47 @@ internal class InProcessTransactionService(InProcessSessionTable sessions) : ITr
         ArgumentNullException.ThrowIfNull(transaction);
         InProcessGuard.Check(options, cancellationToken);
 
-        using (Table.Enter())
+        using var scope = Table.Enter();
+
+        var succeeded = ConditionsHold(transaction);
+        var writes = succeeded ? transaction.OnSuccess : transaction.OnFailure;
+
+        foreach (var write in writes)
         {
-            var succeeded = ConditionsHold(transaction);
-            var writes = succeeded ? transaction.OnSuccess : transaction.OnFailure;
-
-            foreach (var write in writes)
+            if (write.Lifetime?.Session is { } session && !Sessions.IsLive(session))
             {
-                if (write.Lifetime?.Session is { } session && !Sessions.IsLive(session))
-                {
-                    var ended = Table.Current(transaction.Keyspace);
-                    var endedResult = new TransactionResult(TransactionStatus.SessionEnded, ended);
-                    return ValueTask.FromResult(endedResult);
-                }
+                var ended = Table.Current(transaction.Keyspace);
+                var endedResult = new TransactionResult(TransactionStatus.SessionEnded, ended);
+                return ValueTask.FromResult(endedResult);
             }
-
-            var status = succeeded ? TransactionStatus.Succeeded : TransactionStatus.Failed;
-
-            if (writes.IsEmpty)
-            {
-                var current = Table.Current(transaction.Keyspace);
-                var unchanged = new TransactionResult(status, current);
-                return ValueTask.FromResult(unchanged);
-            }
-
-            var revision = Table.Advance(transaction.Keyspace);
-
-            foreach (var write in writes)
-            {
-                if (write.Lifetime is { } lifetime)
-                {
-                    var record = new StoredRecord(write.Key, write.Value, revision);
-                    Table.Put(record, lifetime);
-                }
-                else
-                {
-                    Table.Remove(write.Key, revision);
-                }
-            }
-
-            var result = new TransactionResult(status, revision);
-            return ValueTask.FromResult(result);
         }
+
+        var status = succeeded ? TransactionStatus.Succeeded : TransactionStatus.Failed;
+
+        if (writes.IsEmpty)
+        {
+            var current = Table.Current(transaction.Keyspace);
+            var unchanged = new TransactionResult(status, current);
+            return ValueTask.FromResult(unchanged);
+        }
+
+        var revision = Table.Advance(transaction.Keyspace);
+
+        foreach (var write in writes)
+        {
+            if (write.Lifetime is { } lifetime)
+            {
+                var record = new StoredRecord(write.Key, write.Value, revision);
+                Table.Put(record, lifetime);
+            }
+            else
+            {
+                Table.Remove(write.Key, revision);
+            }
+        }
+
+        var result = new TransactionResult(status, revision);
+        return ValueTask.FromResult(result);
     }
 
     /// <summary>

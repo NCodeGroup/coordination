@@ -58,39 +58,38 @@ internal class InProcessMembershipService : IMembershipService
         ArgumentNullException.ThrowIfNull(member);
         InProcessGuard.Check(options, cancellationToken);
 
-        using (Sessions.Enter())
-        {
-            if (!Sessions.IsLive(member.Session))
-            {
-                return ValueTask.FromResult(MembershipJoinStatus.SessionEnded);
-            }
+        using var scope = Sessions.Enter();
 
-            if (Groups.TryGetValue(group, out var members))
+        if (!Sessions.IsLive(member.Session))
+        {
+            return ValueTask.FromResult(MembershipJoinStatus.SessionEnded);
+        }
+
+        if (Groups.TryGetValue(group, out var members))
+        {
+            foreach (var other in members)
             {
-                foreach (var other in members)
+                if (
+                    string.Equals(other.NodeId, member.NodeId, StringComparison.Ordinal)
+                    && !other.Session.Equals(member.Session)
+                )
                 {
-                    if (
-                        string.Equals(other.NodeId, member.NodeId, StringComparison.Ordinal)
-                        && !other.Session.Equals(member.Session)
-                    )
-                    {
-                        return ValueTask.FromResult(MembershipJoinStatus.NodeIdTaken);
-                    }
+                    return ValueTask.FromResult(MembershipJoinStatus.NodeIdTaken);
                 }
             }
-            else
-            {
-                members = [];
-                Groups[group] = members;
-            }
-
-            members.RemoveAll(other => other.Session.Equals(member.Session));
-            members.Add(member);
-            Bind(member.Session, group);
-            Changed(group);
-
-            return ValueTask.FromResult(MembershipJoinStatus.Joined);
         }
+        else
+        {
+            members = [];
+            Groups[group] = members;
+        }
+
+        members.RemoveAll(other => other.Session.Equals(member.Session));
+        members.Add(member);
+        Bind(member.Session, group);
+        Changed(group);
+
+        return ValueTask.FromResult(MembershipJoinStatus.Joined);
     }
 
     /// <inheritdoc />
@@ -105,15 +104,14 @@ internal class InProcessMembershipService : IMembershipService
         ArgumentNullException.ThrowIfNull(session);
         InProcessGuard.Check(options, cancellationToken);
 
-        using (Sessions.Enter())
-        {
-            if (Remove(group, session))
-            {
-                Changed(group);
-            }
+        using var scope = Sessions.Enter();
 
-            return ValueTask.CompletedTask;
+        if (Remove(group, session))
+        {
+            Changed(group);
         }
+
+        return ValueTask.CompletedTask;
     }
 
     /// <inheritdoc />
@@ -126,12 +124,11 @@ internal class InProcessMembershipService : IMembershipService
         ArgumentNullException.ThrowIfNull(group);
         InProcessGuard.Check(options, cancellationToken);
 
-        using (Sessions.Enter())
-        {
-            var view = View(group);
+        using var scope = Sessions.Enter();
 
-            return ValueTask.FromResult(view);
-        }
+        var view = View(group);
+
+        return ValueTask.FromResult(view);
     }
 
     /// <inheritdoc />
@@ -185,19 +182,18 @@ internal class InProcessMembershipService : IMembershipService
     /// <param name="queue">The queue of the watch.</param>
     private void Start(CoordinationKey group, InProcessEventQueue<MembershipView> queue)
     {
-        using (Sessions.Enter())
+        using var scope = Sessions.Enter();
+
+        if (!Watchers.TryGetValue(group, out var queues))
         {
-            if (!Watchers.TryGetValue(group, out var queues))
-            {
-                queues = [];
-                Watchers[group] = queues;
-            }
-
-            queues.Add(queue);
-            var view = View(group);
-
-            queue.Post(view);
+            queues = [];
+            Watchers[group] = queues;
         }
+
+        queues.Add(queue);
+        var view = View(group);
+
+        queue.Post(view);
     }
 
     /// <summary>
@@ -207,19 +203,18 @@ internal class InProcessMembershipService : IMembershipService
     /// <param name="queue">The queue of the watch.</param>
     private void Stop(CoordinationKey group, InProcessEventQueue<MembershipView> queue)
     {
-        using (Sessions.Enter())
+        using var scope = Sessions.Enter();
+
+        if (!Watchers.TryGetValue(group, out var queues))
         {
-            if (!Watchers.TryGetValue(group, out var queues))
-            {
-                return;
-            }
+            return;
+        }
 
-            queues.Remove(queue);
+        queues.Remove(queue);
 
-            if (queues.Count == 0)
-            {
-                Watchers.Remove(group);
-            }
+        if (queues.Count == 0)
+        {
+            Watchers.Remove(group);
         }
     }
 
