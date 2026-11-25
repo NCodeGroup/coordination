@@ -173,6 +173,9 @@ public sealed class CoordinationCompositionTests : IDisposable
         public object? GetPrimitiveService(Type serviceType) =>
             service is not null && serviceType.IsInstanceOfType(service) ? service : null;
 
+        /// <inheritdoc />
+        public ValueTask ProbeAsync(CancellationToken cancellationToken) => ValueTask.CompletedTask;
+
         public void Dispose() => Disposals++;
     }
 
@@ -185,6 +188,9 @@ public sealed class CoordinationCompositionTests : IDisposable
         public ProviderDeclaration Declaration { get; } = declaration;
 
         public object? GetPrimitiveService(Type serviceType) => null;
+
+        /// <inheritdoc />
+        public ValueTask ProbeAsync(CancellationToken cancellationToken) => ValueTask.CompletedTask;
 
         public ValueTask DisposeAsync()
         {

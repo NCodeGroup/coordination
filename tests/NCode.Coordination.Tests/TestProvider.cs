@@ -20,6 +20,14 @@ internal sealed class TestProvider(
     /// <inheritdoc />
     public ProviderDeclaration Declaration { get; } = declaration;
 
+    /// <summary>
+    /// Gets what the provider's probe does, which by default passes.
+    /// </summary>
+    public Func<CancellationToken, ValueTask> Probe { get; init; } = _ => ValueTask.CompletedTask;
+
+    /// <inheritdoc />
+    public ValueTask ProbeAsync(CancellationToken cancellationToken) => Probe(cancellationToken);
+
     /// <inheritdoc />
     public object? GetPrimitiveService(Type serviceType)
     {
