@@ -121,7 +121,8 @@ internal class RecordModel : ISequentialModel<RecordState>
         }
 
         var revision = record.Revision.Value;
-        next = state with { Revision = revision, Floor = Math.Max(state.Floor, revision) };
+        var floor = Math.Max(state.Floor, revision);
+        next = state with { Revision = revision, Floor = floor };
         return true;
     }
 

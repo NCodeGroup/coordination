@@ -124,7 +124,8 @@ internal class ElectionModel : ISequentialModel<ElectionState>
                     return false;
                 }
 
-                next = state with { Term = leaderTerm, Floor = Math.Max(state.Floor, leaderTerm) };
+                var floor = Math.Max(state.Floor, leaderTerm);
+                next = state with { Term = leaderTerm, Floor = floor };
                 return true;
 
             default:

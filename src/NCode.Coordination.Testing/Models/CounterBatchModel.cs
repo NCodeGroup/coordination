@@ -41,9 +41,13 @@ internal class CounterBatchModel() : PairModel<long>(new CounterModel())
             return false;
         }
 
-        return stops
-            ? IsCounts(result, [first], 0)
-            : IsCounts(result, [first, second], second > call.Limit ? 1 : null);
+        if (stops)
+        {
+            return IsCounts(result, [first], 0);
+        }
+
+        int? exceededIndex = second > call.Limit ? 1 : null;
+        return IsCounts(result, [first, second], exceededIndex);
     }
 
     /// <summary>

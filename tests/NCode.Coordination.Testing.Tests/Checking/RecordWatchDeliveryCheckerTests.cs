@@ -226,16 +226,12 @@ public sealed class RecordWatchDeliveryCheckerTests
     [Fact]
     public void Check_WhenTheWriteConflicted_ReportsIt()
     {
-        HistoryOperation[] history =
-        [
-            HistoryTesting.Returned(
-                new RecordCall(RecordCall.Create, "a", 0),
-                RecordWriteResult.Conflict
-            ) with
-            {
-                Partition = Name.ToString(),
-            },
-        ];
+        var partition = Name.ToString();
+        var conflicted = HistoryTesting.Returned(
+            new RecordCall(RecordCall.Create, "a", 0),
+            RecordWriteResult.Conflict
+        );
+        HistoryOperation[] history = [conflicted with { Partition = partition }];
         var written = Written(3, "a", 1);
         var changes = Changes(written);
 
@@ -250,13 +246,9 @@ public sealed class RecordWatchDeliveryCheckerTests
     [Fact]
     public void Check_WhenTheWriteIsIndeterminate_AcceptsTheChange()
     {
-        HistoryOperation[] history =
-        [
-            HistoryTesting.Indeterminate(new RecordCall(RecordCall.Create, "a", 0)) with
-            {
-                Partition = Name.ToString(),
-            },
-        ];
+        var partition = Name.ToString();
+        var created = HistoryTesting.Indeterminate(new RecordCall(RecordCall.Create, "a", 0));
+        HistoryOperation[] history = [created with { Partition = partition }];
         var written = Written(3, "a", 7);
         var changes = Changes(written);
 
@@ -304,13 +296,11 @@ public sealed class RecordWatchDeliveryCheckerTests
     [Fact]
     public void Check_WhenTheDeleteIsIndeterminate_AcceptsTheDeletion()
     {
-        HistoryOperation[] history =
-        [
-            HistoryTesting.Indeterminate(new RecordCall(RecordCall.CompareAndDelete, null, 1)) with
-            {
-                Partition = Name.ToString(),
-            },
-        ];
+        var partition = Name.ToString();
+        var deletion = HistoryTesting.Indeterminate(
+            new RecordCall(RecordCall.CompareAndDelete, null, 1)
+        );
+        HistoryOperation[] history = [deletion with { Partition = partition }];
         var deleted = Deleted(3, 2);
         var changes = Changes(deleted);
 

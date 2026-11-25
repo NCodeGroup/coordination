@@ -93,15 +93,15 @@ internal static class LinearizabilityChecker
                 continue;
             }
 
-            prefix.Add(
+            var kept =
                 operation.Responded > cut
                     ? operation with
                     {
                         Responded = long.MaxValue,
                         Outcome = HistoryOutcome.Indeterminate,
                     }
-                    : operation
-            );
+                    : operation;
+            prefix.Add(kept);
         }
 
         return prefix.ToImmutable();

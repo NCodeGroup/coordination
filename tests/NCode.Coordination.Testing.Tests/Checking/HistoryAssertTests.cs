@@ -61,16 +61,17 @@ public sealed class HistoryAssertTests
             [first, second]
         );
 
+        var firstLine = HistoryFormat.Describe(first);
+        var secondLine = HistoryFormat.Describe(second);
+        var expected =
+            "The history of partition 'k' is not linearizable. Its shortest failing prefix, in the order of invocation:"
+            + "\n  "
+            + firstLine
+            + "\n  "
+            + secondLine;
         var text = HistoryAssert.Describe(result);
 
-        Assert.Equal(
-            "The history of partition 'k' is not linearizable. Its shortest failing prefix, in the order of invocation:"
-                + "\n  "
-                + HistoryFormat.Describe(first)
-                + "\n  "
-                + HistoryFormat.Describe(second),
-            text
-        );
+        Assert.Equal(expected, text);
     }
 
     [Fact]
