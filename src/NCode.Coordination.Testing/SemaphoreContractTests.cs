@@ -1,0 +1,458 @@
+// Copyright © NCode Group
+// SPDX-License-Identifier: Apache-2.0
+
+using Xunit;
+
+namespace NCode.Coordination.Testing;
+
+/// <summary>
+/// The contract suite of the semaphore primitive: a provider's test project derives a sealed class from it and
+/// overrides <see cref="ProviderContractTests.CreateTargetAsync"/>.
+/// </summary>
+public abstract class SemaphoreContractTests : ProviderContractTests
+{
+    /// <summary>
+    /// Gets the provider's semaphore service, and skips the test when the provider does not support semaphores.
+    /// </summary>
+    private ISemaphoreService Semaphores => GetService<ISemaphoreService>(Primitives.Semaphore);
+
+    /// <summary>
+    /// Gets the provider's session service, and skips the test when the provider does not support sessions.
+    /// </summary>
+    private ISessionService Sessions => GetService<ISessionService>(Primitives.Session);
+
+    /// <summary>
+    /// Acquires a slot of the semaphore on a resource for a time to live and returns the grant, failing the test when
+    /// no slot is acquired.
+    /// </summary>
+    /// <param name="resource">The resource to hold a slot of.</param>
+    /// <param name="capacity">The number of slots.</param>
+    /// <param name="timeToLive">The time to live to ask for.</param>
+    /// <returns>The grant.</returns>
+    private async ValueTask<SemaphoreGrant> AcquireAsync(
+        CoordinationKey resource,
+        int capacity,
+        TimeToLive timeToLive
+    )
+    {
+        var result = await TryAcquireAsync(resource, capacity, timeToLive);
+
+        Assert.True(result.IsAcquired);
+        return result.Grant;
+    }
+
+    /// <summary>
+    /// Tries to acquire a slot of the semaphore on a resource for a time to live and returns the result.
+    /// </summary>
+    /// <param name="resource">The resource to hold a slot of.</param>
+    /// <param name="capacity">The number of slots.</param>
+    /// <param name="timeToLive">The time to live to ask for.</param>
+    /// <returns>The result of the attempt.</returns>
+    private ValueTask<SemaphoreAcquireResult> TryAcquireAsync(
+        CoordinationKey resource,
+        int capacity,
+        TimeToLive timeToLive
+    ) =>
+        Semaphores.TryAcquireAsync(
+            resource,
+            capacity,
+            LeaseTerms.ForTimeToLive(timeToLive),
+            null,
+            TestCancellationToken
+        );
+
+    #region TryAcquireAsync Tests
+
+    /// <summary>
+    /// Checks that holders of a semaphore with two slots each get a slot of their own.
+    /// </summary>
+    [Fact]
+    public async Task TryAcquireAsync_WhenSlotsAreFree_GivesEachHolderItsOwnSlot()
+    {
+        var resource = CreateKey("resource");
+
+        var first = await AcquireAsync(resource, 2, LongTimeToLive);
+        var second = await AcquireAsync(resource, 2, LongTimeToLive);
+
+        Assert.Equal(resource, first.Resource);
+        Assert.NotEqual(first.Slot, second.Slot);
+        Assert.InRange(first.Slot, 0, 1);
+        Assert.InRange(second.Slot, 0, 1);
+        Assert.NotEqual(first.Owner, second.Owner);
+    }
+
+    /// <summary>
+    /// Checks that acquiring a slot when every slot is held returns a full result with no grant.
+    /// </summary>
+    [Fact]
+    public async Task TryAcquireAsync_WhenEverySlotIsHeld_ReturnsFull()
+    {
+        var resource = CreateKey("resource");
+        await AcquireAsync(resource, 1, LongTimeToLive);
+
+        var result = await TryAcquireAsync(resource, 1, LongTimeToLive);
+
+        Assert.Equal(SemaphoreAcquireStatus.Full, result.Status);
+        Assert.Null(result.Grant);
+    }
+
+    /// <summary>
+    /// Checks that acquiring a slot with a capacity other than the holders' returns a capacity conflict.
+    /// </summary>
+    [Fact]
+    public async Task TryAcquireAsync_WhenHoldersUseAnotherCapacity_ReturnsCapacityConflict()
+    {
+        var resource = CreateKey("resource");
+        await AcquireAsync(resource, 2, LongTimeToLive);
+
+        var result = await TryAcquireAsync(resource, 3, LongTimeToLive);
+
+        Assert.Equal(SemaphoreAcquireStatus.CapacityConflict, result.Status);
+        Assert.Null(result.Grant);
+    }
+
+    /// <summary>
+    /// Checks that acquiring a slot with a capacity of zero throws an out of range error.
+    /// </summary>
+    [Fact]
+    public async Task TryAcquireAsync_WhenCapacityIsZero_ThrowsArgumentOutOfRangeException()
+    {
+        var resource = CreateKey("resource");
+
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(async () =>
+            await TryAcquireAsync(resource, 0, LongTimeToLive)
+        );
+    }
+
+    /// <summary>
+    /// Checks that acquiring a slot with a capacity above the limit throws an out of range error.
+    /// </summary>
+    [Fact]
+    public async Task TryAcquireAsync_WhenCapacityIsAboveTheLimit_ThrowsArgumentOutOfRangeException()
+    {
+        var resource = CreateKey("resource");
+
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(async () =>
+            await TryAcquireAsync(
+                resource,
+                CoordinationLimits.MaxSemaphoreCapacity + 1,
+                LongTimeToLive
+            )
+        );
+    }
+
+    /// <summary>
+    /// Checks that acquiring a slot bound to a session that has ended returns a session ended result.
+    /// </summary>
+    [Fact]
+    public async Task TryAcquireAsync_WhenSessionHasEnded_ReturnsSessionEnded()
+    {
+        var resource = CreateKey("resource");
+        var session = await ContractSessions.OpenEndedAsync(
+            Sessions,
+            Keyspace,
+            TestCancellationToken
+        );
+
+        var result = await Semaphores.TryAcquireAsync(
+            resource,
+            1,
+            LeaseTerms.ForSession(session),
+            null,
+            TestCancellationToken
+        );
+
+        Assert.Equal(SemaphoreAcquireStatus.SessionEnded, result.Status);
+        Assert.Null(result.Grant);
+    }
+
+    /// <summary>
+    /// Checks that acquiring a slot again with the session of a grant already held returns that grant, and that
+    /// another session still gets the other slot.
+    /// </summary>
+    [Fact]
+    public async Task TryAcquireAsync_WhenTheSameSessionAcquiresAgain_ReturnsItsSlot()
+    {
+        var resource = CreateKey("resource");
+        var session = await ContractSessions.OpenAsync(
+            Sessions,
+            Keyspace,
+            LongTimeToLive,
+            TestCancellationToken
+        );
+        var other = await ContractSessions.OpenAsync(
+            Sessions,
+            Keyspace,
+            LongTimeToLive,
+            TestCancellationToken
+        );
+        var terms = LeaseTerms.ForSession(session);
+        var first = await Semaphores.TryAcquireAsync(
+            resource,
+            2,
+            terms,
+            null,
+            TestCancellationToken
+        );
+
+        var second = await Semaphores.TryAcquireAsync(
+            resource,
+            2,
+            terms,
+            null,
+            TestCancellationToken
+        );
+        var third = await Semaphores.TryAcquireAsync(
+            resource,
+            2,
+            LeaseTerms.ForSession(other),
+            null,
+            TestCancellationToken
+        );
+
+        Assert.True(first.IsAcquired);
+        Assert.True(second.IsAcquired);
+        Assert.True(third.IsAcquired);
+        Assert.Equal(first.Grant.Slot, second.Grant.Slot);
+        Assert.Equal(first.Grant.Owner, second.Grant.Owner);
+        Assert.Equal(first.Grant.FencingToken, second.Grant.FencingToken);
+        Assert.NotEqual(first.Grant.Slot, third.Grant.Slot);
+    }
+
+    /// <summary>
+    /// Checks that a slot acquired after a release gets a greater fencing token than the released grant's.
+    /// </summary>
+    [Fact]
+    public async Task TryAcquireAsync_AfterASlotIsReleased_GivesAGreaterFencingToken()
+    {
+        var resource = CreateKey("resource");
+        var earlier = await AcquireAsync(resource, 1, LongTimeToLive);
+        await Semaphores.ReleaseAsync(earlier, null, TestCancellationToken);
+
+        var later = await AcquireAsync(resource, 1, LongTimeToLive);
+
+        Assert.Equal(earlier.Slot, later.Slot);
+        Assert.True(later.FencingToken > earlier.FencingToken);
+    }
+
+    /// <summary>
+    /// Checks that once every holder has released, the semaphore accepts a different capacity.
+    /// </summary>
+    [Fact]
+    public async Task TryAcquireAsync_WhenEveryHolderReleased_AcceptsAnotherCapacity()
+    {
+        var resource = CreateKey("resource");
+        var grant = await AcquireAsync(resource, 1, LongTimeToLive);
+        await Semaphores.ReleaseAsync(grant, null, TestCancellationToken);
+
+        var result = await TryAcquireAsync(resource, 2, LongTimeToLive);
+
+        Assert.Equal(SemaphoreAcquireStatus.Acquired, result.Status);
+    }
+
+    /// <summary>
+    /// Checks that a slot is freed when its grant's time to live passes, and that it stays held until then.
+    /// </summary>
+    [Fact]
+    public async Task TryAcquireAsync_WhenAGrantExpires_FreesItsSlot()
+    {
+        var resource = CreateKey("resource");
+        await AcquireAsync(resource, 1, ShortTimeToLive);
+
+        await AdvanceClockAsync(StillAlive, TestCancellationToken);
+
+        var before = await TryAcquireAsync(resource, 1, ShortTimeToLive);
+        Assert.Equal(SemaphoreAcquireStatus.Full, before.Status);
+
+        await AdvanceClockAsync(PastExpiry, TestCancellationToken);
+
+        var after = await TryAcquireAsync(resource, 1, ShortTimeToLive);
+        Assert.Equal(SemaphoreAcquireStatus.Acquired, after.Status);
+    }
+
+    /// <summary>
+    /// Checks that a slot is freed when the session it is bound to closes.
+    /// </summary>
+    [Fact]
+    public async Task TryAcquireAsync_WhenTheSessionCloses_FreesItsSlot()
+    {
+        var resource = CreateKey("resource");
+        var session = await ContractSessions.OpenAsync(
+            Sessions,
+            Keyspace,
+            LongTimeToLive,
+            TestCancellationToken
+        );
+        var held = await Semaphores.TryAcquireAsync(
+            resource,
+            1,
+            LeaseTerms.ForSession(session),
+            null,
+            TestCancellationToken
+        );
+
+        await Sessions.CloseAsync(session, null, TestCancellationToken);
+
+        var result = await TryAcquireAsync(resource, 1, LongTimeToLive);
+        Assert.True(held.IsAcquired);
+        Assert.Equal(SemaphoreAcquireStatus.Acquired, result.Status);
+    }
+
+    /// <summary>
+    /// Checks that acquiring a slot with an option extension that the provider does not know throws an unsupported
+    /// error.
+    /// </summary>
+    [Fact]
+    public async Task TryAcquireAsync_WhenOptionsCarryAnUnknownExtension_ThrowsUnsupported()
+    {
+        var resource = CreateKey("resource");
+        var terms = LeaseTerms.ForTimeToLive(LongTimeToLive);
+
+        var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
+            await Semaphores.TryAcquireAsync(
+                resource,
+                1,
+                terms,
+                UnknownExtension,
+                TestCancellationToken
+            )
+        );
+
+        Assert.Equal(CoordinationErrorCodes.Unsupported, exception.Code);
+    }
+
+    #endregion
+
+    #region RenewAsync Tests
+
+    /// <summary>
+    /// Checks that renewing a grant extends it from the renewal.
+    /// </summary>
+    [Fact]
+    public async Task RenewAsync_WhenGrantHolds_ExtendsItFromTheRenewal()
+    {
+        var resource = CreateKey("resource");
+        var grant = await AcquireAsync(resource, 1, ShortTimeToLive);
+
+        var beforeExpiry = TimeSpan.FromSeconds(1.5);
+        await AdvanceClockAsync(beforeExpiry, TestCancellationToken);
+        var renewed = await Semaphores.RenewAsync(
+            grant,
+            ShortTimeToLive,
+            null,
+            TestCancellationToken
+        );
+        await AdvanceClockAsync(StillAlive, TestCancellationToken);
+
+        Assert.True(renewed);
+
+        var before = await TryAcquireAsync(resource, 1, ShortTimeToLive);
+        Assert.Equal(SemaphoreAcquireStatus.Full, before.Status);
+
+        await AdvanceClockAsync(PastExpiry, TestCancellationToken);
+
+        var after = await TryAcquireAsync(resource, 1, ShortTimeToLive);
+        Assert.Equal(SemaphoreAcquireStatus.Acquired, after.Status);
+    }
+
+    /// <summary>
+    /// Checks that renewing a grant bound to a session throws an argument error, since it lives as its session does.
+    /// </summary>
+    [Fact]
+    public async Task RenewAsync_WhenGrantIsBoundToASession_ThrowsArgumentException()
+    {
+        var resource = CreateKey("resource");
+        var session = await ContractSessions.OpenAsync(
+            Sessions,
+            Keyspace,
+            LongTimeToLive,
+            TestCancellationToken
+        );
+        var result = await Semaphores.TryAcquireAsync(
+            resource,
+            1,
+            LeaseTerms.ForSession(session),
+            null,
+            TestCancellationToken
+        );
+        Assert.True(result.IsAcquired);
+        var grant = result.Grant;
+
+        await Assert.ThrowsAsync<ArgumentException>(async () =>
+            await Semaphores.RenewAsync(grant, LongTimeToLive, null, TestCancellationToken)
+        );
+    }
+
+    #endregion
+
+    #region ReleaseAsync Tests
+
+    /// <summary>
+    /// Checks that releasing a grant that holds returns true and frees its slot.
+    /// </summary>
+    [Fact]
+    public async Task ReleaseAsync_WhenGrantHolds_ReturnsTrueAndFreesTheSlot()
+    {
+        var resource = CreateKey("resource");
+        var grant = await AcquireAsync(resource, 1, LongTimeToLive);
+
+        var released = await Semaphores.ReleaseAsync(grant, null, TestCancellationToken);
+
+        Assert.True(released);
+
+        var result = await TryAcquireAsync(resource, 1, LongTimeToLive);
+        Assert.Equal(SemaphoreAcquireStatus.Acquired, result.Status);
+    }
+
+    /// <summary>
+    /// Checks that releasing a grant that has ended returns false.
+    /// </summary>
+    [Fact]
+    public async Task ReleaseAsync_WhenGrantEnded_ReturnsFalse()
+    {
+        var resource = CreateKey("resource");
+        var grant = await AcquireAsync(resource, 1, LongTimeToLive);
+        await Semaphores.ReleaseAsync(grant, null, TestCancellationToken);
+
+        var released = await Semaphores.ReleaseAsync(grant, null, TestCancellationToken);
+
+        Assert.False(released);
+    }
+
+    #endregion
+
+    #region WaitForReleaseAsync Tests
+
+    /// <summary>
+    /// Checks that waiting for a semaphore that has a free slot completes at once.
+    /// </summary>
+    [Fact]
+    public async Task WaitForReleaseAsync_WhenASlotIsFree_CompletesAtOnce()
+    {
+        var resource = CreateKey("resource");
+        await AcquireAsync(resource, 2, LongTimeToLive);
+
+        var wait = Semaphores.WaitForReleaseAsync(resource, null, TestCancellationToken).AsTask();
+
+        await ContractStreams.CompletesAsync(wait);
+    }
+
+    /// <summary>
+    /// Checks that waiting for a semaphore whose slots are all held completes when a holder releases its grant.
+    /// </summary>
+    [Fact]
+    public async Task WaitForReleaseAsync_WhenAHolderReleases_Completes()
+    {
+        var resource = CreateKey("resource");
+        var grant = await AcquireAsync(resource, 1, LongTimeToLive);
+        var wait = Semaphores.WaitForReleaseAsync(resource, null, TestCancellationToken).AsTask();
+
+        Assert.False(wait.IsCompleted);
+
+        await Semaphores.ReleaseAsync(grant, null, TestCancellationToken);
+
+        await ContractStreams.CompletesAsync(wait);
+    }
+
+    #endregion
+}

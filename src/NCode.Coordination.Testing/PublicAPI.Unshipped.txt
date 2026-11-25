@@ -110,6 +110,26 @@ NCode.Coordination.Testing.RecordContractTests.ReadAsync_WhenOptionsCarryAnUnkno
 NCode.Coordination.Testing.RecordContractTests.RecordContractTests() -> void
 NCode.Coordination.Testing.RecordContractTests.TakeAsync_WhenKeyIsAbsent_ReturnsNull() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.RecordContractTests.TakeAsync_WhenKeyIsPresent_ReturnsAndDeletesTheRecord() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.SemaphoreContractTests
+NCode.Coordination.Testing.SemaphoreContractTests.ReleaseAsync_WhenGrantEnded_ReturnsFalse() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.SemaphoreContractTests.ReleaseAsync_WhenGrantHolds_ReturnsTrueAndFreesTheSlot() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.SemaphoreContractTests.RenewAsync_WhenGrantHolds_ExtendsItFromTheRenewal() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.SemaphoreContractTests.RenewAsync_WhenGrantIsBoundToASession_ThrowsArgumentException() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.SemaphoreContractTests.SemaphoreContractTests() -> void
+NCode.Coordination.Testing.SemaphoreContractTests.TryAcquireAsync_AfterASlotIsReleased_GivesAGreaterFencingToken() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.SemaphoreContractTests.TryAcquireAsync_WhenAGrantExpires_FreesItsSlot() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.SemaphoreContractTests.TryAcquireAsync_WhenCapacityIsAboveTheLimit_ThrowsArgumentOutOfRangeException() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.SemaphoreContractTests.TryAcquireAsync_WhenCapacityIsZero_ThrowsArgumentOutOfRangeException() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.SemaphoreContractTests.TryAcquireAsync_WhenEveryHolderReleased_AcceptsAnotherCapacity() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.SemaphoreContractTests.TryAcquireAsync_WhenEverySlotIsHeld_ReturnsFull() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.SemaphoreContractTests.TryAcquireAsync_WhenHoldersUseAnotherCapacity_ReturnsCapacityConflict() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.SemaphoreContractTests.TryAcquireAsync_WhenOptionsCarryAnUnknownExtension_ThrowsUnsupported() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.SemaphoreContractTests.TryAcquireAsync_WhenSessionHasEnded_ReturnsSessionEnded() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.SemaphoreContractTests.TryAcquireAsync_WhenSlotsAreFree_GivesEachHolderItsOwnSlot() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.SemaphoreContractTests.TryAcquireAsync_WhenTheSameSessionAcquiresAgain_ReturnsItsSlot() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.SemaphoreContractTests.TryAcquireAsync_WhenTheSessionCloses_FreesItsSlot() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.SemaphoreContractTests.WaitForReleaseAsync_WhenAHolderReleases_Completes() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.SemaphoreContractTests.WaitForReleaseAsync_WhenASlotIsFree_CompletesAtOnce() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.SequenceContractTests
 NCode.Coordination.Testing.SequenceContractTests.NextAsync_WhenCalledAgain_ReturnsTheNextNumber() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.SequenceContractTests.NextAsync_WhenOptionsCarryAnUnknownExtension_ThrowsUnsupported() -> System.Threading.Tasks.Task!
