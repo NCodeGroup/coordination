@@ -37,7 +37,21 @@ public sealed class InProcessExpiringTableTests
     }
 
     [Fact]
-    public void TryGet_WhenEntryEnded_ReturnsFalseAndRemovesIt()
+    public void TryGet_WhenEntryEnded_ReturnsFalse()
+    {
+        var time = InProcessTesting.CreateTime();
+        var table = new InProcessExpiringTable<string, int>(time);
+        var expiry = TwoSecondExpiry(time);
+        table.Set("a", 7, expiry);
+
+        time.Advance(TwoSeconds);
+
+        var found = table.TryGet("a", out _);
+        Assert.False(found);
+    }
+
+    [Fact]
+    public void TryGet_WhenEntryEnded_RemovesIt()
     {
         var time = InProcessTesting.CreateTime();
         var table = new InProcessExpiringTable<string, int>(time);
@@ -47,8 +61,7 @@ public sealed class InProcessExpiringTableTests
 
         time.Advance(TwoSeconds);
 
-        var found = table.TryGet("a", out _);
-        Assert.False(found);
+        table.TryGet("a", out _);
         Assert.Equal(0, table.Count);
     }
 
