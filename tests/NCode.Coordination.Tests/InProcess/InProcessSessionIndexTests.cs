@@ -24,7 +24,7 @@ public sealed class InProcessSessionIndexTests
         var first = index.Take(session);
         var second = index.Take(session);
 
-        Assert.Equal(2, first.Length);
+        Assert.Equal(2, first.Count);
         Assert.Contains("a", first);
         Assert.Contains("b", first);
         Assert.Empty(second);

@@ -61,8 +61,8 @@ internal class InProcessSessionIndex<TItem>
     /// Removes a session and the items bound to it.
     /// </summary>
     /// <param name="session">The session.</param>
-    /// <returns>A copy of the items that were bound to the session, or an empty array when it had none.</returns>
-    public TItem[] Take(SessionId session)
+    /// <returns>A copy of the items that were bound to the session, or an empty list when it had none.</returns>
+    public IReadOnlyList<TItem> Take(SessionId session)
     {
         ArgumentNullException.ThrowIfNull(session);
 
