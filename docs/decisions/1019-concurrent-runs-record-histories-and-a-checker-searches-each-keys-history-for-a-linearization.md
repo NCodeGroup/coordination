@@ -59,8 +59,9 @@ for notifications and record watches.**
    Otherwise the run skips with the reason.
 7. **Faults.** The paused holder is driven by the kit and needs the target's `AdvanceClock`. A run of records or
    notifications that drops connections calls the target's `DropConnections` once half the steps are done, and skips
-   when the target has none. A subscription that fails with a `CoordinationException` ends that subscriber's reading.
-   Restart and failover come with the providers.
+   when the target has none. A client that finds half the steps done waits until the fault has begun, so the calls of
+   the second half meet it however late it is scheduled. A subscription that fails with a `CoordinationException` ends
+   that subscriber's reading. Restart and failover come with the providers.
 8. **Surface.** The checker, the models and the runs are internal to `NCode.Coordination.Testing`, which grants
    `InternalsVisibleTo` to its own test project. The public surface adds only `ConformanceTarget.DropConnections` and
    the suites' `ConcurrentRun_*` tests.
@@ -77,7 +78,9 @@ for notifications and record watches.**
 ## Consequences
 
 - Providers get the concurrent runs through the suites they already derive.
-- The runs that drop connections skip until a provider supplies `DropConnections`.
+- The runs that drop connections run in this repository's CI against a test decorator of the in-process provider, whose
+  drop fails the next three calls with an unknown outcome, one of them after it applied, and gives each subscription a
+  resync in place of its next message; against the in-process provider alone they skip, as it has no connection.
 - Checking by key misses a violation that spans keys.
 - Durability and expiry authority wait for restart seams and a server clock.
 
