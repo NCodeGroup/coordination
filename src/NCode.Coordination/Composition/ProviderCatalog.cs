@@ -77,7 +77,9 @@ internal sealed class ProviderCatalog
             }
         }
 
-        return new ProviderCatalog(providers.ToImmutable(), byName.ToFrozenDictionary());
+        var accepted = providers.ToImmutable();
+        var frozenByName = byName.ToFrozenDictionary();
+        return new ProviderCatalog(accepted, frozenByName);
     }
 
     /// <summary>

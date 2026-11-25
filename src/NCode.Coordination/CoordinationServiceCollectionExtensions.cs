@@ -35,7 +35,8 @@ public static class CoordinationServiceCollectionExtensions
                 services.AddSingleton(registrations);
             }
 
-            configure(new DefaultCoordinationBuilder(registrations));
+            var builder = new DefaultCoordinationBuilder(registrations);
+            configure(builder);
 
             services.TryAddSingleton(TimeProvider.System);
             services.TryAddSingleton<CoordinationComposition>();

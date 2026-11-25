@@ -60,7 +60,8 @@ internal sealed class GuaranteeRegistry
             }
         }
 
-        return new GuaranteeRegistry(accepted.ToFrozenDictionary());
+        var frozen = accepted.ToFrozenDictionary();
+        return new GuaranteeRegistry(frozen);
     }
 
     /// <summary>

@@ -80,9 +80,14 @@ internal static class PrimitiveBinder
                 }
 
                 var guarantees = registry.Close(support.Guarantees);
-                bound.Add(
-                    new BoundPrimitive(name, primitive, binding.Keyspace, service, guarantees)
+                var boundPrimitive = new BoundPrimitive(
+                    name,
+                    primitive,
+                    binding.Keyspace,
+                    service,
+                    guarantees
                 );
+                bound.Add(boundPrimitive);
             }
         }
 
