@@ -11,6 +11,7 @@ requirements.
 | Component | Role |
 | --- | --- |
 | `NCode.Coordination.Abstractions` | The contracts: an interface per primitive with its named operations, outcomes and failures, structured keys, the guarantee vocabulary, expiry and time windows, and the declarations and requirements the composition checks. |
+| `NCode.Coordination` | The composition: providers registered on one builder with `AddCoordination`, bound by primitive and keyspace; the guarantee registry; every requirement checked before the host's hosted services start; and the primitive services that route each operation to its bound provider, tracing and measuring it. |
 
 [The design](designs/coordination.md#packages) names the other packages and the phase that builds each.
 
