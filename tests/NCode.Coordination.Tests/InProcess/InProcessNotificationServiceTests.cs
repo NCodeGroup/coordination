@@ -37,6 +37,35 @@ public sealed class InProcessNotificationServiceTests
         Assert.True(stream.Current.IsResync);
         Assert.Equal(topic, stream.Current.Topic);
         Assert.Equal(1, stream.Current.Sequence);
+    }
+
+    [Fact]
+    public async Task SubscribeAsync_AfterAResync_ContinuesWithTheNextSequence()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var time = InProcessTesting.CreateTime();
+        using var provider = new InProcessProvider(time);
+        var service = InProcessTesting.GetService<INotificationService>(provider);
+        var topic = InProcessTesting.Keyspace.CreateKey("t");
+        var payload = "a"u8.ToArray();
+        await using var stream = service
+            .SubscribeAsync(topic, null, cancellationToken)
+            .GetAsyncEnumerator(cancellationToken);
+        var moved = await stream.MoveNextAsync();
+        Assert.True(moved);
+        Assert.True(stream.Current.IsResync);
+        await service.PublishAsync(topic, payload, null, cancellationToken);
+        moved = await stream.MoveNextAsync();
+        Assert.True(moved);
+        Assert.Equal(1, stream.Current.Sequence);
+        for (var index = 0; index <= InProcessNotificationService.QueueCapacity; index++)
+        {
+            await service.PublishAsync(topic, payload, null, cancellationToken);
+        }
+
+        moved = await stream.MoveNextAsync();
+        Assert.True(moved);
+        Assert.True(stream.Current.IsResync);
 
         var next = "b"u8.ToArray();
         await service.PublishAsync(topic, next, null, cancellationToken);

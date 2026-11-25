@@ -5,10 +5,8 @@ namespace NCode.Coordination.InProcess.Tests;
 
 public sealed class InProcessRecordServiceTests
 {
-    private static InProcessRecordService CreateService()
+    private static InProcessRecordService CreateService(InProcessRecordTable table)
     {
-        var time = InProcessTesting.CreateTime();
-        var table = new InProcessRecordTable(time);
         var sessions = new InProcessSessionTable(table);
         return new InProcessRecordService(sessions);
     }
@@ -25,7 +23,9 @@ public sealed class InProcessRecordServiceTests
     public async Task CreateAsync_WhenTheSessionIsUnknown_ReturnsSessionEnded()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        var service = CreateService();
+        var time = InProcessTesting.CreateTime();
+        using var table = new InProcessRecordTable(time);
+        var service = CreateService(table);
         var key = InProcessTesting.Keyspace.CreateKey("a");
         ReadOnlyMemory<byte> value = (byte[])[1];
         var lifetime = SessionLifetime();
@@ -42,7 +42,9 @@ public sealed class InProcessRecordServiceTests
     public async Task CreateAsync_WhenFirstInItsKeyspace_ReturnsRevisionTwo()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        var service = CreateService();
+        var time = InProcessTesting.CreateTime();
+        using var table = new InProcessRecordTable(time);
+        var service = CreateService(table);
         var key = InProcessTesting.Keyspace.CreateKey("a");
         ReadOnlyMemory<byte> value = (byte[])[1];
 
@@ -68,7 +70,9 @@ public sealed class InProcessRecordServiceTests
     public async Task CompareAndSwapAsync_WhenTheSessionIsUnknown_ReturnsSessionEnded()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        var service = CreateService();
+        var time = InProcessTesting.CreateTime();
+        using var table = new InProcessRecordTable(time);
+        var service = CreateService(table);
         var key = InProcessTesting.Keyspace.CreateKey("a");
         ReadOnlyMemory<byte> value = (byte[])[1];
         var created = await service.CreateAsync(
@@ -108,7 +112,9 @@ public sealed class InProcessRecordServiceTests
     public async Task ListAsync_WhenTheTokenWasNotIssued_ThrowsArgumentException(string token)
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        var service = CreateService();
+        var time = InProcessTesting.CreateTime();
+        using var table = new InProcessRecordTable(time);
+        var service = CreateService(table);
         var prefix = InProcessTesting.Keyspace.CreateKey("a");
         var page = new RecordPageRequest(10) { ContinuationToken = token };
 
@@ -123,7 +129,9 @@ public sealed class InProcessRecordServiceTests
     public async Task ListAsync_WhenKeyspaceWasNeverWritten_ReturnsRevisionOne()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        var service = CreateService();
+        var time = InProcessTesting.CreateTime();
+        using var table = new InProcessRecordTable(time);
+        var service = CreateService(table);
         var prefix = InProcessTesting.Keyspace.CreateKey("a");
         var page = new RecordPageRequest(10);
 
@@ -139,7 +147,9 @@ public sealed class InProcessRecordServiceTests
     public async Task ListAsync_WhenAnotherKeyspaceHasRecordsUnderTheSameSegments_ListsOnlyItsOwnKeyspace()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        var service = CreateService();
+        var time = InProcessTesting.CreateTime();
+        using var table = new InProcessRecordTable(time);
+        var service = CreateService(table);
         var ownKey = InProcessTesting.Keyspace.CreateKey("cfg", "a");
         var otherKeyspace = new Keyspace("other");
         var otherKey = otherKeyspace.CreateKey("cfg", "a");

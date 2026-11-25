@@ -525,5 +525,36 @@ public abstract class SemaphoreContractTests : ProviderContractTests
         await ContractStreams.CompletesAsync(wait, TestCancellationToken);
     }
 
+    /// <summary>
+    /// Checks that waiting for a semaphore whose slots are all held completes when the holder's time to live passes.
+    /// </summary>
+    [Fact]
+    public async Task WaitForReleaseAsync_WhenTheSlotExpires_Completes()
+    {
+        var resource = CreateKey("resource");
+        await AcquireAsync(resource, 1, ShortTimeToLive, TestCancellationToken);
+        var wait = Semaphores.WaitForReleaseAsync(resource, null, TestCancellationToken).AsTask();
+
+        await AdvanceClockAsync(PastExpiry, TestCancellationToken);
+
+        await ContractStreams.CompletesAsync(wait, TestCancellationToken);
+    }
+
+    /// <summary>
+    /// Checks that cancelling the token of a wait throws an operation canceled exception.
+    /// </summary>
+    [Fact]
+    public async Task WaitForReleaseAsync_WhenTokenIsCanceled_ThrowsOperationCanceledException()
+    {
+        var resource = CreateKey("resource");
+        await AcquireAsync(resource, 1, LongTimeToLive, TestCancellationToken);
+        using var source = CancellationTokenSource.CreateLinkedTokenSource(TestCancellationToken);
+        var wait = Semaphores.WaitForReleaseAsync(resource, null, source.Token).AsTask();
+
+        await source.CancelAsync();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => wait);
+    }
+
     #endregion
 }

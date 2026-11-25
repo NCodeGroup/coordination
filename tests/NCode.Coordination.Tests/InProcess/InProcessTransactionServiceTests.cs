@@ -12,7 +12,7 @@ public sealed class InProcessTransactionServiceTests
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var time = InProcessTesting.CreateTime();
-        var table = new InProcessRecordTable(time);
+        using var table = new InProcessRecordTable(time);
         var sessions = new InProcessSessionTable(table);
         var service = new InProcessTransactionService(sessions);
         var plainKey = InProcessTesting.Keyspace.CreateKey("plain");
@@ -35,7 +35,7 @@ public sealed class InProcessTransactionServiceTests
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var time = InProcessTesting.CreateTime();
-        var table = new InProcessRecordTable(time);
+        using var table = new InProcessRecordTable(time);
         var sessions = new InProcessSessionTable(table);
         var records = new InProcessRecordService(sessions);
         var service = new InProcessTransactionService(sessions);
@@ -62,7 +62,7 @@ public sealed class InProcessTransactionServiceTests
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var time = InProcessTesting.CreateTime();
-        var table = new InProcessRecordTable(time);
+        using var table = new InProcessRecordTable(time);
         var sessions = new InProcessSessionTable(table);
         var records = new InProcessRecordService(sessions);
         var service = new InProcessTransactionService(sessions);
@@ -100,7 +100,7 @@ public sealed class InProcessTransactionServiceTests
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var time = InProcessTesting.CreateTime();
-        var table = new InProcessRecordTable(time);
+        using var table = new InProcessRecordTable(time);
         var sessions = new InProcessSessionTable(table);
         var records = new InProcessRecordService(sessions);
         var service = new InProcessTransactionService(sessions);
@@ -138,7 +138,7 @@ public sealed class InProcessTransactionServiceTests
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var time = InProcessTesting.CreateTime();
-        var table = new InProcessRecordTable(time);
+        using var table = new InProcessRecordTable(time);
         var sessions = new InProcessSessionTable(table);
         var records = new InProcessRecordService(sessions);
         var service = new InProcessTransactionService(sessions);
@@ -175,7 +175,7 @@ public sealed class InProcessTransactionServiceTests
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var time = InProcessTesting.CreateTime();
-        var table = new InProcessRecordTable(time);
+        using var table = new InProcessRecordTable(time);
         var sessions = new InProcessSessionTable(table);
         var records = new InProcessRecordService(sessions);
         var service = new InProcessTransactionService(sessions);

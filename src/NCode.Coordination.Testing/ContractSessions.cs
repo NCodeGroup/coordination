@@ -9,6 +9,11 @@ namespace NCode.Coordination.Testing;
 internal static class ContractSessions
 {
     /// <summary>
+    /// Gets the time to live of a session that <see cref="OpenEndedAsync"/> closes at once: it only has to outlive the call.
+    /// </summary>
+    private static TimeSpan EndedSessionTimeToLive { get; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>
     /// Opens a session and returns its identity.
     /// </summary>
     /// <param name="sessions">The session service to open the session with.</param>
@@ -41,8 +46,7 @@ internal static class ContractSessions
         CancellationToken cancellationToken
     )
     {
-        var duration = TimeSpan.FromSeconds(30);
-        var timeToLive = new TimeToLive(duration);
+        var timeToLive = new TimeToLive(EndedSessionTimeToLive);
 
         var session = await OpenAsync(sessions, keyspace, timeToLive, cancellationToken);
 

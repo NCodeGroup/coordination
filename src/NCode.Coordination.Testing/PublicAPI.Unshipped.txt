@@ -195,6 +195,8 @@ NCode.Coordination.Testing.SemaphoreContractTests.TryAcquireAsync_WhenTheSameSes
 NCode.Coordination.Testing.SemaphoreContractTests.TryAcquireAsync_WhenTheSessionCloses_FreesItsSlot() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.SemaphoreContractTests.WaitForReleaseAsync_WhenAHolderReleases_Completes() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.SemaphoreContractTests.WaitForReleaseAsync_WhenASlotIsFree_CompletesAtOnce() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.SemaphoreContractTests.WaitForReleaseAsync_WhenTheSlotExpires_Completes() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.SemaphoreContractTests.WaitForReleaseAsync_WhenTokenIsCanceled_ThrowsOperationCanceledException() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.SequenceContractTests
 NCode.Coordination.Testing.SequenceContractTests.NextAsync_WhenCalledAgain_ReturnsTheNextNumber() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.SequenceContractTests.NextAsync_WhenOptionsCarryAnUnknownExtension_ThrowsUnsupported() -> System.Threading.Tasks.Task!

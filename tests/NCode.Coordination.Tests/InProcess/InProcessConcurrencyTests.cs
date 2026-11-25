@@ -59,7 +59,7 @@ public sealed class InProcessConcurrencyTests
     public async Task CreateAsync_WhenCallersRace_WritesOnce()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        var provider = CreateProvider();
+        using var provider = CreateProvider();
         var records = InProcessTesting.GetService<IRecordService>(provider);
         var key = Keyspace.CreateKey("record");
 
@@ -93,7 +93,7 @@ public sealed class InProcessConcurrencyTests
     public async Task TryRecordAsync_WhenCallersRace_RecordsOnce()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        var provider = CreateProvider();
+        using var provider = CreateProvider();
         var occurrences = InProcessTesting.GetService<IOccurrenceService>(provider);
         var key = Keyspace.CreateKey("occurrence");
         var ttl = TimeSpan.FromSeconds(30);
@@ -119,7 +119,7 @@ public sealed class InProcessConcurrencyTests
     public async Task IncrementAsync_WhenCallersRace_CountsEachIncrement()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        var provider = CreateProvider();
+        using var provider = CreateProvider();
         var counters = InProcessTesting.GetService<ICounterService>(provider);
         var key = Keyspace.CreateKey("counter");
         var ttl = TimeSpan.FromSeconds(30);
@@ -145,7 +145,7 @@ public sealed class InProcessConcurrencyTests
     public async Task NextAsync_WhenCallersRace_HandsOutEachNumberOnce()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        var provider = CreateProvider();
+        using var provider = CreateProvider();
         var sequences = InProcessTesting.GetService<ISequenceService>(provider);
         var key = Keyspace.CreateKey("sequence");
 
@@ -166,7 +166,7 @@ public sealed class InProcessConcurrencyTests
     public async Task ExecuteAsync_WhenCallersRace_AppliesOneSuccess()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        var provider = CreateProvider();
+        using var provider = CreateProvider();
         var transactions = InProcessTesting.GetService<ITransactionService>(provider);
         var key = Keyspace.CreateKey("transaction");
         var absent = RecordCondition.Absent(key);
