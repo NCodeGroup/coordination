@@ -52,21 +52,25 @@ keys.**
    `CoordinationCompositionException` whose `Failures` lists them. It is thrown from a hosted lifecycle service's
    starting step, which runs before any hosted service starts. Outside a host, it is thrown the first time a primitive
    service resolves a binding. A provider factory that throws is not caught, so its exception stops the start as it is.
-7. **Primitive services.** Each built-in primitive interface has one canonical implementation registered in DI. It
+7. **Startup probes.** Once the composition is valid, the startup check calls each provider's `ProbeAsync` in
+   registration order, before any hosted service starts, so a provider verifies that its server keeps what it declares,
+   as ADR-1003 rule 2 requires. A composition that is invalid fails without probing any server. A probe's exception
+   stops the start as it is. Outside a host nothing probes the providers.
+8. **Primitive services.** Each built-in primitive interface has one canonical implementation registered in DI. It
    resolves the binding for the key's keyspace and calls the provider's implementation. A provider exposes its
    implementations only through `ICoordinationProvider.GetPrimitiveService`, never through DI. When no binding covers a
    key, the call throws a `CoordinationException` coded `unsupported`, whose message names the primitive and the
    cluster and never the keyspace's segments.
-8. **Provider lifetime.** The composition owns the providers it creates and disposes each one when the host stops,
+9. **Provider lifetime.** The composition owns the providers it creates and disposes each one when the host stops,
    asynchronously when it can. Nothing is disposed when the composition never composed or failed.
-9. **Telemetry.** The meter and the activity source are both named `NCode.Coordination`. One histogram,
+10. **Telemetry.** The meter and the activity source are both named `NCode.Coordination`. One histogram,
    `ncode.coordination.operation.duration`, in seconds, records each operation, and one client span,
    `ncode.coordination.operation`, traces it. Their attributes are the provider, the primitive, the operation and the
    outcome (`success`, `failure` or `canceled`), and on a failure `error.type`, which is the exception's code or its
    type's full name. A cancellation sets no `error.type` and no error status. A failure sets the span's status to error
    with no description. No exception message, key, segment, value or payload is recorded. A stream is measured from its
    first read to its end, and a consumer that stops early counts as a success.
-10. **Dependencies.** `NCode.Coordination` depends on the dependency injection and hosting abstractions packages only.
+11. **Dependencies.** `NCode.Coordination` depends on the dependency injection and hosting abstractions packages only.
     It does not register `IMeterFactory`, whose default implementation is not in an abstractions package and which
     every generic host registers; a bare service collection calls `AddMetrics()`. This is a deliberate exception to a
     feature registering its own framework dependencies, taken to keep the abstractions-only rule.
@@ -86,6 +90,7 @@ keys.**
 ## Consequences
 
 - A host with a gap, an overlap or an unmet requirement doesn't start, and one error lists every problem.
+- A provider whose server doesn't keep what it declares stops the host's start before any hosted service starts.
 - A host moves one cell or tenant to another provider by binding that keyspace.
 - A bare service collection calls `AddMetrics()`.
 - A provider package implements `ICoordinationProvider` and adds an extension on `ICoordinationBuilder`.
