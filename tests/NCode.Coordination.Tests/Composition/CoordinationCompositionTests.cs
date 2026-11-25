@@ -105,6 +105,19 @@ public sealed class CoordinationCompositionTests : IDisposable
         composition.EnsureComposed();
     }
 
+    [Fact]
+    public void EnsureComposed_WhenAFactoryThrows_RethrowsItsException()
+    {
+        var failure = new InvalidOperationException("The factory failed.");
+        var registrations = new CoordinationRegistrations();
+        registrations.ProviderFactories.Add(_ => throw failure);
+        var composition = new CoordinationComposition(registrations, Services);
+
+        var thrown = Assert.Throws<InvalidOperationException>(composition.EnsureComposed);
+
+        Assert.Same(failure, thrown);
+    }
+
     #endregion
 
     #region EnsureStartedAsync Tests
@@ -227,6 +240,21 @@ public sealed class CoordinationCompositionTests : IDisposable
 
         Assert.Equal(1, sync.Disposals);
         Assert.Equal(1, async.Disposals);
+    }
+
+    [Fact]
+    public async Task DisposeAsync_WhenTheCompositionIsInvalid_DisposesTheCreatedProviders()
+    {
+        var declaration = Declare("memory");
+        var provider = new AsyncDisposableProvider(declaration);
+        var binding = new ProviderBinding("missing");
+        var registrations = Register(provider, binding);
+        var composition = new CoordinationComposition(registrations, Services);
+        Assert.Throws<CoordinationCompositionException>(composition.EnsureComposed);
+
+        await composition.DisposeAsync();
+
+        Assert.Equal(1, provider.Disposals);
     }
 
     [Fact]

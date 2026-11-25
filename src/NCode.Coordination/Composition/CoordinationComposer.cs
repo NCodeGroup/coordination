@@ -13,8 +13,10 @@ internal static class CoordinationComposer
     /// </summary>
     /// <param name="registrations">What the application registered.</param>
     /// <param name="services">The application's services, which each provider factory receives.</param>
-    /// <returns>The providers and their bindings.</returns>
-    /// <exception cref="CoordinationCompositionException">One or more registrations are invalid.</exception>
+    /// <returns>
+    /// The providers that were created, their bindings and every failure found, or the exception a provider factory
+    /// threw.
+    /// </returns>
     public static ComposedCoordination Compose(
         CoordinationRegistrations registrations,
         IServiceProvider services
@@ -24,7 +26,21 @@ internal static class CoordinationComposer
         ArgumentNullException.ThrowIfNull(services);
 
         var failures = new List<string>();
-        var catalog = ProviderCatalog.Create(registrations.ProviderFactories, services, failures);
+        var checkedCatalog = ProviderCatalog.Create(registrations.ProviderFactories, services);
+        var catalog = checkedCatalog.Value;
+        var factoryFailure = catalog.FactoryFailure;
+        if (factoryFailure is not null)
+        {
+            var emptyTable = BindingTable.Create([]);
+            return new ComposedCoordination(
+                catalog.Providers,
+                emptyTable.Value,
+                [],
+                factoryFailure
+            );
+        }
+
+        failures.AddRange(checkedCatalog.Failures);
 
         var definitions = new List<GuaranteeDefinition>(Guarantees.Definitions);
         foreach (var provider in catalog.Providers)
@@ -72,11 +88,6 @@ internal static class CoordinationComposer
         );
         failures.AddRange(requirementFailures);
 
-        if (failures.Count > 0)
-        {
-            throw new CoordinationCompositionException(failures);
-        }
-
-        return new ComposedCoordination(catalog.Providers, table);
+        return new ComposedCoordination(catalog.Providers, table, [.. failures], null);
     }
 }

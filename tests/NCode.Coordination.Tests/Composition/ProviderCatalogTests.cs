@@ -22,38 +22,38 @@ public sealed class ProviderCatalogTests
     [Fact]
     public void Create_WhenProvidersAreValid_KeepsThemInOrder()
     {
-        var failures = new List<string>();
         var first = CreateProvider("first");
         var second = CreateProvider("second");
 
-        var catalog = ProviderCatalog.Create([_ => first, _ => second], Services, failures);
+        var checkedCatalog = ProviderCatalog.Create([_ => first, _ => second], Services);
+        var catalog = checkedCatalog.Value;
 
-        Assert.Empty(failures);
+        Assert.Empty(checkedCatalog.Failures);
         Assert.Equal<ICoordinationProvider>([first, second], catalog.Providers);
     }
 
     [Fact]
     public void Create_WhenAFactoryReturnsNull_Fails()
     {
-        var failures = new List<string>();
         var first = CreateProvider("first");
 
-        var catalog = ProviderCatalog.Create([_ => null!, _ => first], Services, failures);
+        var checkedCatalog = ProviderCatalog.Create([_ => null!, _ => first], Services);
+        var catalog = checkedCatalog.Value;
 
-        Assert.Equal(["A provider factory returned no provider."], failures);
+        Assert.Equal(["A provider factory returned no provider."], checkedCatalog.Failures);
         Assert.Equal<ICoordinationProvider>([first], catalog.Providers);
     }
 
     [Fact]
     public void Create_WhenTwoProvidersShareAName_FailsAndKeepsTheFirst()
     {
-        var failures = new List<string>();
         var first = CreateProvider("memory");
         var second = CreateProvider("memory");
 
-        var catalog = ProviderCatalog.Create([_ => first, _ => second], Services, failures);
+        var checkedCatalog = ProviderCatalog.Create([_ => first, _ => second], Services);
+        var catalog = checkedCatalog.Value;
 
-        Assert.Equal(["Two providers are named 'memory'."], failures);
+        Assert.Equal(["Two providers are named 'memory'."], checkedCatalog.Failures);
         Assert.Equal<ICoordinationProvider>([first], catalog.Providers);
         var found = catalog.Find("memory");
         Assert.Same(first, found);
@@ -62,16 +62,16 @@ public sealed class ProviderCatalogTests
     [Fact]
     public void Create_WhenADeclarationListsAPrimitiveTwice_Fails()
     {
-        var failures = new List<string>();
         var supported = PrimitiveSupport.Supported(Primitives.Lease);
         var unsupported = PrimitiveSupport.Unsupported(Primitives.Lease, "Not twice.");
         var provider = CreateProvider("memory", supported, unsupported);
 
-        var catalog = ProviderCatalog.Create([_ => provider], Services, failures);
+        var checkedCatalog = ProviderCatalog.Create([_ => provider], Services);
+        var catalog = checkedCatalog.Value;
 
-        Assert.Equal(
+        Assert.Equal<string>(
             ["The provider 'memory' lists the primitive 'lease' more than once."],
-            failures
+            checkedCatalog.Failures
         );
         Assert.Equal<ICoordinationProvider>([provider], catalog.Providers);
     }
@@ -79,7 +79,6 @@ public sealed class ProviderCatalogTests
     [Fact]
     public void Create_PassesTheServicesToEachFactory()
     {
-        var failures = new List<string>();
         var received = new List<IServiceProvider>();
         var provider = CreateProvider("memory");
 
@@ -91,12 +90,30 @@ public sealed class ProviderCatalogTests
                     return provider;
                 },
             ],
-            Services,
-            failures
+            Services
         );
 
         var single = Assert.Single(received);
         Assert.Same(Services, single);
+    }
+
+    [Fact]
+    public void Create_WhenAFactoryThrows_KeepsTheEarlierProvidersAndTheException()
+    {
+        var first = CreateProvider("first");
+        var third = CreateProvider("third");
+        var failure = new InvalidOperationException("The factory failed.");
+
+        var checkedCatalog = ProviderCatalog.Create(
+            [_ => first, _ => throw failure, _ => third],
+            Services
+        );
+
+        var catalog = checkedCatalog.Value;
+        Assert.Equal<ICoordinationProvider>([first], catalog.Providers);
+        Assert.NotNull(catalog.FactoryFailure);
+        var thrown = Assert.Throws<InvalidOperationException>(catalog.FactoryFailure.Throw);
+        Assert.Same(failure, thrown);
     }
 
     #endregion
@@ -106,9 +123,9 @@ public sealed class ProviderCatalogTests
     [Fact]
     public void Find_WhenNameIsRegistered_ReturnsTheProvider()
     {
-        var failures = new List<string>();
         var provider = CreateProvider("memory");
-        var catalog = ProviderCatalog.Create([_ => provider], Services, failures);
+        var checkedCatalog = ProviderCatalog.Create([_ => provider], Services);
+        var catalog = checkedCatalog.Value;
 
         var found = catalog.Find("memory");
 
@@ -118,9 +135,9 @@ public sealed class ProviderCatalogTests
     [Fact]
     public void Find_WhenNameIsUnknown_ReturnsNull()
     {
-        var failures = new List<string>();
         var provider = CreateProvider("memory");
-        var catalog = ProviderCatalog.Create([_ => provider], Services, failures);
+        var checkedCatalog = ProviderCatalog.Create([_ => provider], Services);
+        var catalog = checkedCatalog.Value;
 
         var found = catalog.Find("other");
 

@@ -25,7 +25,8 @@ public sealed class PrimitiveBinderTests : IDisposable
             .Select(provider => new Func<IServiceProvider, ICoordinationProvider>(_ => provider))
             .ToList();
 
-        return ProviderCatalog.Create(factories, Services, []);
+        var checkedCatalog = ProviderCatalog.Create(factories, Services);
+        return checkedCatalog.Value;
     }
 
     private TestProvider CreateProvider(string name, params PrimitiveSupport[] primitives)

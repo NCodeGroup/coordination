@@ -79,16 +79,14 @@ public sealed class CoordinationComposerTests : IDisposable
         );
         registrations.Requirements.Add(requirement);
 
-        var exception = Assert.Throws<CoordinationCompositionException>(() =>
-            CoordinationComposer.Compose(registrations, Services)
-        );
+        var composed = CoordinationComposer.Compose(registrations, Services);
 
-        Assert.Equal(
+        Assert.Equal<string>(
             [
                 "Two providers are named 'memory'.",
                 "The feature 'replay' requires 'expiry.server-clock' on the primitive 'occurrence' by default, which the provider 'memory' does not keep.",
             ],
-            exception.Failures
+            composed.Failures
         );
     }
 
@@ -146,13 +144,11 @@ public sealed class CoordinationComposerTests : IDisposable
         var binding = new ProviderBinding("memory");
         var registrations = Register(provider, binding);
 
-        var exception = Assert.Throws<CoordinationCompositionException>(() =>
-            CoordinationComposer.Compose(registrations, Services)
-        );
+        var composed = CoordinationComposer.Compose(registrations, Services);
 
         Assert.Contains(
             "The provider 'memory' declares the guarantee 'custom.unknown' on the primitive 'occurrence', which is not defined.",
-            exception.Failures
+            composed.Failures
         );
     }
 

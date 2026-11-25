@@ -18,10 +18,28 @@ internal class CoordinationComposition(
         new(() => CoordinationComposer.Compose(registrations, services));
 
     /// <summary>
-    /// Composes the registrations when that hasn't happened yet.
+    /// Composes the registrations when that hasn't happened yet. A provider factory's exception is rethrown as it was
+    /// thrown.
     /// </summary>
     /// <exception cref="CoordinationCompositionException">The composition is invalid.</exception>
-    public void EnsureComposed() => _ = Composed.Value;
+    public void EnsureComposed() => _ = GetValid();
+
+    /// <summary>
+    /// Gets the composed registrations, composing them when that hasn't happened yet.
+    /// </summary>
+    /// <returns>The composition, when it is valid.</returns>
+    /// <exception cref="CoordinationCompositionException">The composition is invalid.</exception>
+    private ComposedCoordination GetValid()
+    {
+        var composed = Composed.Value;
+        composed.FactoryFailure?.Throw();
+        if (composed.Failures.Length > 0)
+        {
+            throw new CoordinationCompositionException(composed.Failures);
+        }
+
+        return composed;
+    }
 
     /// <summary>
     /// Composes the registrations, then probes each provider in registration order.
@@ -31,8 +49,8 @@ internal class CoordinationComposition(
     /// <exception cref="CoordinationCompositionException">The composition is invalid; no provider is probed.</exception>
     public async ValueTask EnsureStartedAsync(CancellationToken cancellationToken)
     {
-        EnsureComposed();
-        foreach (var provider in Composed.Value.Providers)
+        var composed = GetValid();
+        foreach (var provider in composed.Providers)
         {
             await provider.ProbeAsync(cancellationToken).ConfigureAwait(false);
         }
@@ -46,12 +64,15 @@ internal class CoordinationComposition(
     /// <param name="keyspace">The keyspace of the key being used.</param>
     /// <returns>The bound provider's implementation.</returns>
     /// <exception cref="CoordinationException">No provider is bound to the primitive for the keyspace.</exception>
+    /// <exception cref="CoordinationCompositionException">
+    /// The composition is invalid; outside a host it is thrown on first use.
+    /// </exception>
     public BoundService<TService> Resolve<TService>(Primitive primitive, Keyspace keyspace)
         where TService : class
     {
-        if (
-            Composed.Value.Bindings.Find(primitive, keyspace) is { Service: TService service } bound
-        )
+        var bindings = GetValid().Bindings;
+        var found = bindings.Find(primitive, keyspace);
+        if (found is { Service: TService service } bound)
         {
             return new BoundService<TService>(bound.Provider, primitive, service);
         }
