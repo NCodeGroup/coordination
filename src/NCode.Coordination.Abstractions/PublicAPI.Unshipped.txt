@@ -119,6 +119,15 @@ NCode.Coordination.TimeToLive.<Clone>$() -> NCode.Coordination.TimeToLive!
 NCode.Coordination.TimeToLive.Duration.get -> System.TimeSpan
 NCode.Coordination.TimeToLive.Equals(NCode.Coordination.TimeToLive? other) -> bool
 NCode.Coordination.TimeToLive.TimeToLive(System.TimeSpan duration) -> void
+NCode.Coordination.TimeWindow
+NCode.Coordination.TimeWindow.<Clone>$() -> NCode.Coordination.TimeWindow!
+NCode.Coordination.TimeWindow.End.get -> System.DateTimeOffset
+NCode.Coordination.TimeWindow.Equals(NCode.Coordination.TimeWindow? other) -> bool
+NCode.Coordination.TimeWindow.Length.get -> System.TimeSpan
+NCode.Coordination.TimeWindow.Segment.get -> NCode.Coordination.KeySegment!
+NCode.Coordination.TimeWindow.Start.get -> System.DateTimeOffset
+NCode.Coordination.TimeWindow.TimeWindow(System.DateTimeOffset start, System.TimeSpan length) -> void
+NCode.Coordination.TimeWindow.TryCreateTimeToLive(System.DateTimeOffset now, System.TimeSpan skewAllowance, out NCode.Coordination.TimeToLive? timeToLive) -> bool
 override NCode.Coordination.CoordinationKey.Equals(object? obj) -> bool
 override NCode.Coordination.CoordinationKey.GetHashCode() -> int
 override NCode.Coordination.CoordinationKey.ToString() -> string!
@@ -149,6 +158,9 @@ override NCode.Coordination.SessionId.ToString() -> string!
 override NCode.Coordination.TimeToLive.Equals(object? obj) -> bool
 override NCode.Coordination.TimeToLive.GetHashCode() -> int
 override NCode.Coordination.TimeToLive.ToString() -> string!
+override NCode.Coordination.TimeWindow.Equals(object? obj) -> bool
+override NCode.Coordination.TimeWindow.GetHashCode() -> int
+override NCode.Coordination.TimeWindow.ToString() -> string!
 static NCode.Coordination.CoordinationKey.operator !=(NCode.Coordination.CoordinationKey? left, NCode.Coordination.CoordinationKey? right) -> bool
 static NCode.Coordination.CoordinationKey.operator ==(NCode.Coordination.CoordinationKey? left, NCode.Coordination.CoordinationKey? right) -> bool
 static NCode.Coordination.FencingToken.operator !=(NCode.Coordination.FencingToken? left, NCode.Coordination.FencingToken? right) -> bool
@@ -213,3 +225,6 @@ static NCode.Coordination.TimeToLive.MaxDuration.get -> System.TimeSpan
 static NCode.Coordination.TimeToLive.operator !=(NCode.Coordination.TimeToLive? left, NCode.Coordination.TimeToLive? right) -> bool
 static NCode.Coordination.TimeToLive.operator ==(NCode.Coordination.TimeToLive? left, NCode.Coordination.TimeToLive? right) -> bool
 static NCode.Coordination.TimeToLive.TryCreateUntil(System.DateTimeOffset instant, System.DateTimeOffset now, System.TimeSpan skewAllowance, out NCode.Coordination.TimeToLive? timeToLive) -> bool
+static NCode.Coordination.TimeWindow.Containing(System.DateTimeOffset instant, System.TimeSpan length) -> NCode.Coordination.TimeWindow!
+static NCode.Coordination.TimeWindow.operator !=(NCode.Coordination.TimeWindow? left, NCode.Coordination.TimeWindow? right) -> bool
+static NCode.Coordination.TimeWindow.operator ==(NCode.Coordination.TimeWindow? left, NCode.Coordination.TimeWindow? right) -> bool
