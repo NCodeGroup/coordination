@@ -1,0 +1,241 @@
+// Copyright © NCode Group
+// SPDX-License-Identifier: Apache-2.0
+
+using Microsoft.Extensions.DependencyInjection;
+using NCode.Coordination.InProcess.Tests;
+using NCode.Coordination.Recipes.Tests;
+
+namespace NCode.Coordination.Locks.Tests;
+
+public sealed class DefaultReadWriteLockServiceTests
+{
+    private const int RacingCallers = 32;
+
+    private static LeaseTerms Terms { get; } =
+        LeaseTerms.ForTimeToLive(new TimeToLive(TimeSpan.FromSeconds(30)));
+
+    private static CoordinationKey CreateResource() => RecipeTesting.Keyspace.CreateKey("resource");
+
+    private static DefaultReadWriteLockService CreateLocks(IServiceProvider services) =>
+        new(
+            services.GetRequiredService<ILeaseService>(),
+            services.GetRequiredService<IRecordService>(),
+            services.GetRequiredService<IRecordWatchService>()
+        );
+
+    #region AcquireReadAsync Tests
+
+    [Fact]
+    public async Task AcquireReadAsync_WhenAnotherReaderHolds_SharesTheLock()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var services = RecipeTesting.Build(InProcessTesting.CreateTime());
+        var locks = CreateLocks(services);
+        var resource = CreateResource();
+        var first = await locks.AcquireReadAsync(resource, Terms, null, cancellationToken);
+        Assert.NotNull(first);
+
+        var second = await locks.AcquireReadAsync(resource, Terms, null, cancellationToken);
+
+        Assert.NotNull(second);
+        Assert.NotEqual(first.Registration, second.Registration);
+        Assert.True(second.FencingToken > first.FencingToken);
+    }
+
+    [Fact]
+    public async Task AcquireReadAsync_WhenAWriterHolds_WaitsForItsRelease()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var services = RecipeTesting.Build(InProcessTesting.CreateTime());
+        var locks = CreateLocks(services);
+        var resource = CreateResource();
+        var write = await locks.AcquireWriteAsync(resource, Terms, null, cancellationToken);
+        Assert.NotNull(write);
+
+        var task = locks.AcquireReadAsync(resource, Terms, null, cancellationToken).AsTask();
+
+        Assert.False(task.IsCompleted);
+
+        var released = await locks.ReleaseWriteAsync(write, null, cancellationToken);
+        var read = await task;
+
+        Assert.True(released);
+        Assert.NotNull(read);
+        Assert.True(read.FencingToken > write.FencingToken);
+    }
+
+    [Fact]
+    public async Task AcquireReadAsync_WhenAfterAWrite_HasAGreaterFencingToken()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var services = RecipeTesting.Build(InProcessTesting.CreateTime());
+        var locks = CreateLocks(services);
+        var resource = CreateResource();
+        var write = await locks.AcquireWriteAsync(resource, Terms, null, cancellationToken);
+        Assert.NotNull(write);
+        var released = await locks.ReleaseWriteAsync(write, null, cancellationToken);
+        Assert.True(released);
+
+        var read = await locks.AcquireReadAsync(resource, Terms, null, cancellationToken);
+
+        Assert.NotNull(read);
+        Assert.True(read.FencingToken > write.FencingToken);
+    }
+
+    [Fact]
+    public async Task AcquireReadAsync_WhenTheSessionHasEnded_ReturnsNull()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var services = RecipeTesting.Build(InProcessTesting.CreateTime());
+        var sessions = services.GetRequiredService<ISessionService>();
+        var locks = CreateLocks(services);
+        var resource = CreateResource();
+        var session = await RecipeTesting.OpenSessionAsync(services, cancellationToken);
+        await sessions.CloseAsync(session, null, cancellationToken);
+
+        var grant = await locks.AcquireReadAsync(
+            resource,
+            LeaseTerms.ForSession(session),
+            null,
+            cancellationToken
+        );
+
+        Assert.Null(grant);
+    }
+
+    #endregion
+
+    #region ReleaseReadAsync Tests
+
+    [Fact]
+    public async Task ReleaseReadAsync_WhenReleasedTwice_ReturnsFalse()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var services = RecipeTesting.Build(InProcessTesting.CreateTime());
+        var locks = CreateLocks(services);
+        var resource = CreateResource();
+        var read = await locks.AcquireReadAsync(resource, Terms, null, cancellationToken);
+        Assert.NotNull(read);
+        var first = await locks.ReleaseReadAsync(read, null, cancellationToken);
+        Assert.True(first);
+
+        var second = await locks.ReleaseReadAsync(read, null, cancellationToken);
+
+        Assert.False(second);
+    }
+
+    #endregion
+
+    #region AcquireWriteAsync Tests
+
+    [Fact]
+    public async Task AcquireWriteAsync_WhenAReaderHolds_WaitsForItsRelease()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var services = RecipeTesting.Build(InProcessTesting.CreateTime());
+        var locks = CreateLocks(services);
+        var resource = CreateResource();
+        var read = await locks.AcquireReadAsync(resource, Terms, null, cancellationToken);
+        Assert.NotNull(read);
+
+        var task = locks.AcquireWriteAsync(resource, Terms, null, cancellationToken).AsTask();
+
+        Assert.False(task.IsCompleted);
+
+        var released = await locks.ReleaseReadAsync(read, null, cancellationToken);
+        var write = await task;
+
+        Assert.True(released);
+        Assert.NotNull(write);
+        Assert.True(write.FencingToken > read.FencingToken);
+    }
+
+    [Fact]
+    public async Task AcquireWriteAsync_WhenTheResourceHasTheMostSegments_Throws()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var services = RecipeTesting.Build(InProcessTesting.CreateTime());
+        var locks = CreateLocks(services);
+        var segments = new KeySegment[CoordinationKey.MaxSegments];
+        for (var i = 0; i < segments.Length; i++)
+        {
+            segments[i] = KeySegment.FromInt64(i);
+        }
+
+        var resource = new CoordinationKey(RecipeTesting.Keyspace, segments);
+
+        var exception = await Assert.ThrowsAsync<ArgumentException>(async () =>
+            await locks.AcquireWriteAsync(resource, Terms, null, cancellationToken)
+        );
+
+        Assert.Equal("resource", exception.ParamName);
+    }
+
+    #endregion
+
+    #region Concurrency Tests
+
+    [Fact]
+    public async Task AcquireAsync_WhenReadersAndWritersRace_NeverOverlapAWriter()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var services = RecipeTesting.Build(InProcessTesting.CreateTime());
+        var locks = CreateLocks(services);
+        var resource = CreateResource();
+        var counters = new int[2];
+
+        await RecipeTesting.RunConcurrentlyAsync(
+            RacingCallers,
+            async index =>
+            {
+                if (index % 2 == 0)
+                {
+                    var write = await locks.AcquireWriteAsync(
+                        resource,
+                        Terms,
+                        null,
+                        cancellationToken
+                    );
+                    Assert.NotNull(write);
+
+                    var writers = Interlocked.Increment(ref counters[0]);
+                    var readers = Volatile.Read(ref counters[1]);
+                    await Task.Yield();
+                    Interlocked.Decrement(ref counters[0]);
+
+                    var released = await locks.ReleaseWriteAsync(write, null, cancellationToken);
+                    Assert.True(released);
+                    Assert.Equal(1, writers);
+                    Assert.Equal(0, readers);
+                }
+                else
+                {
+                    var read = await locks.AcquireReadAsync(
+                        resource,
+                        Terms,
+                        null,
+                        cancellationToken
+                    );
+                    Assert.NotNull(read);
+
+                    Interlocked.Increment(ref counters[1]);
+                    var writers = Volatile.Read(ref counters[0]);
+                    await Task.Yield();
+                    Interlocked.Decrement(ref counters[1]);
+
+                    var released = await locks.ReleaseReadAsync(read, null, cancellationToken);
+                    Assert.True(released);
+                    Assert.Equal(0, writers);
+                }
+
+                return 0;
+            },
+            cancellationToken
+        );
+
+        Assert.Equal(0, Volatile.Read(ref counters[0]));
+        Assert.Equal(0, Volatile.Read(ref counters[1]));
+    }
+
+    #endregion
+}
