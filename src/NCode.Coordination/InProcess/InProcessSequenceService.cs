@@ -1,0 +1,82 @@
+// Copyright © NCode Group
+// SPDX-License-Identifier: Apache-2.0
+
+namespace NCode.Coordination.InProcess;
+
+/// <summary>
+/// The sequences of the in-process provider.
+/// </summary>
+/// <remarks>
+/// Every operation runs entirely while holding the service's lock, so it is linearizable in the process. A sequence
+/// is held until the process ends, because its numbers never reset.
+/// </remarks>
+internal class InProcessSequenceService : ISequenceService
+{
+    /// <summary>
+    /// Gets the lock that every operation holds.
+    /// </summary>
+    private Lock Gate { get; } = new();
+
+    /// <summary>
+    /// Gets the last number each sequence handed out.
+    /// </summary>
+    private Dictionary<CoordinationKey, long> Last { get; } = [];
+
+    /// <inheritdoc />
+    public ValueTask<long> NextAsync(
+        CoordinationKey key,
+        OperationOptions? options,
+        CancellationToken cancellationToken
+    )
+    {
+        ArgumentNullException.ThrowIfNull(key);
+        InProcessGuard.Check(options, cancellationToken);
+
+        lock (Gate)
+        {
+            var last = Last.GetValueOrDefault(key);
+            if (last == long.MaxValue)
+            {
+                throw new CoordinationException(
+                    CoordinationErrorCodes.LimitExceeded,
+                    outcomeUnknown: false,
+                    "The sequence has handed out its largest number."
+                );
+            }
+
+            var next = last + 1;
+            Last[key] = next;
+            return ValueTask.FromResult(next);
+        }
+    }
+
+    /// <inheritdoc />
+    public ValueTask<SequenceBlock> ReserveAsync(
+        CoordinationKey key,
+        int count,
+        OperationOptions? options,
+        CancellationToken cancellationToken
+    )
+    {
+        ArgumentNullException.ThrowIfNull(key);
+        ArgumentOutOfRangeException.ThrowIfLessThan(count, 1);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(count, CoordinationLimits.MaxSequenceBlock);
+        InProcessGuard.Check(options, cancellationToken);
+
+        lock (Gate)
+        {
+            var last = Last.GetValueOrDefault(key);
+            if (last > long.MaxValue - count)
+            {
+                throw new CoordinationException(
+                    CoordinationErrorCodes.LimitExceeded,
+                    outcomeUnknown: false,
+                    "The sequence has handed out its largest number."
+                );
+            }
+
+            Last[key] = last + count;
+            return ValueTask.FromResult(new SequenceBlock(last + 1, count));
+        }
+    }
+}
