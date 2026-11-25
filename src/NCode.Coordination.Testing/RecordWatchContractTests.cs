@@ -1,6 +1,9 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using NCode.Coordination.Testing.Checking;
+using NCode.Coordination.Testing.Histories;
+using NCode.Coordination.Testing.Runs;
 using Xunit;
 
 namespace NCode.Coordination.Testing;
@@ -479,6 +482,65 @@ public abstract class RecordWatchContractTests : ProviderContractTests
         );
         Assert.Equal(RecordChangeKind.Written, change.Kind);
         Assert.Equal(key, change.Key);
+    }
+
+    #endregion
+
+    #region Concurrent Run Tests
+
+    /// <summary>
+    /// Checks that a watch receives the changes that clients make to records at once as the provider declares.
+    /// </summary>
+    [Fact]
+    public async Task ConcurrentRun_WhenClientsWrite_DeliversAsDeclared()
+    {
+        var keepsDelivery = Keeps(Primitives.RecordWatch, Guarantees.AtMostOnce);
+        Assert.SkipUnless(
+            keepsDelivery,
+            "The provider declares no delivery guarantee for record watches."
+        );
+
+        var gapDetection = Keeps(Primitives.RecordWatch, Guarantees.AtMostOnceWithGapDetection);
+        var watches = Watches;
+        var prefix = CreateKey("run");
+        var recorder = new HistoryRecorder();
+
+        await using var subscriber = new RunSubscriber<RecordChange>(
+            token => watches.WatchPrefixAsync(prefix, null, null, token),
+            recorder,
+            TestCancellationToken
+        );
+        Assert.True(await subscriber.WaitForAsync(_ => true, TestCancellationToken));
+
+        var script = new RecordRunScript(Records, recorder, CreateRunKeys());
+
+        await ConcurrentRun.RunAsync(
+            ConcurrentRun.Steps,
+            script.StepAsync,
+            null,
+            TestCancellationToken
+        );
+
+        var closing = await script.WriteClosingValuesAsync(TestCancellationToken);
+        var lastRevision = closing.Values.Max();
+
+        var done = await subscriber.WaitForAsync(
+            delivery => delivery.Item.Revision >= lastRevision,
+            TestCancellationToken
+        );
+        Assert.True(
+            done || !gapDetection,
+            "The watch neither received the last write nor a resync after it."
+        );
+
+        Assert.Empty(
+            RecordWatchDeliveryChecker.Check(
+                recorder.ToHistory(),
+                subscriber.Deliveries,
+                closing,
+                gapDetection
+            )
+        );
     }
 
     #endregion

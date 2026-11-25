@@ -177,6 +177,7 @@ NCode.Coordination.Testing.RecordContractTests.TakeAsync_WhenKeyIsAbsent_Returns
 NCode.Coordination.Testing.RecordContractTests.TakeAsync_WhenKeyIsPresent_ReturnsAndDeletesTheRecord() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.RecordWatchContractTests
 NCode.Coordination.Testing.RecordWatchContractTests.RecordWatchContractTests() -> void
+NCode.Coordination.Testing.RecordWatchContractTests.ConcurrentRun_WhenClientsWrite_DeliversAsDeclared() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.RecordWatchContractTests.WatchKeyAsync_WhenAnotherKeyIsWritten_YieldsNothingForIt() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.RecordWatchContractTests.WatchKeyAsync_WhenChangesFollow_YieldsThemInRevisionOrder() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.RecordWatchContractTests.WatchKeyAsync_WhenOptionsCarryAnUnknownExtension_ThrowsUnsupported() -> System.Threading.Tasks.Task!
