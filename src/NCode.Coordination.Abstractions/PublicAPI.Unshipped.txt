@@ -23,6 +23,12 @@ NCode.Coordination.FeatureRequirement.Guarantees.get -> System.Collections.Immut
 NCode.Coordination.FeatureRequirement.Keyspace.get -> NCode.Coordination.Keyspace?
 NCode.Coordination.FeatureRequirement.Keyspace.init -> void
 NCode.Coordination.FeatureRequirement.Primitive.get -> NCode.Coordination.Primitive!
+NCode.Coordination.FencingToken
+NCode.Coordination.FencingToken.<Clone>$() -> NCode.Coordination.FencingToken!
+NCode.Coordination.FencingToken.CompareTo(NCode.Coordination.FencingToken? other) -> int
+NCode.Coordination.FencingToken.Equals(NCode.Coordination.FencingToken? other) -> bool
+NCode.Coordination.FencingToken.FencingToken(long value) -> void
+NCode.Coordination.FencingToken.Value.get -> long
 NCode.Coordination.Guarantee
 NCode.Coordination.Guarantee.<Clone>$() -> NCode.Coordination.Guarantee!
 NCode.Coordination.Guarantee.Equals(NCode.Coordination.Guarantee? other) -> bool
@@ -74,6 +80,12 @@ NCode.Coordination.ProviderDeclaration.Profile.get -> string?
 NCode.Coordination.ProviderDeclaration.Profile.init -> void
 NCode.Coordination.ProviderDeclaration.Provider.get -> string!
 NCode.Coordination.ProviderDeclaration.ProviderDeclaration(string! provider, params System.Collections.Generic.IEnumerable<NCode.Coordination.PrimitiveSupport!>! primitives) -> void
+NCode.Coordination.Revision
+NCode.Coordination.Revision.<Clone>$() -> NCode.Coordination.Revision!
+NCode.Coordination.Revision.CompareTo(NCode.Coordination.Revision? other) -> int
+NCode.Coordination.Revision.Equals(NCode.Coordination.Revision? other) -> bool
+NCode.Coordination.Revision.Revision(long value) -> void
+NCode.Coordination.Revision.Value.get -> long
 NCode.Coordination.TimeToLive
 NCode.Coordination.TimeToLive.<Clone>$() -> NCode.Coordination.TimeToLive!
 NCode.Coordination.TimeToLive.Duration.get -> System.TimeSpan
@@ -82,6 +94,9 @@ NCode.Coordination.TimeToLive.TimeToLive(System.TimeSpan duration) -> void
 override NCode.Coordination.CoordinationKey.Equals(object? obj) -> bool
 override NCode.Coordination.CoordinationKey.GetHashCode() -> int
 override NCode.Coordination.CoordinationKey.ToString() -> string!
+override NCode.Coordination.FencingToken.Equals(object? obj) -> bool
+override NCode.Coordination.FencingToken.GetHashCode() -> int
+override NCode.Coordination.FencingToken.ToString() -> string!
 override NCode.Coordination.Guarantee.Equals(object? obj) -> bool
 override NCode.Coordination.Guarantee.GetHashCode() -> int
 override NCode.Coordination.Guarantee.ToString() -> string!
@@ -94,11 +109,20 @@ override NCode.Coordination.Keyspace.ToString() -> string!
 override NCode.Coordination.Primitive.Equals(object? obj) -> bool
 override NCode.Coordination.Primitive.GetHashCode() -> int
 override NCode.Coordination.Primitive.ToString() -> string!
+override NCode.Coordination.Revision.Equals(object? obj) -> bool
+override NCode.Coordination.Revision.GetHashCode() -> int
+override NCode.Coordination.Revision.ToString() -> string!
 override NCode.Coordination.TimeToLive.Equals(object? obj) -> bool
 override NCode.Coordination.TimeToLive.GetHashCode() -> int
 override NCode.Coordination.TimeToLive.ToString() -> string!
 static NCode.Coordination.CoordinationKey.operator !=(NCode.Coordination.CoordinationKey? left, NCode.Coordination.CoordinationKey? right) -> bool
 static NCode.Coordination.CoordinationKey.operator ==(NCode.Coordination.CoordinationKey? left, NCode.Coordination.CoordinationKey? right) -> bool
+static NCode.Coordination.FencingToken.operator !=(NCode.Coordination.FencingToken? left, NCode.Coordination.FencingToken? right) -> bool
+static NCode.Coordination.FencingToken.operator <(NCode.Coordination.FencingToken? left, NCode.Coordination.FencingToken? right) -> bool
+static NCode.Coordination.FencingToken.operator <=(NCode.Coordination.FencingToken? left, NCode.Coordination.FencingToken? right) -> bool
+static NCode.Coordination.FencingToken.operator ==(NCode.Coordination.FencingToken? left, NCode.Coordination.FencingToken? right) -> bool
+static NCode.Coordination.FencingToken.operator >(NCode.Coordination.FencingToken? left, NCode.Coordination.FencingToken? right) -> bool
+static NCode.Coordination.FencingToken.operator >=(NCode.Coordination.FencingToken? left, NCode.Coordination.FencingToken? right) -> bool
 static NCode.Coordination.Guarantee.operator !=(NCode.Coordination.Guarantee? left, NCode.Coordination.Guarantee? right) -> bool
 static NCode.Coordination.Guarantee.operator ==(NCode.Coordination.Guarantee? left, NCode.Coordination.Guarantee? right) -> bool
 static NCode.Coordination.Guarantees.AtMostOnce.get -> NCode.Coordination.Guarantee!
@@ -141,6 +165,12 @@ static NCode.Coordination.Primitives.Set.get -> NCode.Coordination.Primitive!
 static NCode.Coordination.Primitives.Transaction.get -> NCode.Coordination.Primitive!
 static NCode.Coordination.PrimitiveSupport.Supported(NCode.Coordination.Primitive! primitive, params System.Collections.Generic.IEnumerable<NCode.Coordination.Guarantee!>! guarantees) -> NCode.Coordination.PrimitiveSupport!
 static NCode.Coordination.PrimitiveSupport.Unsupported(NCode.Coordination.Primitive! primitive, string! reason) -> NCode.Coordination.PrimitiveSupport!
+static NCode.Coordination.Revision.operator !=(NCode.Coordination.Revision? left, NCode.Coordination.Revision? right) -> bool
+static NCode.Coordination.Revision.operator <(NCode.Coordination.Revision? left, NCode.Coordination.Revision? right) -> bool
+static NCode.Coordination.Revision.operator <=(NCode.Coordination.Revision? left, NCode.Coordination.Revision? right) -> bool
+static NCode.Coordination.Revision.operator ==(NCode.Coordination.Revision? left, NCode.Coordination.Revision? right) -> bool
+static NCode.Coordination.Revision.operator >(NCode.Coordination.Revision? left, NCode.Coordination.Revision? right) -> bool
+static NCode.Coordination.Revision.operator >=(NCode.Coordination.Revision? left, NCode.Coordination.Revision? right) -> bool
 static NCode.Coordination.TimeToLive.MaxDuration.get -> System.TimeSpan
 static NCode.Coordination.TimeToLive.operator !=(NCode.Coordination.TimeToLive? left, NCode.Coordination.TimeToLive? right) -> bool
 static NCode.Coordination.TimeToLive.operator ==(NCode.Coordination.TimeToLive? left, NCode.Coordination.TimeToLive? right) -> bool
