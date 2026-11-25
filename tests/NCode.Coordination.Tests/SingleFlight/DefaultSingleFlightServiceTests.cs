@@ -1,7 +1,6 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
-using System.Text;
 using Microsoft.Extensions.DependencyInjection;
 using NCode.Coordination.InProcess.Tests;
 using NCode.Coordination.Recipes.Tests;
@@ -22,7 +21,7 @@ public sealed class DefaultSingleFlightServiceTests
 
     private static SingleFlightTerms Terms { get; } = new(ValueTimeToLive, FetchTimeToLive);
 
-    private static ReadOnlyMemory<byte> Value { get; } = Encoding.UTF8.GetBytes("fetched");
+    private static ReadOnlyMemory<byte> Value { get; } = "fetched"u8.ToArray();
 
     private static CoordinationKey CreateKey() => RecipeTesting.Keyspace.CreateKey("flight");
 
