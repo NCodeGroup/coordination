@@ -17,4 +17,4 @@ Until the first stable release, the [Unreleased] section describes the product a
 
 ### Security
 
-- Every pull request scans the code for matches with public open-source code and checks the license of every NuGet dependency, transitive ones included, against the permitted licenses ([#6](https://github.com/NCodeGroup/coordination/issues/6), [ADR-1009](docs/decisions/1009-ci-checks-originality-with-scanoss-snippet-matching-and-nuget-license-license-checking.md)).
+- Every pull request checks the license of every NuGet dependency, transitive ones included, against the permitted licenses ([#6](https://github.com/NCodeGroup/coordination/issues/6), [ADR-1009](docs/decisions/1009-ci-checks-every-dependencys-license-and-no-snippet-scan-runs.md)).
