@@ -39,6 +39,11 @@
     <PackageVersion Include="Microsoft.Extensions.Hosting.Abstractions" Version="11.0.0" />
   </ItemGroup>
 
+  <!-- The recipes' rate limiters (NCode.Coordination): the .NET runtime's rate limiting package. -->
+  <ItemGroup>
+    <PackageVersion Include="System.Threading.RateLimiting" Version="11.0.0" />
+  </ItemGroup>
+
   <!-- The composition's tests: the real container, metrics and host, the metric collector, the fake clock, and Moq. -->
   <ItemGroup>
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="11.0.0" />
