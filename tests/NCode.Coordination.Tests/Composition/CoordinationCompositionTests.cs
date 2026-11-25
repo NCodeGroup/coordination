@@ -3,6 +3,7 @@
 
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
+using NCode.Coordination.Tests;
 
 namespace NCode.Coordination.Composition.Tests;
 
@@ -102,6 +103,98 @@ public sealed class CoordinationCompositionTests : IDisposable
         var composition = new CoordinationComposition(registrations, Services);
 
         composition.EnsureComposed();
+    }
+
+    #endregion
+
+    #region EnsureStartedAsync Tests
+
+    [Fact]
+    public async Task EnsureStartedAsync_ProbesEveryProviderInRegistrationOrder()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var probed = new List<string>();
+        var tokens = new List<CancellationToken>();
+        var firstService = Mocks.Create<IOccurrenceService>().Object;
+        var secondService = Mocks.Create<IOccurrenceService>().Object;
+        var first = new TestProvider(Declare("first"), firstService)
+        {
+            Probe = token =>
+            {
+                probed.Add("first");
+                tokens.Add(token);
+                return ValueTask.CompletedTask;
+            },
+        };
+        var second = new TestProvider(Declare("second"), secondService)
+        {
+            Probe = token =>
+            {
+                probed.Add("second");
+                tokens.Add(token);
+                return ValueTask.CompletedTask;
+            },
+        };
+        var registrations = new CoordinationRegistrations();
+        registrations.ProviderFactories.Add(_ => first);
+        registrations.ProviderFactories.Add(_ => second);
+        registrations.Bindings.Add(new ProviderBinding("first") { Keyspace = new Keyspace("a") });
+        registrations.Bindings.Add(new ProviderBinding("second") { Keyspace = new Keyspace("b") });
+        var composition = new CoordinationComposition(registrations, Services);
+
+        await composition.EnsureStartedAsync(cancellationToken);
+
+        Assert.Equal(["first", "second"], probed);
+        Assert.Equal([cancellationToken, cancellationToken], tokens);
+    }
+
+    [Fact]
+    public async Task EnsureStartedAsync_WhenAProbeThrows_ThrowsItsException()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var failure = new CoordinationException(
+            CoordinationErrorCodes.Unsupported,
+            outcomeUnknown: false,
+            "probe"
+        );
+        var service = Mocks.Create<IOccurrenceService>().Object;
+        var provider = new TestProvider(Declare("memory"), service)
+        {
+            Probe = _ => ValueTask.FromException(failure),
+        };
+        var binding = new ProviderBinding("memory");
+        var registrations = Register(provider, binding);
+        var composition = new CoordinationComposition(registrations, Services);
+
+        var thrown = await Assert.ThrowsAsync<CoordinationException>(async () =>
+            await composition.EnsureStartedAsync(cancellationToken)
+        );
+
+        Assert.Same(failure, thrown);
+    }
+
+    [Fact]
+    public async Task EnsureStartedAsync_WhenTheCompositionIsInvalid_ThrowsWithoutProbing()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var probed = false;
+        var provider = new TestProvider(Declare("memory"))
+        {
+            Probe = _ =>
+            {
+                probed = true;
+                return ValueTask.CompletedTask;
+            },
+        };
+        var binding = new ProviderBinding("missing");
+        var registrations = Register(provider, binding);
+        var composition = new CoordinationComposition(registrations, Services);
+
+        await Assert.ThrowsAsync<CoordinationCompositionException>(async () =>
+            await composition.EnsureStartedAsync(cancellationToken)
+        );
+
+        Assert.False(probed);
     }
 
     #endregion

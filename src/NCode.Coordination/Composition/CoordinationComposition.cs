@@ -24,6 +24,21 @@ internal class CoordinationComposition(
     public void EnsureComposed() => _ = Composed.Value;
 
     /// <summary>
+    /// Composes the registrations, then probes each provider in registration order.
+    /// </summary>
+    /// <param name="cancellationToken">A token that cancels the probes.</param>
+    /// <returns>A task that completes when every probe has passed.</returns>
+    /// <exception cref="CoordinationCompositionException">The composition is invalid; no provider is probed.</exception>
+    public async ValueTask EnsureStartedAsync(CancellationToken cancellationToken)
+    {
+        EnsureComposed();
+        foreach (var provider in Composed.Value.Providers)
+        {
+            await provider.ProbeAsync(cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
     /// Resolves the provider's implementation of a primitive for a keyspace.
     /// </summary>
     /// <typeparam name="TService">The primitive's interface.</typeparam>

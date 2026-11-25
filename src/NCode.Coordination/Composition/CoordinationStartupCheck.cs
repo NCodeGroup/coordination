@@ -6,8 +6,8 @@ using Microsoft.Extensions.Hosting;
 namespace NCode.Coordination.Composition;
 
 /// <summary>
-/// Composes the coordination before any hosted service starts, so the host's start fails on a composition that cannot
-/// keep its requirements.
+/// Composes the coordination and probes its providers before any hosted service starts, so the host's start fails on a
+/// composition that cannot keep its requirements or a server that doesn't keep what its provider declares.
 /// </summary>
 /// <param name="composition">The application's composition.</param>
 internal sealed class CoordinationStartupCheck(CoordinationComposition composition)
@@ -16,11 +16,8 @@ internal sealed class CoordinationStartupCheck(CoordinationComposition compositi
     private CoordinationComposition Composition { get; } = composition;
 
     /// <inheritdoc />
-    public Task StartingAsync(CancellationToken cancellationToken)
-    {
-        Composition.EnsureComposed();
-        return Task.CompletedTask;
-    }
+    public Task StartingAsync(CancellationToken cancellationToken) =>
+        Composition.EnsureStartedAsync(cancellationToken).AsTask();
 
     /// <inheritdoc />
     public Task StartAsync(CancellationToken cancellationToken) => Task.CompletedTask;

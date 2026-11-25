@@ -16,12 +16,18 @@ public sealed class CoordinationStartupCheckTests : IDisposable
 
     public void Dispose() => Mocks.Verify();
 
-    private CoordinationStartupCheck Create(string bindingName)
+    private CoordinationStartupCheck Create(
+        string bindingName,
+        Func<CancellationToken, ValueTask>? probe = null
+    )
     {
         var service = Mocks.Create<IOccurrenceService>().Object;
         var support = PrimitiveSupport.Supported(Primitives.Occurrence, Guarantees.Durable);
         var declaration = new ProviderDeclaration("memory", support);
-        var provider = new TestProvider(declaration, service);
+        var provider = new TestProvider(declaration, service)
+        {
+            Probe = probe ?? (_ => ValueTask.CompletedTask),
+        };
         var registrations = new CoordinationRegistrations();
         registrations.ProviderFactories.Add(_ => provider);
         var binding = new ProviderBinding(bindingName);
@@ -50,6 +56,24 @@ public sealed class CoordinationStartupCheckTests : IDisposable
         var check = Create("memory");
 
         await check.StartingAsync(cancellationToken);
+    }
+
+    [Fact]
+    public async Task StartingAsync_WhenAProbeThrows_Throws()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var failure = new CoordinationException(
+            CoordinationErrorCodes.Unsupported,
+            outcomeUnknown: false,
+            "probe"
+        );
+        var check = Create("memory", _ => ValueTask.FromException(failure));
+
+        var thrown = await Assert.ThrowsAsync<CoordinationException>(() =>
+            check.StartingAsync(cancellationToken)
+        );
+
+        Assert.Same(failure, thrown);
     }
 
     #endregion
