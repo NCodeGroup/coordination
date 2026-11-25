@@ -163,7 +163,10 @@ internal class InProcessDeadlines : IDisposable
 
         if (Due.TryPeek(out _, out var next))
         {
-            Arm(next);
+            if (Armed != next)
+            {
+                Arm(next);
+            }
         }
         else
         {
@@ -239,6 +242,9 @@ internal class InProcessDeadlines : IDisposable
         {
             if (!IsDisposed)
             {
+                // The timer has fired, so nothing is armed: RunDue arms it again, also for a deadline beyond the
+                // longest wait.
+                Armed = null;
                 RunDue();
             }
         }
