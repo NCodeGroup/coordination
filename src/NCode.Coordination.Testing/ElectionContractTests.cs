@@ -357,9 +357,11 @@ public abstract class ElectionContractTests : ProviderContractTests
         Assert.True(result.IsElected);
         var leadership = result.Leadership;
 
-        await Assert.ThrowsAsync<ArgumentException>(async () =>
+        var exception = await Assert.ThrowsAsync<ArgumentException>(async () =>
             await Elections.RenewAsync(leadership, LongTimeToLive, null, TestCancellationToken)
         );
+
+        Assert.Equal("leadership", exception.ParamName);
     }
 
     #endregion

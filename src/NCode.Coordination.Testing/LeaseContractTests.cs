@@ -322,9 +322,11 @@ public abstract class LeaseContractTests : ProviderContractTests
         Assert.True(result.IsAcquired);
         var grant = result.Grant;
 
-        await Assert.ThrowsAsync<ArgumentException>(async () =>
+        var exception = await Assert.ThrowsAsync<ArgumentException>(async () =>
             await Leases.RenewAsync(grant, LongTimeToLive, null, TestCancellationToken)
         );
+
+        Assert.Equal("grant", exception.ParamName);
     }
 
     #endregion

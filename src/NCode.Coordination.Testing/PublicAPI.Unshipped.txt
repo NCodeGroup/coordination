@@ -178,6 +178,7 @@ NCode.Coordination.Testing.SemaphoreContractTests.SemaphoreContractTests() -> vo
 NCode.Coordination.Testing.SemaphoreContractTests.TryAcquireAsync_AfterASlotIsReleased_GivesAGreaterFencingToken() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.SemaphoreContractTests.TryAcquireAsync_WhenAGrantExpires_FreesItsSlot() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.SemaphoreContractTests.TryAcquireAsync_WhenCapacityIsAboveTheLimit_ThrowsArgumentOutOfRangeException() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.SemaphoreContractTests.TryAcquireAsync_WhenCapacityIsTheLimit_Acquires() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.SemaphoreContractTests.TryAcquireAsync_WhenCapacityIsZero_ThrowsArgumentOutOfRangeException() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.SemaphoreContractTests.TryAcquireAsync_WhenEveryHolderReleased_AcceptsAnotherCapacity() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.SemaphoreContractTests.TryAcquireAsync_WhenEverySlotIsHeld_ReturnsFull() -> System.Threading.Tasks.Task!

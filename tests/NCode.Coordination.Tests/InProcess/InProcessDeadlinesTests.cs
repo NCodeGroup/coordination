@@ -169,7 +169,9 @@ public sealed class InProcessDeadlinesTests
         }
 
         Assert.Equal(0, deadlines.Pending);
-        Assert.True(deadlines.Count < total);
+        // The queue compacts at the first cancel that leaves it more than 2 * Pending + CompactFloor handles,
+        // which is the 1,030th with 4 pending, and the later cancels leave it under that bound.
+        Assert.Equal(4, deadlines.Count);
     }
 
     #endregion

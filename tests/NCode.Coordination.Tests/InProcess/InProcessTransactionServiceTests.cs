@@ -58,6 +58,82 @@ public sealed class InProcessTransactionServiceTests
     }
 
     [Fact]
+    public async Task ExecuteAsync_WhenAConditionFailsAndTheFailureBranchBindsToAnEndedSession_ReturnsSessionEnded()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var time = InProcessTesting.CreateTime();
+        var table = new InProcessRecordTable(time);
+        var sessions = new InProcessSessionTable(table);
+        var records = new InProcessRecordService(sessions);
+        var service = new InProcessTransactionService(sessions);
+        var guardKey = InProcessTesting.Keyspace.CreateKey("guard");
+        var plainKey = InProcessTesting.Keyspace.CreateKey("plain");
+        var boundKey = InProcessTesting.Keyspace.CreateKey("bound");
+        ReadOnlyMemory<byte> value = (byte[])[1];
+        var created = await records.CreateAsync(
+            guardKey,
+            value,
+            RecordLifetime.Persistent,
+            null,
+            cancellationToken
+        );
+        Assert.True(created.IsWritten);
+        var sessionId = new SessionId(InProcessTesting.Keyspace, "unknown");
+        var session = RecordLifetime.ForSession(sessionId);
+        var absent = RecordCondition.Absent(guardKey);
+        var plainPut = RecordWrite.Put(plainKey, value, RecordLifetime.Persistent);
+        var boundPut = RecordWrite.Put(boundKey, value, session);
+        var transaction = new RecordTransaction([absent], [plainPut]) { OnFailure = [boundPut] };
+
+        var result = await service.ExecuteAsync(transaction, null, cancellationToken);
+
+        var plain = await records.ReadAsync(plainKey, null, cancellationToken);
+        var bound = await records.ReadAsync(boundKey, null, cancellationToken);
+
+        Assert.Equal(TransactionStatus.SessionEnded, result.Status);
+        Assert.Null(plain);
+        Assert.Null(bound);
+    }
+
+    [Fact]
+    public async Task ExecuteAsync_WhenAConditionFailsAndOnlyTheSuccessBranchBindsToAnEndedSession_ReturnsFailed()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var time = InProcessTesting.CreateTime();
+        var table = new InProcessRecordTable(time);
+        var sessions = new InProcessSessionTable(table);
+        var records = new InProcessRecordService(sessions);
+        var service = new InProcessTransactionService(sessions);
+        var guardKey = InProcessTesting.Keyspace.CreateKey("guard");
+        var plainKey = InProcessTesting.Keyspace.CreateKey("plain");
+        var boundKey = InProcessTesting.Keyspace.CreateKey("bound");
+        ReadOnlyMemory<byte> value = (byte[])[1];
+        var created = await records.CreateAsync(
+            guardKey,
+            value,
+            RecordLifetime.Persistent,
+            null,
+            cancellationToken
+        );
+        Assert.True(created.IsWritten);
+        var sessionId = new SessionId(InProcessTesting.Keyspace, "unknown");
+        var session = RecordLifetime.ForSession(sessionId);
+        var absent = RecordCondition.Absent(guardKey);
+        var plainPut = RecordWrite.Put(plainKey, value, RecordLifetime.Persistent);
+        var boundPut = RecordWrite.Put(boundKey, value, session);
+        var transaction = new RecordTransaction([absent], [boundPut]) { OnFailure = [plainPut] };
+
+        var result = await service.ExecuteAsync(transaction, null, cancellationToken);
+
+        var plain = await records.ReadAsync(plainKey, null, cancellationToken);
+        var bound = await records.ReadAsync(boundKey, null, cancellationToken);
+
+        Assert.Equal(TransactionStatus.Failed, result.Status);
+        Assert.NotNull(plain);
+        Assert.Null(bound);
+    }
+
+    [Fact]
     public async Task ExecuteAsync_WhenAPutIsBoundToALiveSession_EndsTheRecordWithTheSession()
     {
         var cancellationToken = TestContext.Current.CancellationToken;

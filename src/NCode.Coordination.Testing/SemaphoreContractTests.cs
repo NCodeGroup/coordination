@@ -119,9 +119,11 @@ public abstract class SemaphoreContractTests : ProviderContractTests
     {
         var resource = CreateKey("resource");
 
-        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(async () =>
+        var exception = await Assert.ThrowsAsync<ArgumentOutOfRangeException>(async () =>
             await TryAcquireAsync(resource, 0, LongTimeToLive)
         );
+
+        Assert.Equal("capacity", exception.ParamName);
     }
 
     /// <summary>
@@ -132,13 +134,32 @@ public abstract class SemaphoreContractTests : ProviderContractTests
     {
         var resource = CreateKey("resource");
 
-        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(async () =>
+        var exception = await Assert.ThrowsAsync<ArgumentOutOfRangeException>(async () =>
             await TryAcquireAsync(
                 resource,
                 CoordinationLimits.MaxSemaphoreCapacity + 1,
                 LongTimeToLive
             )
         );
+
+        Assert.Equal("capacity", exception.ParamName);
+    }
+
+    /// <summary>
+    /// Checks that acquiring a slot with a capacity of exactly the limit succeeds.
+    /// </summary>
+    [Fact]
+    public async Task TryAcquireAsync_WhenCapacityIsTheLimit_Acquires()
+    {
+        var resource = CreateKey("resource");
+
+        var result = await TryAcquireAsync(
+            resource,
+            CoordinationLimits.MaxSemaphoreCapacity,
+            LongTimeToLive
+        );
+
+        Assert.True(result.IsAcquired);
     }
 
     /// <summary>
@@ -378,9 +399,11 @@ public abstract class SemaphoreContractTests : ProviderContractTests
         Assert.True(result.IsAcquired);
         var grant = result.Grant;
 
-        await Assert.ThrowsAsync<ArgumentException>(async () =>
+        var exception = await Assert.ThrowsAsync<ArgumentException>(async () =>
             await Semaphores.RenewAsync(grant, LongTimeToLive, null, TestCancellationToken)
         );
+
+        Assert.Equal("grant", exception.ParamName);
     }
 
     #endregion
