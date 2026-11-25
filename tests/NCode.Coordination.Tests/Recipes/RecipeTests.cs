@@ -14,9 +14,10 @@ public sealed class RecipeTests
         var record = new RecipeNeed(Primitives.Record, Guarantees.LinearizableUntilFailover);
 
         var recipe = new Recipe("sample", lease, record);
+        var text = recipe.ToString();
 
         Assert.Equal("sample", recipe.Name);
-        Assert.Equal("sample", recipe.ToString());
+        Assert.Equal("sample", text);
         Assert.Equal<RecipeNeed>([lease, record], recipe.Needs);
     }
 
@@ -43,13 +44,10 @@ public sealed class RecipeTests
     [Fact]
     public void Constructor_WhenAPrimitiveIsNamedTwice_ThrowsNamingTheNeeds()
     {
-        var exception = Assert.Throws<ArgumentException>(() =>
-            new Recipe(
-                "sample",
-                new RecipeNeed(Primitives.Lease, Guarantees.LinearizableUntilFailover),
-                new RecipeNeed(Primitives.Lease)
-            )
-        );
+        var first = new RecipeNeed(Primitives.Lease, Guarantees.LinearizableUntilFailover);
+        var second = new RecipeNeed(Primitives.Lease);
+
+        var exception = Assert.Throws<ArgumentException>(() => new Recipe("sample", first, second));
 
         Assert.Equal("needs", exception.ParamName);
         Assert.Contains("names each primitive once", exception.Message);
@@ -58,9 +56,9 @@ public sealed class RecipeTests
     [Fact]
     public void Constructor_WhenTheNameIsBlank_Throws()
     {
-        Assert.ThrowsAny<ArgumentException>(() =>
-            new Recipe(" ", new RecipeNeed(Primitives.Lease))
-        );
+        var need = new RecipeNeed(Primitives.Lease);
+
+        Assert.ThrowsAny<ArgumentException>(() => new Recipe(" ", need));
     }
 
     #endregion

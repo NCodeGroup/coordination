@@ -27,10 +27,8 @@ internal static class RecipeTesting
         var services = new ServiceCollection();
         services.AddMetrics();
         services.AddSingleton<TimeProvider>(time);
-        services.AddCoordination(b =>
-            b.AddInProcessProvider()
-                .Bind(new ProviderBinding(InProcessCoordinationBuilderExtensions.ProviderName))
-        );
+        var binding = new ProviderBinding(InProcessCoordinationBuilderExtensions.ProviderName);
+        services.AddCoordination(b => b.AddInProcessProvider().Bind(binding));
         return services.BuildServiceProvider();
     }
 
@@ -46,7 +44,8 @@ internal static class RecipeTesting
     )
     {
         var sessions = services.GetRequiredService<ISessionService>();
-        var timeToLive = new TimeToLive(TimeSpan.FromMinutes(1));
+        var length = TimeSpan.FromMinutes(1);
+        var timeToLive = new TimeToLive(length);
         var grant = await sessions.OpenAsync(Keyspace, timeToLive, null, cancellationToken);
         return grant.Id;
     }

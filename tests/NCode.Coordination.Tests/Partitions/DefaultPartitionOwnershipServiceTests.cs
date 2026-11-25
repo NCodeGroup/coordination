@@ -20,9 +20,8 @@ public sealed class DefaultPartitionOwnershipServiceTests
     {
         var session = await RecipeTesting.OpenSessionAsync(services, cancellationToken);
         var member = new Member(session, nodeId, $"{nodeId}:5000");
-        var status = await services
-            .GetRequiredService<IMembershipService>()
-            .JoinAsync(group, member, null, cancellationToken);
+        var memberships = services.GetRequiredService<IMembershipService>();
+        var status = await memberships.JoinAsync(group, member, null, cancellationToken);
 
         Assert.Equal(MembershipJoinStatus.Joined, status);
 
@@ -35,13 +34,13 @@ public sealed class DefaultPartitionOwnershipServiceTests
     public async Task ReadAsync_WhenMembersJoined_AssignsEveryPartition()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await using var services = RecipeTesting.Build(InProcessTesting.CreateTime());
+        var time = InProcessTesting.CreateTime();
+        await using var services = RecipeTesting.Build(time);
         var group = CreateGroup();
         await JoinAsync(services, group, "node-a", cancellationToken);
         await JoinAsync(services, group, "node-b", cancellationToken);
-        var partitions = new DefaultPartitionOwnershipService(
-            services.GetRequiredService<IMembershipService>()
-        );
+        var memberships = services.GetRequiredService<IMembershipService>();
+        var partitions = new DefaultPartitionOwnershipService(memberships);
 
         var assignment = await partitions.ReadAsync(group, 8, null, cancellationToken);
 
@@ -63,42 +62,49 @@ public sealed class DefaultPartitionOwnershipServiceTests
     public async Task WatchAsync_WhenAMemberLeaves_YieldsTheNewAssignment()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await using var services = RecipeTesting.Build(InProcessTesting.CreateTime());
+        var time = InProcessTesting.CreateTime();
+        await using var services = RecipeTesting.Build(time);
         var group = CreateGroup();
         var memberA = await JoinAsync(services, group, "node-a", cancellationToken);
         var memberB = await JoinAsync(services, group, "node-b", cancellationToken);
         var memberships = services.GetRequiredService<IMembershipService>();
         var partitions = new DefaultPartitionOwnershipService(memberships);
-        await using var enumerator = partitions
-            .WatchAsync(group, 8, null, cancellationToken)
-            .GetAsyncEnumerator(cancellationToken);
+        var watch = partitions.WatchAsync(group, 8, null, cancellationToken);
+        await using var enumerator = watch.GetAsyncEnumerator(cancellationToken);
 
-        Assert.True(await enumerator.MoveNextAsync());
+        var movedFirst = await enumerator.MoveNextAsync();
         var first = enumerator.Current;
+        var firstPartitionsA = first.GetPartitions("node-a");
+        var firstPartitionsB = first.GetPartitions("node-b");
 
-        Assert.NotEmpty(first.GetPartitions("node-a"));
-        Assert.NotEmpty(first.GetPartitions("node-b"));
+        Assert.True(movedFirst);
+        Assert.NotEmpty(firstPartitionsA);
+        Assert.NotEmpty(firstPartitionsB);
 
         await memberships.LeaveAsync(group, memberB.Session, null, cancellationToken);
 
-        Assert.True(await enumerator.MoveNextAsync());
+        var movedNext = await enumerator.MoveNextAsync();
         var next = enumerator.Current;
+        var nextPartitionsA = next.GetPartitions(memberA.NodeId);
+        var nextPartitionsB = next.GetPartitions("node-b");
 
-        Assert.Equal(8, next.GetPartitions(memberA.NodeId).Length);
-        Assert.Empty(next.GetPartitions("node-b"));
+        Assert.True(movedNext);
+        Assert.Equal(8, nextPartitionsA.Length);
+        Assert.Empty(nextPartitionsB);
     }
 
     [Fact]
     public async Task WatchAsync_WhenThePartitionCountIsZero_ThrowsBeforeEnumerating()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await using var services = RecipeTesting.Build(InProcessTesting.CreateTime());
-        var partitions = new DefaultPartitionOwnershipService(
-            services.GetRequiredService<IMembershipService>()
-        );
+        var time = InProcessTesting.CreateTime();
+        await using var services = RecipeTesting.Build(time);
+        var memberships = services.GetRequiredService<IMembershipService>();
+        var partitions = new DefaultPartitionOwnershipService(memberships);
+        var group = CreateGroup();
 
         Assert.Throws<ArgumentOutOfRangeException>(() =>
-            partitions.WatchAsync(CreateGroup(), 0, null, cancellationToken)
+            partitions.WatchAsync(group, 0, null, cancellationToken)
         );
     }
 

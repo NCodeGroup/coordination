@@ -11,43 +11,57 @@ public sealed class PartitionAssignmentTests
 
     private static CoordinationKey Group { get; } = TestKeyspace.CreateKey("workers");
 
-    private static Member CreateMember(string nodeId) =>
-        new(new SessionId(TestKeyspace, $"s-{nodeId}"), nodeId, "10.0.0.1:5000");
+    private static Member CreateMember(string nodeId)
+    {
+        var session = new SessionId(TestKeyspace, $"s-{nodeId}");
 
-    private static MembershipView CreateView(params string[] nodeIds) =>
-        new(Group, new Revision(1), nodeIds.Select(CreateMember));
+        return new Member(session, nodeId, "10.0.0.1:5000");
+    }
+
+    private static MembershipView CreateView(params string[] nodeIds)
+    {
+        var revision = new Revision(1);
+        var members = nodeIds.Select(CreateMember);
+
+        return new MembershipView(Group, revision, members);
+    }
 
     #region Assign Tests
 
     [Fact]
     public void Assign_WhenTwoMembersJoined_GivesPartitionsZeroAndSevenToTheHigherScore()
     {
-        var assignment = PartitionAssignment.Assign(CreateView("node-a", "node-b"), 8);
+        var view = CreateView("node-a", "node-b");
+        var assignment = PartitionAssignment.Assign(view, 8);
 
-        Assert.Equal("node-b", assignment.GetOwner(0)?.NodeId);
-        Assert.Equal("node-b", assignment.GetOwner(7)?.NodeId);
+        var ownerOfZero = assignment.GetOwner(0);
+        var ownerOfSeven = assignment.GetOwner(7);
+
+        Assert.Equal("node-b", ownerOfZero?.NodeId);
+        Assert.Equal("node-b", ownerOfSeven?.NodeId);
     }
 
     [Fact]
     public void Assign_WhenThereAreNoMembers_LeavesEveryPartitionWithoutAnOwner()
     {
-        var assignment = PartitionAssignment.Assign(CreateView(), Partitions);
+        var view = CreateView();
+        var assignment = PartitionAssignment.Assign(view, Partitions);
 
         for (var partition = 0; partition < Partitions; partition++)
         {
-            Assert.Null(assignment.GetOwner(partition));
+            var owner = assignment.GetOwner(partition);
+
+            Assert.Null(owner);
         }
     }
 
     [Fact]
     public void Assign_WhenAMemberLeaves_KeepsEveryOtherOwner()
     {
-        var before = PartitionAssignment.Assign(
-            CreateView("node-a", "node-b", "node-c"),
-            Partitions
-        );
-
-        var after = PartitionAssignment.Assign(CreateView("node-a", "node-b"), Partitions);
+        var viewBefore = CreateView("node-a", "node-b", "node-c");
+        var before = PartitionAssignment.Assign(viewBefore, Partitions);
+        var viewAfter = CreateView("node-a", "node-b");
+        var after = PartitionAssignment.Assign(viewAfter, Partitions);
 
         var moved = 0;
         for (var partition = 0; partition < Partitions; partition++)
@@ -61,7 +75,9 @@ public sealed class PartitionAssignmentTests
                 continue;
             }
 
-            Assert.Equal(owner.NodeId, after.GetOwner(partition)?.NodeId);
+            var ownerAfter = after.GetOwner(partition);
+
+            Assert.Equal(owner.NodeId, ownerAfter?.NodeId);
         }
 
         Assert.NotEqual(0, moved);
@@ -70,12 +86,10 @@ public sealed class PartitionAssignmentTests
     [Fact]
     public void Assign_WhenAMemberJoins_MovesPartitionsOnlyToTheNewMember()
     {
-        var before = PartitionAssignment.Assign(CreateView("node-a", "node-b"), Partitions);
-
-        var after = PartitionAssignment.Assign(
-            CreateView("node-a", "node-b", "node-c"),
-            Partitions
-        );
+        var viewBefore = CreateView("node-a", "node-b");
+        var before = PartitionAssignment.Assign(viewBefore, Partitions);
+        var viewAfter = CreateView("node-a", "node-b", "node-c");
+        var after = PartitionAssignment.Assign(viewAfter, Partitions);
 
         var moved = 0;
         for (var partition = 0; partition < Partitions; partition++)
@@ -83,7 +97,8 @@ public sealed class PartitionAssignmentTests
             var newOwner = after.GetOwner(partition);
             Assert.NotNull(newOwner);
 
-            if (newOwner.NodeId == before.GetOwner(partition)?.NodeId)
+            var oldOwner = before.GetOwner(partition);
+            if (newOwner.NodeId == oldOwner?.NodeId)
             {
                 continue;
             }
@@ -132,36 +147,43 @@ public sealed class PartitionAssignmentTests
     [Fact]
     public void GetPartitions_WhenEveryMemberIsAsked_CoversEveryPartitionOnce()
     {
-        var assignment = PartitionAssignment.Assign(
-            CreateView("node-a", "node-b", "node-c"),
-            Partitions
-        );
+        var view = CreateView("node-a", "node-b", "node-c");
+        var assignment = PartitionAssignment.Assign(view, Partitions);
+        var nodeIds = new[] { "node-a", "node-b", "node-c" };
 
-        var partitions = new[] { "node-a", "node-b", "node-c" }
+        var covered = nodeIds
             .SelectMany(nodeId => assignment.GetPartitions(nodeId))
             .Order()
             .ToArray();
 
-        Assert.Equal(Enumerable.Range(0, Partitions), partitions);
+        var expected = Enumerable.Range(0, Partitions);
+
+        Assert.Equal(expected, covered);
     }
 
     [Fact]
     public void GetPartitions_WhenTheNodeOwnsPartitions_ReturnsThemInAscendingOrder()
     {
-        var assignment = PartitionAssignment.Assign(CreateView("node-a", "node-b"), Partitions);
+        var view = CreateView("node-a", "node-b");
+        var assignment = PartitionAssignment.Assign(view, Partitions);
 
         var partitions = assignment.GetPartitions("node-b");
 
+        var sorted = partitions.Order().ToArray();
+
         Assert.NotEmpty(partitions);
-        Assert.Equal<int>(partitions.Order().ToArray(), partitions);
+        Assert.Equal<int>(sorted, partitions);
     }
 
     [Fact]
     public void GetPartitions_WhenTheNodeIsUnknown_ReturnsEmpty()
     {
-        var assignment = PartitionAssignment.Assign(CreateView("node-a"), Partitions);
+        var view = CreateView("node-a");
+        var assignment = PartitionAssignment.Assign(view, Partitions);
 
-        Assert.Empty(assignment.GetPartitions("node-z"));
+        var partitions = assignment.GetPartitions("node-z");
+
+        Assert.Empty(partitions);
     }
 
     #endregion
@@ -173,7 +195,8 @@ public sealed class PartitionAssignmentTests
     [InlineData(8)]
     public void GetOwner_WhenThePartitionIsOutsideTheRange_Throws(int partition)
     {
-        var assignment = PartitionAssignment.Assign(CreateView("node-a"), 8);
+        var view = CreateView("node-a");
+        var assignment = PartitionAssignment.Assign(view, 8);
 
         Assert.Throws<ArgumentOutOfRangeException>(() => assignment.GetOwner(partition));
     }

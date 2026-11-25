@@ -90,7 +90,8 @@ public sealed class RecipeCoordinationBuilderExtensionsTests
     [Fact]
     public void RequireRecipe_WhenTheRecipeIsNull_ThrowsNamingTheRecipe()
     {
-        var builder = new DefaultCoordinationBuilder(new CoordinationRegistrations());
+        var registrations = new CoordinationRegistrations();
+        var builder = new DefaultCoordinationBuilder(registrations);
 
         var exception = Assert.Throws<ArgumentNullException>(() =>
             builder.RequireRecipe(null!, "orders")
@@ -102,7 +103,8 @@ public sealed class RecipeCoordinationBuilderExtensionsTests
     [Fact]
     public void RequireRecipe_WhenTheKeyspaceIsNull_ThrowsNamingTheKeyspace()
     {
-        var builder = new DefaultCoordinationBuilder(new CoordinationRegistrations());
+        var registrations = new CoordinationRegistrations();
+        var builder = new DefaultCoordinationBuilder(registrations);
 
         var exception = Assert.Throws<ArgumentNullException>(() =>
             builder.RequireRecipe(CoordinationRecipes.Lock, "orders", null!)
