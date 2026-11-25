@@ -934,6 +934,25 @@ public abstract class RecordContractTests : ProviderContractTests
     #region Concurrent Run Tests
 
     /// <summary>
+    /// Checks that the history of clients that write, read and list two records at once is linearizable, with every
+    /// call in one partition so that each listing is checked against both keys.
+    /// </summary>
+    [Fact]
+    public async Task ConcurrentRun_WhenClientsList_KeepsALinearizableHistory()
+    {
+        SkipUnlessLinearizable(Primitives.Record);
+        var recorder = new HistoryRecorder();
+        var keys = CreateRunKeys();
+        var prefix = CreateKey("run");
+        var script = new RecordRunScript(Records, recorder, keys, prefix);
+
+        await ConcurrentRun.RunAsync(script.StepAsync, TestCancellationToken);
+
+        var history = recorder.ToHistory();
+        HistoryAssert.Linearizable(new RecordListingModel(keys), history);
+    }
+
+    /// <summary>
     /// Checks that the history of clients that create, read, swap, delete and take records at once is linearizable.
     /// </summary>
     [Fact]
