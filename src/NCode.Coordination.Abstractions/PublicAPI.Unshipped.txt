@@ -99,6 +99,16 @@ NCode.Coordination.GuaranteeDimensions
 NCode.Coordination.Guarantees
 NCode.Coordination.IClaimService
 NCode.Coordination.IClaimService.TryClaimAsync(NCode.Coordination.CoordinationKey! name, NCode.Coordination.TimeWindow! window, NCode.Coordination.TimeToLive! timeToLive, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.ClaimStatus>
+NCode.Coordination.ICoordinationBuilder
+NCode.Coordination.ICoordinationBuilder.AddProvider(System.Func<System.IServiceProvider!, NCode.Coordination.ICoordinationProvider!>! factory) -> NCode.Coordination.ICoordinationBuilder!
+NCode.Coordination.ICoordinationBuilder.Bind(NCode.Coordination.ProviderBinding! binding) -> NCode.Coordination.ICoordinationBuilder!
+NCode.Coordination.ICoordinationBuilder.Define(NCode.Coordination.GuaranteeDefinition! definition) -> NCode.Coordination.ICoordinationBuilder!
+NCode.Coordination.ICoordinationBuilder.Require(NCode.Coordination.FeatureRequirement! requirement) -> NCode.Coordination.ICoordinationBuilder!
+NCode.Coordination.ICoordinationBuilder.UseSingleNode() -> NCode.Coordination.ICoordinationBuilder!
+NCode.Coordination.ICoordinationProvider
+NCode.Coordination.ICoordinationProvider.Declaration.get -> NCode.Coordination.ProviderDeclaration!
+NCode.Coordination.ICoordinationProvider.GetPrimitiveService(System.Type! serviceType) -> object?
+NCode.Coordination.ICoordinationProvider.ProbeAsync(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
 NCode.Coordination.ICounterService
 NCode.Coordination.ICounterService.IncrementAsync(NCode.Coordination.CoordinationKey! key, long amount, NCode.Coordination.TimeToLive! timeToLive, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<long>
 NCode.Coordination.ICounterService.IncrementBatchAsync(System.Collections.Generic.IReadOnlyList<NCode.Coordination.CounterIncrement!>! increments, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.CounterBatchResult!>
@@ -267,6 +277,12 @@ NCode.Coordination.PrimitiveSupport.Guarantees.get -> System.Collections.Immutab
 NCode.Coordination.PrimitiveSupport.IsSupported.get -> bool
 NCode.Coordination.PrimitiveSupport.Primitive.get -> NCode.Coordination.Primitive!
 NCode.Coordination.PrimitiveSupport.UnsupportedReason.get -> string?
+NCode.Coordination.ProviderBinding
+NCode.Coordination.ProviderBinding.Keyspace.get -> NCode.Coordination.Keyspace?
+NCode.Coordination.ProviderBinding.Keyspace.init -> void
+NCode.Coordination.ProviderBinding.Primitives.get -> System.Collections.Immutable.ImmutableArray<NCode.Coordination.Primitive!>
+NCode.Coordination.ProviderBinding.Provider.get -> string!
+NCode.Coordination.ProviderBinding.ProviderBinding(string! provider, params System.Collections.Generic.IEnumerable<NCode.Coordination.Primitive!>! primitives) -> void
 NCode.Coordination.ProviderDeclaration
 NCode.Coordination.ProviderDeclaration.Definitions.get -> System.Collections.Immutable.ImmutableArray<NCode.Coordination.GuaranteeDefinition!>
 NCode.Coordination.ProviderDeclaration.Definitions.init -> void
