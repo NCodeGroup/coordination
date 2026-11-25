@@ -2,6 +2,7 @@
 abstract NCode.Coordination.Testing.ProviderContractTests.CreateTargetAsync(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.Testing.ConformanceTarget!>
 NCode.Coordination.Testing.ClaimContractTests
 NCode.Coordination.Testing.ClaimContractTests.ClaimContractTests() -> void
+NCode.Coordination.Testing.ClaimContractTests.ConcurrentRun_WhenClientsRace_KeepsALinearizableHistory() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.ClaimContractTests.TryClaimAsync_WhenNamesDiffer_ClaimsEach() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.ClaimContractTests.TryClaimAsync_WhenOptionsCarryAnUnknownExtension_ThrowsUnsupported() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.ClaimContractTests.TryClaimAsync_WhenTheWindowIsUnclaimed_ReturnsClaimed() -> System.Threading.Tasks.Task!
@@ -14,8 +15,12 @@ NCode.Coordination.Testing.ConformanceTarget
 NCode.Coordination.Testing.ConformanceTarget.AdvanceClock.get -> System.Func<System.TimeSpan, System.Threading.CancellationToken, System.Threading.Tasks.ValueTask>?
 NCode.Coordination.Testing.ConformanceTarget.AdvanceClock.init -> void
 NCode.Coordination.Testing.ConformanceTarget.ConformanceTarget(NCode.Coordination.ICoordinationProvider! provider) -> void
+NCode.Coordination.Testing.ConformanceTarget.DropConnections.get -> System.Func<System.Threading.CancellationToken, System.Threading.Tasks.ValueTask>?
+NCode.Coordination.Testing.ConformanceTarget.DropConnections.init -> void
 NCode.Coordination.Testing.ConformanceTarget.Provider.get -> NCode.Coordination.ICoordinationProvider!
 NCode.Coordination.Testing.CounterContractTests
+NCode.Coordination.Testing.CounterContractTests.ConcurrentRun_WhenBatchesSpanKeys_KeepsALinearizableHistory() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.CounterContractTests.ConcurrentRun_WhenClientsRace_KeepsALinearizableHistory() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.CounterContractTests.CounterContractTests() -> void
 NCode.Coordination.Testing.CounterContractTests.IncrementAsync_WhenAmountIsBelowOne_ThrowsArgumentOutOfRangeException() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.CounterContractTests.IncrementAsync_WhenCounterExists_KeepsTheTimeToLiveThatCreatedIt() -> System.Threading.Tasks.Task!
@@ -37,6 +42,7 @@ NCode.Coordination.Testing.CounterContractTests.ReadAsync_WhenCounterIsAbsent_Re
 NCode.Coordination.Testing.CounterContractTests.ReadAsync_WhenTokenIsCanceled_ThrowsOperationCanceledException() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.CounterContractTests.ResetAsync_WhenCounterExists_DeletesIt() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.ElectionContractTests
+NCode.Coordination.Testing.ElectionContractTests.ConcurrentRun_WhenClientsRace_KeepsALinearizableHistory() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.ElectionContractTests.ElectionContractTests() -> void
 NCode.Coordination.Testing.ElectionContractTests.ReadAsync_WhenRoleHasALeader_ReturnsItsTermAndValue() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.ElectionContractTests.ReadAsync_WhenRoleHasNoLeader_ReturnsNoLeader() -> System.Threading.Tasks.Task!
@@ -59,6 +65,8 @@ NCode.Coordination.Testing.ElectionContractTests.WatchAsync_WhenALeaderIsElected
 NCode.Coordination.Testing.ElectionContractTests.WatchAsync_WhenStarted_YieldsTheCurrentViewFirst() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.ElectionContractTests.WatchAsync_WhenTheLeaderResigns_YieldsAVacancy() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.LeaseContractTests
+NCode.Coordination.Testing.LeaseContractTests.ConcurrentRun_WhenAHolderPauses_KeepsALinearizableHistory() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.LeaseContractTests.ConcurrentRun_WhenClientsRace_KeepsALinearizableHistory() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.LeaseContractTests.LeaseContractTests() -> void
 NCode.Coordination.Testing.LeaseContractTests.ReleaseAsync_WhenAnotherGrantHoldsTheResource_ReturnsFalseAndKeepsIt() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.LeaseContractTests.ReleaseAsync_WhenGrantHolds_ReturnsTrueAndFreesTheResource() -> System.Threading.Tasks.Task!
@@ -79,6 +87,7 @@ NCode.Coordination.Testing.LeaseContractTests.WaitForReleaseAsync_WhenTheGrantEx
 NCode.Coordination.Testing.LeaseContractTests.WaitForReleaseAsync_WhenTheHolderReleases_Completes() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.LeaseContractTests.WaitForReleaseAsync_WhenTokenIsCanceled_ThrowsOperationCanceledException() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.MembershipContractTests
+NCode.Coordination.Testing.MembershipContractTests.ConcurrentRun_WhenClientsRace_KeepsALinearizableHistory() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.MembershipContractTests.JoinAsync_WhenNodeIdIsHeldByAnotherSession_ReturnsNodeIdTaken() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.MembershipContractTests.JoinAsync_WhenOptionsCarryAnUnknownExtension_ThrowsUnsupported() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.MembershipContractTests.JoinAsync_WhenSessionHasEnded_ReturnsSessionEnded() -> System.Threading.Tasks.Task!
@@ -96,6 +105,8 @@ NCode.Coordination.Testing.MembershipContractTests.WatchAsync_WhenAMemberJoins_Y
 NCode.Coordination.Testing.MembershipContractTests.WatchAsync_WhenAMembersSessionEnds_YieldsAViewWithoutIt() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.MembershipContractTests.WatchAsync_WhenStarted_YieldsTheCurrentViewFirst() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.NotificationContractTests
+NCode.Coordination.Testing.NotificationContractTests.ConcurrentRun_WhenClientsPublish_DeliversAsDeclared() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.NotificationContractTests.ConcurrentRun_WhenConnectionsDrop_DeliversAsDeclared() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.NotificationContractTests.NotificationContractTests() -> void
 NCode.Coordination.Testing.NotificationContractTests.PublishAsync_WhenOptionsCarryAnUnknownExtension_ThrowsUnsupported() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.NotificationContractTests.PublishAsync_WhenPayloadIsAtTheLimit_Publishes() -> System.Threading.Tasks.Task!
@@ -107,6 +118,7 @@ NCode.Coordination.Testing.NotificationContractTests.PublishAsync_WhenTwoSubscri
 NCode.Coordination.Testing.NotificationContractTests.SubscribeAsync_WhenStarted_YieldsAResyncFirst() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.NotificationContractTests.SubscribeAsync_WhenTokenIsCanceled_ThrowsOperationCanceledException() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.OccurrenceContractTests
+NCode.Coordination.Testing.OccurrenceContractTests.ConcurrentRun_WhenClientsRace_KeepsALinearizableHistory() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.OccurrenceContractTests.OccurrenceContractTests() -> void
 NCode.Coordination.Testing.OccurrenceContractTests.TryRecordAsync_WhenKeyIsNew_ReturnsRecorded() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.OccurrenceContractTests.TryRecordAsync_WhenKeysDiffer_RecordsEach() -> System.Threading.Tasks.Task!
@@ -138,6 +150,9 @@ NCode.Coordination.Testing.RecordContractTests.CompareAndSwapAsync_WhenRevisionD
 NCode.Coordination.Testing.RecordContractTests.CompareAndSwapAsync_WhenRevisionMatches_WritesALaterRevision() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.RecordContractTests.CompareAndSwapAsync_WhenTheLifetimeLeavesTheSession_KeepsTheRecordAfterTheSessionEnds() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.RecordContractTests.CompareAndSwapAsync_WhenTheSessionHasEnded_ReturnsSessionEnded() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.RecordContractTests.ConcurrentRun_WhenClientsList_KeepsALinearizableHistory() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.RecordContractTests.ConcurrentRun_WhenClientsRace_KeepsALinearizableHistory() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.RecordContractTests.ConcurrentRun_WhenConnectionsDrop_KeepsALinearizableHistory() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.RecordContractTests.CreateAsync_WhenAnotherKeyIsWritten_GivesALaterRevision() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.RecordContractTests.CreateAsync_WhenBoundToALiveSession_WritesTheRecord() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.RecordContractTests.CreateAsync_WhenKeyIsAbsent_WritesTheRecord() -> System.Threading.Tasks.Task!
@@ -163,6 +178,7 @@ NCode.Coordination.Testing.RecordContractTests.RecordContractTests() -> void
 NCode.Coordination.Testing.RecordContractTests.TakeAsync_WhenKeyIsAbsent_ReturnsNull() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.RecordContractTests.TakeAsync_WhenKeyIsPresent_ReturnsAndDeletesTheRecord() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.RecordWatchContractTests
+NCode.Coordination.Testing.RecordWatchContractTests.ConcurrentRun_WhenClientsWrite_DeliversAsDeclared() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.RecordWatchContractTests.RecordWatchContractTests() -> void
 NCode.Coordination.Testing.RecordWatchContractTests.WatchKeyAsync_WhenAnotherKeyIsWritten_YieldsNothingForIt() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.RecordWatchContractTests.WatchKeyAsync_WhenChangesFollow_YieldsThemInRevisionOrder() -> System.Threading.Tasks.Task!
@@ -176,6 +192,7 @@ NCode.Coordination.Testing.RecordWatchContractTests.WatchKeyAsync_WhenTheRecords
 NCode.Coordination.Testing.RecordWatchContractTests.WatchPrefixAsync_WhenAKeyIsOutsideThePrefix_YieldsNothingForIt() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.RecordWatchContractTests.WatchPrefixAsync_WhenRecordsChange_ConvergesOnTheStore() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.SemaphoreContractTests
+NCode.Coordination.Testing.SemaphoreContractTests.ConcurrentRun_WhenClientsRace_KeepsALinearizableHistory() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.SemaphoreContractTests.ReleaseAsync_WhenGrantEnded_ReturnsFalse() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.SemaphoreContractTests.ReleaseAsync_WhenGrantHolds_ReturnsTrueAndFreesTheSlot() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.SemaphoreContractTests.ReleaseAsync_WhenTheSlotWasGrantedAgain_ReturnsFalseAndKeepsIt() -> System.Threading.Tasks.Task!
@@ -201,6 +218,7 @@ NCode.Coordination.Testing.SemaphoreContractTests.WaitForReleaseAsync_WhenASlotI
 NCode.Coordination.Testing.SemaphoreContractTests.WaitForReleaseAsync_WhenTheSlotExpires_Completes() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.SemaphoreContractTests.WaitForReleaseAsync_WhenTokenIsCanceled_ThrowsOperationCanceledException() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.SequenceContractTests
+NCode.Coordination.Testing.SequenceContractTests.ConcurrentRun_WhenClientsRace_KeepsALinearizableHistory() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.SequenceContractTests.NextAsync_WhenCalledAgain_ReturnsTheNextNumber() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.SequenceContractTests.NextAsync_WhenOptionsCarryAnUnknownExtension_ThrowsUnsupported() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.SequenceContractTests.NextAsync_WhenSequenceIsNew_ReturnsOne() -> System.Threading.Tasks.Task!
@@ -213,6 +231,7 @@ NCode.Coordination.Testing.SequenceContractTests.ReserveAsync_WhenSequenceIsNew_
 NCode.Coordination.Testing.SequenceContractTests.SequenceContractTests() -> void
 NCode.Coordination.Testing.SessionContractTests
 NCode.Coordination.Testing.SessionContractTests.CloseAsync_WhenSessionHasEnded_Succeeds() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.SessionContractTests.ConcurrentRun_WhenClientsRace_KeepsALinearizableHistory() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.SessionContractTests.KeepAliveAsync_WhenRenewedBeforeExpiry_MeasuresTheTimeToLiveFromTheRenewal() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.SessionContractTests.KeepAliveAsync_WhenSessionIsLive_ReturnsRenewed() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.SessionContractTests.KeepAliveAsync_WhenSessionIsUnknown_ReturnsEnded() -> System.Threading.Tasks.Task!
@@ -237,12 +256,14 @@ NCode.Coordination.Testing.SetContractTests.AddAsync_WhenOptionsCarryAnUnknownEx
 NCode.Coordination.Testing.SetContractTests.AddAsync_WhenTheSetIsFull_ThrowsLimitExceeded() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.SetContractTests.AddAsync_WhenTheSetIsFullAndMemberIsPresent_ReturnsFalse() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.SetContractTests.ClearAsync_WhenSetHasMembers_RemovesEach() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.SetContractTests.ConcurrentRun_WhenClientsRace_KeepsALinearizableHistory() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.SetContractTests.ListAsync_WhenSetIsAbsent_ReturnsEmpty() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.SetContractTests.ListAsync_WhenTokenIsCanceled_ThrowsOperationCanceledException() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.SetContractTests.RemoveAsync_WhenMemberIsAbsent_ReturnsFalse() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.SetContractTests.RemoveAsync_WhenMemberIsPresent_ReturnsTrueAndRemovesIt() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.SetContractTests.SetContractTests() -> void
 NCode.Coordination.Testing.TransactionContractTests
+NCode.Coordination.Testing.TransactionContractTests.ConcurrentRun_WhenClientsRace_KeepsALinearizableHistory() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.TransactionContractTests.ExecuteAsync_WhenAbsentMeetsAnExpiredRecord_Holds() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.TransactionContractTests.ExecuteAsync_WhenAConditionFails_AppliesTheFailureWrites() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.TransactionContractTests.ExecuteAsync_WhenAConditionFailsWithoutFailureWrites_ChangesNothing() -> System.Threading.Tasks.Task!

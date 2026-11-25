@@ -1,6 +1,10 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using NCode.Coordination.Testing.Checking;
+using NCode.Coordination.Testing.Histories;
+using NCode.Coordination.Testing.Models;
+using NCode.Coordination.Testing.Runs;
 using Xunit;
 
 namespace NCode.Coordination.Testing;
@@ -58,6 +62,109 @@ public abstract class LeaseContractTests : ProviderContractTests
         var terms = LeaseTerms.ForTimeToLive(timeToLive);
 
         return Leases.TryAcquireAsync(resource, terms, null, cancellationToken);
+    }
+
+    /// <summary>
+    /// Tries to acquire the lease on a resource for a time to live and records the call in a history.
+    /// </summary>
+    /// <param name="recorder">The recorder of the history.</param>
+    /// <param name="client">The client that makes the call.</param>
+    /// <param name="resource">The resource to lease.</param>
+    /// <param name="timeToLive">The time to live to ask for.</param>
+    /// <param name="cancellationToken">A token that cancels the run.</param>
+    /// <returns>The grant, or null when the call did not acquire the lease or did not return.</returns>
+    private async ValueTask<LeaseGrant?> AcquireAsync(
+        HistoryRecorder recorder,
+        int client,
+        CoordinationKey resource,
+        TimeToLive timeToLive,
+        CancellationToken cancellationToken
+    )
+    {
+        var leases = Leases;
+        var terms = LeaseTerms.ForTimeToLive(timeToLive);
+        var call = new LeaseCall(LeaseCall.Acquire, null, 0, timeToLive.Duration);
+
+        var partition = resource.ToString();
+        var operation = await recorder.RecordAsync(
+            client,
+            partition,
+            call,
+            token => leases.TryAcquireAsync(resource, terms, null, token),
+            cancellationToken
+        );
+
+        return (operation.Output as LeaseAcquireResult)?.Grant;
+    }
+
+    /// <summary>
+    /// Renews a grant for the long time to live and records the call in a history.
+    /// </summary>
+    /// <param name="recorder">The recorder of the history.</param>
+    /// <param name="client">The client that makes the call.</param>
+    /// <param name="grant">The grant to renew.</param>
+    /// <param name="cancellationToken">A token that cancels the run.</param>
+    /// <returns>True when the call returned and renewed the grant; otherwise, false.</returns>
+    private async ValueTask<bool> RenewAsync(
+        HistoryRecorder recorder,
+        int client,
+        LeaseGrant grant,
+        CancellationToken cancellationToken
+    )
+    {
+        var leases = Leases;
+        var call = new LeaseCall(
+            LeaseCall.Renew,
+            grant.Owner.Value,
+            grant.FencingToken.Value,
+            LongTimeToLive.Duration
+        );
+
+        var partition = grant.Resource.ToString();
+        var operation = await recorder.RecordAsync(
+            client,
+            partition,
+            call,
+            token => leases.RenewAsync(grant, LongTimeToLive, null, token),
+            cancellationToken
+        );
+
+        return operation.Output is true;
+    }
+
+    /// <summary>
+    /// Releases a grant and records the call in a history.
+    /// </summary>
+    /// <param name="recorder">The recorder of the history.</param>
+    /// <param name="client">The client that makes the call.</param>
+    /// <param name="grant">The grant to release.</param>
+    /// <param name="cancellationToken">A token that cancels the run.</param>
+    /// <returns>True when the call returned and released the grant; otherwise, false.</returns>
+    private async ValueTask<bool> ReleaseAsync(
+        HistoryRecorder recorder,
+        int client,
+        LeaseGrant grant,
+        CancellationToken cancellationToken
+    )
+    {
+        var leases = Leases;
+        var call = new LeaseCall(
+            LeaseCall.Release,
+            grant.Owner.Value,
+            grant.FencingToken.Value,
+            TimeSpan.Zero
+        );
+
+        var partition = grant.Resource.ToString();
+        var operation = await recorder.RecordAsync(
+            client,
+            partition,
+            call,
+            token => leases.ReleaseAsync(grant, null, token),
+            cancellationToken
+        );
+
+        return operation.Output is true;
     }
 
     #region TryAcquireAsync Tests
@@ -424,6 +531,136 @@ public abstract class LeaseContractTests : ProviderContractTests
         await source.CancelAsync();
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => wait);
+    }
+
+    #endregion
+
+    #region Concurrent Run Tests
+
+    /// <summary>
+    /// Checks that the history of clients that acquire, renew and release leases at once is linearizable.
+    /// </summary>
+    [Fact]
+    public async Task ConcurrentRun_WhenClientsRace_KeepsALinearizableHistory()
+    {
+        SkipUnlessLinearizable(Primitives.Lease);
+        var keys = CreateRunKeys();
+        var held = new LeaseGrant?[ConcurrentRun.Clients];
+        var recorder = new HistoryRecorder();
+
+        await ConcurrentRun.RunAsync(
+            async (client, index, cancellationToken) =>
+            {
+                var grant = held[client];
+                if (grant is null)
+                {
+                    var key = keys[(client + index) % keys.Length];
+                    held[client] = await AcquireAsync(
+                        recorder,
+                        client,
+                        key,
+                        LongTimeToLive,
+                        cancellationToken
+                    );
+                    return;
+                }
+
+                if (index % 3 == 0)
+                {
+                    await ReleaseAsync(recorder, client, grant, cancellationToken);
+                    held[client] = null;
+                    return;
+                }
+
+                if (!await RenewAsync(recorder, client, grant, cancellationToken))
+                {
+                    held[client] = null;
+                }
+            },
+            TestCancellationToken
+        );
+
+        var history = recorder.ToHistory();
+        HistoryAssert.Linearizable(new LeaseModel(), history);
+    }
+
+    /// <summary>
+    /// Checks that the history is linearizable when a holder pauses until its lease has expired and then renews and
+    /// releases the lease it no longer holds, while other clients acquire it.
+    /// </summary>
+    [Fact]
+    public async Task ConcurrentRun_WhenAHolderPauses_KeepsALinearizableHistory()
+    {
+        SkipUnlessLinearizable(Primitives.Lease);
+        Assert.SkipWhen(
+            Target.AdvanceClock is null,
+            "The target cannot advance its provider's clock."
+        );
+        var key = CreateKey("run", "paused");
+        var held = new LeaseGrant?[ConcurrentRun.Clients];
+        var recorder = new HistoryRecorder();
+
+        var stale = await AcquireAsync(recorder, 0, key, ShortTimeToLive, TestCancellationToken);
+        Assert.NotNull(stale);
+
+        var pause = StillAlive + PastExpiry;
+        await recorder.RecordAsync(
+            HistoryOperation.TestClient,
+            HistoryOperation.EveryPartition,
+            new ClockAdvance(pause),
+            token => AdvanceClockAsync(pause, token),
+            TestCancellationToken
+        );
+
+        await ConcurrentRun.RunAsync(
+            4,
+            async (client, index, cancellationToken) =>
+            {
+                if (client == 0)
+                {
+                    if (index % 2 == 0)
+                    {
+                        await RenewAsync(recorder, client, stale, cancellationToken);
+                    }
+                    else
+                    {
+                        await ReleaseAsync(recorder, client, stale, cancellationToken);
+                    }
+
+                    return;
+                }
+
+                var grant = held[client];
+                if (grant is null)
+                {
+                    held[client] = await AcquireAsync(
+                        recorder,
+                        client,
+                        key,
+                        LongTimeToLive,
+                        cancellationToken
+                    );
+                    return;
+                }
+
+                if (index == 2)
+                {
+                    await RenewAsync(recorder, client, grant, cancellationToken);
+                    return;
+                }
+
+                if (index == 3)
+                {
+                    await ReleaseAsync(recorder, client, grant, cancellationToken);
+                    held[client] = null;
+                }
+            },
+            null,
+            TestCancellationToken
+        );
+
+        var history = recorder.ToHistory();
+        HistoryAssert.Linearizable(new LeaseModel(), history);
     }
 
     #endregion

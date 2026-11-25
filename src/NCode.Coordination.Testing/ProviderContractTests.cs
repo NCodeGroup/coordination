@@ -185,6 +185,84 @@ public abstract class ProviderContractTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// Gets whether the provider keeps a guarantee for a primitive, because it declares the guarantee or declares one
+    /// that implies it, and skips the test when the provider does not support the primitive or does not list it.
+    /// </summary>
+    /// <param name="primitive">The primitive the test exercises.</param>
+    /// <param name="guarantee">The guarantee to look for.</param>
+    /// <returns>True when the provider declares the guarantee, or a guarantee that implies it, for the primitive.</returns>
+    private protected bool Keeps(Primitive primitive, Guarantee guarantee)
+    {
+        var support = GetSupport(primitive);
+        var pending = new Stack<Guarantee>(support.Guarantees);
+        var visited = new HashSet<Guarantee>();
+
+        while (pending.TryPop(out var current))
+        {
+            if (current.Equals(guarantee))
+            {
+                return true;
+            }
+
+            if (!visited.Add(current))
+            {
+                continue;
+            }
+
+            foreach (var definition in Guarantees.Definitions)
+            {
+                if (!definition.Guarantee.Equals(current))
+                {
+                    continue;
+                }
+
+                foreach (var implied in definition.Implies)
+                {
+                    pending.Push(implied);
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Skips the test unless the provider keeps linearizable consistency for a primitive within one process.
+    /// </summary>
+    /// <param name="primitive">The primitive the test exercises.</param>
+    private protected void SkipUnlessLinearizable(Primitive primitive)
+    {
+        var keeps = Keeps(primitive, Guarantees.LinearizableWithinProcess);
+        Assert.SkipUnless(
+            keeps,
+            $"The provider declares no linearizable consistency for the primitive '{primitive.Name}'."
+        );
+    }
+
+    /// <summary>
+    /// Gets the delegate that drops the provider's connections, and skips the test when the target cannot drop them.
+    /// </summary>
+    /// <returns>The delegate that drops every connection the provider has to its server.</returns>
+    private protected Func<CancellationToken, ValueTask> GetDropConnections()
+    {
+        var drop = Target.DropConnections;
+        if (drop is null)
+        {
+            Assert.Skip("The target cannot drop its provider's connections.");
+            throw new UnreachableException();
+        }
+
+        return drop;
+    }
+
+    /// <summary>
+    /// Creates the two keys, in this test's keyspace, that a concurrent run spreads its calls over.
+    /// </summary>
+    /// <returns>The two keys.</returns>
+    private protected ImmutableArray<CoordinationKey> CreateRunKeys() =>
+        [CreateKey("run", "0"), CreateKey("run", "1")];
+
+    /// <summary>
     /// Gets the provider's service for a primitive, and skips the test when the provider does not support the
     /// primitive or does not list it.
     /// </summary>

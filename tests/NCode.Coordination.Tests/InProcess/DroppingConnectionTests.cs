@@ -1,0 +1,203 @@
+// Copyright © NCode Group
+// SPDX-License-Identifier: Apache-2.0
+
+namespace NCode.Coordination.InProcess.Tests;
+
+public sealed class DroppingConnectionTests
+{
+    #region CallAsync Tests
+
+    [Fact]
+    public async Task CallAsync_WhenNotDropped_ReturnsResult()
+    {
+        var connection = new DroppingConnection();
+
+        var result = await connection.CallAsync(
+            _ => ValueTask.FromResult(7),
+            TestContext.Current.CancellationToken
+        );
+
+        Assert.Equal(7, result);
+    }
+
+    [Fact]
+    public async Task CallAsync_WhenDropped_FailsThreeCallsAndRunsOnlyTheSecond()
+    {
+        var connection = new DroppingConnection();
+        var runs = 0;
+        ValueTask<int> Call(CancellationToken token)
+        {
+            runs++;
+            return ValueTask.FromResult(7);
+        }
+
+        await connection.DropAsync(TestContext.Current.CancellationToken);
+
+        var first = await Assert.ThrowsAsync<CoordinationException>(async () =>
+            await connection.CallAsync(Call, TestContext.Current.CancellationToken)
+        );
+        var runsAfterFirst = runs;
+        var second = await Assert.ThrowsAsync<CoordinationException>(async () =>
+            await connection.CallAsync(Call, TestContext.Current.CancellationToken)
+        );
+        var runsAfterSecond = runs;
+        var third = await Assert.ThrowsAsync<CoordinationException>(async () =>
+            await connection.CallAsync(Call, TestContext.Current.CancellationToken)
+        );
+        var runsAfterThird = runs;
+        var fourth = await connection.CallAsync(Call, TestContext.Current.CancellationToken);
+
+        foreach (var failure in new[] { first, second, third })
+        {
+            Assert.True(failure.OutcomeUnknown);
+            Assert.Equal(CoordinationErrorCodes.Unavailable, failure.Code);
+        }
+
+        Assert.Equal(0, runsAfterFirst);
+        Assert.Equal(1, runsAfterSecond);
+        Assert.Equal(1, runsAfterThird);
+        Assert.Equal(7, fourth);
+        Assert.Equal(2, runs);
+    }
+
+    [Fact]
+    public async Task CallAsync_WhenDroppedAndCallReturnsNothing_FailsThreeCallsAndRunsOnlyTheSecond()
+    {
+        var connection = new DroppingConnection();
+        var runs = 0;
+        ValueTask Call(CancellationToken token)
+        {
+            runs++;
+            return ValueTask.CompletedTask;
+        }
+
+        await connection.DropAsync(TestContext.Current.CancellationToken);
+
+        var first = await Assert.ThrowsAsync<CoordinationException>(async () =>
+            await connection.CallAsync(Call, TestContext.Current.CancellationToken)
+        );
+        var runsAfterFirst = runs;
+        var second = await Assert.ThrowsAsync<CoordinationException>(async () =>
+            await connection.CallAsync(Call, TestContext.Current.CancellationToken)
+        );
+        var runsAfterSecond = runs;
+        var third = await Assert.ThrowsAsync<CoordinationException>(async () =>
+            await connection.CallAsync(Call, TestContext.Current.CancellationToken)
+        );
+        var runsAfterThird = runs;
+        await connection.CallAsync(Call, TestContext.Current.CancellationToken);
+
+        foreach (var failure in new[] { first, second, third })
+        {
+            Assert.True(failure.OutcomeUnknown);
+            Assert.Equal(CoordinationErrorCodes.Unavailable, failure.Code);
+        }
+
+        Assert.Equal(0, runsAfterFirst);
+        Assert.Equal(1, runsAfterSecond);
+        Assert.Equal(1, runsAfterThird);
+        Assert.Equal(2, runs);
+    }
+
+    [Fact]
+    public async Task CallAsync_WhenDroppedTwice_RunsOnlyTheSecondCallOfEachOutage()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var connection = new DroppingConnection();
+        var runs = 0;
+        ValueTask<int> Call(CancellationToken token)
+        {
+            runs++;
+            return ValueTask.FromResult(7);
+        }
+        var runsAfterEachCall = new List<int>();
+
+        for (var outage = 0; outage < 2; outage++)
+        {
+            await connection.DropAsync(cancellationToken);
+
+            for (var attempt = 0; attempt < DroppingConnection.FailedCalls; attempt++)
+            {
+                await Assert.ThrowsAsync<CoordinationException>(async () =>
+                    await connection.CallAsync(Call, cancellationToken)
+                );
+                runsAfterEachCall.Add(runs);
+            }
+        }
+
+        Assert.Equal<int>([0, 1, 1, 1, 2, 2], runsAfterEachCall);
+    }
+
+    [Fact]
+    public async Task CallAsync_WhenDroppedDuringAnOutage_StartsTheOutageOver()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var connection = new DroppingConnection();
+        var runs = 0;
+        ValueTask<int> Call(CancellationToken token)
+        {
+            runs++;
+            return ValueTask.FromResult(7);
+        }
+        var runsAfterEachCall = new List<int>();
+        await connection.DropAsync(cancellationToken);
+        await Assert.ThrowsAsync<CoordinationException>(async () =>
+            await connection.CallAsync(Call, cancellationToken)
+        );
+        runsAfterEachCall.Add(runs);
+
+        await connection.DropAsync(cancellationToken);
+
+        for (var attempt = 0; attempt < DroppingConnection.FailedCalls; attempt++)
+        {
+            await Assert.ThrowsAsync<CoordinationException>(async () =>
+                await connection.CallAsync(Call, cancellationToken)
+            );
+            runsAfterEachCall.Add(runs);
+        }
+
+        var result = await connection.CallAsync(Call, cancellationToken);
+
+        Assert.Equal<int>([0, 0, 1, 1], runsAfterEachCall);
+        Assert.Equal(7, result);
+    }
+
+    #endregion
+
+    #region Subscribe Tests
+
+    [Fact]
+    public async Task Subscribe_WhenDropped_TakesOneDropThenNone()
+    {
+        var connection = new DroppingConnection();
+        var subscription = connection.Subscribe();
+
+        await connection.DropAsync(TestContext.Current.CancellationToken);
+
+        var first = subscription.TakeDrop();
+        var second = subscription.TakeDrop();
+
+        Assert.True(first);
+        Assert.False(second);
+    }
+
+    #endregion
+
+    #region Unsubscribe Tests
+
+    [Fact]
+    public async Task Unsubscribe_WhenDropped_TakesNoDrop()
+    {
+        var connection = new DroppingConnection();
+        var subscription = connection.Subscribe();
+
+        connection.Unsubscribe(subscription);
+        await connection.DropAsync(TestContext.Current.CancellationToken);
+
+        var taken = subscription.TakeDrop();
+
+        Assert.False(taken);
+    }
+
+    #endregion
+}

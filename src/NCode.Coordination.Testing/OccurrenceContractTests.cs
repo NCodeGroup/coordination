@@ -1,6 +1,10 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using NCode.Coordination.Testing.Checking;
+using NCode.Coordination.Testing.Histories;
+using NCode.Coordination.Testing.Models;
+using NCode.Coordination.Testing.Runs;
 using Xunit;
 
 namespace NCode.Coordination.Testing;
@@ -197,6 +201,42 @@ public abstract class OccurrenceContractTests : ProviderContractTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
             await Occurrences.TryRecordAsync(key, LongTimeToLive, null, canceledToken)
         );
+    }
+
+    #endregion
+
+    #region Concurrent Run Tests
+
+    /// <summary>
+    /// Checks that the history of clients that record two occurrences at once is linearizable.
+    /// </summary>
+    [Fact]
+    public async Task ConcurrentRun_WhenClientsRace_KeepsALinearizableHistory()
+    {
+        SkipUnlessLinearizable(Primitives.Occurrence);
+        var occurrences = Occurrences;
+        var keys = CreateRunKeys();
+        var recorder = new HistoryRecorder();
+
+        await ConcurrentRun.RunAsync(
+            async (client, index, cancellationToken) =>
+            {
+                var key = keys[(client + index) % keys.Length];
+                var call = new OccurrenceCall(OccurrenceCall.Record);
+                var partition = key.ToString();
+                await recorder.RecordAsync(
+                    client,
+                    partition,
+                    call,
+                    token => occurrences.TryRecordAsync(key, LongTimeToLive, null, token),
+                    cancellationToken
+                );
+            },
+            TestCancellationToken
+        );
+
+        var history = recorder.ToHistory();
+        HistoryAssert.Linearizable(new OccurrenceModel(), history);
     }
 
     #endregion

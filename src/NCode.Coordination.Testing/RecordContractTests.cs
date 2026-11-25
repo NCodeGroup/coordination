@@ -1,6 +1,10 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using NCode.Coordination.Testing.Checking;
+using NCode.Coordination.Testing.Histories;
+using NCode.Coordination.Testing.Models;
+using NCode.Coordination.Testing.Runs;
 using Xunit;
 
 namespace NCode.Coordination.Testing;
@@ -923,6 +927,73 @@ public abstract class RecordContractTests : ProviderContractTests
 
         var record = Assert.Single(page.Records);
         Assert.Equal(kept, record.Key);
+    }
+
+    #endregion
+
+    #region Concurrent Run Tests
+
+    /// <summary>
+    /// Checks that the history of clients that write, read and list two records at once is linearizable, with every
+    /// call in one partition so that each listing is checked against both keys.
+    /// </summary>
+    [Fact]
+    public async Task ConcurrentRun_WhenClientsList_KeepsALinearizableHistory()
+    {
+        SkipUnlessLinearizable(Primitives.Record);
+        var recorder = new HistoryRecorder();
+        var keys = CreateRunKeys();
+        var prefix = CreateKey("run");
+        var script = new RecordRunScript(Records, recorder, keys, prefix);
+
+        await ConcurrentRun.RunAsync(script.StepAsync, TestCancellationToken);
+
+        var history = recorder.ToHistory();
+        HistoryAssert.Linearizable(new RecordListingModel(keys), history);
+    }
+
+    /// <summary>
+    /// Checks that the history of clients that create, read, swap, delete and take records at once is linearizable.
+    /// </summary>
+    [Fact]
+    public async Task ConcurrentRun_WhenClientsRace_KeepsALinearizableHistory() =>
+        await RunAsync(null, TestCancellationToken);
+
+    /// <summary>
+    /// Checks that the history stays linearizable when the provider's connections drop in the middle of the run.
+    /// </summary>
+    [Fact]
+    public async Task ConcurrentRun_WhenConnectionsDrop_KeepsALinearizableHistory()
+    {
+        var fault = GetDropConnections();
+        await RunAsync(fault, TestCancellationToken);
+    }
+
+    /// <summary>
+    /// Runs clients that use records at once, with a fault, and asserts that the history is linearizable.
+    /// </summary>
+    /// <param name="fault">The fault to inject once half of the steps are done, or null for none.</param>
+    /// <param name="cancellationToken">A token that cancels the run.</param>
+    /// <returns>A task that completes when the history has been checked.</returns>
+    private async ValueTask RunAsync(
+        Func<CancellationToken, ValueTask>? fault,
+        CancellationToken cancellationToken
+    )
+    {
+        SkipUnlessLinearizable(Primitives.Record);
+        var recorder = new HistoryRecorder();
+        var keys = CreateRunKeys();
+        var script = new RecordRunScript(Records, recorder, keys);
+
+        await ConcurrentRun.RunAsync(
+            ConcurrentRun.Steps,
+            script.StepAsync,
+            fault,
+            cancellationToken
+        );
+
+        var history = recorder.ToHistory();
+        HistoryAssert.Linearizable(new RecordModel(), history);
     }
 
     #endregion

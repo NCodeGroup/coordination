@@ -1,6 +1,11 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using System.Globalization;
+using NCode.Coordination.Testing.Checking;
+using NCode.Coordination.Testing.Histories;
+using NCode.Coordination.Testing.Models;
+using NCode.Coordination.Testing.Runs;
 using Xunit;
 
 namespace NCode.Coordination.Testing;
@@ -273,6 +278,105 @@ public abstract class SessionContractTests : ProviderContractTests
         await source.CancelAsync();
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => wait);
+    }
+
+    #endregion
+
+    #region Concurrent Run Tests
+
+    /// <summary>
+    /// Checks that the history of clients that open, renew and close sessions at once is linearizable, and that no two
+    /// opened sessions share an id.
+    /// </summary>
+    [Fact]
+    public async Task ConcurrentRun_WhenClientsRace_KeepsALinearizableHistory()
+    {
+        SkipUnlessLinearizable(Primitives.Session);
+        var sessions = Sessions;
+        var opened = new SessionId?[ConcurrentRun.Clients];
+        var recorder = new HistoryRecorder();
+        const int closeStep = ConcurrentRun.Steps * 2 / 3;
+        static string PartitionOf(int owner) =>
+            string.Create(CultureInfo.InvariantCulture, $"session-{owner}");
+
+        await ConcurrentRun.RunAsync(
+            async (client, index, cancellationToken) =>
+            {
+                if (index == 0)
+                {
+                    var open = new SessionCall(SessionCall.Open);
+                    var partition = PartitionOf(client);
+                    var operation = await recorder.RecordAsync(
+                        client,
+                        partition,
+                        open,
+                        token => sessions.OpenAsync(Keyspace, LongTimeToLive, null, token),
+                        cancellationToken
+                    );
+
+                    if (operation.Output is SessionGrant grant)
+                    {
+                        Volatile.Write(ref opened[client], grant.Id);
+                    }
+
+                    return;
+                }
+
+                var own = Volatile.Read(ref opened[client]);
+                if (own is null)
+                {
+                    return;
+                }
+
+                if (index == closeStep)
+                {
+                    var close = new SessionCall(SessionCall.Close);
+                    var partition = PartitionOf(client);
+                    await recorder.RecordAsync(
+                        client,
+                        partition,
+                        close,
+                        token => sessions.CloseAsync(own, null, token),
+                        cancellationToken
+                    );
+                    return;
+                }
+
+                var target = client;
+                var session = own;
+                if (index % 2 != 0)
+                {
+                    var other = (client + 1) % ConcurrentRun.Clients;
+                    var otherSession = Volatile.Read(ref opened[other]);
+                    if (otherSession is not null)
+                    {
+                        target = other;
+                        session = otherSession;
+                    }
+                }
+
+                var keepAlive = new SessionCall(SessionCall.KeepAlive);
+                var targetPartition = PartitionOf(target);
+                await recorder.RecordAsync(
+                    client,
+                    targetPartition,
+                    keepAlive,
+                    token => sessions.KeepAliveAsync(session, null, token),
+                    cancellationToken
+                );
+            },
+            TestCancellationToken
+        );
+
+        var history = recorder.ToHistory();
+
+        var ids = history
+            .Select(operation => operation.Output)
+            .OfType<SessionGrant>()
+            .Select(grant => grant.Id);
+
+        HistoryAssert.Linearizable(new SessionModel(), history);
+        Assert.Distinct(ids);
     }
 
     #endregion

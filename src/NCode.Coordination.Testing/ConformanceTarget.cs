@@ -22,4 +22,10 @@ public sealed class ConformanceTarget(ICoordinationProvider provider)
     /// or null when the provider's clock cannot be advanced.
     /// </summary>
     public Func<TimeSpan, CancellationToken, ValueTask>? AdvanceClock { get; init; }
+
+    /// <summary>
+    /// Gets a delegate that drops every connection the provider has to its server, so the calls in flight fail, or
+    /// null when the provider has no connection to drop.
+    /// </summary>
+    public Func<CancellationToken, ValueTask>? DropConnections { get; init; }
 }

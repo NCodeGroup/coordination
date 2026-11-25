@@ -1,6 +1,10 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using NCode.Coordination.Testing.Checking;
+using NCode.Coordination.Testing.Histories;
+using NCode.Coordination.Testing.Models;
+using NCode.Coordination.Testing.Runs;
 using Xunit;
 
 namespace NCode.Coordination.Testing;
@@ -61,6 +65,111 @@ public abstract class SemaphoreContractTests : ProviderContractTests
         var terms = LeaseTerms.ForTimeToLive(timeToLive);
 
         return Semaphores.TryAcquireAsync(resource, capacity, terms, null, cancellationToken);
+    }
+
+    /// <summary>
+    /// Tries to acquire a slot of the semaphore on a resource for a time to live and records the call in a history.
+    /// </summary>
+    /// <param name="recorder">The recorder of the history.</param>
+    /// <param name="client">The client that makes the call.</param>
+    /// <param name="resource">The resource to hold a slot of.</param>
+    /// <param name="capacity">The number of slots.</param>
+    /// <param name="timeToLive">The time to live to ask for.</param>
+    /// <param name="cancellationToken">A token that cancels the run.</param>
+    /// <returns>The grant, or null when the call did not acquire a slot or did not return.</returns>
+    private async ValueTask<SemaphoreGrant?> AcquireAsync(
+        HistoryRecorder recorder,
+        int client,
+        CoordinationKey resource,
+        int capacity,
+        TimeToLive timeToLive,
+        CancellationToken cancellationToken
+    )
+    {
+        var semaphores = Semaphores;
+        var terms = LeaseTerms.ForTimeToLive(timeToLive);
+        var call = new SemaphoreCall(SemaphoreCall.Acquire, 0, null, 0);
+
+        var partition = resource.ToString();
+        var operation = await recorder.RecordAsync(
+            client,
+            partition,
+            call,
+            token => semaphores.TryAcquireAsync(resource, capacity, terms, null, token),
+            cancellationToken
+        );
+
+        return (operation.Output as SemaphoreAcquireResult)?.Grant;
+    }
+
+    /// <summary>
+    /// Renews a grant for the long time to live and records the call in a history.
+    /// </summary>
+    /// <param name="recorder">The recorder of the history.</param>
+    /// <param name="client">The client that makes the call.</param>
+    /// <param name="grant">The grant to renew.</param>
+    /// <param name="cancellationToken">A token that cancels the run.</param>
+    /// <returns>True when the call returned and renewed the grant; otherwise, false.</returns>
+    private async ValueTask<bool> RenewAsync(
+        HistoryRecorder recorder,
+        int client,
+        SemaphoreGrant grant,
+        CancellationToken cancellationToken
+    )
+    {
+        var semaphores = Semaphores;
+        var call = new SemaphoreCall(
+            SemaphoreCall.Renew,
+            grant.Slot,
+            grant.Owner.Value,
+            grant.FencingToken.Value
+        );
+
+        var partition = grant.Resource.ToString();
+        var operation = await recorder.RecordAsync(
+            client,
+            partition,
+            call,
+            token => semaphores.RenewAsync(grant, LongTimeToLive, null, token),
+            cancellationToken
+        );
+
+        return operation.Output is true;
+    }
+
+    /// <summary>
+    /// Releases a grant and records the call in a history.
+    /// </summary>
+    /// <param name="recorder">The recorder of the history.</param>
+    /// <param name="client">The client that makes the call.</param>
+    /// <param name="grant">The grant to release.</param>
+    /// <param name="cancellationToken">A token that cancels the run.</param>
+    /// <returns>True when the call returned and released the grant; otherwise, false.</returns>
+    private async ValueTask<bool> ReleaseAsync(
+        HistoryRecorder recorder,
+        int client,
+        SemaphoreGrant grant,
+        CancellationToken cancellationToken
+    )
+    {
+        var semaphores = Semaphores;
+        var call = new SemaphoreCall(
+            SemaphoreCall.Release,
+            grant.Slot,
+            grant.Owner.Value,
+            grant.FencingToken.Value
+        );
+
+        var partition = grant.Resource.ToString();
+        var operation = await recorder.RecordAsync(
+            client,
+            partition,
+            call,
+            token => semaphores.ReleaseAsync(grant, null, token),
+            cancellationToken
+        );
+
+        return operation.Output is true;
     }
 
     #region TryAcquireAsync Tests
@@ -554,6 +663,59 @@ public abstract class SemaphoreContractTests : ProviderContractTests
         await source.CancelAsync();
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => wait);
+    }
+
+    #endregion
+
+    #region Concurrent Run Tests
+
+    /// <summary>
+    /// Checks that the history of clients that acquire, renew and release slots of a semaphore at once is
+    /// linearizable.
+    /// </summary>
+    [Fact]
+    public async Task ConcurrentRun_WhenClientsRace_KeepsALinearizableHistory()
+    {
+        SkipUnlessLinearizable(Primitives.Semaphore);
+        var keys = CreateRunKeys();
+        var held = new SemaphoreGrant?[ConcurrentRun.Clients];
+        var recorder = new HistoryRecorder();
+
+        await ConcurrentRun.RunAsync(
+            async (client, index, cancellationToken) =>
+            {
+                var grant = held[client];
+                if (grant is null)
+                {
+                    var key = keys[(client + index) % keys.Length];
+                    held[client] = await AcquireAsync(
+                        recorder,
+                        client,
+                        key,
+                        SemaphoreModel.Capacity,
+                        LongTimeToLive,
+                        cancellationToken
+                    );
+                    return;
+                }
+
+                if (index % 3 == 0)
+                {
+                    await ReleaseAsync(recorder, client, grant, cancellationToken);
+                    held[client] = null;
+                    return;
+                }
+
+                if (!await RenewAsync(recorder, client, grant, cancellationToken))
+                {
+                    held[client] = null;
+                }
+            },
+            TestCancellationToken
+        );
+
+        var history = recorder.ToHistory();
+        HistoryAssert.Linearizable(new SemaphoreModel(), history);
     }
 
     #endregion

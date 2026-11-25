@@ -1,6 +1,10 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using NCode.Coordination.Testing.Checking;
+using NCode.Coordination.Testing.Histories;
+using NCode.Coordination.Testing.Models;
+using NCode.Coordination.Testing.Runs;
 using Xunit;
 
 namespace NCode.Coordination.Testing;
@@ -231,6 +235,42 @@ public abstract class ClaimContractTests : ProviderContractTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
             await Claims.TryClaimAsync(name, FirstWindow, LongTimeToLive, null, canceledToken)
         );
+    }
+
+    #endregion
+
+    #region Concurrent Run Tests
+
+    /// <summary>
+    /// Checks that the history of clients that claim the same windows at once is linearizable.
+    /// </summary>
+    [Fact]
+    public async Task ConcurrentRun_WhenClientsRace_KeepsALinearizableHistory()
+    {
+        SkipUnlessLinearizable(Primitives.Claim);
+        var claims = Claims;
+        var keys = CreateRunKeys();
+        var recorder = new HistoryRecorder();
+
+        await ConcurrentRun.RunAsync(
+            async (client, index, cancellationToken) =>
+            {
+                var key = keys[(client + index) % keys.Length];
+                var call = new ClaimCall(ClaimCall.Claim);
+                var partition = key.ToString();
+                await recorder.RecordAsync(
+                    client,
+                    partition,
+                    call,
+                    token => claims.TryClaimAsync(key, FirstWindow, LongTimeToLive, null, token),
+                    cancellationToken
+                );
+            },
+            TestCancellationToken
+        );
+
+        var history = recorder.ToHistory();
+        HistoryAssert.Linearizable(new ClaimModel(), history);
     }
 
     #endregion

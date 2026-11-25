@@ -1,6 +1,11 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using System.Collections.Immutable;
+using NCode.Coordination.Testing.Checking;
+using NCode.Coordination.Testing.Histories;
+using NCode.Coordination.Testing.Models;
+using NCode.Coordination.Testing.Runs;
 using Xunit;
 
 namespace NCode.Coordination.Testing;
@@ -315,6 +320,81 @@ public abstract class SetContractTests : ProviderContractTests
 
         var members = await Sets.ListAsync(key, null, TestCancellationToken);
         Assert.Empty(members);
+    }
+
+    #endregion
+
+    #region Concurrent Run Tests
+
+    /// <summary>
+    /// Checks that the history of clients that add, list, remove and clear two sets at once is linearizable.
+    /// </summary>
+    [Fact]
+    public async Task ConcurrentRun_WhenClientsRace_KeepsALinearizableHistory()
+    {
+        SkipUnlessLinearizable(Primitives.Set);
+        var sets = Sets;
+        var keys = CreateRunKeys();
+        ImmutableArray<KeySegment> members = ["m0", "m1", "m2"];
+        var recorder = new HistoryRecorder();
+
+        await ConcurrentRun.RunAsync(
+            async (client, index, cancellationToken) =>
+            {
+                var key = keys[(client + index) % keys.Length];
+                var partition = key.ToString();
+                switch ((client + index) % 4)
+                {
+                    case 0:
+                        var addIndex = (client + index) % 3;
+                        var add = new SetCall(SetCall.Add, addIndex);
+                        await recorder.RecordAsync(
+                            client,
+                            partition,
+                            add,
+                            token =>
+                                sets.AddAsync(key, members[addIndex], LongTimeToLive, null, token),
+                            cancellationToken
+                        );
+                        break;
+                    case 1:
+                        var list = new SetCall(SetCall.List, 0);
+                        await recorder.RecordAsync(
+                            client,
+                            partition,
+                            list,
+                            token => sets.ListAsync(key, null, token),
+                            cancellationToken
+                        );
+                        break;
+                    case 2:
+                        var removeIndex = index % 3;
+                        var remove = new SetCall(SetCall.Remove, removeIndex);
+                        await recorder.RecordAsync(
+                            client,
+                            partition,
+                            remove,
+                            token => sets.RemoveAsync(key, members[removeIndex], null, token),
+                            cancellationToken
+                        );
+                        break;
+                    default:
+                        var clear = new SetCall(SetCall.Clear, 0);
+                        await recorder.RecordAsync(
+                            client,
+                            partition,
+                            clear,
+                            token => sets.ClearAsync(key, null, token),
+                            cancellationToken
+                        );
+                        break;
+                }
+            },
+            TestCancellationToken
+        );
+
+        var history = recorder.ToHistory();
+        HistoryAssert.Linearizable(new SetModel(members), history);
     }
 
     #endregion

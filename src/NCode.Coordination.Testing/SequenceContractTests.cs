@@ -1,6 +1,10 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using NCode.Coordination.Testing.Checking;
+using NCode.Coordination.Testing.Histories;
+using NCode.Coordination.Testing.Models;
+using NCode.Coordination.Testing.Runs;
 using Xunit;
 
 namespace NCode.Coordination.Testing;
@@ -156,6 +160,57 @@ public abstract class SequenceContractTests : ProviderContractTests
             await Sequences.ReserveAsync(key, count, null, TestCancellationToken)
         );
         Assert.Equal("count", exception.ParamName);
+    }
+
+    #endregion
+
+    #region Concurrent Run Tests
+
+    /// <summary>
+    /// Checks that the history of clients that take the next number and reserve blocks from two sequences at once is
+    /// linearizable.
+    /// </summary>
+    [Fact]
+    public async Task ConcurrentRun_WhenClientsRace_KeepsALinearizableHistory()
+    {
+        SkipUnlessLinearizable(Primitives.Sequence);
+        var sequences = Sequences;
+        var keys = CreateRunKeys();
+        var recorder = new HistoryRecorder();
+
+        await ConcurrentRun.RunAsync(
+            async (client, index, cancellationToken) =>
+            {
+                var key = keys[(client + index) % keys.Length];
+                var partition = key.ToString();
+                if ((client + index) % 3 == 2)
+                {
+                    var reserve = new SequenceCall(SequenceCall.Reserve, 2);
+                    await recorder.RecordAsync(
+                        client,
+                        partition,
+                        reserve,
+                        token => sequences.ReserveAsync(key, 2, null, token),
+                        cancellationToken
+                    );
+                }
+                else
+                {
+                    var next = new SequenceCall(SequenceCall.Next, 1);
+                    await recorder.RecordAsync(
+                        client,
+                        partition,
+                        next,
+                        token => sequences.NextAsync(key, null, token),
+                        cancellationToken
+                    );
+                }
+            },
+            TestCancellationToken
+        );
+
+        var history = recorder.ToHistory();
+        HistoryAssert.Linearizable(new SequenceModel(), history);
     }
 
     #endregion

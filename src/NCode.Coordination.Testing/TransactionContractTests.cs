@@ -1,6 +1,11 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using System.Globalization;
+using NCode.Coordination.Testing.Checking;
+using NCode.Coordination.Testing.Histories;
+using NCode.Coordination.Testing.Models;
+using NCode.Coordination.Testing.Runs;
 using Xunit;
 
 namespace NCode.Coordination.Testing;
@@ -439,6 +444,110 @@ public abstract class TransactionContractTests : ProviderContractTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
             await Transactions.ExecuteAsync(transaction, null, canceledToken)
         );
+    }
+
+    #endregion
+
+    #region Concurrent Run Tests
+
+    /// <summary>
+    /// Checks that the history of clients that read two records and write them together with transactions at once is
+    /// linearizable.
+    /// </summary>
+    [Fact]
+    public async Task ConcurrentRun_WhenClientsRace_KeepsALinearizableHistory()
+    {
+        SkipUnlessLinearizable(Primitives.Transaction);
+        var transactions = Transactions;
+        var records = Records;
+        var first = CreateKey("tx", "a") with { PartitionDepth = 1 };
+        var second = CreateKey("tx", "b") with { PartitionDepth = 1 };
+        var lastSeen = new string?[ConcurrentRun.Clients];
+        var recorder = new HistoryRecorder();
+        const string partition = "transaction";
+
+        await ConcurrentRun.RunAsync(
+            async (client, index, cancellationToken) =>
+            {
+                switch (index % 3)
+                {
+                    case 0:
+                        var readFirst = new TransactionCall(
+                            TransactionCall.Read,
+                            TransactionCall.FirstKey,
+                            null,
+                            null
+                        );
+                        var observed = await recorder.RecordAsync(
+                            client,
+                            partition,
+                            readFirst,
+                            token => records.ReadAsync(first, null, token),
+                            cancellationToken
+                        );
+                        if (observed.Outcome == HistoryOutcome.Returned)
+                        {
+                            lastSeen[client] = observed.Output is StoredRecord stored
+                                ? HistoryValues.Decode(stored.Value)
+                                : null;
+                        }
+
+                        break;
+
+                    case 1:
+                        var readSecond = new TransactionCall(
+                            TransactionCall.Read,
+                            TransactionCall.SecondKey,
+                            null,
+                            null
+                        );
+                        await recorder.RecordAsync(
+                            client,
+                            partition,
+                            readSecond,
+                            token => records.ReadAsync(second, null, token),
+                            cancellationToken
+                        );
+                        break;
+
+                    default:
+                        var expected = lastSeen[client];
+                        var value = string.Create(
+                            CultureInfo.InvariantCulture,
+                            $"{client}-{index}"
+                        );
+                        var bytes = HistoryValues.Encode(value);
+                        var condition = RecordCondition.Absent(first);
+                        if (expected is not null)
+                        {
+                            var expectedBytes = HistoryValues.Encode(expected);
+                            condition = RecordCondition.ValueEquals(first, expectedBytes);
+                        }
+
+                        var putFirst = Put(first, bytes);
+                        var putSecond = Put(second, bytes);
+                        var transaction = new RecordTransaction([condition], [putFirst, putSecond]);
+                        var execute = new TransactionCall(
+                            TransactionCall.Execute,
+                            null,
+                            expected,
+                            value
+                        );
+                        await recorder.RecordAsync(
+                            client,
+                            partition,
+                            execute,
+                            token => transactions.ExecuteAsync(transaction, null, token),
+                            cancellationToken
+                        );
+                        break;
+                }
+            },
+            TestCancellationToken
+        );
+
+        var history = recorder.ToHistory();
+        HistoryAssert.Linearizable(new TransactionModel(), history);
     }
 
     #endregion

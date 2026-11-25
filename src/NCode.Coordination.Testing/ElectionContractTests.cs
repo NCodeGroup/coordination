@@ -1,6 +1,11 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using System.Globalization;
+using NCode.Coordination.Testing.Checking;
+using NCode.Coordination.Testing.Histories;
+using NCode.Coordination.Testing.Models;
+using NCode.Coordination.Testing.Runs;
 using Xunit;
 
 namespace NCode.Coordination.Testing;
@@ -61,6 +66,112 @@ public abstract class ElectionContractTests : ProviderContractTests
         var terms = LeaseTerms.ForTimeToLive(timeToLive);
 
         return Elections.TryLeadAsync(role, value, terms, null, cancellationToken);
+    }
+
+    /// <summary>
+    /// Tries to become the leader of a role for a time to live and records the call in a history.
+    /// </summary>
+    /// <param name="recorder">The recorder of the history.</param>
+    /// <param name="client">The client that makes the call.</param>
+    /// <param name="role">The role to lead.</param>
+    /// <param name="value">The value followers read.</param>
+    /// <param name="timeToLive">The time to live to ask for.</param>
+    /// <param name="cancellationToken">A token that cancels the run.</param>
+    /// <returns>The leadership, or null when the call did not elect the client or did not return.</returns>
+    private async ValueTask<Leadership?> LeadAsync(
+        HistoryRecorder recorder,
+        int client,
+        CoordinationKey role,
+        string value,
+        TimeToLive timeToLive,
+        CancellationToken cancellationToken
+    )
+    {
+        var elections = Elections;
+        var bytes = HistoryValues.Encode(value);
+        var terms = LeaseTerms.ForTimeToLive(timeToLive);
+        var call = new ElectionCall(ElectionCall.Lead, value, null, 0);
+
+        var partition = role.ToString();
+        var operation = await recorder.RecordAsync(
+            client,
+            partition,
+            call,
+            token => elections.TryLeadAsync(role, bytes, terms, null, token),
+            cancellationToken
+        );
+
+        return (operation.Output as ElectionResult)?.Leadership;
+    }
+
+    /// <summary>
+    /// Renews a leadership for the long time to live and records the call in a history.
+    /// </summary>
+    /// <param name="recorder">The recorder of the history.</param>
+    /// <param name="client">The client that makes the call.</param>
+    /// <param name="leadership">The leadership to renew.</param>
+    /// <param name="cancellationToken">A token that cancels the run.</param>
+    /// <returns>True when the call returned and renewed the leadership; otherwise, false.</returns>
+    private async ValueTask<bool> RenewAsync(
+        HistoryRecorder recorder,
+        int client,
+        Leadership leadership,
+        CancellationToken cancellationToken
+    )
+    {
+        var elections = Elections;
+        var call = new ElectionCall(
+            ElectionCall.Renew,
+            null,
+            leadership.Owner.Value,
+            leadership.Leader.Term.Value
+        );
+
+        var partition = leadership.Leader.Role.ToString();
+        var operation = await recorder.RecordAsync(
+            client,
+            partition,
+            call,
+            token => elections.RenewAsync(leadership, LongTimeToLive, null, token),
+            cancellationToken
+        );
+
+        return operation.Output is true;
+    }
+
+    /// <summary>
+    /// Resigns a leadership and records the call in a history.
+    /// </summary>
+    /// <param name="recorder">The recorder of the history.</param>
+    /// <param name="client">The client that makes the call.</param>
+    /// <param name="leadership">The leadership to give up.</param>
+    /// <param name="cancellationToken">A token that cancels the run.</param>
+    /// <returns>True when the call returned and gave up the leadership; otherwise, false.</returns>
+    private async ValueTask<bool> ResignAsync(
+        HistoryRecorder recorder,
+        int client,
+        Leadership leadership,
+        CancellationToken cancellationToken
+    )
+    {
+        var elections = Elections;
+        var call = new ElectionCall(
+            ElectionCall.Resign,
+            null,
+            leadership.Owner.Value,
+            leadership.Leader.Term.Value
+        );
+
+        var partition = leadership.Leader.Role.ToString();
+        var operation = await recorder.RecordAsync(
+            client,
+            partition,
+            call,
+            token => elections.ResignAsync(leadership, null, token),
+            cancellationToken
+        );
+
+        return operation.Output is true;
     }
 
     #region TryLeadAsync Tests
@@ -522,6 +633,88 @@ public abstract class ElectionContractTests : ProviderContractTests
 
         Assert.NotNull(first.Leader);
         Assert.Equal(role, view.Role);
+    }
+
+    #endregion
+
+    #region Concurrent Run Tests
+
+    /// <summary>
+    /// Checks that the history of clients that lead, renew, resign and read roles at once is linearizable.
+    /// </summary>
+    [Fact]
+    public async Task ConcurrentRun_WhenClientsRace_KeepsALinearizableHistory()
+    {
+        SkipUnlessLinearizable(Primitives.Election);
+        var elections = Elections;
+        var keys = CreateRunKeys();
+        var leading = new Leadership?[ConcurrentRun.Clients];
+        var recorder = new HistoryRecorder();
+
+        await ConcurrentRun.RunAsync(
+            async (client, index, cancellationToken) =>
+            {
+                var role = keys[(client + index) % keys.Length];
+                var held = leading[client];
+                var value = string.Create(CultureInfo.InvariantCulture, $"{client}-{index}");
+
+                switch ((client + index) % 3)
+                {
+                    case 0:
+                        if (held is not null)
+                        {
+                            await ResignAsync(recorder, client, held, cancellationToken);
+                            leading[client] = null;
+                            break;
+                        }
+
+                        leading[client] = await LeadAsync(
+                            recorder,
+                            client,
+                            role,
+                            value,
+                            LongTimeToLive,
+                            cancellationToken
+                        );
+                        break;
+                    case 1:
+                        var read = new ElectionCall(ElectionCall.Read, null, null, 0);
+                        var partition = role.ToString();
+                        await recorder.RecordAsync(
+                            client,
+                            partition,
+                            read,
+                            token => elections.ReadAsync(role, null, token),
+                            cancellationToken
+                        );
+                        break;
+                    default:
+                        if (held is null)
+                        {
+                            leading[client] = await LeadAsync(
+                                recorder,
+                                client,
+                                role,
+                                value,
+                                LongTimeToLive,
+                                cancellationToken
+                            );
+                            break;
+                        }
+
+                        if (!await RenewAsync(recorder, client, held, cancellationToken))
+                        {
+                            leading[client] = null;
+                        }
+
+                        break;
+                }
+            },
+            TestCancellationToken
+        );
+
+        var history = recorder.ToHistory();
+        HistoryAssert.Linearizable(new ElectionModel(), history);
     }
 
     #endregion

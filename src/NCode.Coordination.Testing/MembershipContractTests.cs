@@ -2,6 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using System.Collections.Immutable;
+using NCode.Coordination.Testing.Checking;
+using NCode.Coordination.Testing.Histories;
+using NCode.Coordination.Testing.Models;
+using NCode.Coordination.Testing.Runs;
 using Xunit;
 
 namespace NCode.Coordination.Testing;
@@ -423,6 +427,80 @@ public abstract class MembershipContractTests : ProviderContractTests
 
         Assert.Single(first.Members);
         Assert.True(view.Revision > first.Revision);
+    }
+
+    #endregion
+
+    #region Concurrent Run Tests
+
+    /// <summary>
+    /// Checks that the history of clients that join, read and leave a group at once is linearizable.
+    /// </summary>
+    [Fact]
+    public async Task ConcurrentRun_WhenClientsRace_KeepsALinearizableHistory()
+    {
+        SkipUnlessLinearizable(Primitives.Membership);
+        var members = Members;
+        var group = CreateKey("run", "group");
+        var partition = group.ToString();
+        var builder = ImmutableArray.CreateBuilder<SessionId>(ConcurrentRun.Clients);
+        for (var client = 0; client < ConcurrentRun.Clients; client++)
+        {
+            var session = await ContractSessions.OpenAsync(
+                Sessions,
+                Keyspace,
+                LongTimeToLive,
+                TestCancellationToken
+            );
+            builder.Add(session);
+        }
+
+        var sessions = builder.ToImmutable();
+        var recorder = new HistoryRecorder();
+
+        await ConcurrentRun.RunAsync(
+            async (client, index, cancellationToken) =>
+            {
+                switch ((client + index) % 3)
+                {
+                    case 0:
+                        var join = new MembershipCall(MembershipCall.Join, client);
+                        var member = CreateMember(sessions[client], $"node-{client}");
+                        await recorder.RecordAsync(
+                            client,
+                            partition,
+                            join,
+                            token => members.JoinAsync(group, member, null, token),
+                            cancellationToken
+                        );
+                        break;
+                    case 1:
+                        var read = new MembershipCall(MembershipCall.Read, 0);
+                        await recorder.RecordAsync(
+                            client,
+                            partition,
+                            read,
+                            token => members.ReadAsync(group, null, token),
+                            cancellationToken
+                        );
+                        break;
+                    default:
+                        var leave = new MembershipCall(MembershipCall.Leave, client);
+                        await recorder.RecordAsync(
+                            client,
+                            partition,
+                            leave,
+                            token => members.LeaveAsync(group, sessions[client], null, token),
+                            cancellationToken
+                        );
+                        break;
+                }
+            },
+            TestCancellationToken
+        );
+
+        var history = recorder.ToHistory();
+        HistoryAssert.Linearizable(new MembershipModel(sessions), history);
     }
 
     #endregion
