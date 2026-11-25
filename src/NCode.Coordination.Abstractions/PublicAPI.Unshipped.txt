@@ -242,6 +242,15 @@ NCode.Coordination.RecordChangeKind
 NCode.Coordination.RecordChangeKind.Deleted = 1 -> NCode.Coordination.RecordChangeKind
 NCode.Coordination.RecordChangeKind.Resync = 2 -> NCode.Coordination.RecordChangeKind
 NCode.Coordination.RecordChangeKind.Written = 0 -> NCode.Coordination.RecordChangeKind
+NCode.Coordination.RecordCondition
+NCode.Coordination.RecordCondition.Key.get -> NCode.Coordination.CoordinationKey!
+NCode.Coordination.RecordCondition.Kind.get -> NCode.Coordination.RecordConditionKind
+NCode.Coordination.RecordCondition.Revision.get -> NCode.Coordination.Revision?
+NCode.Coordination.RecordCondition.Value.get -> System.ReadOnlyMemory<byte>
+NCode.Coordination.RecordConditionKind
+NCode.Coordination.RecordConditionKind.Absent = 0 -> NCode.Coordination.RecordConditionKind
+NCode.Coordination.RecordConditionKind.RevisionEquals = 1 -> NCode.Coordination.RecordConditionKind
+NCode.Coordination.RecordConditionKind.ValueEquals = 2 -> NCode.Coordination.RecordConditionKind
 NCode.Coordination.RecordDeleteStatus
 NCode.Coordination.RecordDeleteStatus.Conflict = 1 -> NCode.Coordination.RecordDeleteStatus
 NCode.Coordination.RecordDeleteStatus.Deleted = 0 -> NCode.Coordination.RecordDeleteStatus
@@ -261,6 +270,14 @@ NCode.Coordination.RecordPageRequest.ContinuationToken.get -> string?
 NCode.Coordination.RecordPageRequest.ContinuationToken.init -> void
 NCode.Coordination.RecordPageRequest.Limit.get -> int
 NCode.Coordination.RecordPageRequest.RecordPageRequest(int limit) -> void
+NCode.Coordination.RecordWrite
+NCode.Coordination.RecordWrite.Key.get -> NCode.Coordination.CoordinationKey!
+NCode.Coordination.RecordWrite.Kind.get -> NCode.Coordination.RecordWriteKind
+NCode.Coordination.RecordWrite.Lifetime.get -> NCode.Coordination.RecordLifetime?
+NCode.Coordination.RecordWrite.Value.get -> System.ReadOnlyMemory<byte>
+NCode.Coordination.RecordWriteKind
+NCode.Coordination.RecordWriteKind.Delete = 1 -> NCode.Coordination.RecordWriteKind
+NCode.Coordination.RecordWriteKind.Put = 0 -> NCode.Coordination.RecordWriteKind
 NCode.Coordination.RecordWriteResult
 NCode.Coordination.RecordWriteResult.IsWritten.get -> bool
 NCode.Coordination.RecordWriteResult.Revision.get -> NCode.Coordination.Revision?
@@ -471,9 +488,14 @@ static NCode.Coordination.PrimitiveSupport.Unsupported(NCode.Coordination.Primit
 static NCode.Coordination.RecordChange.Deleted(NCode.Coordination.CoordinationKey! key, NCode.Coordination.Revision! revision) -> NCode.Coordination.RecordChange!
 static NCode.Coordination.RecordChange.Resync(NCode.Coordination.Revision! revision) -> NCode.Coordination.RecordChange!
 static NCode.Coordination.RecordChange.Written(NCode.Coordination.StoredRecord! record) -> NCode.Coordination.RecordChange!
+static NCode.Coordination.RecordCondition.Absent(NCode.Coordination.CoordinationKey! key) -> NCode.Coordination.RecordCondition!
+static NCode.Coordination.RecordCondition.RevisionEquals(NCode.Coordination.CoordinationKey! key, NCode.Coordination.Revision! revision) -> NCode.Coordination.RecordCondition!
+static NCode.Coordination.RecordCondition.ValueEquals(NCode.Coordination.CoordinationKey! key, System.ReadOnlyMemory<byte> value) -> NCode.Coordination.RecordCondition!
 static NCode.Coordination.RecordLifetime.ForSession(NCode.Coordination.SessionId! session) -> NCode.Coordination.RecordLifetime!
 static NCode.Coordination.RecordLifetime.ForTimeToLive(NCode.Coordination.TimeToLive! timeToLive) -> NCode.Coordination.RecordLifetime!
 static NCode.Coordination.RecordLifetime.Persistent.get -> NCode.Coordination.RecordLifetime!
+static NCode.Coordination.RecordWrite.Delete(NCode.Coordination.CoordinationKey! key) -> NCode.Coordination.RecordWrite!
+static NCode.Coordination.RecordWrite.Put(NCode.Coordination.CoordinationKey! key, System.ReadOnlyMemory<byte> value, NCode.Coordination.RecordLifetime! lifetime) -> NCode.Coordination.RecordWrite!
 static NCode.Coordination.RecordWriteResult.Conflict.get -> NCode.Coordination.RecordWriteResult!
 static NCode.Coordination.RecordWriteResult.NotFound.get -> NCode.Coordination.RecordWriteResult!
 static NCode.Coordination.RecordWriteResult.SessionEnded.get -> NCode.Coordination.RecordWriteResult!
