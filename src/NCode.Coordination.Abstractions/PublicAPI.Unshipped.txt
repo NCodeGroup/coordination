@@ -1,4 +1,8 @@
 #nullable enable
+const NCode.Coordination.CoordinationErrorCodes.AccessDenied = "access-denied" -> string!
+const NCode.Coordination.CoordinationErrorCodes.LimitExceeded = "limit-exceeded" -> string!
+const NCode.Coordination.CoordinationErrorCodes.Unavailable = "unavailable" -> string!
+const NCode.Coordination.CoordinationErrorCodes.Unsupported = "unsupported" -> string!
 const NCode.Coordination.CoordinationKey.MaxSegments = 16 -> int
 const NCode.Coordination.CoordinationLimits.MaxAddressLength = 256 -> int
 const NCode.Coordination.CoordinationLimits.MaxBatchIncrements = 16 -> int
@@ -23,6 +27,12 @@ const NCode.Coordination.GuaranteeDimensions.Expiry = "expiry" -> string!
 const NCode.Coordination.KeySegment.MaxTextLength = 256 -> int
 const NCode.Coordination.Keyspace.MaxClusterLength = 63 -> int
 const NCode.Coordination.Keyspace.MaxSegments = 8 -> int
+NCode.Coordination.CoordinationErrorCodes
+NCode.Coordination.CoordinationException
+NCode.Coordination.CoordinationException.Code.get -> string!
+NCode.Coordination.CoordinationException.CoordinationException(string! code, bool outcomeUnknown, string! message, System.Exception? innerException) -> void
+NCode.Coordination.CoordinationException.CoordinationException(string! code, bool outcomeUnknown, string! message) -> void
+NCode.Coordination.CoordinationException.OutcomeUnknown.get -> bool
 NCode.Coordination.CoordinationKey
 NCode.Coordination.CoordinationKey.<Clone>$() -> NCode.Coordination.CoordinationKey!
 NCode.Coordination.CoordinationKey.CoordinationKey(NCode.Coordination.Keyspace! keyspace, params System.Collections.Generic.IEnumerable<NCode.Coordination.KeySegment!>! segments) -> void
@@ -78,6 +88,10 @@ NCode.Coordination.Keyspace.CreateKey(params System.Collections.Generic.IEnumera
 NCode.Coordination.Keyspace.Equals(NCode.Coordination.Keyspace? other) -> bool
 NCode.Coordination.Keyspace.Keyspace(string! cluster, params System.Collections.Generic.IEnumerable<NCode.Coordination.KeySegment!>! segments) -> void
 NCode.Coordination.Keyspace.Segments.get -> System.Collections.Immutable.ImmutableArray<NCode.Coordination.KeySegment!>
+NCode.Coordination.OperationOptions
+NCode.Coordination.OperationOptions.Extensions.get -> System.Collections.Immutable.ImmutableDictionary<string!, string!>!
+NCode.Coordination.OperationOptions.Extensions.init -> void
+NCode.Coordination.OperationOptions.OperationOptions() -> void
 NCode.Coordination.OwnerToken
 NCode.Coordination.OwnerToken.<Clone>$() -> NCode.Coordination.OwnerToken!
 NCode.Coordination.OwnerToken.Equals(NCode.Coordination.OwnerToken? other) -> bool
