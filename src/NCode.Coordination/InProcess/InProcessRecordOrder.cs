@@ -48,7 +48,9 @@ internal class InProcessRecordOrder
     /// Lists the records written after a sequence.
     /// </summary>
     /// <param name="sequence">The sequence after which the listing starts.</param>
-    /// <returns>The keys of the records whose sequence is greater than <paramref name="sequence"/>, in sequence order.</returns>
+    /// <returns>
+    /// The keys of the records whose sequence is greater than <paramref name="sequence"/>, in sequence order.
+    /// </returns>
     public IEnumerable<CoordinationKey> After(long sequence)
     {
         if (sequence == long.MaxValue)

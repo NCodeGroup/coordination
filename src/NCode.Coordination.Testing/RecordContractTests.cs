@@ -825,5 +825,105 @@ public abstract class RecordContractTests : ProviderContractTests
         Assert.Equal(kept, record.Key);
     }
 
+    /// <summary>
+    /// Checks that listing a prefix returns a record that was replaced once, with its new value.
+    /// </summary>
+    [Fact]
+    public async Task ListAsync_WhenARecordWasReplaced_ListsItOnceWithItsNewValue()
+    {
+        var replaced = CreateKey("cfg", "a");
+        var other = CreateKey("cfg", "b");
+        var prefix = CreateKey("cfg");
+        var one = "one"u8.ToArray();
+        var two = "two"u8.ToArray();
+        var request = new RecordPageRequest(10);
+        var created = await ContractRecords.CreateAsync(
+            Records,
+            replaced,
+            one,
+            TestCancellationToken
+        );
+        await ContractRecords.CreateAsync(Records, other, one, TestCancellationToken);
+        await Records.CompareAndSwapAsync(
+            replaced,
+            created,
+            two,
+            RecordLifetime.Persistent,
+            null,
+            TestCancellationToken
+        );
+
+        var page = await Records.ListAsync(prefix, request, null, TestCancellationToken);
+
+        Assert.Equal(2, page.Records.Length);
+        var listedReplaced = Assert.Single(page.Records, record => record.Key.Equals(replaced));
+        var actual = listedReplaced.Value.ToArray();
+        Assert.Equal(two, actual);
+        Assert.Single(page.Records, record => record.Key.Equals(other));
+    }
+
+    /// <summary>
+    /// Checks that listing a prefix leaves out a record that was deleted and lists it once again when it is created
+    /// again.
+    /// </summary>
+    [Fact]
+    public async Task ListAsync_WhenARecordWasDeleted_LeavesItOut()
+    {
+        var deleted = CreateKey("cfg", "a");
+        var kept = CreateKey("cfg", "b");
+        var prefix = CreateKey("cfg");
+        var value = "v"u8.ToArray();
+        var request = new RecordPageRequest(10);
+        var created = await ContractRecords.CreateAsync(
+            Records,
+            deleted,
+            value,
+            TestCancellationToken
+        );
+        await ContractRecords.CreateAsync(Records, kept, value, TestCancellationToken);
+        await Records.CompareAndDeleteAsync(deleted, created, null, TestCancellationToken);
+
+        var afterDelete = await Records.ListAsync(prefix, request, null, TestCancellationToken);
+
+        var remaining = Assert.Single(afterDelete.Records);
+        Assert.Equal(kept, remaining.Key);
+
+        await ContractRecords.CreateAsync(Records, deleted, value, TestCancellationToken);
+
+        var afterCreate = await Records.ListAsync(prefix, request, null, TestCancellationToken);
+
+        Assert.Equal(2, afterCreate.Records.Length);
+        Assert.Single(afterCreate.Records, record => record.Key.Equals(deleted));
+        Assert.Single(afterCreate.Records, record => record.Key.Equals(kept));
+    }
+
+    /// <summary>
+    /// Checks that listing a prefix leaves out the records bound to a session that has closed.
+    /// </summary>
+    [Fact]
+    public async Task ListAsync_WhenTheSessionCloses_LeavesItsRecordsOut()
+    {
+        var bound = CreateKey("cfg", "a");
+        var kept = CreateKey("cfg", "b");
+        var prefix = CreateKey("cfg");
+        var value = "v"u8.ToArray();
+        var request = new RecordPageRequest(10);
+        var session = await ContractSessions.OpenAsync(
+            Sessions,
+            Keyspace,
+            LongTimeToLive,
+            TestCancellationToken
+        );
+        var lifetime = RecordLifetime.ForSession(session);
+        await ContractRecords.CreateAsync(Records, bound, value, lifetime, TestCancellationToken);
+        await ContractRecords.CreateAsync(Records, kept, value, TestCancellationToken);
+        await Sessions.CloseAsync(session, null, TestCancellationToken);
+
+        var page = await Records.ListAsync(prefix, request, null, TestCancellationToken);
+
+        var record = Assert.Single(page.Records);
+        Assert.Equal(kept, record.Key);
+    }
+
     #endregion
 }

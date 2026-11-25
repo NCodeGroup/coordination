@@ -151,9 +151,12 @@ NCode.Coordination.Testing.RecordContractTests.CreateAsync_WhenTokenIsCanceled_T
 NCode.Coordination.Testing.RecordContractTests.CreateAsync_WhenValueHasTheLargestLength_WritesTheRecord() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.RecordContractTests.CreateAsync_WhenValueIsTooLong_ThrowsArgumentException() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.RecordContractTests.ListAsync_WhenARecordExpired_LeavesItOut() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.RecordContractTests.ListAsync_WhenARecordWasDeleted_LeavesItOut() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.RecordContractTests.ListAsync_WhenARecordWasReplaced_ListsItOnceWithItsNewValue() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.RecordContractTests.ListAsync_WhenNothingIsUnderThePrefix_ReturnsAnEmptyPage() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.RecordContractTests.ListAsync_WhenRecordsAreUnderThePrefix_ReturnsThemWithThePrefixesOwnRecord() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.RecordContractTests.ListAsync_WhenRecordsExceedTheLimit_PagesThroughEachRecord() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.RecordContractTests.ListAsync_WhenTheSessionCloses_LeavesItsRecordsOut() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.RecordContractTests.ReadAsync_WhenKeyIsAbsent_ReturnsNull() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.RecordContractTests.ReadAsync_WhenOptionsCarryAnUnknownExtension_ThrowsUnsupported() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.RecordContractTests.RecordContractTests() -> void

@@ -9,7 +9,8 @@ namespace NCode.Coordination.Testing;
 internal static class ContractSessions
 {
     /// <summary>
-    /// Gets the time to live of a session that <see cref="OpenEndedAsync"/> closes at once: it only has to outlive the call.
+    /// Gets the time to live of a session that <see cref="OpenEndedAsync"/> closes at once: it only has to outlive the
+    /// call.
     /// </summary>
     private static TimeSpan EndedSessionTimeToLive { get; } = TimeSpan.FromSeconds(30);
 
