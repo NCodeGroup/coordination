@@ -26,6 +26,26 @@ NCode.Coordination.Testing.CounterContractTests.IncrementBatchAsync_WhenTooLarge
 NCode.Coordination.Testing.CounterContractTests.ReadAsync_WhenCounterIsAbsent_ReturnsZero() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.CounterContractTests.ReadAsync_WhenTokenIsCanceled_ThrowsOperationCanceledException() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.CounterContractTests.ResetAsync_WhenCounterExists_DeletesIt() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.ElectionContractTests
+NCode.Coordination.Testing.ElectionContractTests.ElectionContractTests() -> void
+NCode.Coordination.Testing.ElectionContractTests.ReadAsync_WhenRoleHasALeader_ReturnsItsTermAndValue() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.ElectionContractTests.ReadAsync_WhenRoleHasNoLeader_ReturnsNoLeader() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.ElectionContractTests.RenewAsync_WhenLeadershipHolds_ExtendsItFromTheRenewal() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.ElectionContractTests.RenewAsync_WhenLeadershipIsBoundToASession_ThrowsArgumentException() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.ElectionContractTests.ResignAsync_WhenLeading_ReturnsTrueAndVacatesTheRole() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.ElectionContractTests.ResignAsync_WhenNoLongerLeading_ReturnsFalse() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.ElectionContractTests.TryLeadAsync_AfterResign_GivesAGreaterTerm() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.ElectionContractTests.TryLeadAsync_WhenAnotherLeads_ReturnsLed() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.ElectionContractTests.TryLeadAsync_WhenOptionsCarryAnUnknownExtension_ThrowsUnsupported() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.ElectionContractTests.TryLeadAsync_WhenRoleHasNoLeader_ElectsTheCaller() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.ElectionContractTests.TryLeadAsync_WhenSessionHasEnded_ReturnsSessionEnded() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.ElectionContractTests.TryLeadAsync_WhenTheLeadershipExpires_VacatesTheRole() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.ElectionContractTests.TryLeadAsync_WhenTheSameSessionLeadsAgain_ReturnsItsLeadership() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.ElectionContractTests.TryLeadAsync_WhenTheSessionCloses_VacatesTheRole() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.ElectionContractTests.TryLeadAsync_WhenValueIsTooLong_ThrowsArgumentException() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.ElectionContractTests.WatchAsync_WhenALeaderIsElected_YieldsItsTerm() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.ElectionContractTests.WatchAsync_WhenStarted_YieldsTheCurrentViewFirst() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.ElectionContractTests.WatchAsync_WhenTheLeaderResigns_YieldsAVacancy() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.LeaseContractTests
 NCode.Coordination.Testing.LeaseContractTests.LeaseContractTests() -> void
 NCode.Coordination.Testing.LeaseContractTests.ReleaseAsync_WhenAnotherGrantHoldsTheResource_ReturnsFalseAndKeepsIt() -> System.Threading.Tasks.Task!
