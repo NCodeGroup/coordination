@@ -1,0 +1,65 @@
+// Copyright © NCode Group
+// SPDX-License-Identifier: Apache-2.0
+
+using Microsoft.Extensions.DependencyInjection;
+
+namespace NCode.Coordination.Tests;
+
+/// <summary>
+/// Builds a composition around one test provider.
+/// </summary>
+internal static class TestComposition
+{
+    /// <summary>
+    /// The name of the test provider.
+    /// </summary>
+    public const string ProviderName = "test";
+
+    /// <summary>
+    /// Gets the keyspace the tests use.
+    /// </summary>
+    public static Keyspace Keyspace { get; } = new("test");
+
+    /// <summary>
+    /// Gets a key in the tests' keyspace.
+    /// </summary>
+    public static CoordinationKey Key { get; } = Keyspace.CreateKey("key");
+
+    /// <summary>
+    /// Builds services whose only provider serves a primitive with the given implementation, bound to every keyspace.
+    /// </summary>
+    /// <typeparam name="TService">The primitive's interface.</typeparam>
+    /// <param name="primitive">The primitive.</param>
+    /// <param name="service">The implementation the provider serves.</param>
+    /// <returns>The built service provider.</returns>
+    public static ServiceProvider Build<TService>(Primitive primitive, TService service)
+        where TService : class
+    {
+        var declaration = new ProviderDeclaration(
+            ProviderName,
+            PrimitiveSupport.Supported(primitive)
+        );
+        var services = new ServiceCollection();
+        services.AddMetrics();
+        services.AddCoordination(b =>
+            b.AddProvider(_ => new TestProvider(declaration, service))
+                .Bind(new ProviderBinding(ProviderName))
+        );
+        return services.BuildServiceProvider();
+    }
+
+    /// <summary>
+    /// Streams items, yielding to the scheduler before each.
+    /// </summary>
+    /// <typeparam name="T">The type of the items.</typeparam>
+    /// <param name="items">The items.</param>
+    /// <returns>The stream.</returns>
+    public static async IAsyncEnumerable<T> Stream<T>(params IEnumerable<T> items)
+    {
+        foreach (var item in items)
+        {
+            await Task.Yield();
+            yield return item;
+        }
+    }
+}

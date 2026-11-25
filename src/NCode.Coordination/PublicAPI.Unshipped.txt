@@ -4,4 +4,8 @@ const NCode.Coordination.CoordinationTelemetry.MeterName = "NCode.Coordination" 
 NCode.Coordination.CoordinationCompositionException
 NCode.Coordination.CoordinationCompositionException.CoordinationCompositionException(System.Collections.Generic.IEnumerable<string!>! failures) -> void
 NCode.Coordination.CoordinationCompositionException.Failures.get -> System.Collections.Immutable.ImmutableArray<string!>
+NCode.Coordination.CoordinationServiceCollectionExtensions
+NCode.Coordination.CoordinationServiceCollectionExtensions.extension(Microsoft.Extensions.DependencyInjection.IServiceCollection!)
+NCode.Coordination.CoordinationServiceCollectionExtensions.extension(Microsoft.Extensions.DependencyInjection.IServiceCollection!).AddCoordination(System.Action<NCode.Coordination.ICoordinationBuilder!>! configure) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
 NCode.Coordination.CoordinationTelemetry
+static NCode.Coordination.CoordinationServiceCollectionExtensions.AddCoordination(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, System.Action<NCode.Coordination.ICoordinationBuilder!>! configure) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
