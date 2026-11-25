@@ -58,16 +58,16 @@ internal class InProcessClaimService(TimeProvider time) : IClaimService
             PartitionDepth = name.PartitionDepth,
         };
 
-        lock (Gate)
-        {
-            if (Claims.TryGet(key, out _))
-            {
-                return ValueTask.FromResult(ClaimStatus.Taken);
-            }
+        using var scope = Gate.EnterScope();
 
-            var expiry = InProcessExpiry.Begin(Time, timeToLive);
-            Claims.Set(key, true, expiry);
-            return ValueTask.FromResult(ClaimStatus.Claimed);
+        if (Claims.TryGet(key, out _))
+        {
+            return ValueTask.FromResult(ClaimStatus.Taken);
         }
+
+        var expiry = InProcessExpiry.Begin(Time, timeToLive);
+        Claims.Set(key, true, expiry);
+
+        return ValueTask.FromResult(ClaimStatus.Claimed);
     }
 }

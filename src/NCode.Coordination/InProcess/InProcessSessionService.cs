@@ -61,10 +61,9 @@ internal class InProcessSessionService(InProcessSessionTable sessions) : ISessio
         ArgumentNullException.ThrowIfNull(session);
         InProcessGuard.Check(options, cancellationToken);
 
-        using (Sessions.Enter())
-        {
-            Sessions.Close(session);
-        }
+        using var scope = Sessions.Enter();
+
+        Sessions.Close(session);
 
         return ValueTask.CompletedTask;
     }

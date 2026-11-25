@@ -194,6 +194,7 @@ internal class InProcessDeadlines : IDisposable
             IsDisposed = true;
         }
 
+        // The timer is disposed outside the lock, because its callback takes the lock.
         Timer.Dispose();
     }
 

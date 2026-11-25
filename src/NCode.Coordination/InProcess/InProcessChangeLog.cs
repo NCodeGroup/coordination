@@ -58,7 +58,7 @@ internal class InProcessChangeLog
     /// </summary>
     /// <param name="after">The revision after which the changes are wanted.</param>
     /// <returns>The changes whose revision is later than the given one.</returns>
-    public List<InProcessLoggedChange> After(Revision after)
+    public IReadOnlyList<InProcessLoggedChange> After(Revision after)
     {
         ArgumentNullException.ThrowIfNull(after);
 

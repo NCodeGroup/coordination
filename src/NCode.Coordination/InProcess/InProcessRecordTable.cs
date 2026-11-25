@@ -192,15 +192,14 @@ internal class InProcessRecordTable : IDisposable
     /// </summary>
     /// <param name="key">The key of the record.</param>
     /// <param name="revision">The revision of the deletion.</param>
-    /// <returns>True when a live record was removed.</returns>
-    public bool Remove(CoordinationKey key, Revision revision)
+    public void Remove(CoordinationKey key, Revision revision)
     {
         if (
             !RecordsByKeyspace.TryGetValue(key.Keyspace, out var records)
             || !records.Remove(key, out var entry)
         )
         {
-            return false;
+            return;
         }
 
         Deadlines.Cancel(entry.Deadline);
@@ -212,7 +211,6 @@ internal class InProcessRecordTable : IDisposable
         var change = RecordChange.Deleted(key, revision);
 
         Publish(key, change);
-        return true;
     }
 
     /// <summary>

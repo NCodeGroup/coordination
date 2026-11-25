@@ -59,7 +59,7 @@ internal class InProcessNotificationService : INotificationService
 
         InProcessGuard.Check(options, cancellationToken);
 
-        lock (Gate)
+        using (Gate.EnterScope())
         {
             var sequence = Sequences.GetValueOrDefault(topic) + 1;
             Sequences[topic] = sequence;
@@ -142,16 +142,15 @@ internal class InProcessNotificationService : INotificationService
     /// <param name="queue">The queue to register.</param>
     private void Start(CoordinationKey topic, InProcessEventQueue<Notification> queue)
     {
-        lock (Gate)
-        {
-            if (!Subscribers.TryGetValue(topic, out var queues))
-            {
-                queues = [];
-                Subscribers[topic] = queues;
-            }
+        using var scope = Gate.EnterScope();
 
-            queues.Add(queue);
+        if (!Subscribers.TryGetValue(topic, out var queues))
+        {
+            queues = [];
+            Subscribers[topic] = queues;
         }
+
+        queues.Add(queue);
     }
 
     /// <summary>
@@ -162,19 +161,18 @@ internal class InProcessNotificationService : INotificationService
     /// <param name="queue">The queue to remove.</param>
     private void Stop(CoordinationKey topic, InProcessEventQueue<Notification> queue)
     {
-        lock (Gate)
+        using var scope = Gate.EnterScope();
+
+        if (!Subscribers.TryGetValue(topic, out var queues))
         {
-            if (!Subscribers.TryGetValue(topic, out var queues))
-            {
-                return;
-            }
+            return;
+        }
 
-            queues.Remove(queue);
+        queues.Remove(queue);
 
-            if (queues.Count == 0)
-            {
-                Subscribers.Remove(topic);
-            }
+        if (queues.Count == 0)
+        {
+            Subscribers.Remove(topic);
         }
     }
 }

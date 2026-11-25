@@ -39,7 +39,8 @@ public sealed class TransactionResult
     public TransactionStatus Status { get; }
 
     /// <summary>
-    /// Gets a value indicating whether every condition held, so the writes on success applied.
+    /// Gets a value indicating whether every condition held and the writes on success applied; it is false when a
+    /// condition failed and when a session a write binds to has ended.
     /// </summary>
     public bool Succeeded => Status == TransactionStatus.Succeeded;
 
