@@ -14,7 +14,8 @@ kit. The central decisions are the product's scope ([D1](#d1-scope)), its origin
 declared guarantees ([D3](#d3-guarantees)), protocol-named providers ([D4](#d4-providers)), sessions with fencing
 tokens ([D5](#d5-sessions-and-fencing)), sequenced notifications without brokering ([D6](#d6-notifications)), one
 conformance kit ([D7](#d7-conformance)), the first stable release's scope ([D8](#d8-first-stable-release)) and expiry as
-a duration on a declared clock ([D9](#d9-expiry-clock)).
+a duration on a declared clock ([D9](#d9-expiry-clock)), and the shapes of the primitives' contracts
+([D10](#d10-contract-values) to [D15](#d15-counting-sequences-and-notifications)).
 
 ## Goals and Non-Goals
 
@@ -237,6 +238,36 @@ the server can, and rounded up to the server's units. A feature whose lifetime i
 a window's end, converts it on its own clock and adds an allowance for skew between nodes; holders of time-bound
 ownership give it up at a conservative local deadline and rely on fencing tokens.
 [ADR-1008](../decisions/1008-expiry-is-a-duration-on-the-providers-declared-clock-and-an-instant-becomes-one-at-the-caller-with-an-allowance-for-skew.md)
+
+### D10. Contract values
+
+Every value of the contracts is a sealed record class, so no default instance skips validation.
+[ADR-1010](../decisions/1010-vocabulary-values-are-sealed-record-classes-so-no-default-instance-skips-validation.md)
+
+### D11. Outcomes and failures
+
+An operation returns its outcome, and throws a coded failure that says whether it may have taken effect.
+[ADR-1011](../decisions/1011-an-operation-returns-its-outcome-and-throws-a-coded-failure-that-says-whether-it-may-have-taken-effect.md)
+
+### D12. Primitive interfaces and operations
+
+Each primitive is an interface whose operations are named with the guarantee dimensions they carry.
+[ADR-1012](../decisions/1012-each-primitive-is-an-interface-whose-operations-are-named-with-the-guarantee-dimensions-they-carry.md)
+
+### D13. Ownership
+
+Ownership is granted with a fencing token and an owner token, and bound to a session or a time to live.
+[ADR-1013](../decisions/1013-ownership-is-granted-with-a-fencing-token-and-an-owner-token-and-bound-to-a-session-or-a-time-to-live.md)
+
+### D14. Records, watches and transactions
+
+Records carry a keyspace-wide revision, and watches and transactions are written in it.
+[ADR-1014](../decisions/1014-records-carry-a-keyspace-wide-revision-and-watches-and-transactions-are-written-in-it.md)
+
+### D15. Counting, sequences and notifications
+
+Occurrences fail closed, windows align to the epoch, and notifications number each topic's messages.
+[ADR-1015](../decisions/1015-occurrences-fail-closed-windows-align-to-the-epoch-and-notifications-number-each-topics-messages.md)
 
 ## Open Questions
 

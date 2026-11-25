@@ -10,7 +10,7 @@ requirements.
 
 | Component | Role |
 | --- | --- |
-| `NCode.Coordination.Abstractions` | The vocabulary every contract is written in: structured keys, the guarantee vocabulary, expiry as a time to live, and the declarations and requirements the composition checks. |
+| `NCode.Coordination.Abstractions` | The contracts: an interface per primitive with its named operations, outcomes and failures, structured keys, the guarantee vocabulary, expiry and time windows, and the declarations and requirements the composition checks. |
 
 [The design](designs/coordination.md#packages) names the other packages and the phase that builds each.
 

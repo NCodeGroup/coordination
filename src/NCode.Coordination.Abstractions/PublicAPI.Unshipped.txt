@@ -1,5 +1,26 @@
 #nullable enable
+const NCode.Coordination.CoordinationErrorCodes.AccessDenied = "access-denied" -> string!
+const NCode.Coordination.CoordinationErrorCodes.LimitExceeded = "limit-exceeded" -> string!
+const NCode.Coordination.CoordinationErrorCodes.Unavailable = "unavailable" -> string!
+const NCode.Coordination.CoordinationErrorCodes.Unsupported = "unsupported" -> string!
 const NCode.Coordination.CoordinationKey.MaxSegments = 16 -> int
+const NCode.Coordination.CoordinationLimits.MaxAddressLength = 256 -> int
+const NCode.Coordination.CoordinationLimits.MaxBatchIncrements = 16 -> int
+const NCode.Coordination.CoordinationLimits.MaxContinuationTokenLength = 1024 -> int
+const NCode.Coordination.CoordinationLimits.MaxExtensions = 32 -> int
+const NCode.Coordination.CoordinationLimits.MaxExtensionValueLength = 1024 -> int
+const NCode.Coordination.CoordinationLimits.MaxMetadataEntries = 64 -> int
+const NCode.Coordination.CoordinationLimits.MaxMetadataValueLength = 512 -> int
+const NCode.Coordination.CoordinationLimits.MaxPageSize = 1000 -> int
+const NCode.Coordination.CoordinationLimits.MaxPayloadLength = 4096 -> int
+const NCode.Coordination.CoordinationLimits.MaxSemaphoreCapacity = 1024 -> int
+const NCode.Coordination.CoordinationLimits.MaxSequenceBlock = 65536 -> int
+const NCode.Coordination.CoordinationLimits.MaxSetMembers = 10000 -> int
+const NCode.Coordination.CoordinationLimits.MaxTokenLength = 128 -> int
+const NCode.Coordination.CoordinationLimits.MaxTransactionConditions = 64 -> int
+const NCode.Coordination.CoordinationLimits.MaxTransactionWrites = 64 -> int
+const NCode.Coordination.CoordinationLimits.MaxValueLength = 65536 -> int
+const NCode.Coordination.GuaranteeDimensions.Atomicity = "atomicity" -> string!
 const NCode.Coordination.GuaranteeDimensions.Consistency = "consistency" -> string!
 const NCode.Coordination.GuaranteeDimensions.Delivery = "delivery" -> string!
 const NCode.Coordination.GuaranteeDimensions.Durability = "durability" -> string!
@@ -7,6 +28,15 @@ const NCode.Coordination.GuaranteeDimensions.Expiry = "expiry" -> string!
 const NCode.Coordination.KeySegment.MaxTextLength = 256 -> int
 const NCode.Coordination.Keyspace.MaxClusterLength = 63 -> int
 const NCode.Coordination.Keyspace.MaxSegments = 8 -> int
+NCode.Coordination.ClaimStatus
+NCode.Coordination.ClaimStatus.Claimed = 0 -> NCode.Coordination.ClaimStatus
+NCode.Coordination.ClaimStatus.Taken = 1 -> NCode.Coordination.ClaimStatus
+NCode.Coordination.CoordinationErrorCodes
+NCode.Coordination.CoordinationException
+NCode.Coordination.CoordinationException.Code.get -> string!
+NCode.Coordination.CoordinationException.CoordinationException(string! code, bool outcomeUnknown, string! message, System.Exception? innerException) -> void
+NCode.Coordination.CoordinationException.CoordinationException(string! code, bool outcomeUnknown, string! message) -> void
+NCode.Coordination.CoordinationException.OutcomeUnknown.get -> bool
 NCode.Coordination.CoordinationKey
 NCode.Coordination.CoordinationKey.<Clone>$() -> NCode.Coordination.CoordinationKey!
 NCode.Coordination.CoordinationKey.CoordinationKey(NCode.Coordination.Keyspace! keyspace, params System.Collections.Generic.IEnumerable<NCode.Coordination.KeySegment!>! segments) -> void
@@ -16,6 +46,30 @@ NCode.Coordination.CoordinationKey.Keyspace.get -> NCode.Coordination.Keyspace!
 NCode.Coordination.CoordinationKey.PartitionDepth.get -> int
 NCode.Coordination.CoordinationKey.PartitionDepth.init -> void
 NCode.Coordination.CoordinationKey.Segments.get -> System.Collections.Immutable.ImmutableArray<NCode.Coordination.KeySegment!>
+NCode.Coordination.CoordinationLimits
+NCode.Coordination.CounterBatchResult
+NCode.Coordination.CounterBatchResult.CounterBatchResult(System.Collections.Generic.IEnumerable<long>! counts) -> void
+NCode.Coordination.CounterBatchResult.Counts.get -> System.Collections.Immutable.ImmutableArray<long>
+NCode.Coordination.CounterBatchResult.ExceededIndex.get -> int?
+NCode.Coordination.CounterBatchResult.ExceededIndex.init -> void
+NCode.Coordination.CounterIncrement
+NCode.Coordination.CounterIncrement.Amount.get -> long
+NCode.Coordination.CounterIncrement.CounterIncrement(NCode.Coordination.CoordinationKey! key, long amount, long limit, NCode.Coordination.TimeToLive! timeToLive) -> void
+NCode.Coordination.CounterIncrement.Key.get -> NCode.Coordination.CoordinationKey!
+NCode.Coordination.CounterIncrement.Limit.get -> long
+NCode.Coordination.CounterIncrement.TimeToLive.get -> NCode.Coordination.TimeToLive!
+NCode.Coordination.ElectionResult
+NCode.Coordination.ElectionResult.IsElected.get -> bool
+NCode.Coordination.ElectionResult.Leadership.get -> NCode.Coordination.Leadership?
+NCode.Coordination.ElectionResult.Status.get -> NCode.Coordination.ElectionStatus
+NCode.Coordination.ElectionStatus
+NCode.Coordination.ElectionStatus.Elected = 0 -> NCode.Coordination.ElectionStatus
+NCode.Coordination.ElectionStatus.Led = 1 -> NCode.Coordination.ElectionStatus
+NCode.Coordination.ElectionStatus.SessionEnded = 2 -> NCode.Coordination.ElectionStatus
+NCode.Coordination.ElectionView
+NCode.Coordination.ElectionView.ElectionView(NCode.Coordination.CoordinationKey! role, NCode.Coordination.Leader? leader) -> void
+NCode.Coordination.ElectionView.Leader.get -> NCode.Coordination.Leader?
+NCode.Coordination.ElectionView.Role.get -> NCode.Coordination.CoordinationKey!
 NCode.Coordination.FeatureRequirement
 NCode.Coordination.FeatureRequirement.Feature.get -> string!
 NCode.Coordination.FeatureRequirement.FeatureRequirement(string! feature, NCode.Coordination.Primitive! primitive, params System.Collections.Generic.IEnumerable<NCode.Coordination.Guarantee!>! guarantees) -> void
@@ -23,6 +77,12 @@ NCode.Coordination.FeatureRequirement.Guarantees.get -> System.Collections.Immut
 NCode.Coordination.FeatureRequirement.Keyspace.get -> NCode.Coordination.Keyspace?
 NCode.Coordination.FeatureRequirement.Keyspace.init -> void
 NCode.Coordination.FeatureRequirement.Primitive.get -> NCode.Coordination.Primitive!
+NCode.Coordination.FencingToken
+NCode.Coordination.FencingToken.<Clone>$() -> NCode.Coordination.FencingToken!
+NCode.Coordination.FencingToken.CompareTo(NCode.Coordination.FencingToken? other) -> int
+NCode.Coordination.FencingToken.Equals(NCode.Coordination.FencingToken? other) -> bool
+NCode.Coordination.FencingToken.FencingToken(long value) -> void
+NCode.Coordination.FencingToken.Value.get -> long
 NCode.Coordination.Guarantee
 NCode.Coordination.Guarantee.<Clone>$() -> NCode.Coordination.Guarantee!
 NCode.Coordination.Guarantee.Equals(NCode.Coordination.Guarantee? other) -> bool
@@ -37,6 +97,71 @@ NCode.Coordination.GuaranteeDefinition.Implies.get -> System.Collections.Immutab
 NCode.Coordination.GuaranteeDefinition.Implies.init -> void
 NCode.Coordination.GuaranteeDimensions
 NCode.Coordination.Guarantees
+NCode.Coordination.IClaimService
+NCode.Coordination.IClaimService.TryClaimAsync(NCode.Coordination.CoordinationKey! name, NCode.Coordination.TimeWindow! window, NCode.Coordination.TimeToLive! timeToLive, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.ClaimStatus>
+NCode.Coordination.ICounterService
+NCode.Coordination.ICounterService.IncrementAsync(NCode.Coordination.CoordinationKey! key, long amount, NCode.Coordination.TimeToLive! timeToLive, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<long>
+NCode.Coordination.ICounterService.IncrementBatchAsync(System.Collections.Generic.IReadOnlyList<NCode.Coordination.CounterIncrement!>! increments, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.CounterBatchResult!>
+NCode.Coordination.ICounterService.ReadAsync(NCode.Coordination.CoordinationKey! key, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<long>
+NCode.Coordination.ICounterService.ResetAsync(NCode.Coordination.CoordinationKey! key, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
+NCode.Coordination.IElectionService
+NCode.Coordination.IElectionService.ReadAsync(NCode.Coordination.CoordinationKey! role, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.ElectionView!>
+NCode.Coordination.IElectionService.RenewAsync(NCode.Coordination.Leadership! leadership, NCode.Coordination.TimeToLive! timeToLive, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<bool>
+NCode.Coordination.IElectionService.ResignAsync(NCode.Coordination.Leadership! leadership, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<bool>
+NCode.Coordination.IElectionService.TryLeadAsync(NCode.Coordination.CoordinationKey! role, System.ReadOnlyMemory<byte> value, NCode.Coordination.LeaseTerms! terms, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.ElectionResult!>
+NCode.Coordination.IElectionService.WatchAsync(NCode.Coordination.CoordinationKey! role, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Collections.Generic.IAsyncEnumerable<NCode.Coordination.ElectionView!>!
+NCode.Coordination.ILeaseService
+NCode.Coordination.ILeaseService.ReleaseAsync(NCode.Coordination.LeaseGrant! grant, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<bool>
+NCode.Coordination.ILeaseService.RenewAsync(NCode.Coordination.LeaseGrant! grant, NCode.Coordination.TimeToLive! timeToLive, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<bool>
+NCode.Coordination.ILeaseService.TryAcquireAsync(NCode.Coordination.CoordinationKey! resource, NCode.Coordination.LeaseTerms! terms, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.LeaseAcquireResult!>
+NCode.Coordination.ILeaseService.WaitForReleaseAsync(NCode.Coordination.CoordinationKey! resource, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
+NCode.Coordination.IMembershipService
+NCode.Coordination.IMembershipService.JoinAsync(NCode.Coordination.CoordinationKey! group, NCode.Coordination.Member! member, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.MembershipJoinStatus>
+NCode.Coordination.IMembershipService.LeaveAsync(NCode.Coordination.CoordinationKey! group, NCode.Coordination.SessionId! session, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
+NCode.Coordination.IMembershipService.ReadAsync(NCode.Coordination.CoordinationKey! group, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.MembershipView!>
+NCode.Coordination.IMembershipService.WatchAsync(NCode.Coordination.CoordinationKey! group, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Collections.Generic.IAsyncEnumerable<NCode.Coordination.MembershipView!>!
+NCode.Coordination.INotificationService
+NCode.Coordination.INotificationService.PublishAsync(NCode.Coordination.CoordinationKey! topic, System.ReadOnlyMemory<byte> payload, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
+NCode.Coordination.INotificationService.SubscribeAsync(NCode.Coordination.CoordinationKey! topic, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Collections.Generic.IAsyncEnumerable<NCode.Coordination.Notification!>!
+NCode.Coordination.IOccurrenceService
+NCode.Coordination.IOccurrenceService.TryRecordAsync(NCode.Coordination.CoordinationKey! key, NCode.Coordination.TimeToLive! timeToLive, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.OccurrenceStatus>
+NCode.Coordination.IRecordService
+NCode.Coordination.IRecordService.CompareAndDeleteAsync(NCode.Coordination.CoordinationKey! key, NCode.Coordination.Revision! expected, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.RecordDeleteStatus>
+NCode.Coordination.IRecordService.CompareAndSwapAsync(NCode.Coordination.CoordinationKey! key, NCode.Coordination.Revision! expected, System.ReadOnlyMemory<byte> value, NCode.Coordination.RecordLifetime! lifetime, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.RecordWriteResult!>
+NCode.Coordination.IRecordService.CreateAsync(NCode.Coordination.CoordinationKey! key, System.ReadOnlyMemory<byte> value, NCode.Coordination.RecordLifetime! lifetime, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.RecordWriteResult!>
+NCode.Coordination.IRecordService.ListAsync(NCode.Coordination.CoordinationKey! prefix, NCode.Coordination.RecordPageRequest! page, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.RecordPage!>
+NCode.Coordination.IRecordService.ReadAsync(NCode.Coordination.CoordinationKey! key, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.StoredRecord?>
+NCode.Coordination.IRecordService.TakeAsync(NCode.Coordination.CoordinationKey! key, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.StoredRecord?>
+NCode.Coordination.IRecordWatchService
+NCode.Coordination.IRecordWatchService.WatchKeyAsync(NCode.Coordination.CoordinationKey! key, NCode.Coordination.Revision? after, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Collections.Generic.IAsyncEnumerable<NCode.Coordination.RecordChange!>!
+NCode.Coordination.IRecordWatchService.WatchPrefixAsync(NCode.Coordination.CoordinationKey! prefix, NCode.Coordination.Revision? after, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Collections.Generic.IAsyncEnumerable<NCode.Coordination.RecordChange!>!
+NCode.Coordination.ISemaphoreService
+NCode.Coordination.ISemaphoreService.ReleaseAsync(NCode.Coordination.SemaphoreGrant! grant, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<bool>
+NCode.Coordination.ISemaphoreService.RenewAsync(NCode.Coordination.SemaphoreGrant! grant, NCode.Coordination.TimeToLive! timeToLive, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<bool>
+NCode.Coordination.ISemaphoreService.TryAcquireAsync(NCode.Coordination.CoordinationKey! resource, int capacity, NCode.Coordination.LeaseTerms! terms, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.SemaphoreAcquireResult!>
+NCode.Coordination.ISemaphoreService.WaitForReleaseAsync(NCode.Coordination.CoordinationKey! resource, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
+NCode.Coordination.ISequenceService
+NCode.Coordination.ISequenceService.NextAsync(NCode.Coordination.CoordinationKey! key, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<long>
+NCode.Coordination.ISequenceService.ReserveAsync(NCode.Coordination.CoordinationKey! key, int count, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.SequenceBlock!>
+NCode.Coordination.ISessionService
+NCode.Coordination.ISessionService.CloseAsync(NCode.Coordination.SessionId! session, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
+NCode.Coordination.ISessionService.KeepAliveAsync(NCode.Coordination.SessionId! session, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.KeepAliveResult!>
+NCode.Coordination.ISessionService.OpenAsync(NCode.Coordination.Keyspace! keyspace, NCode.Coordination.TimeToLive! timeToLive, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.SessionGrant!>
+NCode.Coordination.ISessionService.WaitForEndAsync(NCode.Coordination.SessionId! session, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
+NCode.Coordination.ISetService
+NCode.Coordination.ISetService.AddAsync(NCode.Coordination.CoordinationKey! key, NCode.Coordination.KeySegment! member, NCode.Coordination.TimeToLive! timeToLive, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<bool>
+NCode.Coordination.ISetService.ClearAsync(NCode.Coordination.CoordinationKey! key, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
+NCode.Coordination.ISetService.ListAsync(NCode.Coordination.CoordinationKey! key, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<System.Collections.Immutable.ImmutableArray<NCode.Coordination.KeySegment!>>
+NCode.Coordination.ISetService.RemoveAsync(NCode.Coordination.CoordinationKey! key, NCode.Coordination.KeySegment! member, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<bool>
+NCode.Coordination.ITransactionService
+NCode.Coordination.ITransactionService.ExecuteAsync(NCode.Coordination.RecordTransaction! transaction, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.TransactionResult!>
+NCode.Coordination.KeepAliveResult
+NCode.Coordination.KeepAliveResult.IsRenewed.get -> bool
+NCode.Coordination.KeepAliveResult.Status.get -> NCode.Coordination.KeepAliveStatus
+NCode.Coordination.KeepAliveResult.TimeToLive.get -> NCode.Coordination.TimeToLive?
+NCode.Coordination.KeepAliveStatus
+NCode.Coordination.KeepAliveStatus.Ended = 1 -> NCode.Coordination.KeepAliveStatus
+NCode.Coordination.KeepAliveStatus.Renewed = 0 -> NCode.Coordination.KeepAliveStatus
 NCode.Coordination.KeySegment
 NCode.Coordination.KeySegment.<Clone>$() -> NCode.Coordination.KeySegment!
 NCode.Coordination.KeySegment.Equals(NCode.Coordination.KeySegment? other) -> bool
@@ -55,6 +180,82 @@ NCode.Coordination.Keyspace.CreateKey(params System.Collections.Generic.IEnumera
 NCode.Coordination.Keyspace.Equals(NCode.Coordination.Keyspace? other) -> bool
 NCode.Coordination.Keyspace.Keyspace(string! cluster, params System.Collections.Generic.IEnumerable<NCode.Coordination.KeySegment!>! segments) -> void
 NCode.Coordination.Keyspace.Segments.get -> System.Collections.Immutable.ImmutableArray<NCode.Coordination.KeySegment!>
+NCode.Coordination.Leader
+NCode.Coordination.Leader.Leader(NCode.Coordination.CoordinationKey! role, NCode.Coordination.FencingToken! term, System.ReadOnlyMemory<byte> value) -> void
+NCode.Coordination.Leader.Role.get -> NCode.Coordination.CoordinationKey!
+NCode.Coordination.Leader.Term.get -> NCode.Coordination.FencingToken!
+NCode.Coordination.Leader.Value.get -> System.ReadOnlyMemory<byte>
+NCode.Coordination.Leadership
+NCode.Coordination.Leadership.Leader.get -> NCode.Coordination.Leader!
+NCode.Coordination.Leadership.Leadership(NCode.Coordination.Leader! leader, NCode.Coordination.OwnerToken! owner, NCode.Coordination.LeaseTerms! terms) -> void
+NCode.Coordination.Leadership.Owner.get -> NCode.Coordination.OwnerToken!
+NCode.Coordination.Leadership.Terms.get -> NCode.Coordination.LeaseTerms!
+NCode.Coordination.LeaseAcquireResult
+NCode.Coordination.LeaseAcquireResult.Grant.get -> NCode.Coordination.LeaseGrant?
+NCode.Coordination.LeaseAcquireResult.IsAcquired.get -> bool
+NCode.Coordination.LeaseAcquireResult.Status.get -> NCode.Coordination.LeaseAcquireStatus
+NCode.Coordination.LeaseAcquireStatus
+NCode.Coordination.LeaseAcquireStatus.Acquired = 0 -> NCode.Coordination.LeaseAcquireStatus
+NCode.Coordination.LeaseAcquireStatus.Held = 1 -> NCode.Coordination.LeaseAcquireStatus
+NCode.Coordination.LeaseAcquireStatus.SessionEnded = 2 -> NCode.Coordination.LeaseAcquireStatus
+NCode.Coordination.LeaseGrant
+NCode.Coordination.LeaseGrant.FencingToken.get -> NCode.Coordination.FencingToken!
+NCode.Coordination.LeaseGrant.LeaseGrant(NCode.Coordination.CoordinationKey! resource, NCode.Coordination.FencingToken! fencingToken, NCode.Coordination.OwnerToken! owner, NCode.Coordination.LeaseTerms! terms) -> void
+NCode.Coordination.LeaseGrant.Owner.get -> NCode.Coordination.OwnerToken!
+NCode.Coordination.LeaseGrant.Resource.get -> NCode.Coordination.CoordinationKey!
+NCode.Coordination.LeaseGrant.Terms.get -> NCode.Coordination.LeaseTerms!
+NCode.Coordination.LeaseTerms
+NCode.Coordination.LeaseTerms.IsBoundToSession.get -> bool
+NCode.Coordination.LeaseTerms.Session.get -> NCode.Coordination.SessionId?
+NCode.Coordination.LeaseTerms.TimeToLive.get -> NCode.Coordination.TimeToLive?
+NCode.Coordination.Member
+NCode.Coordination.Member.Address.get -> string!
+NCode.Coordination.Member.Member(NCode.Coordination.SessionId! session, string! nodeId, string! address) -> void
+NCode.Coordination.Member.Metadata.get -> System.Collections.Immutable.ImmutableDictionary<string!, string!>!
+NCode.Coordination.Member.Metadata.init -> void
+NCode.Coordination.Member.NodeId.get -> string!
+NCode.Coordination.Member.Session.get -> NCode.Coordination.SessionId!
+NCode.Coordination.MembershipJoinStatus
+NCode.Coordination.MembershipJoinStatus.Joined = 0 -> NCode.Coordination.MembershipJoinStatus
+NCode.Coordination.MembershipJoinStatus.NodeIdTaken = 1 -> NCode.Coordination.MembershipJoinStatus
+NCode.Coordination.MembershipJoinStatus.SessionEnded = 2 -> NCode.Coordination.MembershipJoinStatus
+NCode.Coordination.MembershipView
+NCode.Coordination.MembershipView.Group.get -> NCode.Coordination.CoordinationKey!
+NCode.Coordination.MembershipView.Members.get -> System.Collections.Immutable.ImmutableArray<NCode.Coordination.Member!>
+NCode.Coordination.MembershipView.MembershipView(NCode.Coordination.CoordinationKey! group, NCode.Coordination.Revision! revision, params System.Collections.Generic.IEnumerable<NCode.Coordination.Member!>! members) -> void
+NCode.Coordination.MembershipView.Revision.get -> NCode.Coordination.Revision!
+NCode.Coordination.Notification
+NCode.Coordination.Notification.IsResync.get -> bool
+NCode.Coordination.Notification.Kind.get -> NCode.Coordination.NotificationKind
+NCode.Coordination.Notification.Payload.get -> System.ReadOnlyMemory<byte>
+NCode.Coordination.Notification.Sequence.get -> long
+NCode.Coordination.Notification.Topic.get -> NCode.Coordination.CoordinationKey!
+NCode.Coordination.NotificationKind
+NCode.Coordination.NotificationKind.Message = 0 -> NCode.Coordination.NotificationKind
+NCode.Coordination.NotificationKind.Resync = 1 -> NCode.Coordination.NotificationKind
+NCode.Coordination.OccurrenceStatus
+NCode.Coordination.OccurrenceStatus.Duplicate = 1 -> NCode.Coordination.OccurrenceStatus
+NCode.Coordination.OccurrenceStatus.Recorded = 0 -> NCode.Coordination.OccurrenceStatus
+NCode.Coordination.Operation
+NCode.Coordination.Operation.<Clone>$() -> NCode.Coordination.Operation!
+NCode.Coordination.Operation.Equals(NCode.Coordination.Operation? other) -> bool
+NCode.Coordination.Operation.Name.get -> string!
+NCode.Coordination.Operation.Operation(string! name) -> void
+NCode.Coordination.OperationDefinition
+NCode.Coordination.OperationDefinition.Dimensions.get -> System.Collections.Immutable.ImmutableArray<string!>
+NCode.Coordination.OperationDefinition.Operation.get -> NCode.Coordination.Operation!
+NCode.Coordination.OperationDefinition.OperationDefinition(NCode.Coordination.Operation! operation, NCode.Coordination.Primitive! primitive, params System.Collections.Generic.IEnumerable<string!>! dimensions) -> void
+NCode.Coordination.OperationDefinition.Primitive.get -> NCode.Coordination.Primitive!
+NCode.Coordination.OperationOptions
+NCode.Coordination.OperationOptions.Extensions.get -> System.Collections.Immutable.ImmutableDictionary<string!, string!>!
+NCode.Coordination.OperationOptions.Extensions.init -> void
+NCode.Coordination.OperationOptions.OperationOptions() -> void
+NCode.Coordination.Operations
+NCode.Coordination.OwnerToken
+NCode.Coordination.OwnerToken.<Clone>$() -> NCode.Coordination.OwnerToken!
+NCode.Coordination.OwnerToken.Equals(NCode.Coordination.OwnerToken? other) -> bool
+NCode.Coordination.OwnerToken.OwnerToken(string! value) -> void
+NCode.Coordination.OwnerToken.Value.get -> string!
 NCode.Coordination.Primitive
 NCode.Coordination.Primitive.<Clone>$() -> NCode.Coordination.Primitive!
 NCode.Coordination.Primitive.Equals(NCode.Coordination.Primitive? other) -> bool
@@ -74,14 +275,134 @@ NCode.Coordination.ProviderDeclaration.Profile.get -> string?
 NCode.Coordination.ProviderDeclaration.Profile.init -> void
 NCode.Coordination.ProviderDeclaration.Provider.get -> string!
 NCode.Coordination.ProviderDeclaration.ProviderDeclaration(string! provider, params System.Collections.Generic.IEnumerable<NCode.Coordination.PrimitiveSupport!>! primitives) -> void
+NCode.Coordination.RecordChange
+NCode.Coordination.RecordChange.IsResync.get -> bool
+NCode.Coordination.RecordChange.Key.get -> NCode.Coordination.CoordinationKey?
+NCode.Coordination.RecordChange.Kind.get -> NCode.Coordination.RecordChangeKind
+NCode.Coordination.RecordChange.Record.get -> NCode.Coordination.StoredRecord?
+NCode.Coordination.RecordChange.Revision.get -> NCode.Coordination.Revision!
+NCode.Coordination.RecordChangeKind
+NCode.Coordination.RecordChangeKind.Deleted = 1 -> NCode.Coordination.RecordChangeKind
+NCode.Coordination.RecordChangeKind.Resync = 2 -> NCode.Coordination.RecordChangeKind
+NCode.Coordination.RecordChangeKind.Written = 0 -> NCode.Coordination.RecordChangeKind
+NCode.Coordination.RecordCondition
+NCode.Coordination.RecordCondition.Key.get -> NCode.Coordination.CoordinationKey!
+NCode.Coordination.RecordCondition.Kind.get -> NCode.Coordination.RecordConditionKind
+NCode.Coordination.RecordCondition.Revision.get -> NCode.Coordination.Revision?
+NCode.Coordination.RecordCondition.Value.get -> System.ReadOnlyMemory<byte>
+NCode.Coordination.RecordConditionKind
+NCode.Coordination.RecordConditionKind.Absent = 0 -> NCode.Coordination.RecordConditionKind
+NCode.Coordination.RecordConditionKind.RevisionEquals = 1 -> NCode.Coordination.RecordConditionKind
+NCode.Coordination.RecordConditionKind.ValueEquals = 2 -> NCode.Coordination.RecordConditionKind
+NCode.Coordination.RecordDeleteStatus
+NCode.Coordination.RecordDeleteStatus.Conflict = 1 -> NCode.Coordination.RecordDeleteStatus
+NCode.Coordination.RecordDeleteStatus.Deleted = 0 -> NCode.Coordination.RecordDeleteStatus
+NCode.Coordination.RecordDeleteStatus.NotFound = 2 -> NCode.Coordination.RecordDeleteStatus
+NCode.Coordination.RecordLifetime
+NCode.Coordination.RecordLifetime.IsPersistent.get -> bool
+NCode.Coordination.RecordLifetime.Session.get -> NCode.Coordination.SessionId?
+NCode.Coordination.RecordLifetime.TimeToLive.get -> NCode.Coordination.TimeToLive?
+NCode.Coordination.RecordPage
+NCode.Coordination.RecordPage.ContinuationToken.get -> string?
+NCode.Coordination.RecordPage.ContinuationToken.init -> void
+NCode.Coordination.RecordPage.RecordPage(NCode.Coordination.Revision! revision, params System.Collections.Generic.IEnumerable<NCode.Coordination.StoredRecord!>! records) -> void
+NCode.Coordination.RecordPage.Records.get -> System.Collections.Immutable.ImmutableArray<NCode.Coordination.StoredRecord!>
+NCode.Coordination.RecordPage.Revision.get -> NCode.Coordination.Revision!
+NCode.Coordination.RecordPageRequest
+NCode.Coordination.RecordPageRequest.ContinuationToken.get -> string?
+NCode.Coordination.RecordPageRequest.ContinuationToken.init -> void
+NCode.Coordination.RecordPageRequest.Limit.get -> int
+NCode.Coordination.RecordPageRequest.RecordPageRequest(int limit) -> void
+NCode.Coordination.RecordTransaction
+NCode.Coordination.RecordTransaction.Conditions.get -> System.Collections.Immutable.ImmutableArray<NCode.Coordination.RecordCondition!>
+NCode.Coordination.RecordTransaction.Keyspace.get -> NCode.Coordination.Keyspace!
+NCode.Coordination.RecordTransaction.OnFailure.get -> System.Collections.Immutable.ImmutableArray<NCode.Coordination.RecordWrite!>
+NCode.Coordination.RecordTransaction.OnFailure.init -> void
+NCode.Coordination.RecordTransaction.OnSuccess.get -> System.Collections.Immutable.ImmutableArray<NCode.Coordination.RecordWrite!>
+NCode.Coordination.RecordTransaction.RecordTransaction(System.Collections.Generic.IEnumerable<NCode.Coordination.RecordCondition!>! conditions, System.Collections.Generic.IEnumerable<NCode.Coordination.RecordWrite!>! onSuccess) -> void
+NCode.Coordination.RecordWrite
+NCode.Coordination.RecordWrite.Key.get -> NCode.Coordination.CoordinationKey!
+NCode.Coordination.RecordWrite.Kind.get -> NCode.Coordination.RecordWriteKind
+NCode.Coordination.RecordWrite.Lifetime.get -> NCode.Coordination.RecordLifetime?
+NCode.Coordination.RecordWrite.Value.get -> System.ReadOnlyMemory<byte>
+NCode.Coordination.RecordWriteKind
+NCode.Coordination.RecordWriteKind.Delete = 1 -> NCode.Coordination.RecordWriteKind
+NCode.Coordination.RecordWriteKind.Put = 0 -> NCode.Coordination.RecordWriteKind
+NCode.Coordination.RecordWriteResult
+NCode.Coordination.RecordWriteResult.IsWritten.get -> bool
+NCode.Coordination.RecordWriteResult.Revision.get -> NCode.Coordination.Revision?
+NCode.Coordination.RecordWriteResult.Status.get -> NCode.Coordination.RecordWriteStatus
+NCode.Coordination.RecordWriteStatus
+NCode.Coordination.RecordWriteStatus.Conflict = 1 -> NCode.Coordination.RecordWriteStatus
+NCode.Coordination.RecordWriteStatus.NotFound = 2 -> NCode.Coordination.RecordWriteStatus
+NCode.Coordination.RecordWriteStatus.SessionEnded = 3 -> NCode.Coordination.RecordWriteStatus
+NCode.Coordination.RecordWriteStatus.Written = 0 -> NCode.Coordination.RecordWriteStatus
+NCode.Coordination.Revision
+NCode.Coordination.Revision.<Clone>$() -> NCode.Coordination.Revision!
+NCode.Coordination.Revision.CompareTo(NCode.Coordination.Revision? other) -> int
+NCode.Coordination.Revision.Equals(NCode.Coordination.Revision? other) -> bool
+NCode.Coordination.Revision.Revision(long value) -> void
+NCode.Coordination.Revision.Value.get -> long
+NCode.Coordination.SemaphoreAcquireResult
+NCode.Coordination.SemaphoreAcquireResult.Grant.get -> NCode.Coordination.SemaphoreGrant?
+NCode.Coordination.SemaphoreAcquireResult.IsAcquired.get -> bool
+NCode.Coordination.SemaphoreAcquireResult.Status.get -> NCode.Coordination.SemaphoreAcquireStatus
+NCode.Coordination.SemaphoreAcquireStatus
+NCode.Coordination.SemaphoreAcquireStatus.Acquired = 0 -> NCode.Coordination.SemaphoreAcquireStatus
+NCode.Coordination.SemaphoreAcquireStatus.CapacityConflict = 2 -> NCode.Coordination.SemaphoreAcquireStatus
+NCode.Coordination.SemaphoreAcquireStatus.Full = 1 -> NCode.Coordination.SemaphoreAcquireStatus
+NCode.Coordination.SemaphoreAcquireStatus.SessionEnded = 3 -> NCode.Coordination.SemaphoreAcquireStatus
+NCode.Coordination.SemaphoreGrant
+NCode.Coordination.SemaphoreGrant.FencingToken.get -> NCode.Coordination.FencingToken!
+NCode.Coordination.SemaphoreGrant.Owner.get -> NCode.Coordination.OwnerToken!
+NCode.Coordination.SemaphoreGrant.Resource.get -> NCode.Coordination.CoordinationKey!
+NCode.Coordination.SemaphoreGrant.SemaphoreGrant(NCode.Coordination.CoordinationKey! resource, int slot, NCode.Coordination.FencingToken! fencingToken, NCode.Coordination.OwnerToken! owner, NCode.Coordination.LeaseTerms! terms) -> void
+NCode.Coordination.SemaphoreGrant.Slot.get -> int
+NCode.Coordination.SemaphoreGrant.Terms.get -> NCode.Coordination.LeaseTerms!
+NCode.Coordination.SequenceBlock
+NCode.Coordination.SequenceBlock.Count.get -> int
+NCode.Coordination.SequenceBlock.First.get -> long
+NCode.Coordination.SequenceBlock.Last.get -> long
+NCode.Coordination.SequenceBlock.SequenceBlock(long first, int count) -> void
+NCode.Coordination.SessionGrant
+NCode.Coordination.SessionGrant.Id.get -> NCode.Coordination.SessionId!
+NCode.Coordination.SessionGrant.SessionGrant(NCode.Coordination.SessionId! id, NCode.Coordination.TimeToLive! timeToLive) -> void
+NCode.Coordination.SessionGrant.TimeToLive.get -> NCode.Coordination.TimeToLive!
+NCode.Coordination.SessionId
+NCode.Coordination.SessionId.<Clone>$() -> NCode.Coordination.SessionId!
+NCode.Coordination.SessionId.Equals(NCode.Coordination.SessionId? other) -> bool
+NCode.Coordination.SessionId.Keyspace.get -> NCode.Coordination.Keyspace!
+NCode.Coordination.SessionId.SessionId(NCode.Coordination.Keyspace! keyspace, string! value) -> void
+NCode.Coordination.SessionId.Value.get -> string!
+NCode.Coordination.StoredRecord
+NCode.Coordination.StoredRecord.Key.get -> NCode.Coordination.CoordinationKey!
+NCode.Coordination.StoredRecord.Revision.get -> NCode.Coordination.Revision!
+NCode.Coordination.StoredRecord.StoredRecord(NCode.Coordination.CoordinationKey! key, System.ReadOnlyMemory<byte> value, NCode.Coordination.Revision! revision) -> void
+NCode.Coordination.StoredRecord.Value.get -> System.ReadOnlyMemory<byte>
 NCode.Coordination.TimeToLive
 NCode.Coordination.TimeToLive.<Clone>$() -> NCode.Coordination.TimeToLive!
 NCode.Coordination.TimeToLive.Duration.get -> System.TimeSpan
 NCode.Coordination.TimeToLive.Equals(NCode.Coordination.TimeToLive? other) -> bool
 NCode.Coordination.TimeToLive.TimeToLive(System.TimeSpan duration) -> void
+NCode.Coordination.TimeWindow
+NCode.Coordination.TimeWindow.<Clone>$() -> NCode.Coordination.TimeWindow!
+NCode.Coordination.TimeWindow.End.get -> System.DateTimeOffset
+NCode.Coordination.TimeWindow.Equals(NCode.Coordination.TimeWindow? other) -> bool
+NCode.Coordination.TimeWindow.Length.get -> System.TimeSpan
+NCode.Coordination.TimeWindow.Segment.get -> NCode.Coordination.KeySegment!
+NCode.Coordination.TimeWindow.Start.get -> System.DateTimeOffset
+NCode.Coordination.TimeWindow.TimeWindow(System.DateTimeOffset start, System.TimeSpan length) -> void
+NCode.Coordination.TimeWindow.TryCreateTimeToLive(System.DateTimeOffset now, System.TimeSpan skewAllowance, out NCode.Coordination.TimeToLive? timeToLive) -> bool
+NCode.Coordination.TransactionResult
+NCode.Coordination.TransactionResult.Revision.get -> NCode.Coordination.Revision!
+NCode.Coordination.TransactionResult.Succeeded.get -> bool
+NCode.Coordination.TransactionResult.TransactionResult(bool succeeded, NCode.Coordination.Revision! revision) -> void
 override NCode.Coordination.CoordinationKey.Equals(object? obj) -> bool
 override NCode.Coordination.CoordinationKey.GetHashCode() -> int
 override NCode.Coordination.CoordinationKey.ToString() -> string!
+override NCode.Coordination.FencingToken.Equals(object? obj) -> bool
+override NCode.Coordination.FencingToken.GetHashCode() -> int
+override NCode.Coordination.FencingToken.ToString() -> string!
 override NCode.Coordination.Guarantee.Equals(object? obj) -> bool
 override NCode.Coordination.Guarantee.GetHashCode() -> int
 override NCode.Coordination.Guarantee.ToString() -> string!
@@ -91,18 +412,44 @@ override NCode.Coordination.KeySegment.ToString() -> string!
 override NCode.Coordination.Keyspace.Equals(object? obj) -> bool
 override NCode.Coordination.Keyspace.GetHashCode() -> int
 override NCode.Coordination.Keyspace.ToString() -> string!
+override NCode.Coordination.Operation.Equals(object? obj) -> bool
+override NCode.Coordination.Operation.GetHashCode() -> int
+override NCode.Coordination.Operation.ToString() -> string!
+override NCode.Coordination.OwnerToken.Equals(object? obj) -> bool
+override NCode.Coordination.OwnerToken.GetHashCode() -> int
+override NCode.Coordination.OwnerToken.ToString() -> string!
 override NCode.Coordination.Primitive.Equals(object? obj) -> bool
 override NCode.Coordination.Primitive.GetHashCode() -> int
 override NCode.Coordination.Primitive.ToString() -> string!
+override NCode.Coordination.Revision.Equals(object? obj) -> bool
+override NCode.Coordination.Revision.GetHashCode() -> int
+override NCode.Coordination.Revision.ToString() -> string!
+override NCode.Coordination.SessionId.Equals(object? obj) -> bool
+override NCode.Coordination.SessionId.GetHashCode() -> int
+override NCode.Coordination.SessionId.ToString() -> string!
 override NCode.Coordination.TimeToLive.Equals(object? obj) -> bool
 override NCode.Coordination.TimeToLive.GetHashCode() -> int
 override NCode.Coordination.TimeToLive.ToString() -> string!
+override NCode.Coordination.TimeWindow.Equals(object? obj) -> bool
+override NCode.Coordination.TimeWindow.GetHashCode() -> int
+override NCode.Coordination.TimeWindow.ToString() -> string!
 static NCode.Coordination.CoordinationKey.operator !=(NCode.Coordination.CoordinationKey? left, NCode.Coordination.CoordinationKey? right) -> bool
 static NCode.Coordination.CoordinationKey.operator ==(NCode.Coordination.CoordinationKey? left, NCode.Coordination.CoordinationKey? right) -> bool
+static NCode.Coordination.ElectionResult.Elected(NCode.Coordination.Leadership! leadership) -> NCode.Coordination.ElectionResult!
+static NCode.Coordination.ElectionResult.Led.get -> NCode.Coordination.ElectionResult!
+static NCode.Coordination.ElectionResult.SessionEnded.get -> NCode.Coordination.ElectionResult!
+static NCode.Coordination.FencingToken.operator !=(NCode.Coordination.FencingToken? left, NCode.Coordination.FencingToken? right) -> bool
+static NCode.Coordination.FencingToken.operator <(NCode.Coordination.FencingToken? left, NCode.Coordination.FencingToken? right) -> bool
+static NCode.Coordination.FencingToken.operator <=(NCode.Coordination.FencingToken? left, NCode.Coordination.FencingToken? right) -> bool
+static NCode.Coordination.FencingToken.operator ==(NCode.Coordination.FencingToken? left, NCode.Coordination.FencingToken? right) -> bool
+static NCode.Coordination.FencingToken.operator >(NCode.Coordination.FencingToken? left, NCode.Coordination.FencingToken? right) -> bool
+static NCode.Coordination.FencingToken.operator >=(NCode.Coordination.FencingToken? left, NCode.Coordination.FencingToken? right) -> bool
 static NCode.Coordination.Guarantee.operator !=(NCode.Coordination.Guarantee? left, NCode.Coordination.Guarantee? right) -> bool
 static NCode.Coordination.Guarantee.operator ==(NCode.Coordination.Guarantee? left, NCode.Coordination.Guarantee? right) -> bool
 static NCode.Coordination.Guarantees.AtMostOnce.get -> NCode.Coordination.Guarantee!
 static NCode.Coordination.Guarantees.AtMostOnceWithGapDetection.get -> NCode.Coordination.Guarantee!
+static NCode.Coordination.Guarantees.AtomicAcrossPartitions.get -> NCode.Coordination.Guarantee!
+static NCode.Coordination.Guarantees.AtomicWithinPartition.get -> NCode.Coordination.Guarantee!
 static NCode.Coordination.Guarantees.CallerClock.get -> NCode.Coordination.Guarantee!
 static NCode.Coordination.Guarantees.Definitions.get -> System.Collections.Immutable.ImmutableArray<NCode.Coordination.GuaranteeDefinition!>
 static NCode.Coordination.Guarantees.Durable.get -> NCode.Coordination.Guarantee!
@@ -112,6 +459,8 @@ static NCode.Coordination.Guarantees.LinearizableWithinProcess.get -> NCode.Coor
 static NCode.Coordination.Guarantees.ReplicatedAsynchronously.get -> NCode.Coordination.Guarantee!
 static NCode.Coordination.Guarantees.ServerClock.get -> NCode.Coordination.Guarantee!
 static NCode.Coordination.Guarantees.Volatile.get -> NCode.Coordination.Guarantee!
+static NCode.Coordination.KeepAliveResult.Ended.get -> NCode.Coordination.KeepAliveResult!
+static NCode.Coordination.KeepAliveResult.Renewed(NCode.Coordination.TimeToLive! timeToLive) -> NCode.Coordination.KeepAliveResult!
 static NCode.Coordination.KeySegment.FromGuid(System.Guid value) -> NCode.Coordination.KeySegment!
 static NCode.Coordination.KeySegment.FromInt64(long value) -> NCode.Coordination.KeySegment!
 static NCode.Coordination.KeySegment.FromString(string! text) -> NCode.Coordination.KeySegment!
@@ -122,6 +471,62 @@ static NCode.Coordination.KeySegment.operator !=(NCode.Coordination.KeySegment? 
 static NCode.Coordination.KeySegment.operator ==(NCode.Coordination.KeySegment? left, NCode.Coordination.KeySegment? right) -> bool
 static NCode.Coordination.Keyspace.operator !=(NCode.Coordination.Keyspace? left, NCode.Coordination.Keyspace? right) -> bool
 static NCode.Coordination.Keyspace.operator ==(NCode.Coordination.Keyspace? left, NCode.Coordination.Keyspace? right) -> bool
+static NCode.Coordination.LeaseAcquireResult.Acquired(NCode.Coordination.LeaseGrant! grant) -> NCode.Coordination.LeaseAcquireResult!
+static NCode.Coordination.LeaseAcquireResult.Held.get -> NCode.Coordination.LeaseAcquireResult!
+static NCode.Coordination.LeaseAcquireResult.SessionEnded.get -> NCode.Coordination.LeaseAcquireResult!
+static NCode.Coordination.LeaseTerms.ForSession(NCode.Coordination.SessionId! session) -> NCode.Coordination.LeaseTerms!
+static NCode.Coordination.LeaseTerms.ForTimeToLive(NCode.Coordination.TimeToLive! timeToLive) -> NCode.Coordination.LeaseTerms!
+static NCode.Coordination.Notification.Message(NCode.Coordination.CoordinationKey! topic, long sequence, System.ReadOnlyMemory<byte> payload) -> NCode.Coordination.Notification!
+static NCode.Coordination.Notification.Resync(NCode.Coordination.CoordinationKey! topic, long sequence) -> NCode.Coordination.Notification!
+static NCode.Coordination.Operation.operator !=(NCode.Coordination.Operation? left, NCode.Coordination.Operation? right) -> bool
+static NCode.Coordination.Operation.operator ==(NCode.Coordination.Operation? left, NCode.Coordination.Operation? right) -> bool
+static NCode.Coordination.Operations.ClaimTryClaim.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.CounterIncrement.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.CounterIncrementBatch.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.CounterRead.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.CounterReset.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.Definitions.get -> System.Collections.Immutable.ImmutableArray<NCode.Coordination.OperationDefinition!>
+static NCode.Coordination.Operations.ElectionRead.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.ElectionRenew.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.ElectionResign.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.ElectionTryLead.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.ElectionWatch.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.LeaseRelease.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.LeaseRenew.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.LeaseTryAcquire.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.LeaseWaitForRelease.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.MembershipJoin.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.MembershipLeave.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.MembershipRead.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.MembershipWatch.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.NotificationPublish.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.NotificationSubscribe.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.OccurrenceTryRecord.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.RecordCompareAndDelete.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.RecordCompareAndSwap.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.RecordCreate.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.RecordList.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.RecordRead.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.RecordTake.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.RecordWatchKey.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.RecordWatchPrefix.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.SemaphoreRelease.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.SemaphoreRenew.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.SemaphoreTryAcquire.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.SemaphoreWaitForRelease.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.SequenceNext.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.SequenceReserve.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.SessionClose.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.SessionKeepAlive.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.SessionOpen.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.SessionWaitForEnd.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.SetAdd.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.SetClear.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.SetList.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.SetRemove.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.TransactionExecute.get -> NCode.Coordination.Operation!
+static NCode.Coordination.OwnerToken.operator !=(NCode.Coordination.OwnerToken? left, NCode.Coordination.OwnerToken? right) -> bool
+static NCode.Coordination.OwnerToken.operator ==(NCode.Coordination.OwnerToken? left, NCode.Coordination.OwnerToken? right) -> bool
 static NCode.Coordination.Primitive.operator !=(NCode.Coordination.Primitive? left, NCode.Coordination.Primitive? right) -> bool
 static NCode.Coordination.Primitive.operator ==(NCode.Coordination.Primitive? left, NCode.Coordination.Primitive? right) -> bool
 static NCode.Coordination.Primitives.All.get -> System.Collections.Immutable.ImmutableArray<NCode.Coordination.Primitive!>
@@ -141,7 +546,37 @@ static NCode.Coordination.Primitives.Set.get -> NCode.Coordination.Primitive!
 static NCode.Coordination.Primitives.Transaction.get -> NCode.Coordination.Primitive!
 static NCode.Coordination.PrimitiveSupport.Supported(NCode.Coordination.Primitive! primitive, params System.Collections.Generic.IEnumerable<NCode.Coordination.Guarantee!>! guarantees) -> NCode.Coordination.PrimitiveSupport!
 static NCode.Coordination.PrimitiveSupport.Unsupported(NCode.Coordination.Primitive! primitive, string! reason) -> NCode.Coordination.PrimitiveSupport!
+static NCode.Coordination.RecordChange.Deleted(NCode.Coordination.CoordinationKey! key, NCode.Coordination.Revision! revision) -> NCode.Coordination.RecordChange!
+static NCode.Coordination.RecordChange.Resync(NCode.Coordination.Revision! revision) -> NCode.Coordination.RecordChange!
+static NCode.Coordination.RecordChange.Written(NCode.Coordination.StoredRecord! record) -> NCode.Coordination.RecordChange!
+static NCode.Coordination.RecordCondition.Absent(NCode.Coordination.CoordinationKey! key) -> NCode.Coordination.RecordCondition!
+static NCode.Coordination.RecordCondition.RevisionEquals(NCode.Coordination.CoordinationKey! key, NCode.Coordination.Revision! revision) -> NCode.Coordination.RecordCondition!
+static NCode.Coordination.RecordCondition.ValueEquals(NCode.Coordination.CoordinationKey! key, System.ReadOnlyMemory<byte> value) -> NCode.Coordination.RecordCondition!
+static NCode.Coordination.RecordLifetime.ForSession(NCode.Coordination.SessionId! session) -> NCode.Coordination.RecordLifetime!
+static NCode.Coordination.RecordLifetime.ForTimeToLive(NCode.Coordination.TimeToLive! timeToLive) -> NCode.Coordination.RecordLifetime!
+static NCode.Coordination.RecordLifetime.Persistent.get -> NCode.Coordination.RecordLifetime!
+static NCode.Coordination.RecordWrite.Delete(NCode.Coordination.CoordinationKey! key) -> NCode.Coordination.RecordWrite!
+static NCode.Coordination.RecordWrite.Put(NCode.Coordination.CoordinationKey! key, System.ReadOnlyMemory<byte> value, NCode.Coordination.RecordLifetime! lifetime) -> NCode.Coordination.RecordWrite!
+static NCode.Coordination.RecordWriteResult.Conflict.get -> NCode.Coordination.RecordWriteResult!
+static NCode.Coordination.RecordWriteResult.NotFound.get -> NCode.Coordination.RecordWriteResult!
+static NCode.Coordination.RecordWriteResult.SessionEnded.get -> NCode.Coordination.RecordWriteResult!
+static NCode.Coordination.RecordWriteResult.Written(NCode.Coordination.Revision! revision) -> NCode.Coordination.RecordWriteResult!
+static NCode.Coordination.Revision.operator !=(NCode.Coordination.Revision? left, NCode.Coordination.Revision? right) -> bool
+static NCode.Coordination.Revision.operator <(NCode.Coordination.Revision? left, NCode.Coordination.Revision? right) -> bool
+static NCode.Coordination.Revision.operator <=(NCode.Coordination.Revision? left, NCode.Coordination.Revision? right) -> bool
+static NCode.Coordination.Revision.operator ==(NCode.Coordination.Revision? left, NCode.Coordination.Revision? right) -> bool
+static NCode.Coordination.Revision.operator >(NCode.Coordination.Revision? left, NCode.Coordination.Revision? right) -> bool
+static NCode.Coordination.Revision.operator >=(NCode.Coordination.Revision? left, NCode.Coordination.Revision? right) -> bool
+static NCode.Coordination.SemaphoreAcquireResult.Acquired(NCode.Coordination.SemaphoreGrant! grant) -> NCode.Coordination.SemaphoreAcquireResult!
+static NCode.Coordination.SemaphoreAcquireResult.CapacityConflict.get -> NCode.Coordination.SemaphoreAcquireResult!
+static NCode.Coordination.SemaphoreAcquireResult.Full.get -> NCode.Coordination.SemaphoreAcquireResult!
+static NCode.Coordination.SemaphoreAcquireResult.SessionEnded.get -> NCode.Coordination.SemaphoreAcquireResult!
+static NCode.Coordination.SessionId.operator !=(NCode.Coordination.SessionId? left, NCode.Coordination.SessionId? right) -> bool
+static NCode.Coordination.SessionId.operator ==(NCode.Coordination.SessionId? left, NCode.Coordination.SessionId? right) -> bool
 static NCode.Coordination.TimeToLive.MaxDuration.get -> System.TimeSpan
 static NCode.Coordination.TimeToLive.operator !=(NCode.Coordination.TimeToLive? left, NCode.Coordination.TimeToLive? right) -> bool
 static NCode.Coordination.TimeToLive.operator ==(NCode.Coordination.TimeToLive? left, NCode.Coordination.TimeToLive? right) -> bool
 static NCode.Coordination.TimeToLive.TryCreateUntil(System.DateTimeOffset instant, System.DateTimeOffset now, System.TimeSpan skewAllowance, out NCode.Coordination.TimeToLive? timeToLive) -> bool
+static NCode.Coordination.TimeWindow.Containing(System.DateTimeOffset instant, System.TimeSpan length) -> NCode.Coordination.TimeWindow!
+static NCode.Coordination.TimeWindow.operator !=(NCode.Coordination.TimeWindow? left, NCode.Coordination.TimeWindow? right) -> bool
+static NCode.Coordination.TimeWindow.operator ==(NCode.Coordination.TimeWindow? left, NCode.Coordination.TimeWindow? right) -> bool
