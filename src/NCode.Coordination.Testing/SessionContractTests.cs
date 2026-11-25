@@ -1,6 +1,7 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using System.Globalization;
 using NCode.Coordination.Testing.Checking;
 using NCode.Coordination.Testing.Histories;
 using NCode.Coordination.Testing.Models;
@@ -294,6 +295,9 @@ public abstract class SessionContractTests : ProviderContractTests
         var sessions = Sessions;
         var opened = new SessionId?[ConcurrentRun.Clients];
         var recorder = new HistoryRecorder();
+        const int closeStep = ConcurrentRun.Steps * 2 / 3;
+        static string PartitionOf(int owner) =>
+            string.Create(CultureInfo.InvariantCulture, $"session-{owner}");
 
         await ConcurrentRun.RunAsync(
             async (client, index, cancellationToken) =>
@@ -301,9 +305,10 @@ public abstract class SessionContractTests : ProviderContractTests
                 if (index == 0)
                 {
                     var open = new SessionCall(SessionCall.Open);
+                    var partition = PartitionOf(client);
                     var operation = await recorder.RecordAsync(
                         client,
-                        $"session-{client}",
+                        partition,
                         open,
                         token => sessions.OpenAsync(Keyspace, LongTimeToLive, null, token),
                         cancellationToken
@@ -323,12 +328,13 @@ public abstract class SessionContractTests : ProviderContractTests
                     return;
                 }
 
-                if (index == 8)
+                if (index == closeStep)
                 {
                     var close = new SessionCall(SessionCall.Close);
+                    var partition = PartitionOf(client);
                     await recorder.RecordAsync(
                         client,
-                        $"session-{client}",
+                        partition,
                         close,
                         token => sessions.CloseAsync(own, null, token),
                         cancellationToken
@@ -350,9 +356,10 @@ public abstract class SessionContractTests : ProviderContractTests
                 }
 
                 var keepAlive = new SessionCall(SessionCall.KeepAlive);
+                var targetPartition = PartitionOf(target);
                 await recorder.RecordAsync(
                     client,
-                    $"session-{target}",
+                    targetPartition,
                     keepAlive,
                     token => sessions.KeepAliveAsync(session, null, token),
                     cancellationToken
