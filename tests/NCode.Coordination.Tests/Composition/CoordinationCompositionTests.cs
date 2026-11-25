@@ -117,7 +117,9 @@ public sealed class CoordinationCompositionTests : IDisposable
         var tokens = new List<CancellationToken>();
         var firstService = Mocks.Create<IOccurrenceService>().Object;
         var secondService = Mocks.Create<IOccurrenceService>().Object;
-        var first = new TestProvider(Declare("first"), firstService)
+        var firstDeclaration = Declare("first");
+        var secondDeclaration = Declare("second");
+        var first = new TestProvider(firstDeclaration, firstService)
         {
             Probe = token =>
             {
@@ -126,7 +128,7 @@ public sealed class CoordinationCompositionTests : IDisposable
                 return ValueTask.CompletedTask;
             },
         };
-        var second = new TestProvider(Declare("second"), secondService)
+        var second = new TestProvider(secondDeclaration, secondService)
         {
             Probe = token =>
             {
@@ -138,8 +140,12 @@ public sealed class CoordinationCompositionTests : IDisposable
         var registrations = new CoordinationRegistrations();
         registrations.ProviderFactories.Add(_ => first);
         registrations.ProviderFactories.Add(_ => second);
-        registrations.Bindings.Add(new ProviderBinding("first") { Keyspace = new Keyspace("a") });
-        registrations.Bindings.Add(new ProviderBinding("second") { Keyspace = new Keyspace("b") });
+        var firstKeyspace = new Keyspace("a");
+        var secondKeyspace = new Keyspace("b");
+        var firstBinding = new ProviderBinding("first") { Keyspace = firstKeyspace };
+        var secondBinding = new ProviderBinding("second") { Keyspace = secondKeyspace };
+        registrations.Bindings.Add(firstBinding);
+        registrations.Bindings.Add(secondBinding);
         var composition = new CoordinationComposition(registrations, Services);
 
         await composition.EnsureStartedAsync(cancellationToken);
@@ -158,7 +164,8 @@ public sealed class CoordinationCompositionTests : IDisposable
             "probe"
         );
         var service = Mocks.Create<IOccurrenceService>().Object;
-        var provider = new TestProvider(Declare("memory"), service)
+        var declaration = Declare("memory");
+        var provider = new TestProvider(declaration, service)
         {
             Probe = _ => ValueTask.FromException(failure),
         };
@@ -178,7 +185,8 @@ public sealed class CoordinationCompositionTests : IDisposable
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var probed = false;
-        var provider = new TestProvider(Declare("memory"))
+        var declaration = Declare("memory");
+        var provider = new TestProvider(declaration)
         {
             Probe = _ =>
             {
