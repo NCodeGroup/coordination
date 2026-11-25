@@ -13,6 +13,11 @@ namespace NCode.Coordination.InProcess;
 /// </remarks>
 internal class InProcessTransactionService(InProcessRecordTable table) : ITransactionService
 {
+    /// <summary>
+    /// Gets the record table, shared with the record service.
+    /// </summary>
+    private InProcessRecordTable Table { get; } = table;
+
     /// <inheritdoc />
     public ValueTask<TransactionResult> ExecuteAsync(
         RecordTransaction transaction,
@@ -23,7 +28,7 @@ internal class InProcessTransactionService(InProcessRecordTable table) : ITransa
         ArgumentNullException.ThrowIfNull(transaction);
         InProcessGuard.Check(options, cancellationToken);
 
-        lock (table.Gate)
+        lock (Table.Gate)
         {
             var succeeded = ConditionsHold(transaction);
             var writes = succeeded ? transaction.OnSuccess : transaction.OnFailure;
@@ -43,24 +48,24 @@ internal class InProcessTransactionService(InProcessRecordTable table) : ITransa
             if (writes.IsEmpty)
             {
                 return ValueTask.FromResult(
-                    new TransactionResult(succeeded, table.Current(transaction.Keyspace))
+                    new TransactionResult(succeeded, Table.Current(transaction.Keyspace))
                 );
             }
 
-            var revision = table.Advance(transaction.Keyspace);
+            var revision = Table.Advance(transaction.Keyspace);
 
             foreach (var write in writes)
             {
                 if (write.Lifetime is { } lifetime)
                 {
-                    table.Put(
+                    Table.Put(
                         new StoredRecord(write.Key, write.Value, revision),
-                        InProcessExpiry.ForLifetime(table.Time, lifetime)
+                        InProcessExpiry.ForLifetime(Table.Time, lifetime)
                     );
                 }
                 else
                 {
-                    table.Remove(write.Key);
+                    Table.Remove(write.Key);
                 }
             }
 
@@ -77,7 +82,7 @@ internal class InProcessTransactionService(InProcessRecordTable table) : ITransa
     {
         foreach (var condition in transaction.Conditions)
         {
-            var record = table.Find(condition.Key);
+            var record = Table.Find(condition.Key);
 
             var holds = condition.Kind switch
             {

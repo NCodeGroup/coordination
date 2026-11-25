@@ -15,60 +15,9 @@ internal class InProcessProvider : ICoordinationProvider
         "The in-process provider does not implement this primitive.";
 
     /// <summary>
-    /// Creates the provider and its state tables.
-    /// </summary>
-    /// <param name="time">The clock that the provider's expiries are measured on.</param>
-    /// <exception cref="ArgumentNullException">The clock is null.</exception>
-    public InProcessProvider(TimeProvider time)
-    {
-        ArgumentNullException.ThrowIfNull(time);
-
-        var records = new InProcessRecordTable(time);
-        Records = new InProcessRecordService(records);
-        Transactions = new InProcessTransactionService(records);
-        Occurrences = new InProcessOccurrenceService(time);
-        Sets = new InProcessSetService(time);
-        Counters = new InProcessCounterService(time);
-        Sequences = new InProcessSequenceService();
-    }
-
-    /// <summary>
-    /// Gets the record service.
-    /// </summary>
-    private InProcessRecordService Records { get; }
-
-    /// <summary>
-    /// Gets the transaction service.
-    /// </summary>
-    private InProcessTransactionService Transactions { get; }
-
-    /// <summary>
-    /// Gets the occurrence service.
-    /// </summary>
-    private InProcessOccurrenceService Occurrences { get; }
-
-    /// <summary>
-    /// Gets the set service.
-    /// </summary>
-    private InProcessSetService Sets { get; }
-
-    /// <summary>
-    /// Gets the counter service.
-    /// </summary>
-    private InProcessCounterService Counters { get; }
-
-    /// <summary>
-    /// Gets the sequence service.
-    /// </summary>
-    private InProcessSequenceService Sequences { get; }
-
-    /// <summary>
     /// Gets what every in-process provider declares.
     /// </summary>
     private static ProviderDeclaration DeclarationOfAll { get; } = CreateDeclaration();
-
-    /// <inheritdoc />
-    public ProviderDeclaration Declaration => DeclarationOfAll;
 
     /// <summary>
     /// Creates the declaration, which lists the primitives in the order of <see cref="Primitives.All"/>.
@@ -123,6 +72,57 @@ internal class InProcessProvider : ICoordinationProvider
             primitives
         );
     }
+
+    /// <summary>
+    /// Creates the provider and its state tables.
+    /// </summary>
+    /// <param name="time">The clock that the provider's expiries are measured on.</param>
+    /// <exception cref="ArgumentNullException">The clock is null.</exception>
+    public InProcessProvider(TimeProvider time)
+    {
+        ArgumentNullException.ThrowIfNull(time);
+
+        var records = new InProcessRecordTable(time);
+        Records = new InProcessRecordService(records);
+        Transactions = new InProcessTransactionService(records);
+        Occurrences = new InProcessOccurrenceService(time);
+        Sets = new InProcessSetService(time);
+        Counters = new InProcessCounterService(time);
+        Sequences = new InProcessSequenceService();
+    }
+
+    /// <summary>
+    /// Gets the record service.
+    /// </summary>
+    private InProcessRecordService Records { get; }
+
+    /// <summary>
+    /// Gets the transaction service.
+    /// </summary>
+    private InProcessTransactionService Transactions { get; }
+
+    /// <summary>
+    /// Gets the occurrence service.
+    /// </summary>
+    private InProcessOccurrenceService Occurrences { get; }
+
+    /// <summary>
+    /// Gets the set service.
+    /// </summary>
+    private InProcessSetService Sets { get; }
+
+    /// <summary>
+    /// Gets the counter service.
+    /// </summary>
+    private InProcessCounterService Counters { get; }
+
+    /// <summary>
+    /// Gets the sequence service.
+    /// </summary>
+    private InProcessSequenceService Sequences { get; }
+
+    /// <inheritdoc />
+    public ProviderDeclaration Declaration => DeclarationOfAll;
 
     /// <inheritdoc />
     public object? GetPrimitiveService(Type serviceType)

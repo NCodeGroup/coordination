@@ -19,6 +19,11 @@ internal class InProcessCounterService(TimeProvider time) : ICounterService
     private Lock Gate { get; } = new();
 
     /// <summary>
+    /// Gets the clock the counters' expiries are measured on.
+    /// </summary>
+    private TimeProvider Time { get; } = time;
+
+    /// <summary>
     /// Gets the counts, each held until its time to live ends.
     /// </summary>
     private InProcessExpiringTable<CoordinationKey, long> Counters { get; } = new(time);
@@ -51,7 +56,7 @@ internal class InProcessCounterService(TimeProvider time) : ICounterService
                 return ValueTask.FromResult(count);
             }
 
-            Counters.Set(key, amount, InProcessExpiry.Begin(time, timeToLive));
+            Counters.Set(key, amount, InProcessExpiry.Begin(Time, timeToLive));
             return ValueTask.FromResult(amount);
         }
     }
@@ -171,7 +176,7 @@ internal class InProcessCounterService(TimeProvider time) : ICounterService
                 }
                 else
                 {
-                    Counters.Set(key, count, InProcessExpiry.Begin(time, created[key]));
+                    Counters.Set(key, count, InProcessExpiry.Begin(Time, created[key]));
                 }
             }
 

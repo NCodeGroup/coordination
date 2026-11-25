@@ -20,6 +20,11 @@ internal class InProcessSetService(TimeProvider time) : ISetService
     private Lock Gate { get; } = new();
 
     /// <summary>
+    /// Gets the clock the members' expiries are measured on.
+    /// </summary>
+    private TimeProvider Time { get; } = time;
+
+    /// <summary>
     /// Gets the members of every set, by the set's key.
     /// </summary>
     private Dictionary<CoordinationKey, InProcessExpiringTable<KeySegment, bool>> Sets { get; } =
@@ -48,7 +53,7 @@ internal class InProcessSetService(TimeProvider time) : ISetService
         {
             if (!Sets.TryGetValue(key, out var members))
             {
-                members = new InProcessExpiringTable<KeySegment, bool>(time);
+                members = new InProcessExpiringTable<KeySegment, bool>(Time);
                 Sets[key] = members;
             }
 
@@ -66,7 +71,7 @@ internal class InProcessSetService(TimeProvider time) : ISetService
                 }
             }
 
-            members.Set(member, true, InProcessExpiry.Begin(time, timeToLive));
+            members.Set(member, true, InProcessExpiry.Begin(Time, timeToLive));
 
             AddsSinceSweep++;
             if (

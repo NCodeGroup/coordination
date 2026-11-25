@@ -18,6 +18,11 @@ internal class InProcessOccurrenceService(TimeProvider time) : IOccurrenceServic
     private Lock Gate { get; } = new();
 
     /// <summary>
+    /// Gets the clock the occurrences' expiries are measured on.
+    /// </summary>
+    private TimeProvider Time { get; } = time;
+
+    /// <summary>
     /// Gets the recorded keys, each held until its time to live ends.
     /// </summary>
     private InProcessExpiringTable<CoordinationKey, bool> Occurrences { get; } = new(time);
@@ -41,7 +46,7 @@ internal class InProcessOccurrenceService(TimeProvider time) : IOccurrenceServic
                 return ValueTask.FromResult(OccurrenceStatus.Duplicate);
             }
 
-            Occurrences.Set(key, true, InProcessExpiry.Begin(time, timeToLive));
+            Occurrences.Set(key, true, InProcessExpiry.Begin(Time, timeToLive));
             return ValueTask.FromResult(OccurrenceStatus.Recorded);
         }
     }

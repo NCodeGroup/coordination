@@ -24,6 +24,11 @@ internal class InProcessExpiringTable<TKey, TValue>(TimeProvider time)
     /// </summary>
     internal const int SweepFloor = 1_024;
 
+    /// <summary>
+    /// Gets the clock the entries' expiries are measured on.
+    /// </summary>
+    private TimeProvider Time { get; } = time;
+
     private Dictionary<TKey, (TValue Value, InProcessExpiry? Expiry)> Entries { get; } = [];
 
     private int WritesSinceSweep { get; set; }
@@ -159,6 +164,6 @@ internal class InProcessExpiringTable<TKey, TValue>(TimeProvider time)
 
     private bool HasEnded(InProcessExpiry? expiry)
     {
-        return expiry is { } value && value.HasEnded(time);
+        return expiry is { } value && value.HasEnded(Time);
     }
 }

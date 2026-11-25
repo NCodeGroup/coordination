@@ -14,6 +14,11 @@ namespace NCode.Coordination.InProcess;
 /// </remarks>
 internal class InProcessRecordService(InProcessRecordTable table) : IRecordService
 {
+    /// <summary>
+    /// Gets the record table, shared with the transaction service.
+    /// </summary>
+    private InProcessRecordTable Table { get; } = table;
+
     /// <inheritdoc />
     public ValueTask<RecordWriteResult> CreateAsync(
         CoordinationKey key,
@@ -28,14 +33,14 @@ internal class InProcessRecordService(InProcessRecordTable table) : IRecordServi
         InProcessGuard.CheckValue(value, nameof(value));
         InProcessGuard.Check(options, cancellationToken);
 
-        lock (table.Gate)
+        lock (Table.Gate)
         {
             if (lifetime.Session is not null)
             {
                 return ValueTask.FromResult(RecordWriteResult.SessionEnded);
             }
 
-            if (table.Find(key) is not null)
+            if (Table.Find(key) is not null)
             {
                 return ValueTask.FromResult(RecordWriteResult.Conflict);
             }
@@ -54,9 +59,9 @@ internal class InProcessRecordService(InProcessRecordTable table) : IRecordServi
         ArgumentNullException.ThrowIfNull(key);
         InProcessGuard.Check(options, cancellationToken);
 
-        lock (table.Gate)
+        lock (Table.Gate)
         {
-            return ValueTask.FromResult(table.Find(key));
+            return ValueTask.FromResult(Table.Find(key));
         }
     }
 
@@ -76,14 +81,14 @@ internal class InProcessRecordService(InProcessRecordTable table) : IRecordServi
         InProcessGuard.CheckValue(value, nameof(value));
         InProcessGuard.Check(options, cancellationToken);
 
-        lock (table.Gate)
+        lock (Table.Gate)
         {
             if (lifetime.Session is not null)
             {
                 return ValueTask.FromResult(RecordWriteResult.SessionEnded);
             }
 
-            var current = table.Find(key);
+            var current = Table.Find(key);
             if (current is null)
             {
                 return ValueTask.FromResult(RecordWriteResult.NotFound);
@@ -110,9 +115,9 @@ internal class InProcessRecordService(InProcessRecordTable table) : IRecordServi
         ArgumentNullException.ThrowIfNull(expected);
         InProcessGuard.Check(options, cancellationToken);
 
-        lock (table.Gate)
+        lock (Table.Gate)
         {
-            var current = table.Find(key);
+            var current = Table.Find(key);
             if (current is null)
             {
                 return ValueTask.FromResult(RecordDeleteStatus.NotFound);
@@ -123,8 +128,8 @@ internal class InProcessRecordService(InProcessRecordTable table) : IRecordServi
                 return ValueTask.FromResult(RecordDeleteStatus.Conflict);
             }
 
-            table.Remove(key);
-            table.Advance(key.Keyspace);
+            Table.Remove(key);
+            Table.Advance(key.Keyspace);
             return ValueTask.FromResult(RecordDeleteStatus.Deleted);
         }
     }
@@ -139,16 +144,16 @@ internal class InProcessRecordService(InProcessRecordTable table) : IRecordServi
         ArgumentNullException.ThrowIfNull(key);
         InProcessGuard.Check(options, cancellationToken);
 
-        lock (table.Gate)
+        lock (Table.Gate)
         {
-            var current = table.Find(key);
+            var current = Table.Find(key);
             if (current is null)
             {
                 return ValueTask.FromResult<StoredRecord?>(null);
             }
 
-            table.Remove(key);
-            table.Advance(key.Keyspace);
+            Table.Remove(key);
+            Table.Advance(key.Keyspace);
             return ValueTask.FromResult<StoredRecord?>(current);
         }
     }
@@ -167,13 +172,13 @@ internal class InProcessRecordService(InProcessRecordTable table) : IRecordServi
 
         var after = ParseContinuationToken(page);
 
-        lock (table.Gate)
+        lock (Table.Gate)
         {
             var records = new List<StoredRecord>();
             var more = false;
             long lastSequence = 0;
 
-            foreach (var entry in table.ListLive(prefix))
+            foreach (var entry in Table.ListLive(prefix))
             {
                 if (entry.Sequence <= after)
                 {
@@ -190,7 +195,7 @@ internal class InProcessRecordService(InProcessRecordTable table) : IRecordServi
                 lastSequence = entry.Sequence;
             }
 
-            var result = new RecordPage(table.Current(prefix.Keyspace), records)
+            var result = new RecordPage(Table.Current(prefix.Keyspace), records)
             {
                 ContinuationToken = more
                     ? lastSequence.ToString(CultureInfo.InvariantCulture)
@@ -207,10 +212,10 @@ internal class InProcessRecordService(InProcessRecordTable table) : IRecordServi
         RecordLifetime lifetime
     )
     {
-        var revision = table.Advance(key.Keyspace);
-        table.Put(
+        var revision = Table.Advance(key.Keyspace);
+        Table.Put(
             new StoredRecord(key, value, revision),
-            InProcessExpiry.ForLifetime(table.Time, lifetime)
+            InProcessExpiry.ForLifetime(Table.Time, lifetime)
         );
         return RecordWriteResult.Written(revision);
     }
