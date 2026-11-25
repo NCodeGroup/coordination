@@ -6,17 +6,27 @@ namespace NCode.Coordination.InProcess;
 /// <summary>
 /// The transactions of the in-process provider.
 /// </summary>
-/// <param name="table">The record table, shared with the record service.</param>
+/// <param name="sessions">The session table, which holds the record table that the record service shares.</param>
 /// <remarks>
 /// A transaction evaluates its conditions and applies its writes while holding the table's lock, so it is atomic across
-/// partitions and linearizable in the process.
+/// partitions and linearizable in the process. A write bound to a session that has ended is refused.
 /// </remarks>
-internal class InProcessTransactionService(InProcessRecordTable table) : ITransactionService
+internal class InProcessTransactionService(InProcessSessionTable sessions) : ITransactionService
 {
+    /// <summary>
+    /// The error code of a transaction that writes a record bound to a session that has ended.
+    /// </summary>
+    internal const string SessionEndedCode = "in-process.session-ended";
+
     /// <summary>
     /// Gets the record table, shared with the record service.
     /// </summary>
-    private InProcessRecordTable Table { get; } = table;
+    private InProcessRecordTable Table => Sessions.Records;
+
+    /// <summary>
+    /// Gets the session table, which says whether a session is live.
+    /// </summary>
+    private InProcessSessionTable Sessions { get; } = sessions;
 
     /// <inheritdoc />
     public ValueTask<TransactionResult> ExecuteAsync(
@@ -35,12 +45,12 @@ internal class InProcessTransactionService(InProcessRecordTable table) : ITransa
 
             foreach (var write in writes)
             {
-                if (write.Lifetime?.Session is not null)
+                if (write.Lifetime?.Session is { } session && !Sessions.IsLive(session))
                 {
                     throw new CoordinationException(
-                        CoordinationErrorCodes.Unsupported,
+                        SessionEndedCode,
                         outcomeUnknown: false,
-                        "The in-process provider keeps no sessions, so it binds no record to one."
+                        "A record the transaction writes is bound to a session that has ended."
                     );
                 }
             }

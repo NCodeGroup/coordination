@@ -89,7 +89,7 @@ internal class InProcessProvider : ICoordinationProvider
         var records = new InProcessRecordTable(time);
         var sessions = new InProcessSessionTable(records);
         Records = new InProcessRecordService(sessions);
-        Transactions = new InProcessTransactionService(records);
+        Transactions = new InProcessTransactionService(sessions);
         Occurrences = new InProcessOccurrenceService(time);
         Sets = new InProcessSetService(time);
         Counters = new InProcessCounterService(time);
