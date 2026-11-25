@@ -2,7 +2,7 @@
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <RootNamespace>NCode.Coordination.Testing</RootNamespace>
-    <Description>The conformance kit of NCode.Coordination: a contract suite per primitive that a provider's xUnit tests derive from, given the provider under test and a way to advance its clock.</Description>
+    <Description>The conformance kit of NCode.Coordination: a contract suite per primitive that a provider's xUnit tests derive from, given the provider under test and a way to advance its clock, with concurrent runs whose recorded histories a checker verifies against each guarantee the provider declares.</Description>
     <PackageTags>coordination;distributed;cluster;testing;conformance;xunit</PackageTags>
   </PropertyGroup>
   <ItemGroup>
