@@ -41,6 +41,7 @@ NCode.Coordination.Testing.CounterContractTests.ReadAsync_WhenCounterIsAbsent_Re
 NCode.Coordination.Testing.CounterContractTests.ReadAsync_WhenTokenIsCanceled_ThrowsOperationCanceledException() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.CounterContractTests.ResetAsync_WhenCounterExists_DeletesIt() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.ElectionContractTests
+NCode.Coordination.Testing.ElectionContractTests.ConcurrentRun_WhenClientsRace_KeepsALinearizableHistory() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.ElectionContractTests.ElectionContractTests() -> void
 NCode.Coordination.Testing.ElectionContractTests.ReadAsync_WhenRoleHasALeader_ReturnsItsTermAndValue() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.ElectionContractTests.ReadAsync_WhenRoleHasNoLeader_ReturnsNoLeader() -> System.Threading.Tasks.Task!
