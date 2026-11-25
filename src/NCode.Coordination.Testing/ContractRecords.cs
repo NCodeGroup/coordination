@@ -18,20 +18,31 @@ internal static class ContractRecords
     /// <param name="value">The value to store.</param>
     /// <param name="cancellationToken">A token that cancels the write.</param>
     /// <returns>The revision of the record.</returns>
-    public static async ValueTask<Revision> CreateAsync(
+    public static ValueTask<Revision> CreateAsync(
         IRecordService records,
         CoordinationKey key,
         byte[] value,
         CancellationToken cancellationToken
+    ) => CreateAsync(records, key, value, RecordLifetime.Persistent, cancellationToken);
+
+    /// <summary>
+    /// Creates a record with a lifetime that must not exist yet and returns the revision it was written at.
+    /// </summary>
+    /// <param name="records">The record service to write with.</param>
+    /// <param name="key">The key to create.</param>
+    /// <param name="value">The value to store.</param>
+    /// <param name="lifetime">How long the record lives.</param>
+    /// <param name="cancellationToken">A token that cancels the write.</param>
+    /// <returns>The revision of the record.</returns>
+    public static async ValueTask<Revision> CreateAsync(
+        IRecordService records,
+        CoordinationKey key,
+        byte[] value,
+        RecordLifetime lifetime,
+        CancellationToken cancellationToken
     )
     {
-        var result = await records.CreateAsync(
-            key,
-            value,
-            RecordLifetime.Persistent,
-            null,
-            cancellationToken
-        );
+        var result = await records.CreateAsync(key, value, lifetime, null, cancellationToken);
 
         Assert.True(result.IsWritten);
         return result.Revision;

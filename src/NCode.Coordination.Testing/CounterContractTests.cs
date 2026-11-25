@@ -67,9 +67,10 @@ public abstract class CounterContractTests : ProviderContractTests
     {
         var key = CreateKey("c");
 
-        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(async () =>
+        var exception = await Assert.ThrowsAsync<ArgumentOutOfRangeException>(async () =>
             await Counters.IncrementAsync(key, 0, LongTimeToLive, null, TestCancellationToken)
         );
+        Assert.Equal("amount", exception.ParamName);
     }
 
     /// <summary>

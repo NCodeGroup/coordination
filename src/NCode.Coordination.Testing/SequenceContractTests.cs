@@ -137,9 +137,10 @@ public abstract class SequenceContractTests : ProviderContractTests
     {
         var key = CreateKey("s");
 
-        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(async () =>
+        var exception = await Assert.ThrowsAsync<ArgumentOutOfRangeException>(async () =>
             await Sequences.ReserveAsync(key, 0, null, TestCancellationToken)
         );
+        Assert.Equal("count", exception.ParamName);
     }
 
     /// <summary>
@@ -151,9 +152,10 @@ public abstract class SequenceContractTests : ProviderContractTests
         var key = CreateKey("s");
         var count = CoordinationLimits.MaxSequenceBlock + 1;
 
-        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(async () =>
+        var exception = await Assert.ThrowsAsync<ArgumentOutOfRangeException>(async () =>
             await Sequences.ReserveAsync(key, count, null, TestCancellationToken)
         );
+        Assert.Equal("count", exception.ParamName);
     }
 
     #endregion

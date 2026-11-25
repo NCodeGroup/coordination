@@ -172,8 +172,11 @@ public abstract class ProviderContractTests : IAsyncLifetime
     /// <param name="primitive">The primitive the test exercises.</param>
     /// <param name="guarantee">The guarantee to look for.</param>
     /// <returns>True when the provider declares the guarantee for the primitive.</returns>
-    protected bool Declares(Primitive primitive, Guarantee guarantee) =>
-        GetSupport(primitive).Guarantees.Contains(guarantee);
+    protected bool Declares(Primitive primitive, Guarantee guarantee)
+    {
+        var support = GetSupport(primitive);
+        return support.Guarantees.Contains(guarantee);
+    }
 
     /// <summary>
     /// Gets the provider's service for a primitive, and skips the test when the provider does not support the
@@ -188,6 +191,7 @@ public abstract class ProviderContractTests : IAsyncLifetime
     protected TService GetService<TService>(Primitive primitive)
         where TService : class
     {
+        // Called for its skip: the test skips when the provider does not support or list the primitive.
         _ = GetSupport(primitive);
 
         var service = Target.Provider.GetPrimitiveService(typeof(TService)) as TService;
