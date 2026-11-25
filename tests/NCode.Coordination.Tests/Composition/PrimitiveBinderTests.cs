@@ -83,7 +83,7 @@ public sealed class PrimitiveBinderTests : IDisposable
     }
 
     [Fact]
-    public void Bind_KeepsTheBindingsKeyspace()
+    public void Bind_WhenTheBindingHasAKeyspace_KeepsIt()
     {
         var keyspace = new Keyspace("prod", "cell-1");
         var occurrence = PrimitiveSupport.Supported(Primitives.Occurrence);
@@ -102,7 +102,7 @@ public sealed class PrimitiveBinderTests : IDisposable
     }
 
     [Fact]
-    public void Bind_ClosesTheDeclaredGuarantees()
+    public void Bind_WhenTheProviderDeclaresGuarantees_ClosesThem()
     {
         var occurrence = PrimitiveSupport.Supported(
             Primitives.Occurrence,

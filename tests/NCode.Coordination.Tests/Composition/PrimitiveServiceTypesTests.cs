@@ -8,7 +8,7 @@ public sealed class PrimitiveServiceTypesTests
     #region Find Tests
 
     [Fact]
-    public void Find_ForEveryBuiltInPrimitive_ReturnsAnInterface()
+    public void Find_WhenThePrimitiveIsBuiltIn_ReturnsAnInterface()
     {
         foreach (var primitive in Primitives.All)
         {
@@ -20,7 +20,7 @@ public sealed class PrimitiveServiceTypesTests
     }
 
     [Fact]
-    public void Find_ForAnUnknownPrimitive_ReturnsNull()
+    public void Find_WhenThePrimitiveIsUnknown_ReturnsNull()
     {
         var custom = new Primitive("custom");
 

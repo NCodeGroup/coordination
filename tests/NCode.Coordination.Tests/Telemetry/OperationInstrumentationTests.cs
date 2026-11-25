@@ -204,7 +204,7 @@ public sealed class OperationInstrumentationTests
     }
 
     [Fact]
-    public async Task MeasureAsync_RecordsNoKeyOrValue()
+    public async Task MeasureAsync_WhenTheCallSucceeds_RecordsOnlyTheFixedTagKeys()
     {
         using var fixture = new Fixture();
         var cancellationToken = TestContext.Current.CancellationToken;
@@ -360,7 +360,7 @@ public sealed class OperationInstrumentationTests
     }
 
     [Fact]
-    public void MeasureStreamAsync_BeforeTheFirstRead_RecordsNothing()
+    public void MeasureStreamAsync_WhenNothingIsRead_RecordsNothing()
     {
         using var fixture = new Fixture();
         var cancellationToken = TestContext.Current.CancellationToken;

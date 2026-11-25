@@ -92,7 +92,7 @@ public sealed class ProviderCatalogTests
     }
 
     [Fact]
-    public void Create_PassesTheServicesToEachFactory()
+    public void Create_WhenCalled_PassesTheServicesToEachFactory()
     {
         var received = new List<IServiceProvider>();
         var provider = CreateProvider("memory");

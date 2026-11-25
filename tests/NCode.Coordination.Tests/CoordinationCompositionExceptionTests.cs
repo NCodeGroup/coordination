@@ -53,7 +53,7 @@ public sealed class CoordinationCompositionExceptionTests
     #region Message Tests
 
     [Fact]
-    public void Message_ListsEveryFailure()
+    public void Message_WhenCreated_ListsEveryFailure()
     {
         var exception = new CoordinationCompositionException(["a", "b"]);
 

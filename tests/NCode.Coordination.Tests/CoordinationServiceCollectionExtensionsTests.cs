@@ -35,7 +35,7 @@ public sealed class CoordinationServiceCollectionExtensionsTests : IDisposable
     }
 
     [Fact]
-    public async Task AddCoordination_ResolvesTheComposition()
+    public async Task AddCoordination_WhenCalled_ResolvesTheComposition()
     {
         var provider = CreateProvider();
         var binding = new ProviderBinding(TestComposition.ProviderName);
@@ -89,7 +89,7 @@ public sealed class CoordinationServiceCollectionExtensionsTests : IDisposable
     }
 
     [Fact]
-    public async Task AddCoordination_RegistersTheSystemClock()
+    public async Task AddCoordination_WhenCalled_RegistersTheSystemClock()
     {
         var services = new ServiceCollection();
         services.AddCoordination(_ => { });
@@ -101,7 +101,7 @@ public sealed class CoordinationServiceCollectionExtensionsTests : IDisposable
     }
 
     [Fact]
-    public void AddCoordination_RegistersARoutedServiceForEveryBuiltInPrimitive()
+    public void AddCoordination_WhenCalled_RegistersARoutedServiceForEveryBuiltInPrimitive()
     {
         var services = new ServiceCollection();
 
@@ -117,12 +117,8 @@ public sealed class CoordinationServiceCollectionExtensionsTests : IDisposable
         }
     }
 
-    #endregion
-
-    #region Host Tests
-
     [Fact]
-    public async Task HostStart_WhenARequirementIsUnmet_FailsListingIt()
+    public async Task AddCoordination_WhenTheHostStartsWithAnUnmetRequirement_FailsListingIt()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var settings = new HostApplicationBuilderSettings();
@@ -143,7 +139,7 @@ public sealed class CoordinationServiceCollectionExtensionsTests : IDisposable
     }
 
     [Fact]
-    public async Task HostStart_WhenValid_Starts()
+    public async Task AddCoordination_WhenTheHostStartsWithAValidComposition_Starts()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var provider = CreateProvider();

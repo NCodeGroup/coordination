@@ -44,4 +44,5 @@ One row per span; an empty table means NCode.Coordination starts none.
 | --- | --- | --- | --- | --- |
 | `NCode.Coordination` | `ncode.coordination.operation`, kind Client, displayed as the operation's name; status Error on a failure, with no description | `ncode.coordination.operation.duration` | The same as the histogram | Every operation of a primitive service; a stream's span lasts from its first read to its end |
 
-No attribute records a key, a key segment, a value, a payload or an exception message, because key names can carry tenant identifiers.
+No attribute records a key, a key segment, a value, a payload or an exception message, because key names can carry
+tenant identifiers.

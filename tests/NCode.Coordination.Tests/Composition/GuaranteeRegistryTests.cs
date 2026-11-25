@@ -109,7 +109,7 @@ public sealed class GuaranteeRegistryTests
     }
 
     [Fact]
-    public void Create_WithTheBuiltInDefinitions_HasNoFailure()
+    public void Create_WhenGivenTheBuiltInDefinitions_HasNoFailure()
     {
         var checkedRegistry = GuaranteeRegistry.Create(Guarantees.Definitions);
         var registry = checkedRegistry.Value;

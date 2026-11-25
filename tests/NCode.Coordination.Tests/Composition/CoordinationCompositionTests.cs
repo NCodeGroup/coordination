@@ -223,7 +223,7 @@ public sealed class CoordinationCompositionTests : IDisposable
 
     #endregion
 
-    #region Dispose Tests
+    #region DisposeAsync Tests
 
     [Fact]
     public async Task DisposeAsync_WhenComposed_DisposesEachProvider()
@@ -289,21 +289,24 @@ public sealed class CoordinationCompositionTests : IDisposable
     public async Task DisposeAsync_WhenAProviderDisposalThrows_DisposesTheRestAndRethrows()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        var first = new ThrowingProvider(Declare("first"), new InvalidOperationException("first"));
-        var second = new AsyncDisposableProvider(Declare("second"));
-        var third = new AsyncDisposableProvider(Declare("third"));
-        var registrations = Register(
-            first,
-            new ProviderBinding("first") { Keyspace = new Keyspace("app", "first") }
-        );
+        var firstException = new InvalidOperationException("first");
+        var firstDeclaration = Declare("first");
+        var secondDeclaration = Declare("second");
+        var thirdDeclaration = Declare("third");
+        var first = new ThrowingProvider(firstDeclaration, firstException);
+        var second = new AsyncDisposableProvider(secondDeclaration);
+        var third = new AsyncDisposableProvider(thirdDeclaration);
+        var firstKeyspace = new Keyspace("app", "first");
+        var secondKeyspace = new Keyspace("app", "second");
+        var thirdKeyspace = new Keyspace("app", "third");
+        var firstBinding = new ProviderBinding("first") { Keyspace = firstKeyspace };
+        var secondBinding = new ProviderBinding("second") { Keyspace = secondKeyspace };
+        var thirdBinding = new ProviderBinding("third") { Keyspace = thirdKeyspace };
+        var registrations = Register(first, firstBinding);
         registrations.ProviderFactories.Add(_ => second);
         registrations.ProviderFactories.Add(_ => third);
-        registrations.Bindings.Add(
-            new ProviderBinding("second") { Keyspace = new Keyspace("app", "second") }
-        );
-        registrations.Bindings.Add(
-            new ProviderBinding("third") { Keyspace = new Keyspace("app", "third") }
-        );
+        registrations.Bindings.Add(secondBinding);
+        registrations.Bindings.Add(thirdBinding);
         var composition = new CoordinationComposition(registrations, Services);
         await Assert.ThrowsAsync<CoordinationCompositionException>(async () =>
             await composition.EnsureStartedAsync(cancellationToken)
@@ -322,21 +325,25 @@ public sealed class CoordinationCompositionTests : IDisposable
     public async Task DisposeAsync_WhenSeveralDisposalsThrow_ThrowsAggregate()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        var first = new ThrowingProvider(Declare("first"), new InvalidOperationException("first"));
-        var second = new ThrowingProvider(Declare("second"), new ArgumentException("second"));
-        var third = new AsyncDisposableProvider(Declare("third"));
-        var registrations = Register(
-            first,
-            new ProviderBinding("first") { Keyspace = new Keyspace("app", "first") }
-        );
+        var firstException = new InvalidOperationException("first");
+        var secondException = new ArgumentException("second");
+        var firstDeclaration = Declare("first");
+        var secondDeclaration = Declare("second");
+        var thirdDeclaration = Declare("third");
+        var first = new ThrowingProvider(firstDeclaration, firstException);
+        var second = new ThrowingProvider(secondDeclaration, secondException);
+        var third = new AsyncDisposableProvider(thirdDeclaration);
+        var firstKeyspace = new Keyspace("app", "first");
+        var secondKeyspace = new Keyspace("app", "second");
+        var thirdKeyspace = new Keyspace("app", "third");
+        var firstBinding = new ProviderBinding("first") { Keyspace = firstKeyspace };
+        var secondBinding = new ProviderBinding("second") { Keyspace = secondKeyspace };
+        var thirdBinding = new ProviderBinding("third") { Keyspace = thirdKeyspace };
+        var registrations = Register(first, firstBinding);
         registrations.ProviderFactories.Add(_ => second);
         registrations.ProviderFactories.Add(_ => third);
-        registrations.Bindings.Add(
-            new ProviderBinding("second") { Keyspace = new Keyspace("app", "second") }
-        );
-        registrations.Bindings.Add(
-            new ProviderBinding("third") { Keyspace = new Keyspace("app", "third") }
-        );
+        registrations.Bindings.Add(secondBinding);
+        registrations.Bindings.Add(thirdBinding);
         var composition = new CoordinationComposition(registrations, Services);
         await Assert.ThrowsAsync<CoordinationCompositionException>(async () =>
             await composition.EnsureStartedAsync(cancellationToken)
@@ -353,7 +360,23 @@ public sealed class CoordinationCompositionTests : IDisposable
     }
 
     [Fact]
-    public async Task Dispose_DisposesTheDisposableProviders()
+    public async Task DisposeAsync_WhenNeverComposed_CreatesNoProvider()
+    {
+        var registrations = new CoordinationRegistrations();
+        registrations.ProviderFactories.Add(_ =>
+            throw new InvalidOperationException("The factory must not run.")
+        );
+        var composition = new CoordinationComposition(registrations, Services);
+
+        await composition.DisposeAsync();
+    }
+
+    #endregion
+
+    #region Dispose Tests
+
+    [Fact]
+    public async Task Dispose_WhenComposed_DisposesOnlyTheSynchronousProviders()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var service = Mocks.Create<IOccurrenceService>().Object;
@@ -371,18 +394,6 @@ public sealed class CoordinationCompositionTests : IDisposable
 
         Assert.Equal(1, sync.Disposals);
         Assert.Equal(0, async.Disposals);
-    }
-
-    [Fact]
-    public async Task DisposeAsync_WhenNeverComposed_CreatesNoProvider()
-    {
-        var registrations = new CoordinationRegistrations();
-        registrations.ProviderFactories.Add(_ =>
-            throw new InvalidOperationException("The factory must not run.")
-        );
-        var composition = new CoordinationComposition(registrations, Services);
-
-        await composition.DisposeAsync();
     }
 
     #endregion
