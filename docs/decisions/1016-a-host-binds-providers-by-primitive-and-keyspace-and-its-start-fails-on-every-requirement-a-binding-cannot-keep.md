@@ -51,18 +51,23 @@ keys.**
 6. **Startup failures.** The composition collects every failure, in registration order, into one
    `CoordinationCompositionException` whose `Failures` lists them. It is thrown from a hosted lifecycle service's
    starting step, which runs before any hosted service starts. Outside a host, it is thrown the first time a primitive
-   service resolves a binding. A provider factory that throws is not caught, so its exception stops the start as it is.
+   service resolves a binding. A provider factory's exception stops the composition and is rethrown as it was thrown,
+   and the providers created before it are disposed with the container.
 7. **Startup probes.** Once the composition is valid, the startup check calls each provider's `ProbeAsync` in
    registration order, before any hosted service starts, so a provider verifies that its server keeps what it declares,
    as ADR-1003 rule 2 requires. A composition that is invalid fails without probing any server. A probe's exception
    stops the start as it is. Outside a host nothing probes the providers.
-8. **Primitive services.** Each built-in primitive interface has one canonical implementation registered in DI. It
-   resolves the binding for the key's keyspace and calls the provider's implementation. A provider exposes its
-   implementations only through `ICoordinationProvider.GetPrimitiveService`, never through DI. When no binding covers a
-   key, the call throws a `CoordinationException` coded `unsupported`, whose message names the primitive and the
-   cluster and never the keyspace's segments.
+8. **Primitive services.** Each built-in primitive is an interface
+   ([ADR-1012](1012-each-primitive-is-an-interface-whose-operations-are-named-with-the-guarantee-dimensions-they-carry.md)),
+   and each has one canonical implementation registered in DI, named `Default<Name>`
+   ([ADR-0105](project-template/0105-the-canonical-implementation-is-named-defaultfoo.md)). It resolves the binding for
+   the key's keyspace and calls the provider's implementation. A provider exposes its implementations only through
+   `ICoordinationProvider.GetPrimitiveService`, never through DI. When no binding covers a key, the call throws a
+   `CoordinationException` coded `unsupported`, whose message names the primitive and the cluster and never the
+   keyspace's segments.
 9. **Provider lifetime.** The composition owns the providers it creates and disposes each one when the host stops,
-   asynchronously when it can. Nothing is disposed when the composition never composed or failed.
+   asynchronously when it can. It disposes every provider it created, also when the composition failed after creating
+   them, and a failed composition stays failed for the life of the container.
 10. **Telemetry.** The meter and the activity source are both named `NCode.Coordination`. One histogram,
     `ncode.coordination.operation.duration`, in seconds, records each operation, and one client span,
     `ncode.coordination.operation`, traces it. Their attributes are the provider, the primitive, the operation and the
