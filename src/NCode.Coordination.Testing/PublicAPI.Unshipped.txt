@@ -204,6 +204,7 @@ NCode.Coordination.Testing.SemaphoreContractTests.WaitForReleaseAsync_WhenASlotI
 NCode.Coordination.Testing.SemaphoreContractTests.WaitForReleaseAsync_WhenTheSlotExpires_Completes() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.SemaphoreContractTests.WaitForReleaseAsync_WhenTokenIsCanceled_ThrowsOperationCanceledException() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.SequenceContractTests
+NCode.Coordination.Testing.SequenceContractTests.ConcurrentRun_WhenClientsRace_KeepsALinearizableHistory() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.SequenceContractTests.NextAsync_WhenCalledAgain_ReturnsTheNextNumber() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.SequenceContractTests.NextAsync_WhenOptionsCarryAnUnknownExtension_ThrowsUnsupported() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.SequenceContractTests.NextAsync_WhenSequenceIsNew_ReturnsOne() -> System.Threading.Tasks.Task!
