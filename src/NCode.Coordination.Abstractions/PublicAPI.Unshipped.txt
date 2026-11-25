@@ -71,6 +71,11 @@ NCode.Coordination.GuaranteeDefinition.Implies.get -> System.Collections.Immutab
 NCode.Coordination.GuaranteeDefinition.Implies.init -> void
 NCode.Coordination.GuaranteeDimensions
 NCode.Coordination.Guarantees
+NCode.Coordination.IMembershipService
+NCode.Coordination.IMembershipService.JoinAsync(NCode.Coordination.CoordinationKey! group, NCode.Coordination.Member! member, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.MembershipJoinStatus>
+NCode.Coordination.IMembershipService.LeaveAsync(NCode.Coordination.CoordinationKey! group, NCode.Coordination.SessionId! session, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
+NCode.Coordination.IMembershipService.ReadAsync(NCode.Coordination.CoordinationKey! group, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.MembershipView!>
+NCode.Coordination.IMembershipService.WatchAsync(NCode.Coordination.CoordinationKey! group, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Collections.Generic.IAsyncEnumerable<NCode.Coordination.MembershipView!>!
 NCode.Coordination.ISessionService
 NCode.Coordination.ISessionService.CloseAsync(NCode.Coordination.SessionId! session, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
 NCode.Coordination.ISessionService.KeepAliveAsync(NCode.Coordination.SessionId! session, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.KeepAliveResult!>
@@ -101,6 +106,22 @@ NCode.Coordination.Keyspace.CreateKey(params System.Collections.Generic.IEnumera
 NCode.Coordination.Keyspace.Equals(NCode.Coordination.Keyspace? other) -> bool
 NCode.Coordination.Keyspace.Keyspace(string! cluster, params System.Collections.Generic.IEnumerable<NCode.Coordination.KeySegment!>! segments) -> void
 NCode.Coordination.Keyspace.Segments.get -> System.Collections.Immutable.ImmutableArray<NCode.Coordination.KeySegment!>
+NCode.Coordination.Member
+NCode.Coordination.Member.Address.get -> string!
+NCode.Coordination.Member.Member(NCode.Coordination.SessionId! session, string! nodeId, string! address) -> void
+NCode.Coordination.Member.Metadata.get -> System.Collections.Immutable.ImmutableDictionary<string!, string!>!
+NCode.Coordination.Member.Metadata.init -> void
+NCode.Coordination.Member.NodeId.get -> string!
+NCode.Coordination.Member.Session.get -> NCode.Coordination.SessionId!
+NCode.Coordination.MembershipJoinStatus
+NCode.Coordination.MembershipJoinStatus.Joined = 0 -> NCode.Coordination.MembershipJoinStatus
+NCode.Coordination.MembershipJoinStatus.NodeIdTaken = 1 -> NCode.Coordination.MembershipJoinStatus
+NCode.Coordination.MembershipJoinStatus.SessionEnded = 2 -> NCode.Coordination.MembershipJoinStatus
+NCode.Coordination.MembershipView
+NCode.Coordination.MembershipView.Group.get -> NCode.Coordination.CoordinationKey!
+NCode.Coordination.MembershipView.Members.get -> System.Collections.Immutable.ImmutableArray<NCode.Coordination.Member!>
+NCode.Coordination.MembershipView.MembershipView(NCode.Coordination.CoordinationKey! group, NCode.Coordination.Revision! revision, params System.Collections.Generic.IEnumerable<NCode.Coordination.Member!>! members) -> void
+NCode.Coordination.MembershipView.Revision.get -> NCode.Coordination.Revision!
 NCode.Coordination.Operation
 NCode.Coordination.Operation.<Clone>$() -> NCode.Coordination.Operation!
 NCode.Coordination.Operation.Equals(NCode.Coordination.Operation? other) -> bool
