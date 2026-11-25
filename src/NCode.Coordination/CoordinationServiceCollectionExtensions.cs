@@ -49,6 +49,7 @@ public static class CoordinationServiceCollectionExtensions
             services.TryAddSingleton<IMembershipService, DefaultMembershipService>();
             services.TryAddSingleton<ILeaseService, DefaultLeaseService>();
             services.TryAddSingleton<ISemaphoreService, DefaultSemaphoreService>();
+            services.TryAddSingleton<IElectionService, DefaultElectionService>();
             return services;
         }
     }
