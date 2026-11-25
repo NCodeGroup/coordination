@@ -29,16 +29,26 @@ public sealed class InProcessConcurrencyTests
 
     private static async Task<TResult[]> RunCallersAsync<TResult>(
         int count,
-        Func<int, ValueTask<TResult>> caller
+        Func<int, ValueTask<TResult>> caller,
+        CancellationToken cancellationToken
     )
     {
-        var cancellationToken = TestContext.Current.CancellationToken;
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var tasks = new Task<TResult>[count];
         for (var index = 0; index < count; index++)
         {
             var callerIndex = index;
-            tasks[index] = Task.Run(async () => await caller(callerIndex), cancellationToken);
+            tasks[index] = Task.Run(
+                async () =>
+                {
+                    await gate.Task.WaitAsync(cancellationToken);
+                    return await caller(callerIndex);
+                },
+                cancellationToken
+            );
         }
+
+        gate.SetResult();
 
         return await Task.WhenAll(tasks);
     }
@@ -61,17 +71,21 @@ public sealed class InProcessConcurrencyTests
         var records = GetService<IRecordService>(provider);
         var key = Keyspace.CreateKey("record");
 
-        var results = await RunCallersAsync(RacingCallers, index =>
-        {
-            var value = BitConverter.GetBytes(index);
-            return records.CreateAsync(
-                key,
-                value,
-                RecordLifetime.Persistent,
-                null,
-                cancellationToken
-            );
-        });
+        var results = await RunCallersAsync(
+            RacingCallers,
+            index =>
+            {
+                var value = BitConverter.GetBytes(index);
+                return records.CreateAsync(
+                    key,
+                    value,
+                    RecordLifetime.Persistent,
+                    null,
+                    cancellationToken
+                );
+            },
+            cancellationToken
+        );
 
         var conflicts = results.Count(x => x.Status == RecordWriteStatus.Conflict);
 
@@ -93,8 +107,10 @@ public sealed class InProcessConcurrencyTests
         var ttl = TimeSpan.FromSeconds(30);
         var timeToLive = new TimeToLive(ttl);
 
-        var results = await RunCallersAsync(RacingCallers, _ =>
-            occurrences.TryRecordAsync(key, timeToLive, null, cancellationToken)
+        var results = await RunCallersAsync(
+            RacingCallers,
+            _ => occurrences.TryRecordAsync(key, timeToLive, null, cancellationToken),
+            cancellationToken
         );
 
         var duplicates = results.Count(x => x == OccurrenceStatus.Duplicate);
@@ -117,8 +133,10 @@ public sealed class InProcessConcurrencyTests
         var ttl = TimeSpan.FromSeconds(30);
         var timeToLive = new TimeToLive(ttl);
 
-        var counts = await RunCallersAsync(CountingCallers, _ =>
-            counters.IncrementAsync(key, 1, timeToLive, null, cancellationToken)
+        var counts = await RunCallersAsync(
+            CountingCallers,
+            _ => counters.IncrementAsync(key, 1, timeToLive, null, cancellationToken),
+            cancellationToken
         );
 
         var total = await counters.ReadAsync(key, null, cancellationToken);
@@ -139,8 +157,10 @@ public sealed class InProcessConcurrencyTests
         var sequences = GetService<ISequenceService>(provider);
         var key = Keyspace.CreateKey("sequence");
 
-        var numbers = await RunCallersAsync(CountingCallers, _ =>
-            sequences.NextAsync(key, null, cancellationToken)
+        var numbers = await RunCallersAsync(
+            CountingCallers,
+            _ => sequences.NextAsync(key, null, cancellationToken),
+            cancellationToken
         );
 
         AssertEachNumberOnce(numbers, CountingCallers);
@@ -159,13 +179,17 @@ public sealed class InProcessConcurrencyTests
         var key = Keyspace.CreateKey("transaction");
         var absent = RecordCondition.Absent(key);
 
-        var results = await RunCallersAsync(RacingCallers, index =>
-        {
-            var value = BitConverter.GetBytes(index);
-            var put = RecordWrite.Put(key, value, RecordLifetime.Persistent);
-            var transaction = new RecordTransaction([absent], [put]);
-            return transactions.ExecuteAsync(transaction, null, cancellationToken);
-        });
+        var results = await RunCallersAsync(
+            RacingCallers,
+            index =>
+            {
+                var value = BitConverter.GetBytes(index);
+                var put = RecordWrite.Put(key, value, RecordLifetime.Persistent);
+                var transaction = new RecordTransaction([absent], [put]);
+                return transactions.ExecuteAsync(transaction, null, cancellationToken);
+            },
+            cancellationToken
+        );
 
         var failures = results.Count(x => !x.Succeeded);
 

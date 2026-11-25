@@ -13,9 +13,14 @@ internal static class InProcessConformance
     /// <summary>
     /// Creates an in-process provider on a fake clock, with a way to advance that clock.
     /// </summary>
+    /// <param name="cancellationToken">A token that cancels the creation.</param>
     /// <returns>The target of one contract test.</returns>
-    public static ValueTask<ConformanceTarget> CreateTargetAsync()
+    public static ValueTask<ConformanceTarget> CreateTargetAsync(
+        CancellationToken cancellationToken
+    )
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         var time = InProcessTesting.CreateTime();
         var provider = new InProcessProvider(time);
         var target = new ConformanceTarget(provider)

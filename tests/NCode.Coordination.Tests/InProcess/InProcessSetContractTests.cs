@@ -9,5 +9,5 @@ public sealed class InProcessSetContractTests : SetContractTests
 {
     protected override ValueTask<ConformanceTarget> CreateTargetAsync(
         CancellationToken cancellationToken
-    ) => InProcessConformance.CreateTargetAsync();
+    ) => InProcessConformance.CreateTargetAsync(cancellationToken);
 }
