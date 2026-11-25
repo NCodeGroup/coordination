@@ -22,6 +22,9 @@ NCode.Coordination.ILockService.AcquireAsync(NCode.Coordination.CoordinationKey!
 NCode.Coordination.InProcessCoordinationBuilderExtensions
 NCode.Coordination.InProcessCoordinationBuilderExtensions.extension(NCode.Coordination.ICoordinationBuilder!)
 NCode.Coordination.InProcessCoordinationBuilderExtensions.extension(NCode.Coordination.ICoordinationBuilder!).AddInProcessProvider() -> NCode.Coordination.ICoordinationBuilder!
+NCode.Coordination.IPartitionOwnershipService
+NCode.Coordination.IPartitionOwnershipService.ReadAsync(NCode.Coordination.CoordinationKey! group, int partitionCount, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.PartitionAssignment!>
+NCode.Coordination.IPartitionOwnershipService.WatchAsync(NCode.Coordination.CoordinationKey! group, int partitionCount, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Collections.Generic.IAsyncEnumerable<NCode.Coordination.PartitionAssignment!>!
 NCode.Coordination.IReadWriteLockService
 NCode.Coordination.IReadWriteLockService.AcquireReadAsync(NCode.Coordination.CoordinationKey! resource, NCode.Coordination.LeaseTerms! terms, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.ReadLockGrant?>
 NCode.Coordination.IReadWriteLockService.AcquireWriteAsync(NCode.Coordination.CoordinationKey! resource, NCode.Coordination.LeaseTerms! terms, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.LeaseGrant?>
