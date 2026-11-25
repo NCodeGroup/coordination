@@ -79,6 +79,48 @@ public sealed class InProcessCoordinationBuilderExtensionsTests
     }
 
     [Fact]
+    public async Task AddInProcessProvider_WhenBound_ServesLeases()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var services = CreateServices();
+        AddInProcess(services);
+        await using var serviceProvider = services.BuildServiceProvider();
+        var leases = serviceProvider.GetRequiredService<ILeaseService>();
+        var timeToLive = new TimeToLive(TimeSpan.FromSeconds(30));
+        var terms = LeaseTerms.ForTimeToLive(timeToLive);
+
+        var result = await leases.TryAcquireAsync(
+            TestComposition.Key,
+            terms,
+            null,
+            cancellationToken
+        );
+
+        Assert.True(result.IsAcquired);
+    }
+
+    [Fact]
+    public async Task AddInProcessProvider_WhenBound_ServesSessions()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var services = CreateServices();
+        AddInProcess(services);
+        await using var serviceProvider = services.BuildServiceProvider();
+        var sessions = serviceProvider.GetRequiredService<ISessionService>();
+        var timeToLive = new TimeToLive(TimeSpan.FromSeconds(30));
+        var grant = await sessions.OpenAsync(
+            TestComposition.Keyspace,
+            timeToLive,
+            null,
+            cancellationToken
+        );
+
+        var result = await sessions.KeepAliveAsync(grant.Id, null, cancellationToken);
+
+        Assert.True(result.IsRenewed);
+    }
+
+    [Fact]
     public void AddInProcessProvider_WhenBuilderIsNull_Throws()
     {
         var exception = Assert.Throws<ArgumentNullException>(() =>
