@@ -35,6 +35,25 @@ internal class InProcessSequenceService : ISequenceService
     /// </summary>
     private Dictionary<CoordinationKey, long> Last { get; } = [];
 
+    /// <summary>
+    /// Sets the last number a sequence handed out.
+    /// </summary>
+    /// <remarks>
+    /// Tests use this to reach the largest number, which a block of at most
+    /// <see cref="CoordinationLimits.MaxSequenceBlock" /> numbers cannot reach.
+    /// </remarks>
+    /// <param name="key">The key of the sequence.</param>
+    /// <param name="last">The last number the sequence handed out.</param>
+    internal void SetLast(CoordinationKey key, long last)
+    {
+        ArgumentNullException.ThrowIfNull(key);
+
+        lock (Gate)
+        {
+            Last[key] = last;
+        }
+    }
+
     /// <inheritdoc />
     public ValueTask<long> NextAsync(
         CoordinationKey key,
