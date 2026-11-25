@@ -111,6 +111,9 @@ NCode.Coordination.IRecordService.CreateAsync(NCode.Coordination.CoordinationKey
 NCode.Coordination.IRecordService.ListAsync(NCode.Coordination.CoordinationKey! prefix, NCode.Coordination.RecordPageRequest! page, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.RecordPage!>
 NCode.Coordination.IRecordService.ReadAsync(NCode.Coordination.CoordinationKey! key, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.StoredRecord?>
 NCode.Coordination.IRecordService.TakeAsync(NCode.Coordination.CoordinationKey! key, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.StoredRecord?>
+NCode.Coordination.IRecordWatchService
+NCode.Coordination.IRecordWatchService.WatchKeyAsync(NCode.Coordination.CoordinationKey! key, NCode.Coordination.Revision? after, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Collections.Generic.IAsyncEnumerable<NCode.Coordination.RecordChange!>!
+NCode.Coordination.IRecordWatchService.WatchPrefixAsync(NCode.Coordination.CoordinationKey! prefix, NCode.Coordination.Revision? after, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Collections.Generic.IAsyncEnumerable<NCode.Coordination.RecordChange!>!
 NCode.Coordination.ISemaphoreService
 NCode.Coordination.ISemaphoreService.ReleaseAsync(NCode.Coordination.SemaphoreGrant! grant, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<bool>
 NCode.Coordination.ISemaphoreService.RenewAsync(NCode.Coordination.SemaphoreGrant! grant, NCode.Coordination.TimeToLive! timeToLive, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<bool>
@@ -229,6 +232,16 @@ NCode.Coordination.ProviderDeclaration.Profile.get -> string?
 NCode.Coordination.ProviderDeclaration.Profile.init -> void
 NCode.Coordination.ProviderDeclaration.Provider.get -> string!
 NCode.Coordination.ProviderDeclaration.ProviderDeclaration(string! provider, params System.Collections.Generic.IEnumerable<NCode.Coordination.PrimitiveSupport!>! primitives) -> void
+NCode.Coordination.RecordChange
+NCode.Coordination.RecordChange.IsResync.get -> bool
+NCode.Coordination.RecordChange.Key.get -> NCode.Coordination.CoordinationKey?
+NCode.Coordination.RecordChange.Kind.get -> NCode.Coordination.RecordChangeKind
+NCode.Coordination.RecordChange.Record.get -> NCode.Coordination.StoredRecord?
+NCode.Coordination.RecordChange.Revision.get -> NCode.Coordination.Revision!
+NCode.Coordination.RecordChangeKind
+NCode.Coordination.RecordChangeKind.Deleted = 1 -> NCode.Coordination.RecordChangeKind
+NCode.Coordination.RecordChangeKind.Resync = 2 -> NCode.Coordination.RecordChangeKind
+NCode.Coordination.RecordChangeKind.Written = 0 -> NCode.Coordination.RecordChangeKind
 NCode.Coordination.RecordDeleteStatus
 NCode.Coordination.RecordDeleteStatus.Conflict = 1 -> NCode.Coordination.RecordDeleteStatus
 NCode.Coordination.RecordDeleteStatus.Deleted = 0 -> NCode.Coordination.RecordDeleteStatus
@@ -455,6 +468,9 @@ static NCode.Coordination.Primitives.Set.get -> NCode.Coordination.Primitive!
 static NCode.Coordination.Primitives.Transaction.get -> NCode.Coordination.Primitive!
 static NCode.Coordination.PrimitiveSupport.Supported(NCode.Coordination.Primitive! primitive, params System.Collections.Generic.IEnumerable<NCode.Coordination.Guarantee!>! guarantees) -> NCode.Coordination.PrimitiveSupport!
 static NCode.Coordination.PrimitiveSupport.Unsupported(NCode.Coordination.Primitive! primitive, string! reason) -> NCode.Coordination.PrimitiveSupport!
+static NCode.Coordination.RecordChange.Deleted(NCode.Coordination.CoordinationKey! key, NCode.Coordination.Revision! revision) -> NCode.Coordination.RecordChange!
+static NCode.Coordination.RecordChange.Resync(NCode.Coordination.Revision! revision) -> NCode.Coordination.RecordChange!
+static NCode.Coordination.RecordChange.Written(NCode.Coordination.StoredRecord! record) -> NCode.Coordination.RecordChange!
 static NCode.Coordination.RecordLifetime.ForSession(NCode.Coordination.SessionId! session) -> NCode.Coordination.RecordLifetime!
 static NCode.Coordination.RecordLifetime.ForTimeToLive(NCode.Coordination.TimeToLive! timeToLive) -> NCode.Coordination.RecordLifetime!
 static NCode.Coordination.RecordLifetime.Persistent.get -> NCode.Coordination.RecordLifetime!
