@@ -58,7 +58,7 @@ public sealed class PrimitiveBinderTests : IDisposable
 
         Assert.Empty(checkedBound.Failures);
         var boundPrimitives = bound.Select(x => x.Primitive);
-        Assert.Equal([Primitives.Occurrence, custom], boundPrimitives);
+        Assert.Equal<Primitive>([Primitives.Occurrence, custom], boundPrimitives);
     }
 
     [Fact]
@@ -133,7 +133,7 @@ public sealed class PrimitiveBinderTests : IDisposable
         var bound = checkedBound.Value;
 
         Assert.Empty(bound);
-        Assert.Equal(
+        Assert.Equal<string>(
             ["A binding names the provider 'missing', which is not registered."],
             checkedBound.Failures
         );
@@ -152,7 +152,7 @@ public sealed class PrimitiveBinderTests : IDisposable
         var bound = checkedBound.Value;
 
         Assert.Empty(bound);
-        Assert.Equal(
+        Assert.Equal<string>(
             ["The provider 'memory' is bound to the primitive 'lease', which it does not list."],
             checkedBound.Failures
         );
@@ -171,7 +171,7 @@ public sealed class PrimitiveBinderTests : IDisposable
         var bound = checkedBound.Value;
 
         Assert.Empty(bound);
-        Assert.Equal(
+        Assert.Equal<string>(
             [
                 "The provider 'memory' is bound to the primitive 'lease', which it does not support: Leases need a server.",
             ],
@@ -193,7 +193,7 @@ public sealed class PrimitiveBinderTests : IDisposable
         var bound = checkedBound.Value;
 
         Assert.Empty(bound);
-        Assert.Equal(
+        Assert.Equal<string>(
             [
                 "The provider 'memory' supports the primitive 'occurrence' but serves no IOccurrenceService.",
             ],

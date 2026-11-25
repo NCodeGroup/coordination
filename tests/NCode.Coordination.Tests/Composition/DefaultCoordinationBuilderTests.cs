@@ -22,7 +22,10 @@ public sealed class DefaultCoordinationBuilderTests
 
         builder.AddProvider(factory);
 
-        Assert.Equal([factory], Registrations.ProviderFactories);
+        Assert.Equal<Func<IServiceProvider, ICoordinationProvider>>(
+            [factory],
+            Registrations.ProviderFactories
+        );
     }
 
     [Fact]
@@ -57,7 +60,7 @@ public sealed class DefaultCoordinationBuilderTests
 
         builder.Bind(binding);
 
-        Assert.Equal([binding], Registrations.Bindings);
+        Assert.Equal<ProviderBinding>([binding], Registrations.Bindings);
     }
 
     [Fact]
@@ -92,7 +95,7 @@ public sealed class DefaultCoordinationBuilderTests
 
         builder.Require(requirement);
 
-        Assert.Equal([requirement], Registrations.Requirements);
+        Assert.Equal<FeatureRequirement>([requirement], Registrations.Requirements);
     }
 
     [Fact]
@@ -128,7 +131,7 @@ public sealed class DefaultCoordinationBuilderTests
 
         builder.Define(definition);
 
-        Assert.Equal([definition], Registrations.Definitions);
+        Assert.Equal<GuaranteeDefinition>([definition], Registrations.Definitions);
     }
 
     [Fact]

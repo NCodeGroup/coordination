@@ -43,7 +43,7 @@ public sealed class ProviderCatalogTests
         var checkedCatalog = ProviderCatalog.Create([_ => null!, _ => first], Services);
         var catalog = checkedCatalog.Value;
 
-        Assert.Equal(["A provider factory returned no provider."], checkedCatalog.Failures);
+        Assert.Equal<string>(["A provider factory returned no provider."], checkedCatalog.Failures);
         Assert.Equal<ICoordinationProvider>([first], catalog.Providers);
     }
 
@@ -56,7 +56,7 @@ public sealed class ProviderCatalogTests
         var checkedCatalog = ProviderCatalog.Create([_ => first, _ => second], Services);
         var catalog = checkedCatalog.Value;
 
-        Assert.Equal(["Two providers are named 'memory'."], checkedCatalog.Failures);
+        Assert.Equal<string>(["Two providers are named 'memory'."], checkedCatalog.Failures);
         Assert.Equal<ICoordinationProvider>([first], catalog.Providers);
         var found = catalog.Find("memory");
         Assert.Same(first, found);

@@ -56,7 +56,7 @@ public sealed class GuaranteeRegistryTests
         var checkedRegistry = GuaranteeRegistry.Create(definitions);
         var registry = checkedRegistry.Value;
 
-        Assert.Equal(
+        Assert.Equal<string>(
             ["The guarantee 'test.a' is defined twice, with different meanings."],
             checkedRegistry.Failures
         );
@@ -71,7 +71,7 @@ public sealed class GuaranteeRegistryTests
 
         var checkedRegistry = GuaranteeRegistry.Create(definitions);
 
-        Assert.Equal(
+        Assert.Equal<string>(
             ["The guarantee 'test.a' is defined twice, with different meanings."],
             checkedRegistry.Failures
         );
@@ -89,7 +89,7 @@ public sealed class GuaranteeRegistryTests
 
         var checkedRegistry = GuaranteeRegistry.Create(definitions);
 
-        Assert.Equal(
+        Assert.Equal<string>(
             ["The guarantee 'test.a' is defined twice, with different meanings."],
             checkedRegistry.Failures
         );
@@ -102,7 +102,7 @@ public sealed class GuaranteeRegistryTests
 
         var checkedRegistry = GuaranteeRegistry.Create(definitions);
 
-        Assert.Equal(
+        Assert.Equal<string>(
             ["The guarantee 'test.a' implies 'test.b', which is not defined."],
             checkedRegistry.Failures
         );

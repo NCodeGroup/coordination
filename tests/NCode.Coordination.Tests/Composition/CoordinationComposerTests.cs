@@ -57,7 +57,8 @@ public sealed class CoordinationComposerTests : IDisposable
 
         var composed = CoordinationComposer.Compose(registrations, Services);
 
-        Assert.Equal([provider], composed.Providers);
+        Assert.Empty(composed.Failures);
+        Assert.Equal<ICoordinationProvider>([provider], composed.Providers);
         var bound = composed.Bindings.Find(Primitives.Occurrence, null);
         Assert.NotNull(bound);
         Assert.Equal("memory", bound.Provider);
@@ -105,6 +106,7 @@ public sealed class CoordinationComposerTests : IDisposable
 
         var composed = CoordinationComposer.Compose(registrations, Services);
 
+        Assert.Empty(composed.Failures);
         var bound = composed.Bindings.Find(Primitives.Occurrence, null);
         Assert.NotNull(bound);
     }
@@ -131,6 +133,7 @@ public sealed class CoordinationComposerTests : IDisposable
 
         var composed = CoordinationComposer.Compose(registrations, Services);
 
+        Assert.Empty(composed.Failures);
         var bound = composed.Bindings.Find(Primitives.Occurrence, null);
         Assert.NotNull(bound);
     }
@@ -146,8 +149,10 @@ public sealed class CoordinationComposerTests : IDisposable
 
         var composed = CoordinationComposer.Compose(registrations, Services);
 
-        Assert.Contains(
-            "The provider 'memory' declares the guarantee 'custom.unknown' on the primitive 'occurrence', which is not defined.",
+        Assert.Equal<string>(
+            [
+                "The provider 'memory' declares the guarantee 'custom.unknown' on the primitive 'occurrence', which is not defined.",
+            ],
             composed.Failures
         );
     }

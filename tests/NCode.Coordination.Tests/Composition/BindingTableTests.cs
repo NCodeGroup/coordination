@@ -128,7 +128,7 @@ public sealed class BindingTableTests
 
         var checkedTable = BindingTable.Create([first, second]);
 
-        Assert.Equal(
+        Assert.Equal<string>(
             ["The primitive 'lease' is bound twice by default: to 'a' and to 'b'."],
             checkedTable.Failures
         );
@@ -143,7 +143,7 @@ public sealed class BindingTableTests
 
         var checkedTable = BindingTable.Create([first, second]);
 
-        Assert.Equal(
+        Assert.Equal<string>(
             [
                 "The primitive 'lease' is bound twice for the keyspace 'prod/cell-1': to 'a' and to 'b'.",
             ],

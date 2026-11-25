@@ -9,16 +9,16 @@ namespace NCode.Coordination.Routing.Tests;
 
 public sealed class DefaultClaimServiceTests : IDisposable
 {
-    private MockRepository Mocks { get; } = new(MockBehavior.Strict);
-
-    public void Dispose() => Mocks.Verify();
-
     private static TimeWindow Window()
     {
         var start = new DateTimeOffset(2026, 11, 25, 10, 0, 0, TimeSpan.Zero);
         var length = TimeSpan.FromHours(1);
         return new TimeWindow(start, length);
     }
+
+    private MockRepository Mocks { get; } = new(MockBehavior.Strict);
+
+    public void Dispose() => Mocks.Verify();
 
     #region TryClaimAsync Tests
 
@@ -57,18 +57,7 @@ public sealed class DefaultClaimServiceTests : IDisposable
         var ttl = TimeSpan.FromHours(2);
         var timeToLive = new TimeToLive(ttl);
         var mock = Mocks.Create<IClaimService>();
-        var support = PrimitiveSupport.Supported(Primitives.Claim);
-        var declaration = new ProviderDeclaration(TestComposition.ProviderName, support);
-        var binding = new ProviderBinding(TestComposition.ProviderName)
-        {
-            Keyspace = new Keyspace("elsewhere"),
-        };
-        var services = new ServiceCollection();
-        services.AddMetrics();
-        services.AddCoordination(b =>
-            b.AddProvider(_ => new TestProvider(declaration, mock.Object)).Bind(binding)
-        );
-        await using var provider = services.BuildServiceProvider();
+        await using var provider = TestComposition.BuildElsewhere(Primitives.Claim, mock.Object);
         var service = provider.GetRequiredService<IClaimService>();
 
         var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>

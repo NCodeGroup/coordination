@@ -137,8 +137,8 @@ public sealed class CoordinationCompositionTests : IDisposable
 
         await composition.EnsureStartedAsync(cancellationToken);
 
-        Assert.Equal(["first", "second"], probed);
-        Assert.Equal([cancellationToken, cancellationToken], tokens);
+        Assert.Equal<string>(["first", "second"], probed);
+        Assert.Equal<CancellationToken>([cancellationToken, cancellationToken], tokens);
     }
 
     [Fact]
