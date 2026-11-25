@@ -30,6 +30,10 @@ NCode.Coordination.InProcessCoordinationBuilderExtensions.extension(NCode.Coordi
 NCode.Coordination.IPartitionOwnershipService
 NCode.Coordination.IPartitionOwnershipService.ReadAsync(NCode.Coordination.CoordinationKey! group, int partitionCount, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.PartitionAssignment!>
 NCode.Coordination.IPartitionOwnershipService.WatchAsync(NCode.Coordination.CoordinationKey! group, int partitionCount, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Collections.Generic.IAsyncEnumerable<NCode.Coordination.PartitionAssignment!>!
+NCode.Coordination.IRateLimiterFactory
+NCode.Coordination.IRateLimiterFactory.CreateFixedWindowLimiter(NCode.Coordination.CoordinationKey! key, NCode.Coordination.FixedWindowLimit! limit) -> System.Threading.RateLimiting.RateLimiter!
+NCode.Coordination.IRateLimiterFactory.CreateSlidingWindowLimiter(NCode.Coordination.CoordinationKey! key, NCode.Coordination.SlidingWindowLimit! limit) -> System.Threading.RateLimiting.RateLimiter!
+NCode.Coordination.IRateLimiterFactory.CreateTokenBucketLimiter(NCode.Coordination.CoordinationKey! key, NCode.Coordination.TokenBucketLimit! limit) -> System.Threading.RateLimiting.RateLimiter!
 NCode.Coordination.IReadWriteLockService
 NCode.Coordination.IReadWriteLockService.AcquireReadAsync(NCode.Coordination.CoordinationKey! resource, NCode.Coordination.LeaseTerms! terms, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.ReadLockGrant?>
 NCode.Coordination.IReadWriteLockService.AcquireWriteAsync(NCode.Coordination.CoordinationKey! resource, NCode.Coordination.LeaseTerms! terms, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.LeaseGrant?>
