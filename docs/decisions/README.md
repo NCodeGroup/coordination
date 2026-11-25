@@ -75,3 +75,4 @@ records are indexed in [project-template/](project-template/README.md).
 | [1007](1007-the-first-stable-release-carries-the-whole-model-proven-on-three-providers-and-by-its-first-consumer.md) | The first stable release carries the whole model, proven on three providers and by its first consumer | Proposed |
 | [1008](1008-expiry-is-a-duration-on-the-providers-declared-clock-and-an-instant-becomes-one-at-the-caller-with-an-allowance-for-skew.md) | Expiry is a duration on the provider's declared clock, and an instant becomes one at the caller with an allowance for skew | Proposed |
 | [1009](1009-ci-checks-every-dependencys-license-and-no-snippet-scan-runs.md) | CI checks every dependency's license, and no snippet scan runs (amends 1001) | Proposed |
+| [1010](1010-vocabulary-values-are-sealed-record-classes-so-no-default-instance-skips-validation.md) | Vocabulary values are sealed record classes, so no default instance skips validation | Proposed |

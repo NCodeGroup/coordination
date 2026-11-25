@@ -50,4 +50,4 @@ How `/ship-plan` lands a reviewed plan. `integrate`: `pull-request` pushes the p
 
 ## Conventions
 
-- (Add the project's conventions here, and any template rule this project overrides.)
+- The contracts' value types are sealed record classes, not readonly record structs, which overrides the C# conventions' preference for a readonly record struct ([ADR-1010](docs/decisions/1010-vocabulary-values-are-sealed-record-classes-so-no-default-instance-skips-validation.md)).
