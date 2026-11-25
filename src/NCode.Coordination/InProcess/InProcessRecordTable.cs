@@ -11,7 +11,8 @@ namespace NCode.Coordination.InProcess;
 /// The table is not thread-safe: every method, except <see cref="Time"/>, <see cref="Gate"/>, <see cref="Deadlines"/>,
 /// <see cref="Enter"/> and <see cref="Dispose"/>, is called inside <see cref="Enter"/>. A keyspace's revision is 1
 /// before its first write. Each keyspace's records are held in a dictionary of their own, which, like the keyspace's
-/// revision, stays once written. A record's expiry is a delete at a new revision of its keyspace.
+/// revision, stays once written. A record's expiry is a delete at a new revision of its keyspace. Each keyspace keeps a
+/// log of its latest changes, and every change is posted to the watches that cover its key.
 /// </remarks>
 internal class InProcessRecordTable : IDisposable
 {
@@ -54,6 +55,16 @@ internal class InProcessRecordTable : IDisposable
     /// Gets the latest revision of each keyspace that was written.
     /// </summary>
     private Dictionary<Keyspace, long> Revisions { get; } = [];
+
+    /// <summary>
+    /// Gets the latest changes of each keyspace that was written.
+    /// </summary>
+    private Dictionary<Keyspace, InProcessChangeLog> Logs { get; } = [];
+
+    /// <summary>
+    /// Gets the watches of each keyspace that has any.
+    /// </summary>
+    private Dictionary<Keyspace, List<InProcessRecordWatcher>> Watchers { get; } = [];
 
     /// <summary>
     /// Gets or sets the sequence of the latest write.
@@ -155,14 +166,17 @@ internal class InProcessRecordTable : IDisposable
         }
 
         records[key] = new InProcessRecordEntry(record, sequence, lifetime.Session, deadline);
+
+        Publish(key, RecordChange.Written(record));
     }
 
     /// <summary>
-    /// Removes a record and cancels its deadline.
+    /// Removes a record, cancels its deadline and publishes the deletion.
     /// </summary>
     /// <param name="key">The key of the record.</param>
+    /// <param name="revision">The revision of the deletion.</param>
     /// <returns>True when a live record was removed.</returns>
-    public bool Remove(CoordinationKey key)
+    public bool Remove(CoordinationKey key, Revision revision)
     {
         if (
             !RecordsByKeyspace.TryGetValue(key.Keyspace, out var records)
@@ -173,7 +187,73 @@ internal class InProcessRecordTable : IDisposable
         }
 
         Deadlines.Cancel(entry.Deadline);
+        Publish(key, RecordChange.Deleted(key, revision));
         return true;
+    }
+
+    /// <summary>
+    /// Adds a watch and starts its queue: with the changes after a revision when the keyspace's log covers them, and
+    /// otherwise with a resync.
+    /// </summary>
+    /// <param name="watcher">The watch to add.</param>
+    /// <param name="after">The revision after which the watch wants the changes, or null to start with a resync.</param>
+    public void AddWatcher(InProcessRecordWatcher watcher, Revision? after)
+    {
+        ArgumentNullException.ThrowIfNull(watcher);
+
+        var keyspace = watcher.Keyspace;
+        if (!Watchers.TryGetValue(keyspace, out var watchers))
+        {
+            watchers = [];
+            Watchers[keyspace] = watchers;
+        }
+
+        watchers.Add(watcher);
+
+        var current = Current(keyspace);
+        var log = GetLog(keyspace);
+        if (after is null || after > current || !log.Covers(after))
+        {
+            watcher.Queue.Post(RecordChange.Resync(current));
+            return;
+        }
+
+        foreach (var logged in log.After(after))
+        {
+            if (!watcher.Matches(logged.Key))
+            {
+                continue;
+            }
+
+            if (logged.IsDelete)
+            {
+                watcher.Queue.Post(RecordChange.Deleted(logged.Key, logged.Revision));
+            }
+            else if (Find(logged.Key) is { } record && record.Revision == logged.Revision)
+            {
+                watcher.Queue.Post(RecordChange.Written(record));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Removes a watch.
+    /// </summary>
+    /// <param name="watcher">The watch to remove.</param>
+    public void RemoveWatcher(InProcessRecordWatcher watcher)
+    {
+        ArgumentNullException.ThrowIfNull(watcher);
+
+        if (!Watchers.TryGetValue(watcher.Keyspace, out var watchers))
+        {
+            return;
+        }
+
+        watchers.Remove(watcher);
+        if (watchers.Count == 0)
+        {
+            Watchers.Remove(watcher.Keyspace);
+        }
     }
 
     /// <summary>
@@ -215,8 +295,51 @@ internal class InProcessRecordTable : IDisposable
             && entry.Sequence == sequence
         )
         {
-            Remove(key);
-            Advance(key.Keyspace);
+            Remove(key, Advance(key.Keyspace));
+        }
+    }
+
+    /// <summary>
+    /// Gets the change log of a keyspace, creating it when the keyspace has none.
+    /// </summary>
+    /// <param name="keyspace">The keyspace.</param>
+    /// <returns>The keyspace's change log.</returns>
+    private InProcessChangeLog GetLog(Keyspace keyspace)
+    {
+        if (!Logs.TryGetValue(keyspace, out var log))
+        {
+            log = new InProcessChangeLog();
+            Logs[keyspace] = log;
+        }
+
+        return log;
+    }
+
+    /// <summary>
+    /// Appends a change to its keyspace's log and posts it to the watches that cover its key.
+    /// </summary>
+    /// <param name="key">The key of the change.</param>
+    /// <param name="change">The change to publish.</param>
+    private void Publish(CoordinationKey key, RecordChange change)
+    {
+        var logged = new InProcessLoggedChange(
+            key,
+            change.Revision,
+            change.Kind == RecordChangeKind.Deleted
+        );
+        GetLog(key.Keyspace).Append(logged);
+
+        if (!Watchers.TryGetValue(key.Keyspace, out var watchers))
+        {
+            return;
+        }
+
+        foreach (var watcher in watchers)
+        {
+            if (watcher.Matches(key))
+            {
+                watcher.Queue.Post(change);
+            }
         }
     }
 }

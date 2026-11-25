@@ -63,7 +63,7 @@ internal class InProcessTransactionService(InProcessRecordTable table) : ITransa
                 }
                 else
                 {
-                    Table.Remove(write.Key);
+                    Table.Remove(write.Key, revision);
                 }
             }
 
