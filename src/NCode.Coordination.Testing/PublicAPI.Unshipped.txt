@@ -184,6 +184,7 @@ NCode.Coordination.Testing.RecordWatchContractTests.WatchKeyAsync_WhenTheRecords
 NCode.Coordination.Testing.RecordWatchContractTests.WatchPrefixAsync_WhenAKeyIsOutsideThePrefix_YieldsNothingForIt() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.RecordWatchContractTests.WatchPrefixAsync_WhenRecordsChange_ConvergesOnTheStore() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.SemaphoreContractTests
+NCode.Coordination.Testing.SemaphoreContractTests.ConcurrentRun_WhenClientsRace_KeepsALinearizableHistory() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.SemaphoreContractTests.ReleaseAsync_WhenGrantEnded_ReturnsFalse() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.SemaphoreContractTests.ReleaseAsync_WhenGrantHolds_ReturnsTrueAndFreesTheSlot() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.SemaphoreContractTests.ReleaseAsync_WhenTheSlotWasGrantedAgain_ReturnsFalseAndKeepsIt() -> System.Threading.Tasks.Task!
