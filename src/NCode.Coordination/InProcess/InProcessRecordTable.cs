@@ -12,7 +12,8 @@ namespace NCode.Coordination.InProcess;
 /// <see cref="Enter"/> and <see cref="Dispose"/>, is called inside <see cref="Enter"/>. A keyspace's revision is 1
 /// before its first write. Each keyspace's records are held in a dictionary of their own, which, like the keyspace's
 /// revision, stays once written. A record's expiry is a delete at a new revision of its keyspace. Each keyspace keeps a
-/// log of its latest changes, and every change is posted to the watches that cover its key. The keys of the records
+/// log of its latest changes, and every change is posted to the watches that cover its key. Each keyspace also keeps
+/// its live records' write sequences in order, so a listing reads only the page it returns. The keys of the records
 /// bound to each session are indexed, so a session's end deletes them without a scan.
 /// </remarks>
 internal class InProcessRecordTable : IDisposable
@@ -51,6 +52,11 @@ internal class InProcessRecordTable : IDisposable
         Keyspace,
         Dictionary<CoordinationKey, InProcessRecordEntry>
     > RecordsByKeyspace { get; } = [];
+
+    /// <summary>
+    /// Gets the order of the live records' write sequences of each keyspace that was written.
+    /// </summary>
+    private Dictionary<Keyspace, InProcessRecordOrder> OrderByKeyspace { get; } = [];
 
     /// <summary>
     /// Gets the latest revision of each keyspace that was written.
@@ -157,9 +163,16 @@ internal class InProcessRecordTable : IDisposable
             RecordsByKeyspace[keyspace] = records;
         }
 
+        if (!OrderByKeyspace.TryGetValue(keyspace, out var order))
+        {
+            order = new InProcessRecordOrder();
+            OrderByKeyspace[keyspace] = order;
+        }
+
         if (records.TryGetValue(record.Key, out var replaced))
         {
             Deadlines.Cancel(replaced.Deadline);
+            order.Remove(replaced.Sequence);
             if (replaced.Session is { } replacedSession)
             {
                 KeysBySession.Unbind(replacedSession, record.Key);
@@ -176,6 +189,7 @@ internal class InProcessRecordTable : IDisposable
         }
 
         records[key] = new InProcessRecordEntry(record, sequence, lifetime.Session, deadline);
+        order.Add(sequence, key);
 
         if (lifetime.Session is { } session)
         {
@@ -203,6 +217,11 @@ internal class InProcessRecordTable : IDisposable
         }
 
         Deadlines.Cancel(entry.Deadline);
+        if (OrderByKeyspace.TryGetValue(key.Keyspace, out var order))
+        {
+            order.Remove(entry.Sequence);
+        }
+
         if (entry.Session is { } session)
         {
             KeysBySession.Unbind(session, key);
@@ -312,27 +331,47 @@ internal class InProcessRecordTable : IDisposable
     }
 
     /// <summary>
-    /// Lists the live records under a prefix.
+    /// Lists the live records under a prefix that were written after a sequence, up to a count.
     /// </summary>
     /// <param name="prefix">The prefix of the keys to list.</param>
-    /// <returns>The entries whose key the prefix is a prefix of, in the order they were written.</returns>
-    public IReadOnlyList<InProcessRecordEntry> ListLive(CoordinationKey prefix)
+    /// <param name="after">The write sequence after which the listing starts.</param>
+    /// <param name="count">The most entries to return.</param>
+    /// <returns>
+    /// At most <paramref name="count"/> entries whose key the prefix is a prefix of and whose sequence is greater than
+    /// <paramref name="after"/>, in the order they were written.
+    /// </returns>
+    public IReadOnlyList<InProcessRecordEntry> ListLive(
+        CoordinationKey prefix,
+        long after,
+        int count
+    )
     {
-        if (!RecordsByKeyspace.TryGetValue(prefix.Keyspace, out var records))
+        ArgumentNullException.ThrowIfNull(prefix);
+
+        if (
+            count < 1
+            || !RecordsByKeyspace.TryGetValue(prefix.Keyspace, out var records)
+            || !OrderByKeyspace.TryGetValue(prefix.Keyspace, out var order)
+        )
         {
             return [];
         }
 
-        var entries = new List<InProcessRecordEntry>(records.Count);
-        foreach (var (key, entry) in records)
+        var entries = new List<InProcessRecordEntry>();
+        foreach (var key in order.After(after))
         {
-            if (prefix.IsPrefixOf(key))
+            if (!prefix.IsPrefixOf(key) || !records.TryGetValue(key, out var entry))
             {
-                entries.Add(entry);
+                continue;
+            }
+
+            entries.Add(entry);
+            if (entries.Count == count)
+            {
+                break;
             }
         }
 
-        entries.Sort((left, right) => left.Sequence.CompareTo(right.Sequence));
         return entries;
     }
 

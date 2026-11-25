@@ -211,24 +211,15 @@ internal class InProcessRecordService(InProcessSessionTable sessions) : IRecordS
 
         using var scope = Table.Enter();
 
-        var live = Table.ListLive(prefix);
-        var capacity = Math.Min(page.Limit, live.Count);
-        var records = new List<StoredRecord>(capacity);
-        var more = false;
+        var live = Table.ListLive(prefix, after, page.Limit + 1);
+        var more = live.Count > page.Limit;
+        var returned = more ? page.Limit : live.Count;
+        var records = new List<StoredRecord>(returned);
         long lastSequence = 0;
 
-        foreach (var entry in live)
+        for (var index = 0; index < returned; index++)
         {
-            if (entry.Sequence <= after)
-            {
-                continue;
-            }
-
-            if (records.Count == page.Limit)
-            {
-                more = true;
-                break;
-            }
+            var entry = live[index];
 
             records.Add(entry.Record);
             lastSequence = entry.Sequence;
