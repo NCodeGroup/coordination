@@ -34,6 +34,7 @@ internal static class CoordinationComposer
             var emptyTable = BindingTable.Create([]);
             return new ComposedCoordination(
                 catalog.Providers,
+                catalog.Created,
                 emptyTable.Value,
                 [],
                 factoryFailure
@@ -88,6 +89,12 @@ internal static class CoordinationComposer
         );
         failures.AddRange(requirementFailures);
 
-        return new ComposedCoordination(catalog.Providers, table, [.. failures], null);
+        return new ComposedCoordination(
+            catalog.Providers,
+            catalog.Created,
+            table,
+            [.. failures],
+            null
+        );
     }
 }

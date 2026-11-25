@@ -92,7 +92,7 @@ internal class CoordinationComposition(
     {
         if (Composed.IsValueCreated)
         {
-            foreach (var provider in Composed.Value.Providers)
+            foreach (var provider in Composed.Value.Created)
             {
                 if (provider is IAsyncDisposable asyncDisposable)
                 {
@@ -113,7 +113,7 @@ internal class CoordinationComposition(
     {
         if (Composed.IsValueCreated)
         {
-            foreach (var provider in Composed.Value.Providers)
+            foreach (var provider in Composed.Value.Created)
             {
                 if (provider is IDisposable disposable)
                 {

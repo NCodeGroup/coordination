@@ -63,6 +63,18 @@ public sealed class ProviderCatalogTests
     }
 
     [Fact]
+    public void Create_WhenTwoProvidersShareAName_KeepsTheRejectedOneInCreated()
+    {
+        var first = CreateProvider("memory");
+        var second = CreateProvider("memory");
+
+        var checkedCatalog = ProviderCatalog.Create([_ => first, _ => second], Services);
+        var catalog = checkedCatalog.Value;
+
+        Assert.Equal<ICoordinationProvider>([first, second], catalog.Created);
+    }
+
+    [Fact]
     public void Create_WhenADeclarationListsAPrimitiveTwice_Fails()
     {
         var supported = PrimitiveSupport.Supported(Primitives.Lease);

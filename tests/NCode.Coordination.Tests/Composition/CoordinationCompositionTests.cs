@@ -292,6 +292,24 @@ public sealed class CoordinationCompositionTests : IDisposable
     }
 
     [Fact]
+    public async Task DisposeAsync_WhenAProviderIsRejected_DisposesIt()
+    {
+        var declaration = Declare("memory");
+        var first = new AsyncDisposableProvider(declaration);
+        var second = new AsyncDisposableProvider(declaration);
+        var binding = new ProviderBinding("memory");
+        var registrations = Register(first, binding);
+        registrations.ProviderFactories.Add(_ => second);
+        var composition = new CoordinationComposition(registrations, Services);
+        Assert.Throws<CoordinationCompositionException>(composition.EnsureComposed);
+
+        await composition.DisposeAsync();
+
+        Assert.Equal(1, first.Disposals);
+        Assert.Equal(1, second.Disposals);
+    }
+
+    [Fact]
     public void Dispose_DisposesTheDisposableProviders()
     {
         var service = Mocks.Create<IOccurrenceService>().Object;

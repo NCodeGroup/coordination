@@ -29,6 +29,7 @@ internal sealed class ProviderCatalog
 
         var failures = new List<string>();
         var providers = ImmutableArray.CreateBuilder<ICoordinationProvider>();
+        var created = ImmutableArray.CreateBuilder<ICoordinationProvider>();
         var byName = new Dictionary<string, ICoordinationProvider>(StringComparer.Ordinal);
         ExceptionDispatchInfo? factoryFailure = null;
         foreach (var factory in factories)
@@ -50,7 +51,19 @@ internal sealed class ProviderCatalog
                 continue;
             }
 
-            var declaration = provider.Declaration;
+            created.Add(provider);
+
+            ProviderDeclaration declaration;
+            try
+            {
+                declaration = provider.Declaration;
+            }
+            catch (Exception exception)
+            {
+                factoryFailure = ExceptionDispatchInfo.Capture(exception);
+                break;
+            }
+
             var name = declaration.Provider;
             if (!byName.TryAdd(name, provider))
             {
@@ -73,8 +86,9 @@ internal sealed class ProviderCatalog
         }
 
         var accepted = providers.ToImmutable();
+        var createdProviders = created.ToImmutable();
         var frozenByName = byName.ToFrozenDictionary();
-        var catalog = new ProviderCatalog(accepted, frozenByName, factoryFailure);
+        var catalog = new ProviderCatalog(accepted, createdProviders, frozenByName, factoryFailure);
         return new Checked<ProviderCatalog>(catalog, [.. failures]);
     }
 
@@ -82,15 +96,20 @@ internal sealed class ProviderCatalog
     /// Creates a catalog over the accepted providers.
     /// </summary>
     /// <param name="providers">The accepted providers, in registration order.</param>
+    /// <param name="created">Every provider a factory returned, accepted or not, in creation order.</param>
     /// <param name="byName">The accepted providers by name.</param>
-    /// <param name="factoryFailure">The exception a provider factory threw, or null.</param>
+    /// <param name="factoryFailure">
+    /// The exception a provider factory or a provider's declaration threw, or null.
+    /// </param>
     private ProviderCatalog(
         ImmutableArray<ICoordinationProvider> providers,
+        ImmutableArray<ICoordinationProvider> created,
         FrozenDictionary<string, ICoordinationProvider> byName,
         ExceptionDispatchInfo? factoryFailure
     )
     {
         Providers = providers;
+        Created = created;
         ByName = byName;
         FactoryFailure = factoryFailure;
     }
@@ -101,7 +120,12 @@ internal sealed class ProviderCatalog
     public ImmutableArray<ICoordinationProvider> Providers { get; }
 
     /// <summary>
-    /// Gets the exception a provider factory threw, or null when every factory returned.
+    /// Gets every provider a factory returned, accepted or not, in creation order.
+    /// </summary>
+    public ImmutableArray<ICoordinationProvider> Created { get; }
+
+    /// <summary>
+    /// Gets the exception a provider factory or a provider's declaration threw, or null when none did.
     /// </summary>
     public ExceptionDispatchInfo? FactoryFailure { get; }
 
