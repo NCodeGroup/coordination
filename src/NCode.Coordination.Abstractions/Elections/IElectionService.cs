@@ -62,7 +62,7 @@ public interface IElectionService
     /// <param name="leadership">The leadership to give up.</param>
     /// <param name="options">Options for this call, or null for none.</param>
     /// <param name="cancellationToken">The token that cancels the operation.</param>
-    /// <returns>True when the leadership was given up; false when it no longer led.</returns>
+    /// <returns>True when the leadership was given up; false when the caller did not lead.</returns>
     ValueTask<bool> ResignAsync(
         Leadership leadership,
         OperationOptions? options,

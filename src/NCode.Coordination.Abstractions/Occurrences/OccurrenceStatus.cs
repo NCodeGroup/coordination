@@ -9,7 +9,7 @@ namespace NCode.Coordination;
 public enum OccurrenceStatus
 {
     /// <summary>
-    /// The key was not recorded before, and it is now.
+    /// The key had not been recorded, and the call recorded it.
     /// </summary>
     Recorded,
 

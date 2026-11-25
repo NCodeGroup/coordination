@@ -28,7 +28,7 @@ public sealed class KeepAliveResultTests
 
     #endregion
 
-    #region Ended Tests
+    #region Ended Property Tests
 
     [Fact]
     public void Ended_Always_HasEndedStatusAndNoPayload()

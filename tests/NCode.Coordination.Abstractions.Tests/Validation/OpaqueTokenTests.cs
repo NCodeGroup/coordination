@@ -13,7 +13,9 @@ public sealed class OpaqueTokenTests
     [InlineData("12345678")]
     public void Validate_WhenValueIsAToken_ReturnsValue(string value)
     {
-        var result = OpaqueToken.Validate(value, 8 + 8, "name");
+        const int maxLength = 16;
+
+        var result = OpaqueToken.Validate(value, maxLength, "name");
 
         Assert.Equal(value, result);
     }

@@ -30,7 +30,7 @@ public sealed class RecordWriteResultTests
 
     #endregion
 
-    #region Conflict Tests
+    #region Conflict Property Tests
 
     [Fact]
     public void Conflict_Always_HasConflictStatusAndNoPayload()
@@ -49,7 +49,7 @@ public sealed class RecordWriteResultTests
 
     #endregion
 
-    #region NotFound Tests
+    #region NotFound Property Tests
 
     [Fact]
     public void NotFound_Always_HasNotFoundStatusAndNoPayload()
@@ -68,7 +68,7 @@ public sealed class RecordWriteResultTests
 
     #endregion
 
-    #region SessionEnded Tests
+    #region SessionEnded Property Tests
 
     [Fact]
     public void SessionEnded_Always_HasSessionEndedStatusAndNoPayload()

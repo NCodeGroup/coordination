@@ -6,7 +6,7 @@ using System.Diagnostics.CodeAnalysis;
 namespace NCode.Coordination;
 
 /// <summary>
-/// The result of renewing a session: renewed with the time to live now granted, or ended.
+/// The result of renewing a session: renewed with the time to live the provider granted, or ended.
 /// </summary>
 /// <remarks>
 /// Create a renewed result with <see cref="Renewed(TimeToLive)"/>; <see cref="Ended"/> is shared.

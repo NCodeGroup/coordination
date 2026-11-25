@@ -38,7 +38,7 @@ public sealed class LeaseAcquireResultTests
 
     #endregion
 
-    #region Held Tests
+    #region Held Property Tests
 
     [Fact]
     public void Held_Always_HasHeldStatusAndNoPayload()
@@ -57,7 +57,7 @@ public sealed class LeaseAcquireResultTests
 
     #endregion
 
-    #region SessionEnded Tests
+    #region SessionEnded Property Tests
 
     [Fact]
     public void SessionEnded_Always_HasSessionEndedStatusAndNoPayload()

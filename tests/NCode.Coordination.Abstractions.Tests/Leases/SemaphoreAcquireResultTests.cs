@@ -39,7 +39,7 @@ public sealed class SemaphoreAcquireResultTests
 
     #endregion
 
-    #region Full Tests
+    #region Full Property Tests
 
     [Fact]
     public void Full_Always_HasFullStatusAndNoPayload()
@@ -58,7 +58,7 @@ public sealed class SemaphoreAcquireResultTests
 
     #endregion
 
-    #region CapacityConflict Tests
+    #region CapacityConflict Property Tests
 
     [Fact]
     public void CapacityConflict_Always_HasCapacityConflictStatusAndNoPayload()
@@ -80,7 +80,7 @@ public sealed class SemaphoreAcquireResultTests
 
     #endregion
 
-    #region SessionEnded Tests
+    #region SessionEnded Property Tests
 
     [Fact]
     public void SessionEnded_Always_HasSessionEndedStatusAndNoPayload()

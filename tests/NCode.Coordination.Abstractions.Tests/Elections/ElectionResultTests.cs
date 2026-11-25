@@ -39,7 +39,7 @@ public sealed class ElectionResultTests
 
     #endregion
 
-    #region Led Tests
+    #region Led Property Tests
 
     [Fact]
     public void Led_Always_HasLedStatusAndNoPayload()
@@ -58,7 +58,7 @@ public sealed class ElectionResultTests
 
     #endregion
 
-    #region SessionEnded Tests
+    #region SessionEnded Property Tests
 
     [Fact]
     public void SessionEnded_Always_HasSessionEndedStatusAndNoPayload()
