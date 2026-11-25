@@ -39,7 +39,7 @@ internal class InProcessLeaseService : ILeaseService
     /// <summary>
     /// Gets the resources whose hold is bound to each session, so a session's end looks up what it holds.
     /// </summary>
-    private Dictionary<SessionId, HashSet<CoordinationKey>> ResourcesBySession { get; } = [];
+    private InProcessSessionIndex<CoordinationKey> ResourcesBySession { get; } = new();
 
     /// <inheritdoc />
     public ValueTask<LeaseAcquireResult> TryAcquireAsync(
@@ -71,7 +71,7 @@ internal class InProcessLeaseService : ILeaseService
             return ValueTask.FromResult(existing);
         }
 
-        var ownerValue = Sessions.Issue("o");
+        var ownerValue = Sessions.Issue(InProcessSessionTable.OwnerTokenPrefix);
         var owner = new OwnerToken(ownerValue);
         var fencingToken = Sessions.NextFencingToken();
         var grant = new LeaseGrant(resource, fencingToken, owner, terms);
@@ -83,7 +83,7 @@ internal class InProcessLeaseService : ILeaseService
         }
         else
         {
-            Bind(terms.Session, resource);
+            ResourcesBySession.Bind(terms.Session, resource);
         }
 
         Holds[resource] = created;
@@ -204,42 +204,6 @@ internal class InProcessLeaseService : ILeaseService
     }
 
     /// <summary>
-    /// Records that a resource's hold is bound to a session.
-    /// </summary>
-    /// <param name="session">The session the hold is bound to.</param>
-    /// <param name="resource">The resource the hold leases.</param>
-    private void Bind(SessionId session, CoordinationKey resource)
-    {
-        if (!ResourcesBySession.TryGetValue(session, out var resources))
-        {
-            resources = [];
-            ResourcesBySession[session] = resources;
-        }
-
-        resources.Add(resource);
-    }
-
-    /// <summary>
-    /// Removes the binding of a resource's hold to a session, dropping the session when it holds nothing else.
-    /// </summary>
-    /// <param name="session">The session the hold was bound to.</param>
-    /// <param name="resource">The resource the hold leased.</param>
-    private void Unbind(SessionId session, CoordinationKey resource)
-    {
-        if (!ResourcesBySession.TryGetValue(session, out var resources))
-        {
-            return;
-        }
-
-        resources.Remove(resource);
-
-        if (resources.Count == 0)
-        {
-            ResourcesBySession.Remove(session);
-        }
-    }
-
-    /// <summary>
     /// Removes a resource's hold and wakes the tasks that wait for its release.
     /// </summary>
     /// <param name="resource">The resource whose hold ends.</param>
@@ -251,7 +215,7 @@ internal class InProcessLeaseService : ILeaseService
 
             if (hold.Terms.IsBoundToSession)
             {
-                Unbind(hold.Terms.Session, resource);
+                ResourcesBySession.Unbind(hold.Terms.Session, resource);
             }
         }
 
@@ -280,12 +244,7 @@ internal class InProcessLeaseService : ILeaseService
     /// <param name="session">The session that ended.</param>
     private void EndSession(SessionId session)
     {
-        if (!ResourcesBySession.TryGetValue(session, out var resources))
-        {
-            return;
-        }
-
-        CoordinationKey[] ended = [.. resources];
+        var ended = ResourcesBySession.Take(session);
 
         foreach (var resource in ended)
         {

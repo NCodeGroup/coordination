@@ -70,7 +70,7 @@ internal class InProcessRecordTable : IDisposable
     /// <summary>
     /// Gets the keys of the live records bound to each session that has any.
     /// </summary>
-    private Dictionary<SessionId, HashSet<CoordinationKey>> KeysBySession { get; } = [];
+    private InProcessSessionIndex<CoordinationKey> KeysBySession { get; } = new();
 
     /// <summary>
     /// Gets or sets the sequence of the latest write.
@@ -160,7 +160,10 @@ internal class InProcessRecordTable : IDisposable
         if (records.TryGetValue(record.Key, out var replaced))
         {
             Deadlines.Cancel(replaced.Deadline);
-            Unbind(replaced.Session, record.Key);
+            if (replaced.Session is { } replacedSession)
+            {
+                KeysBySession.Unbind(replacedSession, record.Key);
+            }
         }
 
         var sequence = ++WriteSequence;
@@ -176,7 +179,7 @@ internal class InProcessRecordTable : IDisposable
 
         if (lifetime.Session is { } session)
         {
-            Bind(session, key);
+            KeysBySession.Bind(session, key);
         }
 
         var change = RecordChange.Written(record);
@@ -201,7 +204,11 @@ internal class InProcessRecordTable : IDisposable
         }
 
         Deadlines.Cancel(entry.Deadline);
-        Unbind(entry.Session, key);
+        if (entry.Session is { } session)
+        {
+            KeysBySession.Unbind(session, key);
+        }
+
         var change = RecordChange.Deleted(key, revision);
 
         Publish(key, change);
@@ -216,10 +223,7 @@ internal class InProcessRecordTable : IDisposable
     {
         ArgumentNullException.ThrowIfNull(session);
 
-        if (!KeysBySession.Remove(session, out var keys))
-        {
-            return;
-        }
+        var keys = KeysBySession.Take(session);
 
         foreach (var key in keys)
         {
@@ -351,41 +355,6 @@ internal class InProcessRecordTable : IDisposable
             var revision = Advance(key.Keyspace);
 
             Remove(key, revision);
-        }
-    }
-
-    /// <summary>
-    /// Records that a record is bound to a session.
-    /// </summary>
-    /// <param name="session">The session the record is bound to.</param>
-    /// <param name="key">The key of the record.</param>
-    private void Bind(SessionId session, CoordinationKey key)
-    {
-        if (!KeysBySession.TryGetValue(session, out var keys))
-        {
-            keys = [];
-            KeysBySession[session] = keys;
-        }
-
-        keys.Add(key);
-    }
-
-    /// <summary>
-    /// Removes the binding of a record to a session.
-    /// </summary>
-    /// <param name="session">The session the record was bound to, or null when it was bound to none.</param>
-    /// <param name="key">The key of the record.</param>
-    private void Unbind(SessionId? session, CoordinationKey key)
-    {
-        if (session is null || !KeysBySession.TryGetValue(session, out var keys))
-        {
-            return;
-        }
-
-        keys.Remove(key);
-        if (keys.Count == 0)
-        {
-            KeysBySession.Remove(session);
         }
     }
 

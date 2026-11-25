@@ -61,10 +61,8 @@ internal class InProcessSemaphoreService : ISemaphoreService
     /// <summary>
     /// Gets the resources and slots whose hold is bound to each session, so a session's end looks up what it holds.
     /// </summary>
-    private Dictionary<
-        SessionId,
-        HashSet<(CoordinationKey Resource, int Slot)>
-    > SlotsBySession { get; } = [];
+    private InProcessSessionIndex<(CoordinationKey Resource, int Slot)> SlotsBySession { get; } =
+        new();
 
     /// <inheritdoc />
     public ValueTask<SemaphoreAcquireResult> TryAcquireAsync(
@@ -122,7 +120,7 @@ internal class InProcessSemaphoreService : ISemaphoreService
             return ValueTask.FromResult(SemaphoreAcquireResult.Full);
         }
 
-        var ownerValue = Sessions.Issue("o");
+        var ownerValue = Sessions.Issue(InProcessSessionTable.OwnerTokenPrefix);
         var owner = new OwnerToken(ownerValue);
         var fencingToken = Sessions.NextFencingToken();
         var grant = new SemaphoreGrant(resource, slot, fencingToken, owner, terms);
@@ -130,11 +128,11 @@ internal class InProcessSemaphoreService : ISemaphoreService
 
         if (!terms.IsBoundToSession)
         {
-            created.Deadline = Schedule(resource, slot, owner, terms.TimeToLive);
+            created.Deadline = Schedule(grant, terms.TimeToLive);
         }
         else
         {
-            Bind(terms.Session, resource, slot);
+            SlotsBySession.Bind(terms.Session, (resource, slot));
         }
 
         semaphore.Slots[slot] = created;
@@ -177,7 +175,7 @@ internal class InProcessSemaphoreService : ISemaphoreService
         }
 
         Sessions.Deadlines.Cancel(hold.Deadline);
-        hold.Deadline = Schedule(grant.Resource, grant.Slot, grant.Owner, timeToLive);
+        hold.Deadline = Schedule(grant, timeToLive);
 
         return ValueTask.FromResult(true);
     }
@@ -266,59 +264,14 @@ internal class InProcessSemaphoreService : ISemaphoreService
     /// <summary>
     /// Adds the deadline that ends a grant made for a time to live.
     /// </summary>
-    /// <param name="resource">The resource the semaphore is on.</param>
-    /// <param name="slot">The index of the slot the grant holds.</param>
-    /// <param name="owner">The owner token of the grant.</param>
+    /// <param name="grant">The grant the deadline ends.</param>
     /// <param name="timeToLive">How long the grant lasts from now.</param>
     /// <returns>The handle that cancels the deadline.</returns>
-    private InProcessDeadline Schedule(
-        CoordinationKey resource,
-        int slot,
-        OwnerToken owner,
-        TimeToLive timeToLive
-    )
+    private InProcessDeadline Schedule(SemaphoreGrant grant, TimeToLive timeToLive)
     {
         var expiry = InProcessExpiry.Begin(Sessions.Time, timeToLive);
 
-        return Sessions.Deadlines.Add(expiry, () => Expire(resource, slot, owner));
-    }
-
-    /// <summary>
-    /// Records that a slot's hold is bound to a session.
-    /// </summary>
-    /// <param name="session">The session the hold is bound to.</param>
-    /// <param name="resource">The resource the semaphore is on.</param>
-    /// <param name="slot">The index of the slot the hold takes.</param>
-    private void Bind(SessionId session, CoordinationKey resource, int slot)
-    {
-        if (!SlotsBySession.TryGetValue(session, out var slots))
-        {
-            slots = [];
-            SlotsBySession[session] = slots;
-        }
-
-        slots.Add((resource, slot));
-    }
-
-    /// <summary>
-    /// Removes the binding of a slot's hold to a session, dropping the session when it holds nothing else.
-    /// </summary>
-    /// <param name="session">The session the hold was bound to.</param>
-    /// <param name="resource">The resource the semaphore is on.</param>
-    /// <param name="slot">The index of the slot the hold took.</param>
-    private void Unbind(SessionId session, CoordinationKey resource, int slot)
-    {
-        if (!SlotsBySession.TryGetValue(session, out var slots))
-        {
-            return;
-        }
-
-        slots.Remove((resource, slot));
-
-        if (slots.Count == 0)
-        {
-            SlotsBySession.Remove(session);
-        }
+        return Sessions.Deadlines.Add(expiry, () => Expire(grant));
     }
 
     /// <summary>
@@ -340,7 +293,7 @@ internal class InProcessSemaphoreService : ISemaphoreService
 
                 if (hold.Terms.IsBoundToSession)
                 {
-                    Unbind(hold.Terms.Session, resource, slot);
+                    SlotsBySession.Unbind(hold.Terms.Session, (resource, slot));
                 }
             }
 
@@ -359,18 +312,16 @@ internal class InProcessSemaphoreService : ISemaphoreService
     /// <summary>
     /// Ends a slot whose time to live has passed, unless the slot has since been granted to another owner.
     /// </summary>
-    /// <param name="resource">The resource whose deadline came due.</param>
-    /// <param name="slot">The index of the slot the deadline belongs to.</param>
-    /// <param name="owner">The owner token of the grant the deadline belongs to.</param>
-    private void Expire(CoordinationKey resource, int slot, OwnerToken owner)
+    /// <param name="grant">The grant the deadline belongs to.</param>
+    private void Expire(SemaphoreGrant grant)
     {
         if (
-            Semaphores.TryGetValue(resource, out var semaphore)
-            && semaphore.Slots[slot] is { } hold
-            && hold.Owner == owner
+            Semaphores.TryGetValue(grant.Resource, out var semaphore)
+            && semaphore.Slots[grant.Slot] is { } hold
+            && hold.Owner == grant.Owner
         )
         {
-            Free(resource, slot);
+            Free(grant.Resource, grant.Slot);
         }
     }
 
@@ -380,12 +331,7 @@ internal class InProcessSemaphoreService : ISemaphoreService
     /// <param name="session">The session that ended.</param>
     private void EndSession(SessionId session)
     {
-        if (!SlotsBySession.TryGetValue(session, out var slots))
-        {
-            return;
-        }
-
-        (CoordinationKey Resource, int Slot)[] ended = [.. slots];
+        var ended = SlotsBySession.Take(session);
 
         foreach (var (resource, slot) in ended)
         {

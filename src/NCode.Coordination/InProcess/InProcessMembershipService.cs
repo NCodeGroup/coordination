@@ -44,7 +44,7 @@ internal class InProcessMembershipService : IMembershipService
     /// <summary>
     /// Gets the groups that hold an entry of each session, so a session's end looks up where it is a member.
     /// </summary>
-    private Dictionary<SessionId, HashSet<CoordinationKey>> GroupsBySession { get; } = [];
+    private InProcessSessionIndex<CoordinationKey> GroupsBySession { get; } = new();
 
     /// <inheritdoc />
     public ValueTask<MembershipJoinStatus> JoinAsync(
@@ -86,7 +86,7 @@ internal class InProcessMembershipService : IMembershipService
 
         members.RemoveAll(other => other.Session.Equals(member.Session));
         members.Add(member);
-        Bind(member.Session, group);
+        GroupsBySession.Bind(member.Session, group);
         Changed(group);
 
         return ValueTask.FromResult(MembershipJoinStatus.Joined);
@@ -234,42 +234,6 @@ internal class InProcessMembershipService : IMembershipService
     }
 
     /// <summary>
-    /// Records that a session has an entry in a group.
-    /// </summary>
-    /// <param name="session">The session that joined.</param>
-    /// <param name="group">The group the session joined.</param>
-    private void Bind(SessionId session, CoordinationKey group)
-    {
-        if (!GroupsBySession.TryGetValue(session, out var groups))
-        {
-            groups = [];
-            GroupsBySession[session] = groups;
-        }
-
-        groups.Add(group);
-    }
-
-    /// <summary>
-    /// Removes the record that a session has an entry in a group, dropping the session when it is in no other group.
-    /// </summary>
-    /// <param name="session">The session that left.</param>
-    /// <param name="group">The group the session left.</param>
-    private void Unbind(SessionId session, CoordinationKey group)
-    {
-        if (!GroupsBySession.TryGetValue(session, out var groups))
-        {
-            return;
-        }
-
-        groups.Remove(group);
-
-        if (groups.Count == 0)
-        {
-            GroupsBySession.Remove(session);
-        }
-    }
-
-    /// <summary>
     /// Removes a session's entries from a group and drops the group when it is left empty.
     /// </summary>
     /// <param name="group">The group to remove the session from.</param>
@@ -286,7 +250,7 @@ internal class InProcessMembershipService : IMembershipService
 
         if (removed)
         {
-            Unbind(session, group);
+            GroupsBySession.Unbind(session, group);
         }
 
         if (members.Count == 0)
@@ -324,12 +288,7 @@ internal class InProcessMembershipService : IMembershipService
     /// <param name="session">The session that ended.</param>
     private void EndSession(SessionId session)
     {
-        if (!GroupsBySession.TryGetValue(session, out var found))
-        {
-            return;
-        }
-
-        CoordinationKey[] groups = [.. found];
+        var groups = GroupsBySession.Take(session);
 
         foreach (var group in groups)
         {

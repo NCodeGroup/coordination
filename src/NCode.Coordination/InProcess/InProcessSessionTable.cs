@@ -17,6 +17,16 @@ namespace NCode.Coordination.InProcess;
 internal class InProcessSessionTable
 {
     /// <summary>
+    /// The text that a session's token starts with.
+    /// </summary>
+    internal const string SessionTokenPrefix = "s";
+
+    /// <summary>
+    /// The text that an owner token starts with.
+    /// </summary>
+    internal const string OwnerTokenPrefix = "o";
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="InProcessSessionTable"/> class.
     /// </summary>
     /// <param name="records">The record table, whose lock and deadlines the sessions share.</param>
@@ -109,7 +119,7 @@ internal class InProcessSessionTable
         ArgumentNullException.ThrowIfNull(keyspace);
         ArgumentNullException.ThrowIfNull(timeToLive);
 
-        var token = Issue("s");
+        var token = Issue(SessionTokenPrefix);
         var id = new SessionId(keyspace, token);
         var session = new InProcessSession(id, timeToLive);
 
