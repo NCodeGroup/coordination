@@ -30,6 +30,8 @@ NCode.Coordination.IReadWriteLockService.AcquireReadAsync(NCode.Coordination.Coo
 NCode.Coordination.IReadWriteLockService.AcquireWriteAsync(NCode.Coordination.CoordinationKey! resource, NCode.Coordination.LeaseTerms! terms, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.LeaseGrant?>
 NCode.Coordination.IReadWriteLockService.ReleaseReadAsync(NCode.Coordination.ReadLockGrant! grant, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<bool>
 NCode.Coordination.IReadWriteLockService.ReleaseWriteAsync(NCode.Coordination.LeaseGrant! grant, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<bool>
+NCode.Coordination.ISingleFlightService
+NCode.Coordination.ISingleFlightService.GetOrFetchAsync(NCode.Coordination.CoordinationKey! key, NCode.Coordination.SingleFlightTerms! terms, System.Func<System.Threading.CancellationToken, System.Threading.Tasks.ValueTask<System.ReadOnlyMemory<byte>>>! fetch, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.StoredRecord!>
 NCode.Coordination.ISingletonService
 NCode.Coordination.ISingletonService.RunAsync(NCode.Coordination.CoordinationKey! role, NCode.Coordination.SingletonCandidate! candidate, System.Func<NCode.Coordination.Leadership!, System.Threading.CancellationToken, System.Threading.Tasks.ValueTask>! work, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<bool>
 NCode.Coordination.PartitionAssignment
@@ -56,6 +58,10 @@ NCode.Coordination.RecipeNeed
 NCode.Coordination.RecipeNeed.Guarantees.get -> System.Collections.Immutable.ImmutableArray<NCode.Coordination.Guarantee!>
 NCode.Coordination.RecipeNeed.Primitive.get -> NCode.Coordination.Primitive!
 NCode.Coordination.RecipeNeed.RecipeNeed(NCode.Coordination.Primitive! primitive, params System.Collections.Generic.IEnumerable<NCode.Coordination.Guarantee!>! guarantees) -> void
+NCode.Coordination.SingleFlightTerms
+NCode.Coordination.SingleFlightTerms.FetchTimeToLive.get -> NCode.Coordination.TimeToLive!
+NCode.Coordination.SingleFlightTerms.SingleFlightTerms(NCode.Coordination.TimeToLive! valueTimeToLive, NCode.Coordination.TimeToLive! fetchTimeToLive) -> void
+NCode.Coordination.SingleFlightTerms.ValueTimeToLive.get -> NCode.Coordination.TimeToLive!
 NCode.Coordination.SingletonCandidate
 NCode.Coordination.SingletonCandidate.Session.get -> NCode.Coordination.SessionId!
 NCode.Coordination.SingletonCandidate.SingletonCandidate(NCode.Coordination.SessionId! session) -> void
