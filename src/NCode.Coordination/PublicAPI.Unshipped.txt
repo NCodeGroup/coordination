@@ -17,6 +17,10 @@ NCode.Coordination.Recipe
 NCode.Coordination.Recipe.Name.get -> string!
 NCode.Coordination.Recipe.Needs.get -> System.Collections.Immutable.ImmutableArray<NCode.Coordination.RecipeNeed!>
 NCode.Coordination.Recipe.Recipe(string! name, params System.Collections.Generic.IEnumerable<NCode.Coordination.RecipeNeed!>! needs) -> void
+NCode.Coordination.RecipeCoordinationBuilderExtensions
+NCode.Coordination.RecipeCoordinationBuilderExtensions.extension(NCode.Coordination.ICoordinationBuilder!)
+NCode.Coordination.RecipeCoordinationBuilderExtensions.extension(NCode.Coordination.ICoordinationBuilder!).RequireRecipe(NCode.Coordination.Recipe! recipe, string! feature, NCode.Coordination.Keyspace! keyspace) -> NCode.Coordination.ICoordinationBuilder!
+NCode.Coordination.RecipeCoordinationBuilderExtensions.extension(NCode.Coordination.ICoordinationBuilder!).RequireRecipe(NCode.Coordination.Recipe! recipe, string! feature) -> NCode.Coordination.ICoordinationBuilder!
 NCode.Coordination.RecipeNeed
 NCode.Coordination.RecipeNeed.Guarantees.get -> System.Collections.Immutable.ImmutableArray<NCode.Coordination.Guarantee!>
 NCode.Coordination.RecipeNeed.Primitive.get -> NCode.Coordination.Primitive!
@@ -35,3 +39,5 @@ static NCode.Coordination.CoordinationRecipes.SlidingWindowRateLimiter.get -> NC
 static NCode.Coordination.CoordinationRecipes.TokenBucketRateLimiter.get -> NCode.Coordination.Recipe!
 static NCode.Coordination.CoordinationServiceCollectionExtensions.AddCoordination(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, System.Action<NCode.Coordination.ICoordinationBuilder!>! configure) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
 static NCode.Coordination.InProcessCoordinationBuilderExtensions.AddInProcessProvider(this NCode.Coordination.ICoordinationBuilder! builder) -> NCode.Coordination.ICoordinationBuilder!
+static NCode.Coordination.RecipeCoordinationBuilderExtensions.RequireRecipe(this NCode.Coordination.ICoordinationBuilder! builder, NCode.Coordination.Recipe! recipe, string! feature, NCode.Coordination.Keyspace! keyspace) -> NCode.Coordination.ICoordinationBuilder!
+static NCode.Coordination.RecipeCoordinationBuilderExtensions.RequireRecipe(this NCode.Coordination.ICoordinationBuilder! builder, NCode.Coordination.Recipe! recipe, string! feature) -> NCode.Coordination.ICoordinationBuilder!
