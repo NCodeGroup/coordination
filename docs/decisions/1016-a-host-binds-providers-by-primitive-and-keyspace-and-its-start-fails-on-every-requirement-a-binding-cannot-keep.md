@@ -64,12 +64,12 @@ keys.**
 9. **Provider lifetime.** The composition owns the providers it creates and disposes each one when the host stops,
    asynchronously when it can. Nothing is disposed when the composition never composed or failed.
 10. **Telemetry.** The meter and the activity source are both named `NCode.Coordination`. One histogram,
-   `ncode.coordination.operation.duration`, in seconds, records each operation, and one client span,
-   `ncode.coordination.operation`, traces it. Their attributes are the provider, the primitive, the operation and the
-   outcome (`success`, `failure` or `canceled`), and on a failure `error.type`, which is the exception's code or its
-   type's full name. A cancellation sets no `error.type` and no error status. A failure sets the span's status to error
-   with no description. No exception message, key, segment, value or payload is recorded. A stream is measured from its
-   first read to its end, and a consumer that stops early counts as a success.
+    `ncode.coordination.operation.duration`, in seconds, records each operation, and one client span,
+    `ncode.coordination.operation`, traces it. Their attributes are the provider, the primitive, the operation and the
+    outcome (`success`, `failure` or `canceled`), and on a failure `error.type`, which is the exception's code or its
+    type's full name. A cancellation sets no `error.type` and no error status. A failure sets the span's status to error
+    with no description. No exception message, key, segment, value or payload is recorded. A stream is measured from its
+    first read to its end, and a consumer that stops early counts as a success.
 11. **Dependencies.** `NCode.Coordination` depends on the dependency injection and hosting abstractions packages only.
     It does not register `IMeterFactory`, whose default implementation is not in an abstractions package and which
     every generic host registers; a bare service collection calls `AddMetrics()`. This is a deliberate exception to a
