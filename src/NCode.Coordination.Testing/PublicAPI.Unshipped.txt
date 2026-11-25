@@ -14,9 +14,9 @@ NCode.Coordination.Testing.ClaimContractTests.TryClaimAsync_WhenWindowsDiffer_Cl
 NCode.Coordination.Testing.ConformanceTarget
 NCode.Coordination.Testing.ConformanceTarget.AdvanceClock.get -> System.Func<System.TimeSpan, System.Threading.CancellationToken, System.Threading.Tasks.ValueTask>?
 NCode.Coordination.Testing.ConformanceTarget.AdvanceClock.init -> void
+NCode.Coordination.Testing.ConformanceTarget.ConformanceTarget(NCode.Coordination.ICoordinationProvider! provider) -> void
 NCode.Coordination.Testing.ConformanceTarget.DropConnections.get -> System.Func<System.Threading.CancellationToken, System.Threading.Tasks.ValueTask>?
 NCode.Coordination.Testing.ConformanceTarget.DropConnections.init -> void
-NCode.Coordination.Testing.ConformanceTarget.ConformanceTarget(NCode.Coordination.ICoordinationProvider! provider) -> void
 NCode.Coordination.Testing.ConformanceTarget.Provider.get -> NCode.Coordination.ICoordinationProvider!
 NCode.Coordination.Testing.CounterContractTests
 NCode.Coordination.Testing.CounterContractTests.ConcurrentRun_WhenClientsRace_KeepsALinearizableHistory() -> System.Threading.Tasks.Task!
@@ -176,8 +176,8 @@ NCode.Coordination.Testing.RecordContractTests.RecordContractTests() -> void
 NCode.Coordination.Testing.RecordContractTests.TakeAsync_WhenKeyIsAbsent_ReturnsNull() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.RecordContractTests.TakeAsync_WhenKeyIsPresent_ReturnsAndDeletesTheRecord() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.RecordWatchContractTests
-NCode.Coordination.Testing.RecordWatchContractTests.RecordWatchContractTests() -> void
 NCode.Coordination.Testing.RecordWatchContractTests.ConcurrentRun_WhenClientsWrite_DeliversAsDeclared() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.RecordWatchContractTests.RecordWatchContractTests() -> void
 NCode.Coordination.Testing.RecordWatchContractTests.WatchKeyAsync_WhenAnotherKeyIsWritten_YieldsNothingForIt() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.RecordWatchContractTests.WatchKeyAsync_WhenChangesFollow_YieldsThemInRevisionOrder() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.RecordWatchContractTests.WatchKeyAsync_WhenOptionsCarryAnUnknownExtension_ThrowsUnsupported() -> System.Threading.Tasks.Task!
