@@ -28,8 +28,10 @@ clock.**
 1. **References.** `NCode.Coordination.Testing` references `NCode.Coordination.Abstractions` and xUnit.net v3's
    `xunit.v3.extensibility.core` and `xunit.v3.assert`, and never `NCode.Coordination`
    ([project-template ADR-0132](project-template/0132-implementation-packages-depend-only-on-abstractions.md)).
-2. **Contract classes.** There is one abstract class per primitive: `RecordContractTests`, `TransactionContractTests`,
-   `OccurrenceContractTests`, `SetContractTests`, `CounterContractTests` and `SequenceContractTests`. Each derives from
+2. **Contract classes.** There is one abstract class per primitive: `SessionContractTests`, `MembershipContractTests`,
+   `LeaseContractTests`, `SemaphoreContractTests`, `ElectionContractTests`, `ClaimContractTests`, `RecordContractTests`,
+   `RecordWatchContractTests`, `TransactionContractTests`, `OccurrenceContractTests`, `SetContractTests`,
+   `CounterContractTests`, `SequenceContractTests` and `NotificationContractTests`. Each derives from
    `ProviderContractTests`. A provider's test project derives a sealed class from each and overrides
    `CreateTargetAsync`, which returns a `ConformanceTarget`: a provider created for that test and, optionally, a
    delegate that advances the provider's clock, by moving a fake clock or by waiting.
@@ -44,6 +46,9 @@ clock.**
 6. **Names.** The kit's tests are named `Method_State_Expected`, as the project's tests are, so the kit's folder turns
    off CA1707 and CA1861 in `.editorconfig`.
 7. **First consumer.** The in-process provider in `NCode.Coordination` runs every suite in `tests/`.
+8. **Streams.** A test reads a watch or a subscription only after its first item, which the provider yields once the
+   watch is registered, and waits at most 10 seconds for each item; a test of a state watch waits for the view it
+   expects, since views may be skipped.
 
 ## Options considered
 

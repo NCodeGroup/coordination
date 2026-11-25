@@ -38,10 +38,11 @@ live. Acquisition never blocks.**
    once the resource has no holder. Acquisition never blocks, so waiting and fairness belong to the recipes.
 5. **Semaphores.** The capacity, 1 to 1,024, is named on every acquire. Each grant has a slot index below the capacity
    with its own fencing token. The outcomes are acquired, full, capacity conflict (holders use another capacity) and
-   session ended.
+   session ended. Acquiring again with the session of a slot already held returns that grant.
 6. **Elections.** Try-lead with a value up to 65,536 bytes, such as the leader's address, returns elected, led by another
    or session ended. The term is the leader's fencing token. Read and watch give the role's leader or none, the watch
-   current first and then later terms. Resign returns whether it still led.
+   current first and then later terms. Resign returns whether it still led. Trying to lead again with the session of
+   the leadership returns that leadership.
 7. **Claims.** Try-claim on a name, a time window and a time to live returns claimed or taken, at most one per name and
    window, with no release and no token. The time to live runs to the window's end plus the caller's skew allowance
    ([ADR-1008](1008-expiry-is-a-duration-on-the-providers-declared-clock-and-an-instant-becomes-one-at-the-caller-with-an-allowance-for-skew.md)

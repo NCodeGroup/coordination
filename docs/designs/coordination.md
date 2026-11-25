@@ -16,8 +16,8 @@ tokens ([D5](#d5-sessions-and-fencing)), sequenced notifications without brokeri
 conformance kit ([D7](#d7-conformance)), the first stable release's scope ([D8](#d8-first-stable-release)), expiry as a
 duration on a declared clock ([D9](#d9-expiry-clock)), the shapes of the primitives' contracts
 ([D10](#d10-contract-values) to [D15](#d15-counting-sequences-and-notifications)), the composition that binds
-providers and checks requirements when the host starts ([D16](#d16-composition)), and the conformance kit's contract
-suites ([D17](#d17-conformance-kit)).
+providers and checks requirements when the host starts ([D16](#d16-composition)), the conformance kit's contract
+suites ([D17](#d17-conformance-kit)), and the holder's local deadline ([D18](#d18-holder-deadline)).
 
 ## Goals and Non-Goals
 
@@ -282,6 +282,12 @@ requirement a binding cannot keep, and every operation is traced and measured wi
 The conformance kit is a set of xUnit contract classes, one per primitive, that a provider's test project derives from,
 giving the provider under test and a way to advance its clock; a test skips what the provider declares unsupported.
 [ADR-1017](../decisions/1017-the-conformance-kit-is-a-set-of-xunit-contract-classes-a-providers-tests-derive-from.md)
+
+### D18. Holder deadline
+
+A holder begins a deadline on its own clock before each request that grants or renews its ownership, ending an allowance
+for drift before the requested time to live, and treats the ownership as lost once it passes.
+[ADR-1018](../decisions/1018-a-holders-local-deadline-starts-before-its-request-and-ends-an-allowance-for-drift-before-the-time-to-live.md)
 
 ## Open Questions
 

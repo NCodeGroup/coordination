@@ -25,4 +25,17 @@ internal static class InProcessTesting
     /// </summary>
     /// <returns>The fake clock.</returns>
     public static FakeTimeProvider CreateTime() => new(Start);
+
+    /// <summary>
+    /// Gets the service that a provider implements for a primitive.
+    /// </summary>
+    /// <typeparam name="TService">The type of the primitive's service.</typeparam>
+    /// <param name="provider">The provider to get the service from.</param>
+    /// <returns>The provider's service for the primitive.</returns>
+    public static TService GetService<TService>(InProcessProvider provider)
+        where TService : class
+    {
+        var service = provider.GetPrimitiveService(typeof(TService));
+        return Assert.IsAssignableFrom<TService>(service);
+    }
 }

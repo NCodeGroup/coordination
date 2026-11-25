@@ -10,8 +10,8 @@ requirements.
 
 | Component | Role |
 | --- | --- |
-| `NCode.Coordination.Abstractions` | The contracts: an interface per primitive with its named operations, outcomes and failures, structured keys, the guarantee vocabulary, expiry and time windows, and the declarations and requirements the composition checks. |
-| `NCode.Coordination` | The composition: providers registered on one builder with `AddCoordination`, bound by primitive and keyspace; the guarantee registry; every requirement checked before the host's hosted services start; and the primitive services that route each operation to its bound provider, tracing and measuring it; and the in-process provider, added with `AddInProcessProvider`, which keeps records, transactions, occurrences, sets, counters and sequences in the process's memory. |
+| `NCode.Coordination.Abstractions` | The contracts: an interface per primitive with its named operations, outcomes and failures, structured keys, the guarantee vocabulary, expiry, time windows and the holder's local deadline, and the declarations and requirements the composition checks. |
+| `NCode.Coordination` | The composition: providers registered on one builder with `AddCoordination`, bound by primitive and keyspace; the guarantee registry; every requirement checked before the host's hosted services start; and the primitive services that route each operation to its bound provider, tracing and measuring it; and the in-process provider, added with `AddInProcessProvider`, which keeps every primitive in the process's memory, with sessions that end what is bound to them, eager expiry, and watches that replay the last 1,024 changes of a keyspace. |
 | `NCode.Coordination.Testing` | The conformance kit: a contract suite per primitive, xUnit classes a provider's test project derives from with the provider under test and a way to advance its clock ([ADR-1017](decisions/1017-the-conformance-kit-is-a-set-of-xunit-contract-classes-a-providers-tests-derive-from.md)). |
 
 [The design](designs/coordination.md#packages) names the other packages and the phase that builds each.

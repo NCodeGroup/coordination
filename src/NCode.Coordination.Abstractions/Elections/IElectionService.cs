@@ -16,9 +16,10 @@ public interface IElectionService
     /// </summary>
     /// <remarks>
     /// The operation <see cref="Operations.ElectionTryLead"/>. It never waits: the result is led when another node
-    /// leads. The value, at most <see cref="CoordinationLimits.MaxValueLength"/> bytes, is what followers read, such
-    /// as the leader's address. The provider reads the value before the returned task completes, so the caller may
-    /// reuse its buffer once it does.
+    /// leads. Trying to lead again with the session of the leadership already held returns that leadership. The value,
+    /// at most <see cref="CoordinationLimits.MaxValueLength"/> bytes, is what followers read, such as the leader's
+    /// address. The provider reads the value before the returned task completes, so the caller may reuse its buffer
+    /// once it does.
     /// </remarks>
     /// <param name="role">The role to lead.</param>
     /// <param name="value">The value followers read.</param>

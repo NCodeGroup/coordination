@@ -6,17 +6,23 @@ namespace NCode.Coordination.InProcess;
 /// <summary>
 /// The transactions of the in-process provider.
 /// </summary>
-/// <param name="table">The record table, shared with the record service.</param>
+/// <param name="sessions">The session table, which holds the record table that the record service shares.</param>
 /// <remarks>
 /// A transaction evaluates its conditions and applies its writes while holding the table's lock, so it is atomic across
-/// partitions and linearizable in the process.
+/// partitions and linearizable in the process. When the applied writes bind a record to a session that has ended, it
+/// writes nothing and reports that the session ended.
 /// </remarks>
-internal class InProcessTransactionService(InProcessRecordTable table) : ITransactionService
+internal class InProcessTransactionService(InProcessSessionTable sessions) : ITransactionService
 {
     /// <summary>
     /// Gets the record table, shared with the record service.
     /// </summary>
-    private InProcessRecordTable Table { get; } = table;
+    private InProcessRecordTable Table => Sessions.Records;
+
+    /// <summary>
+    /// Gets the session table, which says whether a session is live.
+    /// </summary>
+    private InProcessSessionTable Sessions { get; } = sessions;
 
     /// <inheritdoc />
     public ValueTask<TransactionResult> ExecuteAsync(
@@ -28,49 +34,47 @@ internal class InProcessTransactionService(InProcessRecordTable table) : ITransa
         ArgumentNullException.ThrowIfNull(transaction);
         InProcessGuard.Check(options, cancellationToken);
 
-        lock (Table.Gate)
+        using var scope = Table.Enter();
+
+        var succeeded = ConditionsHold(transaction);
+        var writes = succeeded ? transaction.OnSuccess : transaction.OnFailure;
+
+        foreach (var write in writes)
         {
-            var succeeded = ConditionsHold(transaction);
-            var writes = succeeded ? transaction.OnSuccess : transaction.OnFailure;
-
-            foreach (var write in writes)
+            if (write.Lifetime?.Session is { } session && !Sessions.IsLive(session))
             {
-                if (write.Lifetime?.Session is not null)
-                {
-                    throw new CoordinationException(
-                        CoordinationErrorCodes.Unsupported,
-                        outcomeUnknown: false,
-                        "The in-process provider keeps no sessions, so it binds no record to one."
-                    );
-                }
+                var ended = Table.Current(transaction.Keyspace);
+                var endedResult = new TransactionResult(TransactionStatus.SessionEnded, ended);
+                return ValueTask.FromResult(endedResult);
             }
-
-            if (writes.IsEmpty)
-            {
-                var current = Table.Current(transaction.Keyspace);
-                var unchanged = new TransactionResult(succeeded, current);
-                return ValueTask.FromResult(unchanged);
-            }
-
-            var revision = Table.Advance(transaction.Keyspace);
-
-            foreach (var write in writes)
-            {
-                if (write.Lifetime is { } lifetime)
-                {
-                    var record = new StoredRecord(write.Key, write.Value, revision);
-                    var expiry = InProcessExpiry.ForLifetime(Table.Time, lifetime);
-                    Table.Put(record, expiry);
-                }
-                else
-                {
-                    Table.Remove(write.Key);
-                }
-            }
-
-            var result = new TransactionResult(succeeded, revision);
-            return ValueTask.FromResult(result);
         }
+
+        var status = succeeded ? TransactionStatus.Succeeded : TransactionStatus.Failed;
+
+        if (writes.IsEmpty)
+        {
+            var current = Table.Current(transaction.Keyspace);
+            var unchanged = new TransactionResult(status, current);
+            return ValueTask.FromResult(unchanged);
+        }
+
+        var revision = Table.Advance(transaction.Keyspace);
+
+        foreach (var write in writes)
+        {
+            if (write.Lifetime is { } lifetime)
+            {
+                var record = new StoredRecord(write.Key, write.Value, revision);
+                Table.Put(record, lifetime);
+            }
+            else
+            {
+                Table.Remove(write.Key, revision);
+            }
+        }
+
+        var result = new TransactionResult(status, revision);
+        return ValueTask.FromResult(result);
     }
 
     /// <summary>

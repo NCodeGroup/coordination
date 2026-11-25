@@ -28,7 +28,7 @@ public sealed class DefaultTransactionServiceTests : IDisposable
         var cancellationToken = TestContext.Current.CancellationToken;
         var transaction = Transaction();
         var revision = new Revision(4);
-        var expected = new TransactionResult(true, revision);
+        var expected = new TransactionResult(TransactionStatus.Succeeded, revision);
         var mock = Mocks.Create<ITransactionService>();
         mock.Setup(x => x.ExecuteAsync(transaction, null, cancellationToken))
             .ReturnsAsync(expected)

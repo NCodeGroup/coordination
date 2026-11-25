@@ -21,11 +21,15 @@ public interface ITransactionService
     /// <see cref="CoordinationException"/> with <see cref="CoordinationErrorCodes.Unsupported"/> for keys in more than
     /// one partition, where two keys share a partition when they have the same
     /// <see cref="CoordinationKey.PartitionDepth"/> above 0 and equal leading segments to that depth, or are equal.
+    /// When the writes of the branch the conditions choose bind a record to a session that has ended, the result is
+    /// <see cref="TransactionStatus.SessionEnded"/> and nothing is written.
     /// </remarks>
     /// <param name="transaction">The conditions and the writes of each branch.</param>
     /// <param name="options">Options for this call, or null for none.</param>
     /// <param name="cancellationToken">The token that cancels the operation.</param>
-    /// <returns>Whether the conditions held, and the revision after the transaction.</returns>
+    /// <returns>
+    /// Which branch applied, or that a session a write binds to has ended, and the revision after the transaction.
+    /// </returns>
     ValueTask<TransactionResult> ExecuteAsync(
         RecordTransaction transaction,
         OperationOptions? options,

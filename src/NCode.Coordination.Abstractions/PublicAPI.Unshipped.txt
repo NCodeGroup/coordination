@@ -97,6 +97,10 @@ NCode.Coordination.GuaranteeDefinition.Implies.get -> System.Collections.Immutab
 NCode.Coordination.GuaranteeDefinition.Implies.init -> void
 NCode.Coordination.GuaranteeDimensions
 NCode.Coordination.Guarantees
+NCode.Coordination.HolderDeadline
+NCode.Coordination.HolderDeadline.HasPassed.get -> bool
+NCode.Coordination.HolderDeadline.Lifetime.get -> System.TimeSpan
+NCode.Coordination.HolderDeadline.Remaining.get -> System.TimeSpan
 NCode.Coordination.IClaimService
 NCode.Coordination.IClaimService.TryClaimAsync(NCode.Coordination.CoordinationKey! name, NCode.Coordination.TimeWindow! window, NCode.Coordination.TimeToLive! timeToLive, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.ClaimStatus>
 NCode.Coordination.ICoordinationBuilder
@@ -411,8 +415,13 @@ NCode.Coordination.TimeWindow.TimeWindow(System.DateTimeOffset start, System.Tim
 NCode.Coordination.TimeWindow.TryCreateTimeToLive(System.DateTimeOffset now, System.TimeSpan skewAllowance, out NCode.Coordination.TimeToLive? timeToLive) -> bool
 NCode.Coordination.TransactionResult
 NCode.Coordination.TransactionResult.Revision.get -> NCode.Coordination.Revision!
+NCode.Coordination.TransactionResult.Status.get -> NCode.Coordination.TransactionStatus
 NCode.Coordination.TransactionResult.Succeeded.get -> bool
-NCode.Coordination.TransactionResult.TransactionResult(bool succeeded, NCode.Coordination.Revision! revision) -> void
+NCode.Coordination.TransactionResult.TransactionResult(NCode.Coordination.TransactionStatus status, NCode.Coordination.Revision! revision) -> void
+NCode.Coordination.TransactionStatus
+NCode.Coordination.TransactionStatus.Failed = 1 -> NCode.Coordination.TransactionStatus
+NCode.Coordination.TransactionStatus.SessionEnded = 2 -> NCode.Coordination.TransactionStatus
+NCode.Coordination.TransactionStatus.Succeeded = 0 -> NCode.Coordination.TransactionStatus
 override NCode.Coordination.CoordinationKey.Equals(object? obj) -> bool
 override NCode.Coordination.CoordinationKey.GetHashCode() -> int
 override NCode.Coordination.CoordinationKey.ToString() -> string!
@@ -475,6 +484,7 @@ static NCode.Coordination.Guarantees.LinearizableWithinProcess.get -> NCode.Coor
 static NCode.Coordination.Guarantees.ReplicatedAsynchronously.get -> NCode.Coordination.Guarantee!
 static NCode.Coordination.Guarantees.ServerClock.get -> NCode.Coordination.Guarantee!
 static NCode.Coordination.Guarantees.Volatile.get -> NCode.Coordination.Guarantee!
+static NCode.Coordination.HolderDeadline.Begin(System.TimeProvider! time, NCode.Coordination.TimeToLive! timeToLive, System.TimeSpan driftAllowance) -> NCode.Coordination.HolderDeadline!
 static NCode.Coordination.KeepAliveResult.Ended.get -> NCode.Coordination.KeepAliveResult!
 static NCode.Coordination.KeepAliveResult.Renewed(NCode.Coordination.TimeToLive! timeToLive) -> NCode.Coordination.KeepAliveResult!
 static NCode.Coordination.KeySegment.FromGuid(System.Guid value) -> NCode.Coordination.KeySegment!

@@ -33,6 +33,11 @@ public abstract class TransactionContractTests : ProviderContractTests
     private IRecordService Records => GetService<IRecordService>(Primitives.Record);
 
     /// <summary>
+    /// Gets the provider's session service, and skips the test when the provider does not support sessions.
+    /// </summary>
+    private ISessionService Sessions => GetService<ISessionService>(Primitives.Session);
+
+    /// <summary>
     /// Reads the value of a record, or null when the key is absent.
     /// </summary>
     /// <param name="key">The key to read.</param>
@@ -257,6 +262,63 @@ public abstract class TransactionContractTests : ProviderContractTests
         await AdvanceClockAsync(PastExpiry, TestCancellationToken);
         var expired = await ReadValueAsync(key, TestCancellationToken);
         Assert.Null(expired);
+    }
+
+    /// <summary>
+    /// Checks that a record put bound to a live session is written and is deleted when the session closes.
+    /// </summary>
+    [Fact]
+    public async Task ExecuteAsync_WhenAPutIsBoundToALiveSession_EndsTheRecordWithTheSession()
+    {
+        var key = CreateKey("k1");
+        var one = "one"u8.ToArray();
+        var session = await ContractSessions.OpenAsync(
+            Sessions,
+            Keyspace,
+            LongTimeToLive,
+            TestCancellationToken
+        );
+        var lifetime = RecordLifetime.ForSession(session);
+        var putOne = RecordWrite.Put(key, one, lifetime);
+        var transaction = new RecordTransaction([], [putOne]);
+        var result = await Transactions.ExecuteAsync(transaction, null, TestCancellationToken);
+        Assert.True(result.Succeeded);
+        var alive = await ReadValueAsync(key, TestCancellationToken);
+        Assert.Equal(one, alive);
+
+        await Sessions.CloseAsync(session, null, TestCancellationToken);
+
+        var ended = await ReadValueAsync(key, TestCancellationToken);
+        Assert.Null(ended);
+    }
+
+    /// <summary>
+    /// Checks that a transaction whose applied writes bind a record to a session that has ended writes nothing and
+    /// reports that the session ended.
+    /// </summary>
+    [Fact]
+    public async Task ExecuteAsync_WhenTheAppliedBranchBindsToAnEndedSession_ReturnsSessionEnded()
+    {
+        var plainKey = CreateKey("k1");
+        var boundKey = CreateKey("k2");
+        var one = "one"u8.ToArray();
+        var session = await ContractSessions.OpenEndedAsync(
+            Sessions,
+            Keyspace,
+            TestCancellationToken
+        );
+        var lifetime = RecordLifetime.ForSession(session);
+        var putPlain = Put(plainKey, one);
+        var putBound = RecordWrite.Put(boundKey, one, lifetime);
+        var transaction = new RecordTransaction([], [putPlain, putBound]);
+
+        var result = await Transactions.ExecuteAsync(transaction, null, TestCancellationToken);
+
+        Assert.Equal(TransactionStatus.SessionEnded, result.Status);
+        var plain = await ReadValueAsync(plainKey, TestCancellationToken);
+        var bound = await ReadValueAsync(boundKey, TestCancellationToken);
+        Assert.Null(plain);
+        Assert.Null(bound);
     }
 
     /// <summary>
