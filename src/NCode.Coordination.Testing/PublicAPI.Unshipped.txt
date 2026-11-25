@@ -26,6 +26,26 @@ NCode.Coordination.Testing.CounterContractTests.IncrementBatchAsync_WhenTooLarge
 NCode.Coordination.Testing.CounterContractTests.ReadAsync_WhenCounterIsAbsent_ReturnsZero() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.CounterContractTests.ReadAsync_WhenTokenIsCanceled_ThrowsOperationCanceledException() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.CounterContractTests.ResetAsync_WhenCounterExists_DeletesIt() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.LeaseContractTests
+NCode.Coordination.Testing.LeaseContractTests.LeaseContractTests() -> void
+NCode.Coordination.Testing.LeaseContractTests.ReleaseAsync_WhenAnotherGrantHoldsTheResource_ReturnsFalseAndKeepsIt() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.LeaseContractTests.ReleaseAsync_WhenGrantHolds_ReturnsTrueAndFreesTheResource() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.LeaseContractTests.RenewAsync_WhenGrantEnded_ReturnsFalse() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.LeaseContractTests.RenewAsync_WhenGrantHolds_ExtendsItFromTheRenewal() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.LeaseContractTests.RenewAsync_WhenGrantIsBoundToASession_ThrowsArgumentException() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.LeaseContractTests.TryAcquireAsync_AfterExpiry_GivesAGreaterFencingToken() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.LeaseContractTests.TryAcquireAsync_AfterRelease_GivesAGreaterFencingToken() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.LeaseContractTests.TryAcquireAsync_WhenAnotherHolderHasIt_ReturnsHeld() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.LeaseContractTests.TryAcquireAsync_WhenAnotherSessionHoldsIt_ReturnsHeld() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.LeaseContractTests.TryAcquireAsync_WhenOptionsCarryAnUnknownExtension_ThrowsUnsupported() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.LeaseContractTests.TryAcquireAsync_WhenResourceIsFree_ReturnsAGrant() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.LeaseContractTests.TryAcquireAsync_WhenSessionHasEnded_ReturnsSessionEnded() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.LeaseContractTests.TryAcquireAsync_WhenTheSameSessionAcquiresAgain_ReturnsTheExistingGrant() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.LeaseContractTests.TryAcquireAsync_WhenTheSessionCloses_FreesTheResource() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.LeaseContractTests.WaitForReleaseAsync_WhenResourceIsFree_CompletesAtOnce() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.LeaseContractTests.WaitForReleaseAsync_WhenTheGrantExpires_Completes() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.LeaseContractTests.WaitForReleaseAsync_WhenTheHolderReleases_Completes() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.LeaseContractTests.WaitForReleaseAsync_WhenTokenIsCanceled_ThrowsOperationCanceledException() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.MembershipContractTests
 NCode.Coordination.Testing.MembershipContractTests.JoinAsync_WhenNodeIdIsHeldByAnotherSession_ReturnsNodeIdTaken() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.MembershipContractTests.JoinAsync_WhenOptionsCarryAnUnknownExtension_ThrowsUnsupported() -> System.Threading.Tasks.Task!
