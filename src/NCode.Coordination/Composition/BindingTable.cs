@@ -1,6 +1,9 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using System.Collections.Frozen;
+using System.Collections.Immutable;
+
 namespace NCode.Coordination.Composition;
 
 /// <summary>
@@ -41,7 +44,11 @@ internal sealed class BindingTable
             list.Add(entry);
         }
 
-        var table = new BindingTable(entries);
+        var frozen = entries.ToFrozenDictionary(
+            pair => pair.Key,
+            pair => pair.Value.ToImmutableArray()
+        );
+        var table = new BindingTable(frozen);
         return new Checked<BindingTable>(table, [.. failures]);
     }
 
@@ -80,7 +87,7 @@ internal sealed class BindingTable
     /// Creates a table over the accepted entries.
     /// </summary>
     /// <param name="entries">The accepted entries, grouped by primitive.</param>
-    private BindingTable(Dictionary<Primitive, List<BoundPrimitive>> entries)
+    private BindingTable(FrozenDictionary<Primitive, ImmutableArray<BoundPrimitive>> entries)
     {
         Entries = entries;
     }
@@ -88,7 +95,7 @@ internal sealed class BindingTable
     /// <summary>
     /// Gets the accepted entries of each primitive, in registration order.
     /// </summary>
-    private Dictionary<Primitive, List<BoundPrimitive>> Entries { get; }
+    private FrozenDictionary<Primitive, ImmutableArray<BoundPrimitive>> Entries { get; }
 
     /// <summary>
     /// Finds the entry that serves a primitive for a keyspace.

@@ -142,6 +142,10 @@ public sealed class DefaultCounterServiceTests : IDisposable
         );
 
         Assert.Equal("increments", exception.ParamName);
+        Assert.StartsWith(
+            "A batch has at least one increment, and its first is not null.",
+            exception.Message
+        );
     }
 
     [Fact]
@@ -164,6 +168,7 @@ public sealed class DefaultCounterServiceTests : IDisposable
         );
 
         Assert.Equal("increments", exception.ParamName);
+        Assert.StartsWith("A batch's increments are all non-null.", exception.Message);
     }
 
     [Fact]
@@ -188,6 +193,7 @@ public sealed class DefaultCounterServiceTests : IDisposable
         );
 
         Assert.Equal("increments", exception.ParamName);
+        Assert.StartsWith("A batch's increments are all in one keyspace.", exception.Message);
     }
 
     #endregion

@@ -92,10 +92,18 @@ internal class DefaultCounterService(
         var keyspace = first.Key.Keyspace;
         foreach (var increment in increments)
         {
-            if (increment is null || !keyspace.Equals(increment.Key.Keyspace))
+            if (increment is null)
             {
                 throw new ArgumentException(
-                    "A batch's increments are all non-null and in one keyspace.",
+                    "A batch's increments are all non-null.",
+                    nameof(increments)
+                );
+            }
+
+            if (!keyspace.Equals(increment.Key.Keyspace))
+            {
+                throw new ArgumentException(
+                    "A batch's increments are all in one keyspace.",
                     nameof(increments)
                 );
             }

@@ -17,17 +17,30 @@ internal class CoordinationComposition(
 ) : IAsyncDisposable, IDisposable
 {
     /// <summary>
+    /// Throws what the disposals threw: nothing when none threw, the exception as it was thrown when one did, and an
+    /// aggregate of them when several did.
+    /// </summary>
+    /// <param name="exceptions">The exceptions the disposals threw.</param>
+    private static void ThrowCaught(List<Exception> exceptions)
+    {
+        if (exceptions.Count == 0)
+        {
+            return;
+        }
+
+        if (exceptions.Count == 1)
+        {
+            ExceptionDispatchInfo.Capture(exceptions[0]).Throw();
+        }
+
+        throw new AggregateException(exceptions);
+    }
+
+    /// <summary>
     /// Gets the composed registrations, created on first use.
     /// </summary>
     private Lazy<ComposedCoordination> Composed { get; } =
         new(() => CoordinationComposer.Compose(registrations, services));
-
-    /// <summary>
-    /// Composes the registrations when that hasn't happened yet. A provider factory's exception is rethrown as it was
-    /// thrown.
-    /// </summary>
-    /// <exception cref="CoordinationCompositionException">The composition is invalid.</exception>
-    public void EnsureComposed() => _ = GetValid();
 
     /// <summary>
     /// Gets the composed registrations, composing them when that hasn't happened yet.
@@ -119,7 +132,11 @@ internal class CoordinationComposition(
         ThrowCaught(exceptions);
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Disposes each provider the composition created that implements <see cref="IDisposable" />. A provider that is
+    /// only <see cref="IAsyncDisposable" /> is released by <see cref="DisposeAsync" /> only, because blocking on its
+    /// disposal is banned in this repository.
+    /// </summary>
     public void Dispose()
     {
         List<Exception> exceptions = [];
@@ -143,25 +160,5 @@ internal class CoordinationComposition(
 
         GC.SuppressFinalize(this);
         ThrowCaught(exceptions);
-    }
-
-    /// <summary>
-    /// Throws what the disposals threw: nothing when none threw, the exception as it was thrown when one did, and an
-    /// aggregate of them when several did.
-    /// </summary>
-    /// <param name="exceptions">The exceptions the disposals threw.</param>
-    private static void ThrowCaught(List<Exception> exceptions)
-    {
-        if (exceptions.Count == 0)
-        {
-            return;
-        }
-
-        if (exceptions.Count == 1)
-        {
-            ExceptionDispatchInfo.Capture(exceptions[0]).Throw();
-        }
-
-        throw new AggregateException(exceptions);
     }
 }

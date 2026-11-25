@@ -78,54 +78,23 @@ public sealed class CoordinationCompositionTests : IDisposable
 
     #endregion
 
-    #region EnsureComposed Tests
+    #region EnsureStartedAsync Tests
 
     [Fact]
-    public void EnsureComposed_WhenInvalid_Throws()
+    public async Task EnsureStartedAsync_WhenAFactoryThrows_RethrowsItsException()
     {
-        var declaration = Declare("memory");
-        var provider = new DisposableProvider(declaration);
-        var binding = new ProviderBinding("missing");
-        var registrations = Register(provider, binding);
-        var composition = new CoordinationComposition(registrations, Services);
-
-        var thrown = Assert.Throws<CoordinationCompositionException>(composition.EnsureComposed);
-
-        Assert.Equal<string>(
-            ["A binding names the provider 'missing', which is not registered."],
-            thrown.Failures
-        );
-    }
-
-    [Fact]
-    public void EnsureComposed_WhenValid_DoesNotThrow()
-    {
-        var service = Mocks.Create<IOccurrenceService>().Object;
-        var declaration = Declare("memory");
-        var provider = new DisposableProvider(declaration, service);
-        var binding = new ProviderBinding("memory");
-        var registrations = Register(provider, binding);
-        var composition = new CoordinationComposition(registrations, Services);
-
-        composition.EnsureComposed();
-    }
-
-    [Fact]
-    public void EnsureComposed_WhenAFactoryThrows_RethrowsItsException()
-    {
+        var cancellationToken = TestContext.Current.CancellationToken;
         var failure = new InvalidOperationException("The factory failed.");
         var registrations = new CoordinationRegistrations();
         registrations.ProviderFactories.Add(_ => throw failure);
         var composition = new CoordinationComposition(registrations, Services);
 
-        var thrown = Assert.Throws<InvalidOperationException>(composition.EnsureComposed);
+        var thrown = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await composition.EnsureStartedAsync(cancellationToken)
+        );
 
         Assert.Same(failure, thrown);
     }
-
-    #endregion
-
-    #region EnsureStartedAsync Tests
 
     [Fact]
     public async Task EnsureStartedAsync_WhenValid_ProbesEveryProviderInRegistrationOrder()
@@ -259,6 +228,7 @@ public sealed class CoordinationCompositionTests : IDisposable
     [Fact]
     public async Task DisposeAsync_WhenComposed_DisposesEachProvider()
     {
+        var cancellationToken = TestContext.Current.CancellationToken;
         var service = Mocks.Create<IOccurrenceService>().Object;
         var syncDeclaration = Declare("sync");
         var asyncDeclaration = Declare("async");
@@ -268,7 +238,7 @@ public sealed class CoordinationCompositionTests : IDisposable
         var registrations = Register(sync, binding);
         registrations.ProviderFactories.Add(_ => async);
         var composition = new CoordinationComposition(registrations, Services);
-        composition.EnsureComposed();
+        await composition.EnsureStartedAsync(cancellationToken);
 
         await composition.DisposeAsync();
 
@@ -279,12 +249,15 @@ public sealed class CoordinationCompositionTests : IDisposable
     [Fact]
     public async Task DisposeAsync_WhenTheCompositionIsInvalid_DisposesTheCreatedProviders()
     {
+        var cancellationToken = TestContext.Current.CancellationToken;
         var declaration = Declare("memory");
         var provider = new AsyncDisposableProvider(declaration);
         var binding = new ProviderBinding("missing");
         var registrations = Register(provider, binding);
         var composition = new CoordinationComposition(registrations, Services);
-        Assert.Throws<CoordinationCompositionException>(composition.EnsureComposed);
+        await Assert.ThrowsAsync<CoordinationCompositionException>(async () =>
+            await composition.EnsureStartedAsync(cancellationToken)
+        );
 
         await composition.DisposeAsync();
 
@@ -294,6 +267,7 @@ public sealed class CoordinationCompositionTests : IDisposable
     [Fact]
     public async Task DisposeAsync_WhenAProviderIsRejected_DisposesIt()
     {
+        var cancellationToken = TestContext.Current.CancellationToken;
         var declaration = Declare("memory");
         var first = new AsyncDisposableProvider(declaration);
         var second = new AsyncDisposableProvider(declaration);
@@ -301,7 +275,9 @@ public sealed class CoordinationCompositionTests : IDisposable
         var registrations = Register(first, binding);
         registrations.ProviderFactories.Add(_ => second);
         var composition = new CoordinationComposition(registrations, Services);
-        Assert.Throws<CoordinationCompositionException>(composition.EnsureComposed);
+        await Assert.ThrowsAsync<CoordinationCompositionException>(async () =>
+            await composition.EnsureStartedAsync(cancellationToken)
+        );
 
         await composition.DisposeAsync();
 
@@ -312,6 +288,7 @@ public sealed class CoordinationCompositionTests : IDisposable
     [Fact]
     public async Task DisposeAsync_WhenAProviderDisposalThrows_DisposesTheRestAndRethrows()
     {
+        var cancellationToken = TestContext.Current.CancellationToken;
         var first = new ThrowingProvider(Declare("first"), new InvalidOperationException("first"));
         var second = new AsyncDisposableProvider(Declare("second"));
         var third = new AsyncDisposableProvider(Declare("third"));
@@ -328,7 +305,9 @@ public sealed class CoordinationCompositionTests : IDisposable
             new ProviderBinding("third") { Keyspace = new Keyspace("app", "third") }
         );
         var composition = new CoordinationComposition(registrations, Services);
-        Assert.Throws<CoordinationCompositionException>(composition.EnsureComposed);
+        await Assert.ThrowsAsync<CoordinationCompositionException>(async () =>
+            await composition.EnsureStartedAsync(cancellationToken)
+        );
 
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             composition.DisposeAsync().AsTask()
@@ -342,6 +321,7 @@ public sealed class CoordinationCompositionTests : IDisposable
     [Fact]
     public async Task DisposeAsync_WhenSeveralDisposalsThrow_ThrowsAggregate()
     {
+        var cancellationToken = TestContext.Current.CancellationToken;
         var first = new ThrowingProvider(Declare("first"), new InvalidOperationException("first"));
         var second = new ThrowingProvider(Declare("second"), new ArgumentException("second"));
         var third = new AsyncDisposableProvider(Declare("third"));
@@ -358,7 +338,9 @@ public sealed class CoordinationCompositionTests : IDisposable
             new ProviderBinding("third") { Keyspace = new Keyspace("app", "third") }
         );
         var composition = new CoordinationComposition(registrations, Services);
-        Assert.Throws<CoordinationCompositionException>(composition.EnsureComposed);
+        await Assert.ThrowsAsync<CoordinationCompositionException>(async () =>
+            await composition.EnsureStartedAsync(cancellationToken)
+        );
 
         var aggregate = await Assert.ThrowsAsync<AggregateException>(() =>
             composition.DisposeAsync().AsTask()
@@ -371,8 +353,9 @@ public sealed class CoordinationCompositionTests : IDisposable
     }
 
     [Fact]
-    public void Dispose_DisposesTheDisposableProviders()
+    public async Task Dispose_DisposesTheDisposableProviders()
     {
+        var cancellationToken = TestContext.Current.CancellationToken;
         var service = Mocks.Create<IOccurrenceService>().Object;
         var syncDeclaration = Declare("sync");
         var asyncDeclaration = Declare("async");
@@ -382,7 +365,7 @@ public sealed class CoordinationCompositionTests : IDisposable
         var registrations = Register(sync, binding);
         registrations.ProviderFactories.Add(_ => async);
         var composition = new CoordinationComposition(registrations, Services);
-        composition.EnsureComposed();
+        await composition.EnsureStartedAsync(cancellationToken);
 
         composition.Dispose();
 

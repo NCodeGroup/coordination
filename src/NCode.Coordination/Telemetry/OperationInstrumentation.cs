@@ -16,14 +16,49 @@ namespace NCode.Coordination.Telemetry;
 /// <param name="timeProvider">Reads the clock that times each operation.</param>
 internal class OperationInstrumentation(IMeterFactory meterFactory, TimeProvider timeProvider)
 {
+    /// <summary>
+    /// The name of the span that traces each operation.
+    /// </summary>
     private const string SpanName = "ncode.coordination.operation";
+
+    /// <summary>
+    /// The attribute that names the provider that served the operation.
+    /// </summary>
     private const string ProviderTag = "ncode.coordination.provider";
+
+    /// <summary>
+    /// The attribute that names the primitive the operation belongs to.
+    /// </summary>
     private const string PrimitiveTag = "ncode.coordination.primitive";
+
+    /// <summary>
+    /// The attribute that names the operation.
+    /// </summary>
     private const string OperationTag = "ncode.coordination.operation";
+
+    /// <summary>
+    /// The attribute that holds the operation's outcome.
+    /// </summary>
     private const string OutcomeTag = "ncode.coordination.outcome";
+
+    /// <summary>
+    /// The attribute that holds the error type of a failed operation.
+    /// </summary>
     private const string ErrorTypeTag = "error.type";
+
+    /// <summary>
+    /// The outcome value of an operation that completed.
+    /// </summary>
     private const string SuccessOutcome = "success";
+
+    /// <summary>
+    /// The outcome value of an operation that threw an exception other than a cancellation.
+    /// </summary>
     private const string FailureOutcome = "failure";
+
+    /// <summary>
+    /// The outcome value of an operation that was canceled.
+    /// </summary>
     private const string CanceledOutcome = "canceled";
 
     /// <summary>
