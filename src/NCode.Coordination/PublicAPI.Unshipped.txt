@@ -2,6 +2,7 @@
 const NCode.Coordination.CoordinationTelemetry.ActivitySourceName = "NCode.Coordination" -> string!
 const NCode.Coordination.CoordinationTelemetry.MeterName = "NCode.Coordination" -> string!
 const NCode.Coordination.InProcessCoordinationBuilderExtensions.ProviderName = "in-process" -> string!
+const NCode.Coordination.PartitionAssignment.MaxPartitions = 4096 -> int
 NCode.Coordination.BarrierTerms
 NCode.Coordination.BarrierTerms.BarrierTerms(int parties, NCode.Coordination.RecordLifetime! lifetime) -> void
 NCode.Coordination.BarrierTerms.Lifetime.get -> NCode.Coordination.RecordLifetime!
@@ -28,6 +29,12 @@ NCode.Coordination.IReadWriteLockService.ReleaseReadAsync(NCode.Coordination.Rea
 NCode.Coordination.IReadWriteLockService.ReleaseWriteAsync(NCode.Coordination.LeaseGrant! grant, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<bool>
 NCode.Coordination.ISingletonService
 NCode.Coordination.ISingletonService.RunAsync(NCode.Coordination.CoordinationKey! role, NCode.Coordination.SingletonCandidate! candidate, System.Func<NCode.Coordination.Leadership!, System.Threading.CancellationToken, System.Threading.Tasks.ValueTask>! work, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<bool>
+NCode.Coordination.PartitionAssignment
+NCode.Coordination.PartitionAssignment.GetOwner(int partition) -> NCode.Coordination.Member?
+NCode.Coordination.PartitionAssignment.GetPartitions(string! nodeId) -> System.Collections.Immutable.ImmutableArray<int>
+NCode.Coordination.PartitionAssignment.Group.get -> NCode.Coordination.CoordinationKey!
+NCode.Coordination.PartitionAssignment.PartitionCount.get -> int
+NCode.Coordination.PartitionAssignment.Revision.get -> NCode.Coordination.Revision!
 NCode.Coordination.ReadLockGrant
 NCode.Coordination.ReadLockGrant.FencingToken.get -> NCode.Coordination.FencingToken!
 NCode.Coordination.ReadLockGrant.ReadLockGrant(NCode.Coordination.CoordinationKey! resource, NCode.Coordination.CoordinationKey! registration, NCode.Coordination.Revision! revision, NCode.Coordination.FencingToken! fencingToken) -> void
@@ -65,5 +72,6 @@ static NCode.Coordination.CoordinationRecipes.SlidingWindowRateLimiter.get -> NC
 static NCode.Coordination.CoordinationRecipes.TokenBucketRateLimiter.get -> NCode.Coordination.Recipe!
 static NCode.Coordination.CoordinationServiceCollectionExtensions.AddCoordination(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, System.Action<NCode.Coordination.ICoordinationBuilder!>! configure) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
 static NCode.Coordination.InProcessCoordinationBuilderExtensions.AddInProcessProvider(this NCode.Coordination.ICoordinationBuilder! builder) -> NCode.Coordination.ICoordinationBuilder!
+static NCode.Coordination.PartitionAssignment.Assign(NCode.Coordination.MembershipView! view, int partitionCount) -> NCode.Coordination.PartitionAssignment!
 static NCode.Coordination.RecipeCoordinationBuilderExtensions.RequireRecipe(this NCode.Coordination.ICoordinationBuilder! builder, NCode.Coordination.Recipe! recipe, string! feature, NCode.Coordination.Keyspace! keyspace) -> NCode.Coordination.ICoordinationBuilder!
 static NCode.Coordination.RecipeCoordinationBuilderExtensions.RequireRecipe(this NCode.Coordination.ICoordinationBuilder! builder, NCode.Coordination.Recipe! recipe, string! feature) -> NCode.Coordination.ICoordinationBuilder!
