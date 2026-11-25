@@ -14,6 +14,9 @@ internal class CoordinationComposition(
     IServiceProvider services
 ) : IAsyncDisposable, IDisposable
 {
+    /// <summary>
+    /// Gets the composed registrations, created on first use.
+    /// </summary>
     private Lazy<ComposedCoordination> Composed { get; } =
         new(() => CoordinationComposer.Compose(registrations, services));
 

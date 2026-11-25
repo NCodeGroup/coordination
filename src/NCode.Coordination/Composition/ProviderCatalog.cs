@@ -12,29 +12,6 @@ namespace NCode.Coordination.Composition;
 /// </summary>
 internal sealed class ProviderCatalog
 {
-    private ProviderCatalog(
-        ImmutableArray<ICoordinationProvider> providers,
-        FrozenDictionary<string, ICoordinationProvider> byName,
-        ExceptionDispatchInfo? factoryFailure
-    )
-    {
-        Providers = providers;
-        ByName = byName;
-        FactoryFailure = factoryFailure;
-    }
-
-    /// <summary>
-    /// Gets the accepted providers, in registration order.
-    /// </summary>
-    public ImmutableArray<ICoordinationProvider> Providers { get; }
-
-    /// <summary>
-    /// Gets the exception a provider factory threw, or null when every factory returned.
-    /// </summary>
-    public ExceptionDispatchInfo? FactoryFailure { get; }
-
-    private FrozenDictionary<string, ICoordinationProvider> ByName { get; }
-
     /// <summary>
     /// Creates the providers from their factories, recording a failure for each one that cannot be accepted. A factory
     /// that throws stops the creation, and the providers created before it are kept.
@@ -100,6 +77,38 @@ internal sealed class ProviderCatalog
         var catalog = new ProviderCatalog(accepted, frozenByName, factoryFailure);
         return new Checked<ProviderCatalog>(catalog, [.. failures]);
     }
+
+    /// <summary>
+    /// Creates a catalog over the accepted providers.
+    /// </summary>
+    /// <param name="providers">The accepted providers, in registration order.</param>
+    /// <param name="byName">The accepted providers by name.</param>
+    /// <param name="factoryFailure">The exception a provider factory threw, or null.</param>
+    private ProviderCatalog(
+        ImmutableArray<ICoordinationProvider> providers,
+        FrozenDictionary<string, ICoordinationProvider> byName,
+        ExceptionDispatchInfo? factoryFailure
+    )
+    {
+        Providers = providers;
+        ByName = byName;
+        FactoryFailure = factoryFailure;
+    }
+
+    /// <summary>
+    /// Gets the accepted providers, in registration order.
+    /// </summary>
+    public ImmutableArray<ICoordinationProvider> Providers { get; }
+
+    /// <summary>
+    /// Gets the exception a provider factory threw, or null when every factory returned.
+    /// </summary>
+    public ExceptionDispatchInfo? FactoryFailure { get; }
+
+    /// <summary>
+    /// Gets the accepted providers by the name their declarations give.
+    /// </summary>
+    private FrozenDictionary<string, ICoordinationProvider> ByName { get; }
 
     /// <summary>
     /// Finds a provider by the name its declaration gives.

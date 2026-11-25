@@ -11,13 +11,6 @@ namespace NCode.Coordination.Composition;
 /// </summary>
 internal sealed class GuaranteeRegistry
 {
-    private GuaranteeRegistry(FrozenDictionary<Guarantee, GuaranteeDefinition> definitions)
-    {
-        Definitions = definitions;
-    }
-
-    private FrozenDictionary<Guarantee, GuaranteeDefinition> Definitions { get; }
-
     /// <summary>
     /// Creates a registry from definitions, returning a failure for each conflict or undefined implication.
     /// </summary>
@@ -62,6 +55,31 @@ internal sealed class GuaranteeRegistry
     }
 
     /// <summary>
+    /// Gets whether two definitions of one guarantee mean the same.
+    /// </summary>
+    /// <param name="first">The first definition.</param>
+    /// <param name="second">The second definition.</param>
+    /// <returns>True when the dimension, the description and the implied guarantees are equal.</returns>
+    private static bool SameMeaning(GuaranteeDefinition first, GuaranteeDefinition second) =>
+        string.Equals(first.Dimension, second.Dimension, StringComparison.Ordinal)
+        && string.Equals(first.Description, second.Description, StringComparison.Ordinal)
+        && first.Implies.SequenceEqual(second.Implies);
+
+    /// <summary>
+    /// Creates a registry over the accepted definitions.
+    /// </summary>
+    /// <param name="definitions">The accepted definitions, by guarantee.</param>
+    private GuaranteeRegistry(FrozenDictionary<Guarantee, GuaranteeDefinition> definitions)
+    {
+        Definitions = definitions;
+    }
+
+    /// <summary>
+    /// Gets the accepted definition of each defined guarantee.
+    /// </summary>
+    private FrozenDictionary<Guarantee, GuaranteeDefinition> Definitions { get; }
+
+    /// <summary>
     /// Gets whether the registry defines a guarantee.
     /// </summary>
     /// <param name="guarantee">The guarantee to look up.</param>
@@ -97,9 +115,4 @@ internal sealed class GuaranteeRegistry
 
         return [.. seen];
     }
-
-    private static bool SameMeaning(GuaranteeDefinition first, GuaranteeDefinition second) =>
-        string.Equals(first.Dimension, second.Dimension, StringComparison.Ordinal)
-        && string.Equals(first.Description, second.Description, StringComparison.Ordinal)
-        && first.Implies.SequenceEqual(second.Implies);
 }

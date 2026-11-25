@@ -15,6 +15,24 @@ namespace NCode.Coordination;
 /// </summary>
 public static class CoordinationServiceCollectionExtensions
 {
+    /// <summary>
+    /// Finds the registrations a previous call added to the services.
+    /// </summary>
+    /// <param name="services">The services to search.</param>
+    /// <returns>The registrations, or null when none were added.</returns>
+    private static CoordinationRegistrations? FindRegistrations(IServiceCollection services)
+    {
+        foreach (var descriptor in services)
+        {
+            if (descriptor.ImplementationInstance is CoordinationRegistrations registrations)
+            {
+                return registrations;
+            }
+        }
+
+        return null;
+    }
+
     extension(IServiceCollection services)
     {
         /// <summary>
@@ -62,18 +80,5 @@ public static class CoordinationServiceCollectionExtensions
             services.TryAddSingleton<INotificationService, DefaultNotificationService>();
             return services;
         }
-    }
-
-    private static CoordinationRegistrations? FindRegistrations(IServiceCollection services)
-    {
-        foreach (var descriptor in services)
-        {
-            if (descriptor.ImplementationInstance is CoordinationRegistrations registrations)
-            {
-                return registrations;
-            }
-        }
-
-        return null;
     }
 }

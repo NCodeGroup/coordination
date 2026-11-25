@@ -9,6 +9,9 @@ namespace NCode.Coordination.Composition;
 internal class DefaultCoordinationBuilder(CoordinationRegistrations registrations)
     : ICoordinationBuilder
 {
+    /// <summary>
+    /// Gets the registrations the builder adds to.
+    /// </summary>
     private CoordinationRegistrations Registrations { get; } = registrations;
 
     /// <inheritdoc />

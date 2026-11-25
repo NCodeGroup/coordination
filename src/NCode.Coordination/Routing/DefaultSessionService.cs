@@ -16,8 +16,14 @@ internal class DefaultSessionService(
     OperationInstrumentation instrumentation
 ) : ISessionService
 {
+    /// <summary>
+    /// Gets the composition that resolves the provider bound for a key's keyspace.
+    /// </summary>
     private CoordinationComposition Composition { get; } = composition;
 
+    /// <summary>
+    /// Gets the instrumentation that traces and measures each call.
+    /// </summary>
     private OperationInstrumentation Instrumentation { get; } = instrumentation;
 
     /// <inheritdoc />

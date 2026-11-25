@@ -12,25 +12,12 @@ namespace NCode.Coordination;
 public sealed class CoordinationCompositionException : Exception
 {
     /// <summary>
-    /// Creates a failure that lists every problem found.
+    /// Copies and validates the failures.
     /// </summary>
-    /// <param name="failures">What to change, one entry for each problem, in order.</param>
+    /// <param name="failures">What to change, one entry for each problem.</param>
+    /// <returns>The failures, as an immutable array.</returns>
     /// <exception cref="ArgumentNullException">The failures are null.</exception>
     /// <exception cref="ArgumentException">The failures are empty, or an entry is null, empty or white space.</exception>
-    public CoordinationCompositionException(IEnumerable<string> failures)
-        : this(Copy(failures)) { }
-
-    private CoordinationCompositionException(ImmutableArray<string> failures)
-        : base(Describe(failures))
-    {
-        Failures = failures;
-    }
-
-    /// <summary>
-    /// Gets what to change, one entry for each problem, in order.
-    /// </summary>
-    public ImmutableArray<string> Failures { get; }
-
     private static ImmutableArray<string> Copy(IEnumerable<string> failures)
     {
         ArgumentNullException.ThrowIfNull(failures);
@@ -52,6 +39,11 @@ public sealed class CoordinationCompositionException : Exception
         return copy;
     }
 
+    /// <summary>
+    /// Builds the exception's message from its failures.
+    /// </summary>
+    /// <param name="failures">What to change, one entry for each problem.</param>
+    /// <returns>The message that lists every failure.</returns>
     private static string Describe(ImmutableArray<string> failures)
     {
         var builder = new StringBuilder("The coordination composition is invalid:");
@@ -62,4 +54,28 @@ public sealed class CoordinationCompositionException : Exception
 
         return builder.ToString();
     }
+
+    /// <summary>
+    /// Creates a failure that lists every problem found.
+    /// </summary>
+    /// <param name="failures">What to change, one entry for each problem, in order.</param>
+    /// <exception cref="ArgumentNullException">The failures are null.</exception>
+    /// <exception cref="ArgumentException">The failures are empty, or an entry is null, empty or white space.</exception>
+    public CoordinationCompositionException(IEnumerable<string> failures)
+        : this(Copy(failures)) { }
+
+    /// <summary>
+    /// Creates a failure from failures that are already validated.
+    /// </summary>
+    /// <param name="failures">What to change, one entry for each problem, in order.</param>
+    private CoordinationCompositionException(ImmutableArray<string> failures)
+        : base(Describe(failures))
+    {
+        Failures = failures;
+    }
+
+    /// <summary>
+    /// Gets what to change, one entry for each problem, in order.
+    /// </summary>
+    public ImmutableArray<string> Failures { get; }
 }

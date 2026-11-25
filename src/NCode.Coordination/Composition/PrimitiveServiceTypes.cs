@@ -10,6 +10,9 @@ namespace NCode.Coordination.Composition;
 /// </summary>
 internal static class PrimitiveServiceTypes
 {
+    /// <summary>
+    /// Gets the interface of each built-in primitive.
+    /// </summary>
     private static FrozenDictionary<Primitive, Type> Types { get; } =
         new Dictionary<Primitive, Type>
         {

@@ -13,6 +13,9 @@ namespace NCode.Coordination.Composition;
 internal sealed class CoordinationStartupCheck(CoordinationComposition composition)
     : IHostedLifecycleService
 {
+    /// <summary>
+    /// Gets the composition to compose and probe.
+    /// </summary>
     private CoordinationComposition Composition { get; } = composition;
 
     /// <inheritdoc />

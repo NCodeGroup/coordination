@@ -83,6 +83,16 @@ internal static class RequirementChecker
         return [.. failures];
     }
 
+    /// <summary>
+    /// Gets whether a bound primitive keeps a guarantee.
+    /// </summary>
+    /// <param name="bound">The bound primitive that serves the requirement.</param>
+    /// <param name="guarantee">The required guarantee.</param>
+    /// <param name="singleNode">Whether the host runs as a single node.</param>
+    /// <returns>
+    /// True when the primitive's closed guarantees contain it, or on a single node when it is a linearizable guarantee
+    /// across or until failover and the primitive keeps linearizability within the process.
+    /// </returns>
     private static bool IsKept(BoundPrimitive bound, Guarantee guarantee, bool singleNode)
     {
         if (bound.Guarantees.Contains(guarantee))

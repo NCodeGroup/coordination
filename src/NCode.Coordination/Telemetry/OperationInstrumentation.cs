@@ -31,8 +31,50 @@ internal class OperationInstrumentation(IMeterFactory meterFactory, TimeProvider
     /// </summary>
     internal static ActivitySource Source { get; } = new(CoordinationTelemetry.ActivitySourceName);
 
+    /// <summary>
+    /// Creates the histogram that records each operation's duration.
+    /// </summary>
+    /// <param name="meterFactory">Creates the meter that holds the histogram.</param>
+    /// <returns>The duration histogram, in seconds.</returns>
+    private static Histogram<double> CreateDuration(IMeterFactory meterFactory)
+    {
+        var meter = meterFactory.Create(CoordinationTelemetry.MeterName);
+        return meter.CreateHistogram<double>(
+            "ncode.coordination.operation.duration",
+            "s",
+            "The duration of each coordination operation.",
+            tags: null,
+            advice: new InstrumentAdvice<double>
+            {
+                HistogramBucketBoundaries =
+                [
+                    0.0005,
+                    0.001,
+                    0.0025,
+                    0.005,
+                    0.01,
+                    0.025,
+                    0.05,
+                    0.1,
+                    0.25,
+                    0.5,
+                    1,
+                    2.5,
+                    5,
+                    10,
+                ],
+            }
+        );
+    }
+
+    /// <summary>
+    /// Gets the histogram that records each operation's duration.
+    /// </summary>
     private Histogram<double> Duration { get; } = CreateDuration(meterFactory);
 
+    /// <summary>
+    /// Gets the clock that times each operation.
+    /// </summary>
     private TimeProvider TimeProvider { get; } = timeProvider;
 
     /// <summary>
@@ -155,37 +197,13 @@ internal class OperationInstrumentation(IMeterFactory meterFactory, TimeProvider
         }
     }
 
-    private static Histogram<double> CreateDuration(IMeterFactory meterFactory)
-    {
-        var meter = meterFactory.Create(CoordinationTelemetry.MeterName);
-        return meter.CreateHistogram<double>(
-            "ncode.coordination.operation.duration",
-            "s",
-            "The duration of each coordination operation.",
-            tags: null,
-            advice: new InstrumentAdvice<double>
-            {
-                HistogramBucketBoundaries =
-                [
-                    0.0005,
-                    0.001,
-                    0.0025,
-                    0.005,
-                    0.01,
-                    0.025,
-                    0.05,
-                    0.1,
-                    0.25,
-                    0.5,
-                    1,
-                    2.5,
-                    5,
-                    10,
-                ],
-            }
-        );
-    }
-
+    /// <summary>
+    /// Starts an operation's span and timer.
+    /// </summary>
+    /// <typeparam name="TService">The primitive's interface.</typeparam>
+    /// <param name="target">The bound provider's implementation.</param>
+    /// <param name="operation">The operation.</param>
+    /// <returns>The measurement to complete when the operation ends.</returns>
     private OperationMeasurement Start<TService>(BoundService<TService> target, Operation operation)
         where TService : class
     {
@@ -208,6 +226,11 @@ internal class OperationInstrumentation(IMeterFactory meterFactory, TimeProvider
         );
     }
 
+    /// <summary>
+    /// Ends an operation: records its duration and closes its span, tagged with the outcome and any error type.
+    /// </summary>
+    /// <param name="measurement">The measurement that <c>Start</c> returned.</param>
+    /// <param name="exception">The exception the operation ended with, or null for a success.</param>
     private void Complete(OperationMeasurement measurement, Exception? exception)
     {
         string? errorType = null;

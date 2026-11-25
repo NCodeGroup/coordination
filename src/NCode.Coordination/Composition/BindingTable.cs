@@ -8,13 +8,6 @@ namespace NCode.Coordination.Composition;
 /// </summary>
 internal sealed class BindingTable
 {
-    private BindingTable(Dictionary<Primitive, List<BoundPrimitive>> entries)
-    {
-        Entries = entries;
-    }
-
-    private Dictionary<Primitive, List<BoundPrimitive>> Entries { get; }
-
     /// <summary>
     /// Creates a table, returning a failure for each primitive bound twice for one scope.
     /// </summary>
@@ -53,6 +46,51 @@ internal sealed class BindingTable
     }
 
     /// <summary>
+    /// Describes a scope for a message.
+    /// </summary>
+    /// <param name="keyspace">The keyspace, or null for the default.</param>
+    /// <returns>The text of the scope.</returns>
+    internal static string DescribeScope(Keyspace? keyspace) =>
+        keyspace is null ? "by default" : $"for the keyspace '{keyspace}'";
+
+    /// <summary>
+    /// Gets whether a binding's keyspace covers another keyspace.
+    /// </summary>
+    /// <param name="scope">The keyspace a binding is declared for.</param>
+    /// <param name="keyspace">The keyspace of the key being resolved.</param>
+    /// <returns>True when the scope is in the keyspace's cluster and its segments are a prefix of the keyspace's.</returns>
+    private static bool Covers(Keyspace scope, Keyspace keyspace)
+    {
+        if (!string.Equals(scope.Cluster, keyspace.Cluster, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var length = scope.Segments.Length;
+        if (length > keyspace.Segments.Length)
+        {
+            return false;
+        }
+
+        var leading = keyspace.Segments.AsSpan(0, length);
+        return scope.Segments.AsSpan().SequenceEqual(leading);
+    }
+
+    /// <summary>
+    /// Creates a table over the accepted entries.
+    /// </summary>
+    /// <param name="entries">The accepted entries, grouped by primitive.</param>
+    private BindingTable(Dictionary<Primitive, List<BoundPrimitive>> entries)
+    {
+        Entries = entries;
+    }
+
+    /// <summary>
+    /// Gets the accepted entries of each primitive, in registration order.
+    /// </summary>
+    private Dictionary<Primitive, List<BoundPrimitive>> Entries { get; }
+
+    /// <summary>
     /// Finds the entry that serves a primitive for a keyspace.
     /// </summary>
     /// <param name="primitive">The primitive.</param>
@@ -88,30 +126,5 @@ internal sealed class BindingTable
         }
 
         return best ?? fallback;
-    }
-
-    /// <summary>
-    /// Describes a scope for a message.
-    /// </summary>
-    /// <param name="keyspace">The keyspace, or null for the default.</param>
-    /// <returns>The text of the scope.</returns>
-    internal static string DescribeScope(Keyspace? keyspace) =>
-        keyspace is null ? "by default" : $"for the keyspace '{keyspace}'";
-
-    private static bool Covers(Keyspace scope, Keyspace keyspace)
-    {
-        if (!string.Equals(scope.Cluster, keyspace.Cluster, StringComparison.Ordinal))
-        {
-            return false;
-        }
-
-        var length = scope.Segments.Length;
-        if (length > keyspace.Segments.Length)
-        {
-            return false;
-        }
-
-        var leading = keyspace.Segments.AsSpan(0, length);
-        return scope.Segments.AsSpan().SequenceEqual(leading);
     }
 }
