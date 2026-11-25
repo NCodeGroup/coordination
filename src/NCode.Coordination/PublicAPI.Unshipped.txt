@@ -5,6 +5,7 @@ const NCode.Coordination.InProcessCoordinationBuilderExtensions.ProviderName = "
 NCode.Coordination.CoordinationCompositionException
 NCode.Coordination.CoordinationCompositionException.CoordinationCompositionException(System.Collections.Generic.IEnumerable<string!>! failures) -> void
 NCode.Coordination.CoordinationCompositionException.Failures.get -> System.Collections.Immutable.ImmutableArray<string!>
+NCode.Coordination.CoordinationRecipes
 NCode.Coordination.CoordinationServiceCollectionExtensions
 NCode.Coordination.CoordinationServiceCollectionExtensions.extension(Microsoft.Extensions.DependencyInjection.IServiceCollection!)
 NCode.Coordination.CoordinationServiceCollectionExtensions.extension(Microsoft.Extensions.DependencyInjection.IServiceCollection!).AddCoordination(System.Action<NCode.Coordination.ICoordinationBuilder!>! configure) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
@@ -21,5 +22,16 @@ NCode.Coordination.RecipeNeed.Guarantees.get -> System.Collections.Immutable.Imm
 NCode.Coordination.RecipeNeed.Primitive.get -> NCode.Coordination.Primitive!
 NCode.Coordination.RecipeNeed.RecipeNeed(NCode.Coordination.Primitive! primitive, params System.Collections.Generic.IEnumerable<NCode.Coordination.Guarantee!>! guarantees) -> void
 override NCode.Coordination.Recipe.ToString() -> string!
+static NCode.Coordination.CoordinationRecipes.All.get -> System.Collections.Immutable.ImmutableArray<NCode.Coordination.Recipe!>
+static NCode.Coordination.CoordinationRecipes.Barrier.get -> NCode.Coordination.Recipe!
+static NCode.Coordination.CoordinationRecipes.CacheInvalidation.get -> NCode.Coordination.Recipe!
+static NCode.Coordination.CoordinationRecipes.FixedWindowRateLimiter.get -> NCode.Coordination.Recipe!
+static NCode.Coordination.CoordinationRecipes.Lock.get -> NCode.Coordination.Recipe!
+static NCode.Coordination.CoordinationRecipes.PartitionOwnership.get -> NCode.Coordination.Recipe!
+static NCode.Coordination.CoordinationRecipes.ReadWriteLock.get -> NCode.Coordination.Recipe!
+static NCode.Coordination.CoordinationRecipes.SingleFlight.get -> NCode.Coordination.Recipe!
+static NCode.Coordination.CoordinationRecipes.Singleton.get -> NCode.Coordination.Recipe!
+static NCode.Coordination.CoordinationRecipes.SlidingWindowRateLimiter.get -> NCode.Coordination.Recipe!
+static NCode.Coordination.CoordinationRecipes.TokenBucketRateLimiter.get -> NCode.Coordination.Recipe!
 static NCode.Coordination.CoordinationServiceCollectionExtensions.AddCoordination(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, System.Action<NCode.Coordination.ICoordinationBuilder!>! configure) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
 static NCode.Coordination.InProcessCoordinationBuilderExtensions.AddInProcessProvider(this NCode.Coordination.ICoordinationBuilder! builder) -> NCode.Coordination.ICoordinationBuilder!
