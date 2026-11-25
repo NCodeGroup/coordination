@@ -31,9 +31,8 @@ public abstract class NotificationContractTests : ProviderContractTests
     {
         var topic = CreateKey("topic");
 
-        await using var stream = ContractStreams.Open(
-            Notifications.SubscribeAsync(topic, null, TestCancellationToken)
-        );
+        var subscription = Notifications.SubscribeAsync(topic, null, TestCancellationToken);
+        await using var stream = ContractStreams.Open(subscription);
         var first = await ContractStreams.NextAsync(stream);
 
         Assert.True(first.IsResync);
@@ -70,9 +69,8 @@ public abstract class NotificationContractTests : ProviderContractTests
     public async Task PublishAsync_WhenSubscribed_DeliversTheMessage()
     {
         var topic = CreateKey("topic");
-        await using var stream = ContractStreams.Open(
-            Notifications.SubscribeAsync(topic, null, TestCancellationToken)
-        );
+        var subscription = Notifications.SubscribeAsync(topic, null, TestCancellationToken);
+        await using var stream = ContractStreams.Open(subscription);
         await ContractStreams.NextAsync(stream);
 
         await Notifications.PublishAsync(topic, "a"u8.ToArray(), null, TestCancellationToken);
@@ -89,15 +87,15 @@ public abstract class NotificationContractTests : ProviderContractTests
     [Fact]
     public async Task PublishAsync_WhenPublishedTwice_NumbersTheMessagesConsecutively()
     {
-        Assert.SkipUnless(
-            Declares(Primitives.Notification, Guarantees.AtMostOnceWithGapDetection),
-            "The provider does not number a topic's messages."
+        var declaresNumbering = Declares(
+            Primitives.Notification,
+            Guarantees.AtMostOnceWithGapDetection
         );
+        Assert.SkipUnless(declaresNumbering, "The provider does not number a topic's messages.");
 
         var topic = CreateKey("topic");
-        await using var stream = ContractStreams.Open(
-            Notifications.SubscribeAsync(topic, null, TestCancellationToken)
-        );
+        var subscription = Notifications.SubscribeAsync(topic, null, TestCancellationToken);
+        await using var stream = ContractStreams.Open(subscription);
         await ContractStreams.NextAsync(stream);
 
         await Notifications.PublishAsync(topic, "a"u8.ToArray(), null, TestCancellationToken);
@@ -117,12 +115,10 @@ public abstract class NotificationContractTests : ProviderContractTests
     public async Task PublishAsync_WhenTwoSubscribe_DeliversToEach()
     {
         var topic = CreateKey("topic");
-        await using var first = ContractStreams.Open(
-            Notifications.SubscribeAsync(topic, null, TestCancellationToken)
-        );
-        await using var second = ContractStreams.Open(
-            Notifications.SubscribeAsync(topic, null, TestCancellationToken)
-        );
+        var firstSubscription = Notifications.SubscribeAsync(topic, null, TestCancellationToken);
+        await using var first = ContractStreams.Open(firstSubscription);
+        var secondSubscription = Notifications.SubscribeAsync(topic, null, TestCancellationToken);
+        await using var second = ContractStreams.Open(secondSubscription);
         await ContractStreams.NextAsync(first);
         await ContractStreams.NextAsync(second);
 
@@ -142,9 +138,8 @@ public abstract class NotificationContractTests : ProviderContractTests
     {
         var topicA = CreateKey("a");
         var topicB = CreateKey("b");
-        await using var stream = ContractStreams.Open(
-            Notifications.SubscribeAsync(topicA, null, TestCancellationToken)
-        );
+        var subscription = Notifications.SubscribeAsync(topicA, null, TestCancellationToken);
+        await using var stream = ContractStreams.Open(subscription);
         await ContractStreams.NextAsync(stream);
 
         await Notifications.PublishAsync(topicB, "b"u8.ToArray(), null, TestCancellationToken);

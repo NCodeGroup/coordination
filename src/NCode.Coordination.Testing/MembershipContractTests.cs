@@ -352,9 +352,8 @@ public abstract class MembershipContractTests : ProviderContractTests
         await Members.JoinAsync(group, member, null, TestCancellationToken);
         var current = await Members.ReadAsync(group, null, TestCancellationToken);
 
-        await using var stream = ContractStreams.Open(
-            Members.WatchAsync(group, null, TestCancellationToken)
-        );
+        var watch = Members.WatchAsync(group, null, TestCancellationToken);
+        await using var stream = ContractStreams.Open(watch);
         var first = await ContractStreams.NextAsync(stream);
 
         Assert.Equal(group, first.Group);
@@ -377,9 +376,8 @@ public abstract class MembershipContractTests : ProviderContractTests
             TestCancellationToken
         );
         var member = CreateMember(session, "b");
-        await using var stream = ContractStreams.Open(
-            Members.WatchAsync(group, null, TestCancellationToken)
-        );
+        var watch = Members.WatchAsync(group, null, TestCancellationToken);
+        await using var stream = ContractStreams.Open(watch);
         var first = await ContractStreams.NextAsync(stream);
         await Members.JoinAsync(group, member, null, TestCancellationToken);
 
@@ -405,9 +403,8 @@ public abstract class MembershipContractTests : ProviderContractTests
         );
         var member = CreateMember(session, "a");
         await Members.JoinAsync(group, member, null, TestCancellationToken);
-        await using var stream = ContractStreams.Open(
-            Members.WatchAsync(group, null, TestCancellationToken)
-        );
+        var watch = Members.WatchAsync(group, null, TestCancellationToken);
+        await using var stream = ContractStreams.Open(watch);
         var first = await ContractStreams.NextAsync(stream);
         await Sessions.CloseAsync(session, null, TestCancellationToken);
 

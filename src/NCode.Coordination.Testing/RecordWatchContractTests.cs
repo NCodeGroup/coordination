@@ -156,9 +156,8 @@ public abstract class RecordWatchContractTests : ProviderContractTests
     {
         var key = CreateKey("a");
 
-        await using var stream = ContractStreams.Open(
-            Watches.WatchKeyAsync(key, null, null, TestCancellationToken)
-        );
+        var watch = Watches.WatchKeyAsync(key, null, null, TestCancellationToken);
+        await using var stream = ContractStreams.Open(watch);
         var first = await ContractStreams.NextAsync(stream);
 
         Assert.True(first.IsResync);
@@ -172,9 +171,8 @@ public abstract class RecordWatchContractTests : ProviderContractTests
     {
         var key = CreateKey("a");
         var value = "one"u8.ToArray();
-        await using var stream = ContractStreams.Open(
-            Watches.WatchKeyAsync(key, null, null, TestCancellationToken)
-        );
+        var watch = Watches.WatchKeyAsync(key, null, null, TestCancellationToken);
+        await using var stream = ContractStreams.Open(watch);
         await ContractStreams.NextAsync(stream);
 
         var revision = await ContractRecords.CreateAsync(
@@ -206,9 +204,8 @@ public abstract class RecordWatchContractTests : ProviderContractTests
             "one"u8.ToArray(),
             TestCancellationToken
         );
-        await using var stream = ContractStreams.Open(
-            Watches.WatchKeyAsync(key, null, null, TestCancellationToken)
-        );
+        var watch = Watches.WatchKeyAsync(key, null, null, TestCancellationToken);
+        await using var stream = ContractStreams.Open(watch);
         await ContractStreams.NextAsync(stream);
 
         var status = await Records.CompareAndDeleteAsync(key, written, null, TestCancellationToken);
@@ -230,9 +227,8 @@ public abstract class RecordWatchContractTests : ProviderContractTests
         var key = CreateKey("a");
         var otherKey = CreateKey("b");
         var value = "one"u8.ToArray();
-        await using var stream = ContractStreams.Open(
-            Watches.WatchKeyAsync(key, null, null, TestCancellationToken)
-        );
+        var watch = Watches.WatchKeyAsync(key, null, null, TestCancellationToken);
+        await using var stream = ContractStreams.Open(watch);
         await ContractStreams.NextAsync(stream);
 
         await ContractRecords.CreateAsync(Records, otherKey, value, TestCancellationToken);
@@ -258,9 +254,8 @@ public abstract class RecordWatchContractTests : ProviderContractTests
             lifetime,
             TestCancellationToken
         );
-        await using var stream = ContractStreams.Open(
-            Watches.WatchKeyAsync(key, null, null, TestCancellationToken)
-        );
+        var watch = Watches.WatchKeyAsync(key, null, null, TestCancellationToken);
+        await using var stream = ContractStreams.Open(watch);
         await ContractStreams.NextAsync(stream);
 
         await AdvanceClockAsync(StillAlive, TestCancellationToken);
@@ -292,9 +287,8 @@ public abstract class RecordWatchContractTests : ProviderContractTests
             RecordLifetime.ForSession(session),
             TestCancellationToken
         );
-        await using var stream = ContractStreams.Open(
-            Watches.WatchKeyAsync(key, null, null, TestCancellationToken)
-        );
+        var watch = Watches.WatchKeyAsync(key, null, null, TestCancellationToken);
+        await using var stream = ContractStreams.Open(watch);
         await ContractStreams.NextAsync(stream);
 
         await Sessions.CloseAsync(session, null, TestCancellationToken);
@@ -312,9 +306,8 @@ public abstract class RecordWatchContractTests : ProviderContractTests
     public async Task WatchKeyAsync_WhenChangesFollow_YieldsThemInRevisionOrder()
     {
         var key = CreateKey("a");
-        await using var stream = ContractStreams.Open(
-            Watches.WatchKeyAsync(key, null, null, TestCancellationToken)
-        );
+        var watch = Watches.WatchKeyAsync(key, null, null, TestCancellationToken);
+        await using var stream = ContractStreams.Open(watch);
         await ContractStreams.NextAsync(stream);
         var first = await ContractRecords.CreateAsync(
             Records,
@@ -350,9 +343,8 @@ public abstract class RecordWatchContractTests : ProviderContractTests
         var first = await ContractRecords.CreateAsync(Records, key, one, TestCancellationToken);
         var second = await SwapAsync(key, first, two);
 
-        await using var stream = ContractStreams.Open(
-            Watches.WatchKeyAsync(key, first, null, TestCancellationToken)
-        );
+        var watch = Watches.WatchKeyAsync(key, first, null, TestCancellationToken);
+        await using var stream = ContractStreams.Open(watch);
         var change = await ContractStreams.NextAsync(stream);
 
         Assert.True(
@@ -403,9 +395,8 @@ public abstract class RecordWatchContractTests : ProviderContractTests
         var keyB = CreateKey("cfg", "b");
         var keyC = CreateKey("cfg", "c");
         var other = CreateKey("other");
-        await using var stream = ContractStreams.Open(
-            Watches.WatchPrefixAsync(prefix, null, null, TestCancellationToken)
-        );
+        var watch = Watches.WatchPrefixAsync(prefix, null, null, TestCancellationToken);
+        await using var stream = ContractStreams.Open(watch);
         var first = await ContractStreams.NextAsync(stream);
         var createdA = await ContractRecords.CreateAsync(
             Records,
@@ -450,9 +441,8 @@ public abstract class RecordWatchContractTests : ProviderContractTests
         var key = CreateKey("cfg", "a");
         var other = CreateKey("other");
         var value = "one"u8.ToArray();
-        await using var stream = ContractStreams.Open(
-            Watches.WatchPrefixAsync(prefix, null, null, TestCancellationToken)
-        );
+        var watch = Watches.WatchPrefixAsync(prefix, null, null, TestCancellationToken);
+        await using var stream = ContractStreams.Open(watch);
         await ContractStreams.NextAsync(stream);
 
         await ContractRecords.CreateAsync(Records, other, value, TestCancellationToken);
