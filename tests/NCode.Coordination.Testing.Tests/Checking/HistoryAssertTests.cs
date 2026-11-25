@@ -38,17 +38,12 @@ public sealed class HistoryAssertTests
             HistoryAssert.Linearizable(Model, history)
         );
 
+        var first = HistoryFormat.Describe(history[0]);
+        var second = HistoryFormat.Describe(history[1]);
+
         Assert.Contains("'key-a'", exception.Message, StringComparison.Ordinal);
-        Assert.Contains(
-            HistoryFormat.Describe(history[0]),
-            exception.Message,
-            StringComparison.Ordinal
-        );
-        Assert.Contains(
-            HistoryFormat.Describe(history[1]),
-            exception.Message,
-            StringComparison.Ordinal
-        );
+        Assert.Contains(first, exception.Message, StringComparison.Ordinal);
+        Assert.Contains(second, exception.Message, StringComparison.Ordinal);
     }
 
     #endregion

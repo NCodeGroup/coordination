@@ -30,17 +30,21 @@ public sealed class ElectionModelTests
 
     private static ElectionState LedState { get; } = new(Owner, 5, 5, Alpha);
 
-    private static ElectionResult Elected(long term, string owner, string value) =>
-        ElectionResult.Elected(
-            new Leadership(
-                new Leader(Role, new FencingToken(term), HistoryValues.Encode(value)),
-                new OwnerToken(owner),
-                LeaseTerms.ForTimeToLive(new TimeToLive(Lifetime))
-            )
-        );
+    private static ElectionResult Elected(long term, string owner, string value)
+    {
+        var encoded = HistoryValues.Encode(value);
+        var leader = new Leader(Role, new FencingToken(term), encoded);
+        var terms = LeaseTerms.ForTimeToLive(new TimeToLive(Lifetime));
+        var leadership = new Leadership(leader, new OwnerToken(owner), terms);
+        return ElectionResult.Elected(leadership);
+    }
 
-    private static ElectionView ViewOf(long term, string value) =>
-        new(Role, new Leader(Role, new FencingToken(term), HistoryValues.Encode(value)));
+    private static ElectionView ViewOf(long term, string value)
+    {
+        var encoded = HistoryValues.Encode(value);
+        var leader = new Leader(Role, new FencingToken(term), encoded);
+        return new(Role, leader);
+    }
 
     private static ElectionView NoLeader { get; } = new(Role, null);
 

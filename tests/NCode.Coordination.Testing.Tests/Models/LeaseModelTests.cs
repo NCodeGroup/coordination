@@ -26,15 +26,17 @@ public sealed class LeaseModelTests
 
     private static LeaseState HeldState { get; } = new(Holder, 5, 5, TimeSpan.Zero, Lifetime);
 
-    private static LeaseAcquireResult Acquired(long token) =>
-        LeaseAcquireResult.Acquired(
-            new LeaseGrant(
-                Resource,
-                new FencingToken(token),
-                new OwnerToken(Holder),
-                LeaseTerms.ForTimeToLive(new TimeToLive(Lifetime))
-            )
+    private static LeaseAcquireResult Acquired(long token)
+    {
+        var terms = LeaseTerms.ForTimeToLive(new TimeToLive(Lifetime));
+        var grant = new LeaseGrant(
+            Resource,
+            new FencingToken(token),
+            new OwnerToken(Holder),
+            terms
         );
+        return LeaseAcquireResult.Acquired(grant);
+    }
 
     #region TryApply Tests
 

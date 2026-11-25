@@ -28,8 +28,11 @@ public sealed class TransactionModelTests
 
     private static TransactionState PresentState { get; } = new("old", "old");
 
-    private static StoredRecord Stored(string value) =>
-        new(Name, HistoryValues.Encode(value), new Revision(1));
+    private static StoredRecord Stored(string value)
+    {
+        var encoded = HistoryValues.Encode(value);
+        return new(Name, encoded, new Revision(1));
+    }
 
     private static TransactionResult Result(TransactionStatus status) =>
         new(status, new Revision(1));

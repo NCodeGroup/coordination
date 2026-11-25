@@ -31,16 +31,18 @@ public sealed class SemaphoreModelTests
 
     private static SemaphoreState BothHeldState { get; } = new(First, 5, 5, Second, 7, 7, 0);
 
-    private static SemaphoreAcquireResult Acquired(int slot, long token, string owner) =>
-        SemaphoreAcquireResult.Acquired(
-            new SemaphoreGrant(
-                Resource,
-                slot,
-                new FencingToken(token),
-                new OwnerToken(owner),
-                LeaseTerms.ForTimeToLive(new TimeToLive(Lifetime))
-            )
+    private static SemaphoreAcquireResult Acquired(int slot, long token, string owner)
+    {
+        var terms = LeaseTerms.ForTimeToLive(new TimeToLive(Lifetime));
+        var grant = new SemaphoreGrant(
+            Resource,
+            slot,
+            new FencingToken(token),
+            new OwnerToken(owner),
+            terms
         );
+        return SemaphoreAcquireResult.Acquired(grant);
+    }
 
     #region TryApply Tests
 

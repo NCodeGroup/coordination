@@ -25,8 +25,11 @@ public sealed class RecordListingModelTests
     private static PairState<RecordState> PresentState { get; } =
         new(new RecordState("one", 5, 5), new RecordState("two", 6, 6));
 
-    private static StoredRecord Stored(CoordinationKey key, string value, long revision) =>
-        new(key, HistoryValues.Encode(value), new Revision(revision));
+    private static StoredRecord Stored(CoordinationKey key, string value, long revision)
+    {
+        var encoded = HistoryValues.Encode(value);
+        return new(key, encoded, new Revision(revision));
+    }
 
     private static RecordPage Page(long revision, params StoredRecord[] records) =>
         new(new Revision(revision), records);

@@ -26,8 +26,11 @@ public sealed class RecordModelTests
 
     private static RecordState PresentState { get; } = new("old", 5, 5);
 
-    private static StoredRecord Stored(string value, long revision) =>
-        new(Name, HistoryValues.Encode(value), new Revision(revision));
+    private static StoredRecord Stored(string value, long revision)
+    {
+        var encoded = HistoryValues.Encode(value);
+        return new(Name, encoded, new Revision(revision));
+    }
 
     #region TryApply Tests
 
