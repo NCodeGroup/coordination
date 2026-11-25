@@ -17,7 +17,8 @@ conformance kit ([D7](#d7-conformance)), the first stable release's scope ([D8](
 duration on a declared clock ([D9](#d9-expiry-clock)), the shapes of the primitives' contracts
 ([D10](#d10-contract-values) to [D15](#d15-counting-sequences-and-notifications)), the composition that binds
 providers and checks requirements when the host starts ([D16](#d16-composition)), the conformance kit's contract
-suites ([D17](#d17-conformance-kit)), and the holder's local deadline ([D18](#d18-holder-deadline)).
+suites ([D17](#d17-conformance-kit)), the holder's local deadline ([D18](#d18-holder-deadline)), and the history checker
+that verifies concurrent runs of every primitive ([D19](#d19-history-checker)).
 
 ## Goals and Non-Goals
 
@@ -288,6 +289,15 @@ giving the provider under test and a way to advance its clock; a test skips what
 A holder begins a deadline on its own clock before each request that grants or renews its ownership, ending an allowance
 for drift before the requested time to live, and treats the ownership as lost once it passes.
 [ADR-1018](../decisions/1018-a-holders-local-deadline-starts-before-its-request-and-ends-an-allowance-for-drift-before-the-time-to-live.md)
+
+### D19. History checker
+
+Each primitive's suite runs concurrent clients against the provider and records every call and return; a checker then
+searches each key's history for a linearization against the primitive's sequential specification, treating a call whose
+outcome is unknown as possibly applied, and checks notifications and record watches against their declared delivery.
+A failure is reported cut to its shortest failing prefix. A paused-holder run and dropped-connection runs add the
+faults a provider's declared guarantees must survive.
+[ADR-1019](../decisions/1019-concurrent-runs-record-histories-and-a-checker-searches-each-keys-history-for-a-linearization.md)
 
 ## Open Questions
 
