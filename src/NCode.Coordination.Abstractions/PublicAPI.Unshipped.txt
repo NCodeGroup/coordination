@@ -103,6 +103,7 @@ NCode.Coordination.OperationOptions
 NCode.Coordination.OperationOptions.Extensions.get -> System.Collections.Immutable.ImmutableDictionary<string!, string!>!
 NCode.Coordination.OperationOptions.Extensions.init -> void
 NCode.Coordination.OperationOptions.OperationOptions() -> void
+NCode.Coordination.Operations
 NCode.Coordination.OwnerToken
 NCode.Coordination.OwnerToken.<Clone>$() -> NCode.Coordination.OwnerToken!
 NCode.Coordination.OwnerToken.Equals(NCode.Coordination.OwnerToken? other) -> bool
@@ -224,6 +225,51 @@ static NCode.Coordination.Keyspace.operator !=(NCode.Coordination.Keyspace? left
 static NCode.Coordination.Keyspace.operator ==(NCode.Coordination.Keyspace? left, NCode.Coordination.Keyspace? right) -> bool
 static NCode.Coordination.Operation.operator !=(NCode.Coordination.Operation? left, NCode.Coordination.Operation? right) -> bool
 static NCode.Coordination.Operation.operator ==(NCode.Coordination.Operation? left, NCode.Coordination.Operation? right) -> bool
+static NCode.Coordination.Operations.ClaimTryClaim.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.CounterIncrement.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.CounterIncrementBatch.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.CounterRead.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.CounterReset.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.Definitions.get -> System.Collections.Immutable.ImmutableArray<NCode.Coordination.OperationDefinition!>
+static NCode.Coordination.Operations.ElectionRead.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.ElectionRenew.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.ElectionResign.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.ElectionTryLead.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.ElectionWatch.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.LeaseRelease.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.LeaseRenew.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.LeaseTryAcquire.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.LeaseWaitForRelease.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.MembershipJoin.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.MembershipLeave.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.MembershipRead.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.MembershipWatch.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.NotificationPublish.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.NotificationSubscribe.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.OccurrenceTryRecord.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.RecordCompareAndDelete.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.RecordCompareAndSwap.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.RecordCreate.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.RecordList.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.RecordRead.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.RecordTake.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.RecordWatchKey.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.RecordWatchPrefix.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.SemaphoreRelease.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.SemaphoreRenew.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.SemaphoreTryAcquire.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.SemaphoreWaitForRelease.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.SequenceNext.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.SequenceReserve.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.SessionClose.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.SessionKeepAlive.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.SessionOpen.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.SessionWaitForEnd.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.SetAdd.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.SetClear.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.SetList.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.SetRemove.get -> NCode.Coordination.Operation!
+static NCode.Coordination.Operations.TransactionExecute.get -> NCode.Coordination.Operation!
 static NCode.Coordination.OwnerToken.operator !=(NCode.Coordination.OwnerToken? left, NCode.Coordination.OwnerToken? right) -> bool
 static NCode.Coordination.OwnerToken.operator ==(NCode.Coordination.OwnerToken? left, NCode.Coordination.OwnerToken? right) -> bool
 static NCode.Coordination.Primitive.operator !=(NCode.Coordination.Primitive? left, NCode.Coordination.Primitive? right) -> bool
