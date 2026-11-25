@@ -77,3 +77,4 @@ records are indexed in [project-template/](project-template/README.md).
 | [1009](1009-ci-checks-every-dependencys-license-and-no-snippet-scan-runs.md) | CI checks every dependency's license, and no snippet scan runs (amends 1001) | Proposed |
 | [1010](1010-vocabulary-values-are-sealed-record-classes-so-no-default-instance-skips-validation.md) | Vocabulary values are sealed record classes, so no default instance skips validation | Proposed |
 | [1011](1011-an-operation-returns-its-outcome-and-throws-a-coded-failure-that-says-whether-it-may-have-taken-effect.md) | An operation returns its outcome, and throws a coded failure that says whether it may have taken effect | Proposed |
+| [1012](1012-each-primitive-is-an-interface-whose-operations-are-named-with-the-guarantee-dimensions-they-carry.md) | Each primitive is an interface whose operations are named with the guarantee dimensions they carry | Proposed |
