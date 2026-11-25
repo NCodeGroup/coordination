@@ -90,6 +90,22 @@ public abstract class RecordContractTests : ProviderContractTests
     }
 
     /// <summary>
+    /// Checks that creating a record whose value has the largest length writes it.
+    /// </summary>
+    [Fact]
+    public async Task CreateAsync_WhenValueHasTheLargestLength_WritesTheRecord()
+    {
+        var key = CreateKey("a");
+        var value = new byte[CoordinationLimits.MaxValueLength];
+
+        await ContractRecords.CreateAsync(Records, key, value, TestCancellationToken);
+
+        var record = await Records.ReadAsync(key, null, TestCancellationToken);
+        Assert.NotNull(record);
+        Assert.Equal(CoordinationLimits.MaxValueLength, record.Value.Length);
+    }
+
+    /// <summary>
     /// Checks that creating a record whose value is longer than the limit throws and writes nothing.
     /// </summary>
     [Fact]

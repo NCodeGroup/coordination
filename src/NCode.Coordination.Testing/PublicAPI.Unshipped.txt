@@ -13,9 +13,11 @@ NCode.Coordination.Testing.CounterContractTests.IncrementAsync_WhenCounterExists
 NCode.Coordination.Testing.CounterContractTests.IncrementAsync_WhenCounterIsAbsent_ReturnsTheAmount() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.CounterContractTests.IncrementAsync_WhenOptionsCarryAnUnknownExtension_ThrowsUnsupported() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.CounterContractTests.IncrementAsync_WhenTimeToLivePasses_StartsFromZero() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.CounterContractTests.IncrementBatchAsync_WhenACountReachesItsLimit_ReportsNoneExceeded() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.CounterContractTests.IncrementBatchAsync_WhenAKeyRepeats_AppliesInOrder() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.CounterContractTests.IncrementBatchAsync_WhenAnIncrementExceedsItsLimit_StopsAfterIt() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.CounterContractTests.IncrementBatchAsync_WhenEmpty_ThrowsArgumentException() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.CounterContractTests.IncrementBatchAsync_WhenItHoldsTheLargestNumberOfIncrements_AppliesEach() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.CounterContractTests.IncrementBatchAsync_WhenKeyspacesDiffer_ThrowsArgumentException() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.CounterContractTests.IncrementBatchAsync_WhenKeysSpanPartitionsAndAtomicityAcrossPartitionsIsDeclared_AppliesEveryIncrement() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.CounterContractTests.IncrementBatchAsync_WhenKeysSpanPartitionsAndOnlyAtomicityWithinPartitionIsDeclared_ThrowsUnsupported() -> System.Threading.Tasks.Task!
@@ -60,6 +62,7 @@ NCode.Coordination.Testing.RecordContractTests.CreateAsync_WhenKeyIsPresent_Retu
 NCode.Coordination.Testing.RecordContractTests.CreateAsync_WhenTheRecordWasDeleted_WritesItAgain() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.RecordContractTests.CreateAsync_WhenTimeToLivePasses_ExpiresTheRecord() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.RecordContractTests.CreateAsync_WhenTokenIsCanceled_ThrowsOperationCanceledException() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.RecordContractTests.CreateAsync_WhenValueHasTheLargestLength_WritesTheRecord() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.RecordContractTests.CreateAsync_WhenValueIsTooLong_ThrowsArgumentException() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.RecordContractTests.ListAsync_WhenARecordExpired_LeavesItOut() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.RecordContractTests.ListAsync_WhenNothingIsUnderThePrefix_ReturnsAnEmptyPage() -> System.Threading.Tasks.Task!
@@ -82,6 +85,7 @@ NCode.Coordination.Testing.SequenceContractTests.ReserveAsync_WhenCountIsZero_Th
 NCode.Coordination.Testing.SequenceContractTests.ReserveAsync_WhenSequenceIsNew_StartsAtOne() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.SequenceContractTests.SequenceContractTests() -> void
 NCode.Coordination.Testing.SetContractTests
+NCode.Coordination.Testing.SetContractTests.AddAsync_WhenEveryMemberOfAFullSetExpired_AddsTheMember() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.SetContractTests.AddAsync_WhenMemberIsAbsent_ReturnsTrueAndListsIt() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.SetContractTests.AddAsync_WhenMemberIsPresent_ReplacesItsExpiry() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.SetContractTests.AddAsync_WhenMemberIsPresent_ReturnsFalse() -> System.Threading.Tasks.Task!
@@ -89,6 +93,7 @@ NCode.Coordination.Testing.SetContractTests.AddAsync_WhenMembersDifferInKind_Kee
 NCode.Coordination.Testing.SetContractTests.AddAsync_WhenMembersHaveTheirOwnTimeToLive_ExpiresEachOnItsOwn() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.SetContractTests.AddAsync_WhenOptionsCarryAnUnknownExtension_ThrowsUnsupported() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.SetContractTests.AddAsync_WhenTheSetIsFull_ThrowsLimitExceeded() -> System.Threading.Tasks.Task!
+NCode.Coordination.Testing.SetContractTests.AddAsync_WhenTheSetIsFullAndMemberIsPresent_ReturnsFalse() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.SetContractTests.ClearAsync_WhenSetHasMembers_RemovesEach() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.SetContractTests.ListAsync_WhenSetIsAbsent_ReturnsEmpty() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.SetContractTests.ListAsync_WhenTokenIsCanceled_ThrowsOperationCanceledException() -> System.Threading.Tasks.Task!

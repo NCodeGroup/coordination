@@ -16,6 +16,26 @@ public abstract class SetContractTests : ProviderContractTests
     /// </summary>
     private ISetService Sets => GetService<ISetService>(Primitives.Set);
 
+    /// <summary>
+    /// Fills a set with the largest number of members, the numbers 0, 1 and so on.
+    /// </summary>
+    /// <param name="key">The key of the set.</param>
+    /// <param name="timeToLive">The time to live of each member.</param>
+    /// <param name="cancellationToken">A token that cancels the writes.</param>
+    /// <returns>A task that completes when the set is full.</returns>
+    private async ValueTask FillAsync(
+        CoordinationKey key,
+        TimeToLive timeToLive,
+        CancellationToken cancellationToken
+    )
+    {
+        for (var index = 0; index < CoordinationLimits.MaxSetMembers; index++)
+        {
+            var member = KeySegment.FromInt64(index);
+            await Sets.AddAsync(key, member, timeToLive, null, cancellationToken);
+        }
+    }
+
     #region AddAsync Tests
 
     /// <summary>
@@ -135,29 +155,56 @@ public abstract class SetContractTests : ProviderContractTests
     }
 
     /// <summary>
-    /// Checks that adding a member beyond the largest size of a set throws a limit exceeded error, and that a member
-    /// already in the full set can still be added again.
+    /// Checks that adding a member beyond the largest size of a set throws a limit exceeded error.
     /// </summary>
     [Fact]
     public async Task AddAsync_WhenTheSetIsFull_ThrowsLimitExceeded()
     {
         var key = CreateKey("set");
-        for (var index = 0; index < CoordinationLimits.MaxSetMembers; index++)
-        {
-            var member = KeySegment.FromInt64(index);
-            await Sets.AddAsync(key, member, LongTimeToLive, null, TestCancellationToken);
-        }
-
+        await FillAsync(key, LongTimeToLive, TestCancellationToken);
         var extra = KeySegment.FromInt64(CoordinationLimits.MaxSetMembers);
-        var first = KeySegment.FromInt64(0);
 
         var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
             await Sets.AddAsync(key, extra, LongTimeToLive, null, TestCancellationToken)
         );
-        var readded = await Sets.AddAsync(key, first, LongTimeToLive, null, TestCancellationToken);
 
         Assert.Equal(CoordinationErrorCodes.LimitExceeded, exception.Code);
-        Assert.False(readded);
+    }
+
+    /// <summary>
+    /// Checks that adding a member that is already in a full set returns false.
+    /// </summary>
+    [Fact]
+    public async Task AddAsync_WhenTheSetIsFullAndMemberIsPresent_ReturnsFalse()
+    {
+        var key = CreateKey("set");
+        await FillAsync(key, LongTimeToLive, TestCancellationToken);
+        var first = KeySegment.FromInt64(0);
+
+        var added = await Sets.AddAsync(key, first, LongTimeToLive, null, TestCancellationToken);
+
+        Assert.False(added);
+    }
+
+    /// <summary>
+    /// Checks that a set whose every member expired accepts a new member, because only live members count toward
+    /// the limit.
+    /// </summary>
+    [Fact]
+    public async Task AddAsync_WhenEveryMemberOfAFullSetExpired_AddsTheMember()
+    {
+        var key = CreateKey("set");
+        await FillAsync(key, ShortTimeToLive, TestCancellationToken);
+        await AdvanceClockAsync(StillAlive, TestCancellationToken);
+        await AdvanceClockAsync(PastExpiry, TestCancellationToken);
+        var extra = KeySegment.FromInt64(CoordinationLimits.MaxSetMembers);
+
+        var added = await Sets.AddAsync(key, extra, LongTimeToLive, null, TestCancellationToken);
+
+        var members = await Sets.ListAsync(key, null, TestCancellationToken);
+        Assert.True(added);
+        Assert.Single(members);
+        Assert.Contains(extra, members);
     }
 
     /// <summary>

@@ -268,18 +268,21 @@ public abstract class CounterContractTests : ProviderContractTests
     }
 
     /// <summary>
-    /// Checks that an empty batch throws an argument error.
+    /// Checks that an empty batch throws an argument error that names the increments.
     /// </summary>
     [Fact]
     public async Task IncrementBatchAsync_WhenEmpty_ThrowsArgumentException()
     {
-        await Assert.ThrowsAsync<ArgumentException>(async () =>
+        var exception = await Assert.ThrowsAsync<ArgumentException>(async () =>
             await Counters.IncrementBatchAsync([], null, TestCancellationToken)
         );
+
+        Assert.Equal("increments", exception.ParamName);
     }
 
     /// <summary>
-    /// Checks that a batch with more increments than the limit allows throws an argument error.
+    /// Checks that a batch with more increments than the limit allows throws an argument error that names the
+    /// increments and applies nothing.
     /// </summary>
     [Fact]
     public async Task IncrementBatchAsync_WhenTooLarge_ThrowsArgumentException()
@@ -293,13 +296,18 @@ public abstract class CounterContractTests : ProviderContractTests
             })
             .ToList();
 
-        await Assert.ThrowsAsync<ArgumentException>(async () =>
+        var exception = await Assert.ThrowsAsync<ArgumentException>(async () =>
             await Counters.IncrementBatchAsync(increments, null, TestCancellationToken)
         );
+
+        var count = await Counters.ReadAsync(increments[0].Key, null, TestCancellationToken);
+        Assert.Equal("increments", exception.ParamName);
+        Assert.Equal(0, count);
     }
 
     /// <summary>
-    /// Checks that a batch whose increments are in different keyspaces throws an argument error.
+    /// Checks that a batch whose increments are in different keyspaces throws an argument error that names the
+    /// increments and applies nothing.
     /// </summary>
     [Fact]
     public async Task IncrementBatchAsync_WhenKeyspacesDiffer_ThrowsArgumentException()
@@ -311,9 +319,52 @@ public abstract class CounterContractTests : ProviderContractTests
         var second = new CounterIncrement(key2, 1, 10, LongTimeToLive);
         IReadOnlyList<CounterIncrement> increments = [first, second];
 
-        await Assert.ThrowsAsync<ArgumentException>(async () =>
+        var exception = await Assert.ThrowsAsync<ArgumentException>(async () =>
             await Counters.IncrementBatchAsync(increments, null, TestCancellationToken)
         );
+
+        var count = await Counters.ReadAsync(key1, null, TestCancellationToken);
+        Assert.Equal("increments", exception.ParamName);
+        Assert.Equal(0, count);
+    }
+
+    /// <summary>
+    /// Checks that an increment whose count reaches its limit exactly is not reported as exceeded.
+    /// </summary>
+    [Fact]
+    public async Task IncrementBatchAsync_WhenACountReachesItsLimit_ReportsNoneExceeded()
+    {
+        var key = CreateKey("k1");
+        var only = new CounterIncrement(key, 3, 3, LongTimeToLive);
+        IReadOnlyList<CounterIncrement> increments = [only];
+
+        var result = await Counters.IncrementBatchAsync(increments, null, TestCancellationToken);
+
+        Assert.Equal([3L], result.Counts);
+        Assert.Null(result.ExceededIndex);
+    }
+
+    /// <summary>
+    /// Checks that a batch with the largest number of increments applies each of them.
+    /// </summary>
+    [Fact]
+    public async Task IncrementBatchAsync_WhenItHoldsTheLargestNumberOfIncrements_AppliesEach()
+    {
+        var increments = Enumerable
+            .Range(0, CoordinationLimits.MaxBatchIncrements)
+            .Select(index =>
+            {
+                var key = CreateKey($"k{index}");
+                return new CounterIncrement(key, 1, 10, LongTimeToLive);
+            })
+            .ToList();
+
+        var result = await Counters.IncrementBatchAsync(increments, null, TestCancellationToken);
+
+        var last = await Counters.ReadAsync(increments[^1].Key, null, TestCancellationToken);
+        Assert.Equal(CoordinationLimits.MaxBatchIncrements, result.Counts.Length);
+        Assert.Null(result.ExceededIndex);
+        Assert.Equal(1, last);
     }
 
     /// <summary>
