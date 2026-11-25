@@ -2,6 +2,10 @@
 const NCode.Coordination.CoordinationTelemetry.ActivitySourceName = "NCode.Coordination" -> string!
 const NCode.Coordination.CoordinationTelemetry.MeterName = "NCode.Coordination" -> string!
 const NCode.Coordination.InProcessCoordinationBuilderExtensions.ProviderName = "in-process" -> string!
+NCode.Coordination.BarrierTerms
+NCode.Coordination.BarrierTerms.BarrierTerms(int parties, NCode.Coordination.RecordLifetime! lifetime) -> void
+NCode.Coordination.BarrierTerms.Lifetime.get -> NCode.Coordination.RecordLifetime!
+NCode.Coordination.BarrierTerms.Parties.get -> int
 NCode.Coordination.CoordinationCompositionException
 NCode.Coordination.CoordinationCompositionException.CoordinationCompositionException(System.Collections.Generic.IEnumerable<string!>! failures) -> void
 NCode.Coordination.CoordinationCompositionException.Failures.get -> System.Collections.Immutable.ImmutableArray<string!>
@@ -10,6 +14,8 @@ NCode.Coordination.CoordinationServiceCollectionExtensions
 NCode.Coordination.CoordinationServiceCollectionExtensions.extension(Microsoft.Extensions.DependencyInjection.IServiceCollection!)
 NCode.Coordination.CoordinationServiceCollectionExtensions.extension(Microsoft.Extensions.DependencyInjection.IServiceCollection!).AddCoordination(System.Action<NCode.Coordination.ICoordinationBuilder!>! configure) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
 NCode.Coordination.CoordinationTelemetry
+NCode.Coordination.IBarrierService
+NCode.Coordination.IBarrierService.ArriveAndWaitAsync(NCode.Coordination.CoordinationKey! barrier, NCode.Coordination.KeySegment! participant, NCode.Coordination.BarrierTerms! terms, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<bool>
 NCode.Coordination.ILockService
 NCode.Coordination.ILockService.AcquireAsync(NCode.Coordination.CoordinationKey! resource, NCode.Coordination.LeaseTerms! terms, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.LeaseGrant?>
 NCode.Coordination.InProcessCoordinationBuilderExtensions
