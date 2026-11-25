@@ -109,6 +109,60 @@ public sealed class DefaultReadWriteLockServiceTests
         Assert.Null(grant);
     }
 
+    [Fact]
+    public async Task AcquireReadAsync_WhenTheProbeIsLostBeforeItsRelease_DeletesTheRegistrationAndRetries()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var time = InProcessTesting.CreateTime();
+        await using var services = RecipeTesting.Build(time);
+        var leases = services.GetRequiredService<ILeaseService>();
+        var records = services.GetRequiredService<IRecordService>();
+        var watches = services.GetRequiredService<IRecordWatchService>();
+        var losing = new LosingProbeLeases(leases);
+        var locks = new DefaultReadWriteLockService(losing, records, watches);
+        var resource = CreateResource();
+        var request = new RecordPageRequest(10);
+
+        var grant = await locks.AcquireReadAsync(resource, Terms, null, cancellationToken);
+        var firstProbe = losing.FirstProbe;
+        var page = await records.ListAsync(resource, request, null, cancellationToken);
+
+        Assert.NotNull(grant);
+        Assert.NotNull(firstProbe);
+        Assert.True(grant.FencingToken > firstProbe.FencingToken);
+
+        var record = Assert.Single(page.Records);
+
+        Assert.Equal(grant.Registration, record.Key);
+    }
+
+    [Fact]
+    public async Task AcquireReadAsync_WhenTheRegistrationFails_ReleasesTheProbeAndThrows()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var time = InProcessTesting.CreateTime();
+        await using var services = RecipeTesting.Build(time);
+        var leases = services.GetRequiredService<ILeaseService>();
+        var records = services.GetRequiredService<IRecordService>();
+        var watches = services.GetRequiredService<IRecordWatchService>();
+        var failing = new FailingRecords(records);
+        var failingLocks = new DefaultReadWriteLockService(leases, failing, watches);
+        var locks = CreateLocks(services);
+        var resource = CreateResource();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            failingLocks.AcquireReadAsync(resource, Terms, null, cancellationToken).AsTask()
+        );
+        var task = locks.AcquireWriteAsync(resource, Terms, null, cancellationToken).AsTask();
+
+        Assert.Equal("The record service failed.", exception.Message);
+        Assert.True(task.IsCompleted);
+
+        var write = await task;
+
+        Assert.NotNull(write);
+    }
+
     #endregion
 
     #region ReleaseReadAsync Tests
@@ -178,6 +232,24 @@ public sealed class DefaultReadWriteLockServiceTests
         );
 
         Assert.Equal("resource", exception.ParamName);
+    }
+
+    [Fact]
+    public async Task AcquireWriteAsync_WhenTheSessionHasEnded_ReturnsNull()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var time = InProcessTesting.CreateTime();
+        await using var services = RecipeTesting.Build(time);
+        var sessions = services.GetRequiredService<ISessionService>();
+        var locks = CreateLocks(services);
+        var resource = CreateResource();
+        var session = await RecipeTesting.OpenSessionAsync(services, cancellationToken);
+        await sessions.CloseAsync(session, null, cancellationToken);
+        var terms = LeaseTerms.ForSession(session);
+
+        var grant = await locks.AcquireWriteAsync(resource, terms, null, cancellationToken);
+
+        Assert.Null(grant);
     }
 
     [Fact]
@@ -277,6 +349,100 @@ public sealed class DefaultReadWriteLockServiceTests
     }
 
     #endregion
+
+    private sealed class LosingProbeLeases(ILeaseService inner) : ILeaseService
+    {
+        private int _releases;
+
+        public LeaseGrant? FirstProbe { get; private set; }
+
+        public ValueTask<LeaseAcquireResult> TryAcquireAsync(
+            CoordinationKey resource,
+            LeaseTerms terms,
+            OperationOptions? options,
+            CancellationToken cancellationToken
+        ) => inner.TryAcquireAsync(resource, terms, options, cancellationToken);
+
+        public ValueTask<bool> RenewAsync(
+            LeaseGrant grant,
+            TimeToLive timeToLive,
+            OperationOptions? options,
+            CancellationToken cancellationToken
+        ) => inner.RenewAsync(grant, timeToLive, options, cancellationToken);
+
+        public async ValueTask<bool> ReleaseAsync(
+            LeaseGrant grant,
+            OperationOptions? options,
+            CancellationToken cancellationToken
+        )
+        {
+            var released = await inner.ReleaseAsync(grant, options, cancellationToken);
+
+            if (++_releases > 1)
+            {
+                return released;
+            }
+
+            FirstProbe = grant;
+
+            return false;
+        }
+
+        public ValueTask WaitForReleaseAsync(
+            CoordinationKey resource,
+            OperationOptions? options,
+            CancellationToken cancellationToken
+        ) => inner.WaitForReleaseAsync(resource, options, cancellationToken);
+    }
+
+    private sealed class FailingRecords(IRecordService inner) : IRecordService
+    {
+        public ValueTask<RecordWriteResult> CreateAsync(
+            CoordinationKey key,
+            ReadOnlyMemory<byte> value,
+            RecordLifetime lifetime,
+            OperationOptions? options,
+            CancellationToken cancellationToken
+        ) =>
+            ValueTask.FromException<RecordWriteResult>(
+                new InvalidOperationException("The record service failed.")
+            );
+
+        public ValueTask<StoredRecord?> ReadAsync(
+            CoordinationKey key,
+            OperationOptions? options,
+            CancellationToken cancellationToken
+        ) => inner.ReadAsync(key, options, cancellationToken);
+
+        public ValueTask<RecordWriteResult> CompareAndSwapAsync(
+            CoordinationKey key,
+            Revision expected,
+            ReadOnlyMemory<byte> value,
+            RecordLifetime lifetime,
+            OperationOptions? options,
+            CancellationToken cancellationToken
+        ) => inner.CompareAndSwapAsync(key, expected, value, lifetime, options, cancellationToken);
+
+        public ValueTask<RecordDeleteStatus> CompareAndDeleteAsync(
+            CoordinationKey key,
+            Revision expected,
+            OperationOptions? options,
+            CancellationToken cancellationToken
+        ) => inner.CompareAndDeleteAsync(key, expected, options, cancellationToken);
+
+        public ValueTask<StoredRecord?> TakeAsync(
+            CoordinationKey key,
+            OperationOptions? options,
+            CancellationToken cancellationToken
+        ) => inner.TakeAsync(key, options, cancellationToken);
+
+        public ValueTask<RecordPage> ListAsync(
+            CoordinationKey prefix,
+            RecordPageRequest page,
+            OperationOptions? options,
+            CancellationToken cancellationToken
+        ) => inner.ListAsync(prefix, page, options, cancellationToken);
+    }
 
     private sealed class EndingWatches : IRecordWatchService
     {
