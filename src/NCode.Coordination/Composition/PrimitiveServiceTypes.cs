@@ -30,11 +30,6 @@ internal static class PrimitiveServiceTypes
         }.ToFrozenDictionary();
 
     /// <summary>
-    /// Gets the interface of every built-in primitive.
-    /// </summary>
-    public static IEnumerable<Type> All => Types.Values;
-
-    /// <summary>
     /// Finds the interface a primitive is consumed through.
     /// </summary>
     /// <param name="primitive">The primitive.</param>

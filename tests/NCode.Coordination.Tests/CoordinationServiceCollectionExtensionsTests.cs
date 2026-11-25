@@ -35,13 +35,13 @@ public sealed class CoordinationServiceCollectionExtensionsTests : IDisposable
     }
 
     [Fact]
-    public void AddCoordination_ResolvesTheComposition()
+    public async Task AddCoordination_ResolvesTheComposition()
     {
         var provider = CreateProvider();
         var binding = new ProviderBinding(TestComposition.ProviderName);
         var services = new ServiceCollection();
         services.AddCoordination(b => b.AddProvider(_ => provider).Bind(binding));
-        using var serviceProvider = services.BuildServiceProvider();
+        await using var serviceProvider = services.BuildServiceProvider();
 
         var composition = serviceProvider.GetRequiredService<CoordinationComposition>();
 
@@ -53,7 +53,7 @@ public sealed class CoordinationServiceCollectionExtensionsTests : IDisposable
     }
 
     [Fact]
-    public void AddCoordination_WhenCalledTwice_AddsToOneComposition()
+    public async Task AddCoordination_WhenCalledTwice_AddsToOneComposition()
     {
         var provider = CreateProvider(Guarantees.Durable);
         var binding = new ProviderBinding(TestComposition.ProviderName);
@@ -65,7 +65,7 @@ public sealed class CoordinationServiceCollectionExtensionsTests : IDisposable
         var services = new ServiceCollection();
         services.AddCoordination(b => b.AddProvider(_ => provider).Bind(binding));
         services.AddCoordination(b => b.Require(requirement));
-        using var serviceProvider = services.BuildServiceProvider();
+        await using var serviceProvider = services.BuildServiceProvider();
 
         var composition = serviceProvider.GetRequiredService<CoordinationComposition>();
 
@@ -89,11 +89,11 @@ public sealed class CoordinationServiceCollectionExtensionsTests : IDisposable
     }
 
     [Fact]
-    public void AddCoordination_RegistersTheSystemClock()
+    public async Task AddCoordination_RegistersTheSystemClock()
     {
         var services = new ServiceCollection();
         services.AddCoordination(_ => { });
-        using var serviceProvider = services.BuildServiceProvider();
+        await using var serviceProvider = services.BuildServiceProvider();
 
         var timeProvider = serviceProvider.GetRequiredService<TimeProvider>();
 
@@ -107,8 +107,10 @@ public sealed class CoordinationServiceCollectionExtensionsTests : IDisposable
 
         services.AddCoordination(_ => { });
 
-        foreach (var serviceType in PrimitiveServiceTypes.All)
+        foreach (var primitive in Primitives.All)
         {
+            var serviceType = PrimitiveServiceTypes.Find(primitive);
+            Assert.NotNull(serviceType);
             var descriptor = Assert.Single(services, x => x.ServiceType == serviceType);
             Assert.Equal(ServiceLifetime.Singleton, descriptor.Lifetime);
             Assert.Equal("NCode.Coordination.Routing", descriptor.ImplementationType?.Namespace);
@@ -127,7 +129,7 @@ public sealed class CoordinationServiceCollectionExtensionsTests : IDisposable
         var builder = Host.CreateEmptyApplicationBuilder(settings);
         var requirement = new FeatureRequirement("replay", Primitives.Occurrence);
         builder.Services.AddCoordination(b => b.Require(requirement));
-        using var host = builder.Build();
+        using IHost host = builder.Build();
 
         var exception = await Assert.ThrowsAsync<CoordinationCompositionException>(() =>
             host.StartAsync(cancellationToken)
@@ -149,7 +151,7 @@ public sealed class CoordinationServiceCollectionExtensionsTests : IDisposable
         var settings = new HostApplicationBuilderSettings();
         var builder = Host.CreateEmptyApplicationBuilder(settings);
         builder.Services.AddCoordination(b => b.AddProvider(_ => provider).Bind(binding));
-        using var host = builder.Build();
+        using IHost host = builder.Build();
 
         await host.StartAsync(cancellationToken);
         await host.StopAsync(cancellationToken);

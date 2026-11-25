@@ -42,11 +42,11 @@ public sealed class DefaultRecordWatchServiceTests : IDisposable
     }
 
     [Fact]
-    public void WatchKeyAsync_WhenNoProviderIsBound_ThrowsUnsupported()
+    public async Task WatchKeyAsync_WhenNoProviderIsBound_ThrowsUnsupported()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var mock = Mocks.Create<IRecordWatchService>();
-        using var provider = BuildElsewhere(mock.Object);
+        await using var provider = BuildElsewhere(mock.Object);
         var service = provider.GetRequiredService<IRecordWatchService>();
 
         var exception = Assert.Throws<CoordinationException>(() =>
