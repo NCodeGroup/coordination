@@ -258,6 +258,7 @@ NCode.Coordination.Testing.SetContractTests.RemoveAsync_WhenMemberIsAbsent_Retur
 NCode.Coordination.Testing.SetContractTests.RemoveAsync_WhenMemberIsPresent_ReturnsTrueAndRemovesIt() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.SetContractTests.SetContractTests() -> void
 NCode.Coordination.Testing.TransactionContractTests
+NCode.Coordination.Testing.TransactionContractTests.ConcurrentRun_WhenClientsRace_KeepsALinearizableHistory() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.TransactionContractTests.ExecuteAsync_WhenAbsentMeetsAnExpiredRecord_Holds() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.TransactionContractTests.ExecuteAsync_WhenAConditionFails_AppliesTheFailureWrites() -> System.Threading.Tasks.Task!
 NCode.Coordination.Testing.TransactionContractTests.ExecuteAsync_WhenAConditionFailsWithoutFailureWrites_ChangesNothing() -> System.Threading.Tasks.Task!
