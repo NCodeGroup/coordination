@@ -12,5 +12,9 @@ NCode.Coordination.CoordinationTelemetry
 NCode.Coordination.InProcessCoordinationBuilderExtensions
 NCode.Coordination.InProcessCoordinationBuilderExtensions.extension(NCode.Coordination.ICoordinationBuilder!)
 NCode.Coordination.InProcessCoordinationBuilderExtensions.extension(NCode.Coordination.ICoordinationBuilder!).AddInProcessProvider() -> NCode.Coordination.ICoordinationBuilder!
+NCode.Coordination.RecipeNeed
+NCode.Coordination.RecipeNeed.Guarantees.get -> System.Collections.Immutable.ImmutableArray<NCode.Coordination.Guarantee!>
+NCode.Coordination.RecipeNeed.Primitive.get -> NCode.Coordination.Primitive!
+NCode.Coordination.RecipeNeed.RecipeNeed(NCode.Coordination.Primitive! primitive, params System.Collections.Generic.IEnumerable<NCode.Coordination.Guarantee!>! guarantees) -> void
 static NCode.Coordination.CoordinationServiceCollectionExtensions.AddCoordination(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, System.Action<NCode.Coordination.ICoordinationBuilder!>! configure) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
 static NCode.Coordination.InProcessCoordinationBuilderExtensions.AddInProcessProvider(this NCode.Coordination.ICoordinationBuilder! builder) -> NCode.Coordination.ICoordinationBuilder!
