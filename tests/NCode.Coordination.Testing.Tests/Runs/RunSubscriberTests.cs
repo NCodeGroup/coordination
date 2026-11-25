@@ -135,6 +135,24 @@ public sealed class RunSubscriberTests
     }
 
     [Fact]
+    public async ValueTask WaitForAsync_WhenTheCallerCancels_ThrowsOperationCanceled()
+    {
+        var channel = Channel.CreateUnbounded<int>();
+        await using var subscriber = new RunSubscriber<int>(
+            token => StreamAsync(channel, null, token),
+            new HistoryRecorder(),
+            Token
+        );
+        using var caller = new CancellationTokenSource();
+        await caller.CancelAsync();
+        var callerToken = caller.Token;
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+            await subscriber.WaitForAsync(_ => true, callerToken)
+        );
+    }
+
+    [Fact]
     public async ValueTask WaitForAsync_WhenItemsArrive_StampsIncrease()
     {
         var channel = Channel.CreateUnbounded<int>();
