@@ -17,11 +17,11 @@ public sealed class InProcessCoordinationBuilderExtensionsTests
         return services;
     }
 
-    private static void AddInProcess(ServiceCollection services) =>
-        services.AddCoordination(b =>
-            b.AddInProcessProvider()
-                .Bind(new ProviderBinding(InProcessCoordinationBuilderExtensions.ProviderName))
-        );
+    private static void AddInProcess(ServiceCollection services)
+    {
+        var binding = new ProviderBinding(InProcessCoordinationBuilderExtensions.ProviderName);
+        services.AddCoordination(b => b.AddInProcessProvider().Bind(binding));
+    }
 
     #region AddInProcessProvider Tests
 
@@ -44,10 +44,11 @@ public sealed class InProcessCoordinationBuilderExtensionsTests
             cancellationToken
         );
         var read = await records.ReadAsync(key, null, cancellationToken);
+        Assert.NotNull(read);
+        var actual = read.Value.ToArray();
 
         Assert.True(created.IsWritten);
-        Assert.NotNull(read);
-        Assert.Equal(value, read.Value.ToArray());
+        Assert.Equal(value, actual);
         Assert.Equal(created.Revision, read.Revision);
     }
 
@@ -62,20 +63,21 @@ public sealed class InProcessCoordinationBuilderExtensionsTests
         await using var serviceProvider = services.BuildServiceProvider();
         var records = serviceProvider.GetRequiredService<IRecordService>();
         var key = TestComposition.Key;
-        var lifetime = RecordLifetime.ForTimeToLive(new TimeToLive(TimeSpan.FromSeconds(2)));
-        var created = await records.CreateAsync(
-            key,
-            new byte[] { 1 },
-            lifetime,
-            null,
-            cancellationToken
-        );
+        var ttl = TimeSpan.FromSeconds(2);
+        var timeToLive = new TimeToLive(ttl);
+        var lifetime = RecordLifetime.ForTimeToLive(timeToLive);
+        byte[] value = [1];
+        var created = await records.CreateAsync(key, value, lifetime, null, cancellationToken);
         Assert.True(created.IsWritten);
-        Assert.NotNull(await records.ReadAsync(key, null, cancellationToken));
+        var before = await records.ReadAsync(key, null, cancellationToken);
+        Assert.NotNull(before);
 
-        time.Advance(TimeSpan.FromSeconds(3));
+        var elapsed = TimeSpan.FromSeconds(3);
+        time.Advance(elapsed);
 
-        Assert.Null(await records.ReadAsync(key, null, cancellationToken));
+        var after = await records.ReadAsync(key, null, cancellationToken);
+
+        Assert.Null(after);
     }
 
     [Fact]

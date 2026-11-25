@@ -9,7 +9,11 @@ public sealed class InProcessProviderTests
 {
     private static DateTimeOffset Start { get; } = new(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
 
-    private static InProcessProvider CreateProvider() => new(new FakeTimeProvider(Start));
+    private static InProcessProvider CreateProvider()
+    {
+        var time = new FakeTimeProvider(Start);
+        return new InProcessProvider(time);
+    }
 
     private static PrimitiveSupport GetSupport(InProcessProvider provider, Primitive primitive) =>
         Assert.Single(provider.Declaration.Primitives, x => x.Primitive == primitive);
@@ -92,7 +96,9 @@ public sealed class InProcessProviderTests
     {
         var provider = CreateProvider();
 
-        var support = GetSupport(provider, new Primitive(name));
+        var primitive = new Primitive(name);
+
+        var support = GetSupport(provider, primitive);
 
         Assert.False(support.IsSupported);
         Assert.Equal(

@@ -20,7 +20,8 @@ internal static class InProcessConformance
     public static ValueTask<ConformanceTarget> CreateTargetAsync()
     {
         var time = new FakeTimeProvider(Start);
-        var target = new ConformanceTarget(new InProcessProvider(time))
+        var provider = new InProcessProvider(time);
+        var target = new ConformanceTarget(provider)
         {
             AdvanceClock = (duration, _) =>
             {

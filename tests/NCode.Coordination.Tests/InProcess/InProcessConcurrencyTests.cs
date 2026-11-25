@@ -8,8 +8,14 @@ public sealed class InProcessConcurrencyTests
     private const int RacingCallers = 64;
     private const int CountingCallers = 1_000;
 
-    private static Keyspace Keyspace { get; } =
-        new("concurrency", KeySegment.FromGuid(Guid.NewGuid()));
+    private static Keyspace Keyspace { get; } = CreateKeyspace();
+
+    private static Keyspace CreateKeyspace()
+    {
+        var id = Guid.NewGuid();
+        var segment = KeySegment.FromGuid(id);
+        return new Keyspace("concurrency", segment);
+    }
 
     private static InProcessProvider CreateProvider() => new(TimeProvider.System);
 
@@ -39,7 +45,10 @@ public sealed class InProcessConcurrencyTests
 
     private static void AssertEachNumberOnce(long[] numbers, int count)
     {
-        Assert.Equal(Enumerable.Range(1, count).Select(x => (long)x), numbers.Order());
+        var expected = Enumerable.Range(1, count).Select(x => (long)x);
+        var actual = numbers.Order();
+
+        Assert.Equal(expected, actual);
     }
 
     #region CreateAsync Tests
@@ -48,21 +57,26 @@ public sealed class InProcessConcurrencyTests
     public async Task CreateAsync_WhenCallersRace_WritesOnce()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        var records = GetService<IRecordService>(CreateProvider());
+        var provider = CreateProvider();
+        var records = GetService<IRecordService>(provider);
         var key = Keyspace.CreateKey("record");
 
         var results = await RunCallersAsync(RacingCallers, index =>
-            records.CreateAsync(
+        {
+            var value = BitConverter.GetBytes(index);
+            return records.CreateAsync(
                 key,
-                BitConverter.GetBytes(index),
+                value,
                 RecordLifetime.Persistent,
                 null,
                 cancellationToken
-            )
-        );
+            );
+        });
+
+        var conflicts = results.Count(x => x.Status == RecordWriteStatus.Conflict);
 
         Assert.Single(results, x => x.IsWritten);
-        Assert.Equal(RacingCallers - 1, results.Count(x => x.Status == RecordWriteStatus.Conflict));
+        Assert.Equal(RacingCallers - 1, conflicts);
     }
 
     #endregion
@@ -73,20 +87,20 @@ public sealed class InProcessConcurrencyTests
     public async Task TryRecordAsync_WhenCallersRace_RecordsOnce()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        var occurrences = GetService<IOccurrenceService>(CreateProvider());
+        var provider = CreateProvider();
+        var occurrences = GetService<IOccurrenceService>(provider);
         var key = Keyspace.CreateKey("occurrence");
+        var ttl = TimeSpan.FromSeconds(30);
+        var timeToLive = new TimeToLive(ttl);
 
         var results = await RunCallersAsync(RacingCallers, _ =>
-            occurrences.TryRecordAsync(
-                key,
-                new TimeToLive(TimeSpan.FromSeconds(30)),
-                null,
-                cancellationToken
-            )
+            occurrences.TryRecordAsync(key, timeToLive, null, cancellationToken)
         );
 
+        var duplicates = results.Count(x => x == OccurrenceStatus.Duplicate);
+
         Assert.Single(results, x => x == OccurrenceStatus.Recorded);
-        Assert.Equal(RacingCallers - 1, results.Count(x => x == OccurrenceStatus.Duplicate));
+        Assert.Equal(RacingCallers - 1, duplicates);
     }
 
     #endregion
@@ -97,16 +111,20 @@ public sealed class InProcessConcurrencyTests
     public async Task IncrementAsync_WhenCallersRace_CountsEachIncrement()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        var counters = GetService<ICounterService>(CreateProvider());
+        var provider = CreateProvider();
+        var counters = GetService<ICounterService>(provider);
         var key = Keyspace.CreateKey("counter");
-        var timeToLive = new TimeToLive(TimeSpan.FromSeconds(30));
+        var ttl = TimeSpan.FromSeconds(30);
+        var timeToLive = new TimeToLive(ttl);
 
         var counts = await RunCallersAsync(CountingCallers, _ =>
             counters.IncrementAsync(key, 1, timeToLive, null, cancellationToken)
         );
 
+        var total = await counters.ReadAsync(key, null, cancellationToken);
+
         AssertEachNumberOnce(counts, CountingCallers);
-        Assert.Equal(CountingCallers, await counters.ReadAsync(key, null, cancellationToken));
+        Assert.Equal(CountingCallers, total);
     }
 
     #endregion
@@ -117,7 +135,8 @@ public sealed class InProcessConcurrencyTests
     public async Task NextAsync_WhenCallersRace_HandsOutEachNumberOnce()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        var sequences = GetService<ISequenceService>(CreateProvider());
+        var provider = CreateProvider();
+        var sequences = GetService<ISequenceService>(provider);
         var key = Keyspace.CreateKey("sequence");
 
         var numbers = await RunCallersAsync(CountingCallers, _ =>
@@ -135,22 +154,23 @@ public sealed class InProcessConcurrencyTests
     public async Task ExecuteAsync_WhenCallersRace_AppliesOneSuccess()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        var transactions = GetService<ITransactionService>(CreateProvider());
+        var provider = CreateProvider();
+        var transactions = GetService<ITransactionService>(provider);
         var key = Keyspace.CreateKey("transaction");
+        var absent = RecordCondition.Absent(key);
 
         var results = await RunCallersAsync(RacingCallers, index =>
-            transactions.ExecuteAsync(
-                new RecordTransaction(
-                    [RecordCondition.Absent(key)],
-                    [RecordWrite.Put(key, BitConverter.GetBytes(index), RecordLifetime.Persistent)]
-                ),
-                null,
-                cancellationToken
-            )
-        );
+        {
+            var value = BitConverter.GetBytes(index);
+            var put = RecordWrite.Put(key, value, RecordLifetime.Persistent);
+            var transaction = new RecordTransaction([absent], [put]);
+            return transactions.ExecuteAsync(transaction, null, cancellationToken);
+        });
+
+        var failures = results.Count(x => !x.Succeeded);
 
         Assert.Single(results, x => x.Succeeded);
-        Assert.Equal(RacingCallers - 1, results.Count(x => !x.Succeeded));
+        Assert.Equal(RacingCallers - 1, failures);
     }
 
     #endregion

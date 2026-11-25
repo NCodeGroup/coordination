@@ -7,13 +7,25 @@ namespace NCode.Coordination.InProcess.Tests;
 
 public sealed class InProcessExpiringTableTests
 {
+    private static TimeSpan OneSecond { get; } = TimeSpan.FromSeconds(1);
+
     private static TimeSpan TwoSeconds { get; } = TimeSpan.FromSeconds(2);
 
-    private static FakeTimeProvider CreateTime() =>
-        new(new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero));
+    private static TimeSpan ThreeSeconds { get; } = TimeSpan.FromSeconds(3);
 
-    private static InProcessExpiry TwoSecondExpiry(TimeProvider time) =>
-        InProcessExpiry.Begin(time, new TimeToLive(TwoSeconds));
+    private static TimeSpan FourHundredDays { get; } = TimeSpan.FromDays(400);
+
+    private static FakeTimeProvider CreateTime()
+    {
+        var start = new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
+        return new FakeTimeProvider(start);
+    }
+
+    private static InProcessExpiry TwoSecondExpiry(TimeProvider time)
+    {
+        var timeToLive = new TimeToLive(TwoSeconds);
+        return InProcessExpiry.Begin(time, timeToLive);
+    }
 
     #region TryGet Tests
 
@@ -22,9 +34,10 @@ public sealed class InProcessExpiringTableTests
     {
         var time = CreateTime();
         var table = new InProcessExpiringTable<string, int>(time);
-        table.Set("a", 7, TwoSecondExpiry(time));
+        var expiry = TwoSecondExpiry(time);
+        table.Set("a", 7, expiry);
 
-        time.Advance(TimeSpan.FromSeconds(1));
+        time.Advance(OneSecond);
 
         var found = table.TryGet("a", out var value);
         Assert.True(found);
@@ -36,7 +49,8 @@ public sealed class InProcessExpiringTableTests
     {
         var time = CreateTime();
         var table = new InProcessExpiringTable<string, int>(time);
-        table.Set("a", 7, TwoSecondExpiry(time));
+        var expiry = TwoSecondExpiry(time);
+        table.Set("a", 7, expiry);
         Assert.Equal(1, table.Count);
 
         time.Advance(TwoSeconds);
@@ -53,7 +67,7 @@ public sealed class InProcessExpiringTableTests
         var table = new InProcessExpiringTable<string, int>(time);
         table.Set("a", 7, null);
 
-        time.Advance(TimeSpan.FromDays(400));
+        time.Advance(FourHundredDays);
 
         var found = table.TryGet("a", out var value);
         Assert.True(found);
@@ -69,16 +83,17 @@ public sealed class InProcessExpiringTableTests
     {
         var time = CreateTime();
         var table = new InProcessExpiringTable<string, int>(time);
-        table.Set("a", 7, TwoSecondExpiry(time));
+        var expiry = TwoSecondExpiry(time);
+        table.Set("a", 7, expiry);
 
-        time.Advance(TimeSpan.FromSeconds(1));
+        time.Advance(OneSecond);
         table.Update("a", 8);
 
         var foundBeforeEnd = table.TryGet("a", out var value);
         Assert.True(foundBeforeEnd);
         Assert.Equal(8, value);
 
-        time.Advance(TimeSpan.FromSeconds(1));
+        time.Advance(OneSecond);
 
         var foundAfterEnd = table.TryGet("a", out _);
         Assert.False(foundAfterEnd);
@@ -87,7 +102,8 @@ public sealed class InProcessExpiringTableTests
     [Fact]
     public void Update_WhenKeyIsAbsent_ThrowsInvalidOperationException()
     {
-        var table = new InProcessExpiringTable<string, int>(CreateTime());
+        var time = CreateTime();
+        var table = new InProcessExpiringTable<string, int>(time);
 
         Assert.Throws<InvalidOperationException>(() => table.Update("a", 8));
     }
@@ -101,7 +117,8 @@ public sealed class InProcessExpiringTableTests
     {
         var time = CreateTime();
         var table = new InProcessExpiringTable<string, int>(time);
-        table.Set("a", 7, TwoSecondExpiry(time));
+        var expiry = TwoSecondExpiry(time);
+        table.Set("a", 7, expiry);
 
         var removed = table.Remove("a");
 
@@ -114,7 +131,8 @@ public sealed class InProcessExpiringTableTests
     {
         var time = CreateTime();
         var table = new InProcessExpiringTable<string, int>(time);
-        table.Set("a", 7, TwoSecondExpiry(time));
+        var expiry = TwoSecondExpiry(time);
+        table.Set("a", 7, expiry);
 
         time.Advance(TwoSeconds);
 
@@ -132,7 +150,8 @@ public sealed class InProcessExpiringTableTests
     {
         var time = CreateTime();
         var table = new InProcessExpiringTable<string, int>(time);
-        table.Set("short", 1, TwoSecondExpiry(time));
+        var expiry = TwoSecondExpiry(time);
+        table.Set("short", 1, expiry);
         table.Set("forever", 2, null);
 
         time.Advance(TwoSeconds);
@@ -152,9 +171,10 @@ public sealed class InProcessExpiringTableTests
     {
         var time = CreateTime();
         var table = new InProcessExpiringTable<string, int>(time);
-        table.Set("old", 0, TwoSecondExpiry(time));
+        var expiry = TwoSecondExpiry(time);
+        table.Set("old", 0, expiry);
 
-        time.Advance(TimeSpan.FromSeconds(3));
+        time.Advance(ThreeSeconds);
         for (var index = 0; index < InProcessExpiringTable<string, int>.SweepFloor; index++)
         {
             table.Set($"key-{index}", index, null);

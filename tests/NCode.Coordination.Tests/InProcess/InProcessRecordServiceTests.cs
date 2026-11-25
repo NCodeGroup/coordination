@@ -11,11 +11,18 @@ public sealed class InProcessRecordServiceTests
 
     private static Keyspace Keyspace { get; } = new("test");
 
-    private static InProcessRecordService CreateService() =>
-        new(new InProcessRecordTable(new FakeTimeProvider(Start)));
+    private static InProcessRecordService CreateService()
+    {
+        var time = new FakeTimeProvider(Start);
+        var table = new InProcessRecordTable(time);
+        return new InProcessRecordService(table);
+    }
 
-    private static RecordLifetime SessionLifetime() =>
-        RecordLifetime.ForSession(new SessionId(Keyspace, "s1"));
+    private static RecordLifetime SessionLifetime()
+    {
+        var sessionId = new SessionId(Keyspace, "s1");
+        return RecordLifetime.ForSession(sessionId);
+    }
 
     #region CreateAsync Tests
 
@@ -26,17 +33,14 @@ public sealed class InProcessRecordServiceTests
         var service = CreateService();
         var key = Keyspace.CreateKey("a");
         ReadOnlyMemory<byte> value = (byte[])[1];
+        var lifetime = SessionLifetime();
 
-        var result = await service.CreateAsync(
-            key,
-            value,
-            SessionLifetime(),
-            null,
-            cancellationToken
-        );
+        var result = await service.CreateAsync(key, value, lifetime, null, cancellationToken);
+
+        var stored = await service.ReadAsync(key, null, cancellationToken);
 
         Assert.Same(RecordWriteResult.SessionEnded, result);
-        Assert.Null(await service.ReadAsync(key, null, cancellationToken));
+        Assert.Null(stored);
     }
 
     [Fact]
@@ -55,8 +59,10 @@ public sealed class InProcessRecordServiceTests
             cancellationToken
         );
 
+        var expected = new Revision(2);
+
         Assert.True(result.IsWritten);
-        Assert.Equal(new Revision(2), result.Revision);
+        Assert.Equal(expected, result.Revision);
     }
 
     #endregion
@@ -78,12 +84,13 @@ public sealed class InProcessRecordServiceTests
             cancellationToken
         );
         Assert.True(created.IsWritten);
+        var lifetime = SessionLifetime();
 
         var result = await service.CompareAndSwapAsync(
             key,
             created.Revision,
             (byte[])[2],
-            SessionLifetime(),
+            lifetime,
             null,
             cancellationToken
         );
@@ -92,7 +99,8 @@ public sealed class InProcessRecordServiceTests
         var stored = await service.ReadAsync(key, null, cancellationToken);
         Assert.NotNull(stored);
         Assert.Equal(created.Revision, stored.Revision);
-        Assert.True(value.Span.SequenceEqual(stored.Value.Span));
+        var isSameValue = value.Span.SequenceEqual(stored.Value.Span);
+        Assert.True(isSameValue);
     }
 
     #endregion
@@ -122,15 +130,13 @@ public sealed class InProcessRecordServiceTests
         var cancellationToken = TestContext.Current.CancellationToken;
         var service = CreateService();
         var prefix = Keyspace.CreateKey("a");
+        var page = new RecordPageRequest(10);
 
-        var result = await service.ListAsync(
-            prefix,
-            new RecordPageRequest(10),
-            null,
-            cancellationToken
-        );
+        var result = await service.ListAsync(prefix, page, null, cancellationToken);
 
-        Assert.Equal(new Revision(1), result.Revision);
+        var expected = new Revision(1);
+
+        Assert.Equal(expected, result.Revision);
         Assert.Empty(result.Records);
     }
 
