@@ -56,8 +56,11 @@ internal static class HistoryAssert
     /// </summary>
     /// <param name="result">The outcome of the check.</param>
     /// <returns>The text of the calls, each on a line of its own after a line break.</returns>
-    private static string DescribeOperations(LinearizabilityResult result) =>
-        string.Concat(
-            result.Operations.Select(operation => "\n  " + HistoryFormat.Describe(operation))
+    private static string DescribeOperations(LinearizabilityResult result)
+    {
+        var lines = result.Operations.Select(operation =>
+            "\n  " + HistoryFormat.Describe(operation)
         );
+        return string.Concat(lines);
+    }
 }
