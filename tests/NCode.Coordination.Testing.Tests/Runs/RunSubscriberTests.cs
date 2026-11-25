@@ -69,7 +69,8 @@ public sealed class RunSubscriberTests
         var found = await subscriber.WaitForAsync(delivery => delivery.Item == 3, Token);
 
         Assert.True(found);
-        Assert.Equal<int>([1, 2, 3], subscriber.Deliveries.Select(delivery => delivery.Item));
+        var items = subscriber.Deliveries.Select(delivery => delivery.Item);
+        Assert.Equal<int>([1, 2, 3], items);
     }
 
     [Fact]
@@ -82,7 +83,8 @@ public sealed class RunSubscriberTests
             Token
         );
         await WriteAsync(channel, 1, 2);
-        Assert.True(await subscriber.WaitForAsync(delivery => delivery.Item == 1, Token));
+        var receivedFirst = await subscriber.WaitForAsync(delivery => delivery.Item == 1, Token);
+        Assert.True(receivedFirst);
 
         var found = await subscriber.WaitForAsync(delivery => delivery.Item == 1, Token);
 
@@ -104,7 +106,8 @@ public sealed class RunSubscriberTests
         var found = await subscriber.WaitForAsync(delivery => delivery.Item == 9, Token);
 
         Assert.False(found);
-        Assert.Equal(1, Assert.Single(subscriber.Deliveries).Item);
+        var received = Assert.Single(subscriber.Deliveries);
+        Assert.Equal(1, received.Item);
     }
 
     [Fact]
@@ -144,7 +147,8 @@ public sealed class RunSubscriberTests
         var found = await subscriber.WaitForAsync(delivery => delivery.Item == 9, Token);
 
         Assert.False(found);
-        Assert.Equal(1, Assert.Single(subscriber.Deliveries).Item);
+        var received = Assert.Single(subscriber.Deliveries);
+        Assert.Equal(1, received.Item);
     }
 
     #endregion
@@ -161,7 +165,8 @@ public sealed class RunSubscriberTests
             Token
         );
         channel.Writer.Complete();
-        Assert.False(await subscriber.WaitForAsync(_ => false, Token));
+        var found = await subscriber.WaitForAsync(_ => false, Token);
+        Assert.False(found);
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
             await subscriber.DisposeAsync()

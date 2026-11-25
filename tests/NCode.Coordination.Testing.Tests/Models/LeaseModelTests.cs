@@ -42,7 +42,8 @@ public sealed class LeaseModelTests
     public void TryApply_WhenAcquireIsAcquiredWhileFree_HoldsTheLease()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Returned(Acquire, Acquired(5));
+        var result = Acquired(5);
+        var operation = HistoryTesting.Returned(Acquire, result);
 
         var applied = model.TryApply(model.Initial, operation, out var next);
 
@@ -54,7 +55,8 @@ public sealed class LeaseModelTests
     public void TryApply_WhenAcquireTokenIsNotAboveTheFloor_Rejects()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Returned(Acquire, Acquired(5));
+        var result = Acquired(5);
+        var operation = HistoryTesting.Returned(Acquire, result);
         var state = model.Initial with { Floor = 5 };
 
         var applied = model.TryApply(state, operation, out _);
@@ -89,7 +91,8 @@ public sealed class LeaseModelTests
     public void TryApply_WhenAcquireIsAcquiredWhileHeld_Rejects()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Returned(Acquire, Acquired(6));
+        var result = Acquired(6);
+        var operation = HistoryTesting.Returned(Acquire, result);
 
         var applied = model.TryApply(HeldState, operation, out _);
 
@@ -116,8 +119,9 @@ public sealed class LeaseModelTests
 
         var applied = model.TryApply(state, operation, out var next);
 
+        var expected = state with { Until = TimeSpan.FromSeconds(40) };
         Assert.True(applied);
-        Assert.Equal(state with { Until = TimeSpan.FromSeconds(40) }, next);
+        Assert.Equal(expected, next);
     }
 
     [Fact]
@@ -205,7 +209,8 @@ public sealed class LeaseModelTests
     {
         var model = CreateModel();
         var advance = HistoryTesting.Returned(new ClockAdvance(TimeSpan.FromSeconds(31)), null);
-        var acquire = HistoryTesting.Returned(Acquire, Acquired(6));
+        var result = Acquired(6);
+        var acquire = HistoryTesting.Returned(Acquire, result);
 
         var advanced = model.TryApply(HeldState, advance, out var expired);
         Assert.NotNull(expired);
@@ -256,8 +261,9 @@ public sealed class LeaseModelTests
 
         var applied = model.TryApply(HeldState, operation, out var next);
 
+        var expected = HeldState with { Now = TimeSpan.FromSeconds(5) };
         Assert.True(applied);
-        Assert.Equal(HeldState with { Now = TimeSpan.FromSeconds(5) }, next);
+        Assert.Equal(expected, next);
     }
 
     [Fact]
@@ -293,8 +299,9 @@ public sealed class LeaseModelTests
 
         var applied = model.TryApply(state, operation, out var next);
 
+        var expected = state with { Until = TimeSpan.FromSeconds(40) };
         Assert.True(applied);
-        Assert.Equal(state with { Until = TimeSpan.FromSeconds(40) }, next);
+        Assert.Equal(expected, next);
     }
 
     [Fact]
@@ -336,7 +343,8 @@ public sealed class LeaseModelTests
     public void TryApply_WhenInputIsForeign_Rejects()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Returned("acquire", Acquired(5));
+        var result = Acquired(5);
+        var operation = HistoryTesting.Returned("acquire", result);
 
         var applied = model.TryApply(model.Initial, operation, out _);
 

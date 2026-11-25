@@ -17,49 +17,65 @@ public sealed class RecordWatchDeliveryCheckerTests
     private static IReadOnlyDictionary<CoordinationKey, Revision> NoClosing { get; } =
         ImmutableDictionary<CoordinationKey, Revision>.Empty;
 
-    private static HistoryOperation Write(string operation, string value, long revision) =>
-        HistoryTesting.Operation(
+    private static HistoryOperation Write(string operation, string value, long revision)
+    {
+        var partition = Name.ToString();
+        var result = RecordWriteResult.Written(new Revision(revision));
+        return HistoryTesting.Operation(
             0,
-            Name.ToString(),
+            partition,
             new RecordCall(operation, value, 0),
             1,
             2,
-            RecordWriteResult.Written(new Revision(revision))
+            result
         );
+    }
 
-    private static HistoryOperation Delete(object? output) =>
-        HistoryTesting.Operation(
+    private static HistoryOperation Delete(object? output)
+    {
+        var partition = Name.ToString();
+        return HistoryTesting.Operation(
             0,
-            Name.ToString(),
+            partition,
             new RecordCall(RecordCall.CompareAndDelete, null, 1),
             1,
             2,
             output
         );
+    }
 
-    private static HistoryOperation Take(object? output) =>
-        HistoryTesting.Operation(
+    private static HistoryOperation Take(object? output)
+    {
+        var partition = Name.ToString();
+        return HistoryTesting.Operation(
             0,
-            Name.ToString(),
+            partition,
             new RecordCall(RecordCall.Take, null, 0),
             1,
             2,
             output
         );
+    }
 
-    private static Delivery<RecordChange> Written(long stamp, string value, long revision) =>
-        new(
-            stamp,
-            RecordChange.Written(
-                new StoredRecord(Name, HistoryValues.Encode(value), new Revision(revision))
-            )
-        );
+    private static Delivery<RecordChange> Written(long stamp, string value, long revision)
+    {
+        var encoded = HistoryValues.Encode(value);
+        var record = new StoredRecord(Name, encoded, new Revision(revision));
+        var change = RecordChange.Written(record);
+        return new(stamp, change);
+    }
 
-    private static Delivery<RecordChange> Deleted(long stamp, long revision) =>
-        new(stamp, RecordChange.Deleted(Name, new Revision(revision)));
+    private static Delivery<RecordChange> Deleted(long stamp, long revision)
+    {
+        var change = RecordChange.Deleted(Name, new Revision(revision));
+        return new(stamp, change);
+    }
 
-    private static Delivery<RecordChange> Resync(long stamp, long revision) =>
-        new(stamp, RecordChange.Resync(new Revision(revision)));
+    private static Delivery<RecordChange> Resync(long stamp, long revision)
+    {
+        var change = RecordChange.Resync(new Revision(revision));
+        return new(stamp, change);
+    }
 
     private static ImmutableArray<Delivery<RecordChange>> Changes(
         params Delivery<RecordChange>[] changes
@@ -80,14 +96,14 @@ public sealed class RecordWatchDeliveryCheckerTests
             Delete(RecordDeleteStatus.Deleted),
             Write(RecordCall.Create, "c", 4),
         ];
-        var changes = Changes(
-            Written(3, "a", 1),
-            Written(4, "b", 2),
-            Deleted(5, 3),
-            Written(6, "c", 4)
-        );
+        var created = Written(3, "a", 1);
+        var swapped = Written(4, "b", 2);
+        var deleted = Deleted(5, 3);
+        var recreated = Written(6, "c", 4);
+        var changes = Changes(created, swapped, deleted, recreated);
+        var closing = Closing(4);
 
-        var violations = RecordWatchDeliveryChecker.Check(history, changes, Closing(4), true);
+        var violations = RecordWatchDeliveryChecker.Check(history, changes, closing, true);
 
         Assert.Empty(violations);
     }
@@ -96,7 +112,9 @@ public sealed class RecordWatchDeliveryCheckerTests
     public void Check_WhenAResyncIsBelowTheFloor_ReportsIt()
     {
         HistoryOperation[] history = [Write(RecordCall.Create, "a", 3)];
-        var changes = Changes(Written(3, "a", 3), Resync(4, 2));
+        var written = Written(3, "a", 3);
+        var resync = Resync(4, 2);
+        var changes = Changes(written, resync);
 
         var violations = RecordWatchDeliveryChecker.Check(history, changes, NoClosing, false);
 
@@ -111,7 +129,9 @@ public sealed class RecordWatchDeliveryCheckerTests
             Write(RecordCall.Create, "a", 2),
             Write(RecordCall.CompareAndSwap, "b", 2),
         ];
-        var changes = Changes(Written(3, "a", 2), Written(4, "b", 2));
+        var first = Written(3, "a", 2);
+        var second = Written(4, "b", 2);
+        var changes = Changes(first, second);
 
         var violations = RecordWatchDeliveryChecker.Check(history, changes, NoClosing, false);
 
@@ -122,7 +142,8 @@ public sealed class RecordWatchDeliveryCheckerTests
     public void Check_WhenNoWriteProducedAValue_ReportsIt()
     {
         HistoryOperation[] history = [Write(RecordCall.Create, "a", 1)];
-        var changes = Changes(Written(3, "x", 1));
+        var written = Written(3, "x", 1);
+        var changes = Changes(written);
 
         var violations = RecordWatchDeliveryChecker.Check(history, changes, NoClosing, false);
 
@@ -136,7 +157,8 @@ public sealed class RecordWatchDeliveryCheckerTests
     public void Check_WhenTheWriteWasAtAnotherRevision_ReportsIt()
     {
         HistoryOperation[] history = [Write(RecordCall.Create, "a", 1)];
-        var changes = Changes(Written(3, "a", 2));
+        var written = Written(3, "a", 2);
+        var changes = Changes(written);
 
         var violations = RecordWatchDeliveryChecker.Check(history, changes, NoClosing, false);
 
@@ -149,18 +171,21 @@ public sealed class RecordWatchDeliveryCheckerTests
     [Fact]
     public void Check_WhenTheWriteCameAfterTheChange_ReportsIt()
     {
+        var partition = Name.ToString();
+        var result = RecordWriteResult.Written(new Revision(1));
         HistoryOperation[] history =
         [
             HistoryTesting.Operation(
                 0,
-                Name.ToString(),
+                partition,
                 new RecordCall(RecordCall.Create, "a", 0),
                 5,
                 6,
-                RecordWriteResult.Written(new Revision(1))
+                result
             ),
         ];
-        var changes = Changes(Written(3, "a", 1));
+        var written = Written(3, "a", 1);
+        var changes = Changes(written);
 
         var violations = RecordWatchDeliveryChecker.Check(history, changes, NoClosing, false);
 
@@ -173,18 +198,22 @@ public sealed class RecordWatchDeliveryCheckerTests
     [Fact]
     public void Check_WhenTheWriteBelongsToAnotherKey_ReportsIt()
     {
+        var other = new CoordinationKey(Space, "other");
+        var partition = other.ToString();
+        var result = RecordWriteResult.Written(new Revision(1));
         HistoryOperation[] history =
         [
             HistoryTesting.Operation(
                 0,
-                new CoordinationKey(Space, "other").ToString(),
+                partition,
                 new RecordCall(RecordCall.Create, "a", 0),
                 1,
                 2,
-                RecordWriteResult.Written(new Revision(1))
+                result
             ),
         ];
-        var changes = Changes(Written(3, "a", 1));
+        var written = Written(3, "a", 1);
+        var changes = Changes(written);
 
         var violations = RecordWatchDeliveryChecker.Check(history, changes, NoClosing, false);
 
@@ -204,7 +233,8 @@ public sealed class RecordWatchDeliveryCheckerTests
                 Partition = Name.ToString(),
             },
         ];
-        var changes = Changes(Written(3, "a", 1));
+        var written = Written(3, "a", 1);
+        var changes = Changes(written);
 
         var violations = RecordWatchDeliveryChecker.Check(history, changes, NoClosing, false);
 
@@ -221,7 +251,8 @@ public sealed class RecordWatchDeliveryCheckerTests
                 Partition = Name.ToString(),
             },
         ];
-        var changes = Changes(Written(3, "a", 7));
+        var written = Written(3, "a", 7);
+        var changes = Changes(written);
 
         var violations = RecordWatchDeliveryChecker.Check(history, changes, NoClosing, false);
 
@@ -237,7 +268,9 @@ public sealed class RecordWatchDeliveryCheckerTests
             Delete(RecordDeleteStatus.Conflict),
             Take(null),
         ];
-        var changes = Changes(Written(3, "a", 1), Deleted(4, 2));
+        var written = Written(3, "a", 1);
+        var deleted = Deleted(4, 2);
+        var changes = Changes(written, deleted);
 
         var violations = RecordWatchDeliveryChecker.Check(history, changes, NoClosing, false);
 
@@ -250,12 +283,12 @@ public sealed class RecordWatchDeliveryCheckerTests
     [Fact]
     public void Check_WhenATakeReturnedTheRecord_AcceptsTheDeletion()
     {
-        HistoryOperation[] history =
-        [
-            Write(RecordCall.Create, "a", 1),
-            Take(new StoredRecord(Name, HistoryValues.Encode("a"), new Revision(1))),
-        ];
-        var changes = Changes(Written(3, "a", 1), Deleted(4, 2));
+        var value = HistoryValues.Encode("a");
+        var record = new StoredRecord(Name, value, new Revision(1));
+        HistoryOperation[] history = [Write(RecordCall.Create, "a", 1), Take(record)];
+        var written = Written(3, "a", 1);
+        var deleted = Deleted(4, 2);
+        var changes = Changes(written, deleted);
 
         var violations = RecordWatchDeliveryChecker.Check(history, changes, NoClosing, false);
 
@@ -272,7 +305,8 @@ public sealed class RecordWatchDeliveryCheckerTests
                 Partition = Name.ToString(),
             },
         ];
-        var changes = Changes(Deleted(3, 2));
+        var deleted = Deleted(3, 2);
+        var changes = Changes(deleted);
 
         var violations = RecordWatchDeliveryChecker.Check(history, changes, NoClosing, false);
 
@@ -282,18 +316,20 @@ public sealed class RecordWatchDeliveryCheckerTests
     [Fact]
     public void Check_WhenTheDeleteCameAfterTheChange_ReportsIt()
     {
+        var partition = Name.ToString();
         HistoryOperation[] history =
         [
             HistoryTesting.Operation(
                 0,
-                Name.ToString(),
+                partition,
                 new RecordCall(RecordCall.CompareAndDelete, null, 1),
                 5,
                 6,
                 RecordDeleteStatus.Deleted
             ),
         ];
-        var changes = Changes(Deleted(3, 2));
+        var deleted = Deleted(3, 2);
+        var changes = Changes(deleted);
 
         var violations = RecordWatchDeliveryChecker.Check(history, changes, NoClosing, false);
 
@@ -308,9 +344,11 @@ public sealed class RecordWatchDeliveryCheckerTests
             Write(RecordCall.Create, "a", 1),
             Write(RecordCall.CompareAndSwap, "b", 2),
         ];
-        var changes = Changes(Written(3, "a", 1));
+        var written = Written(3, "a", 1);
+        var changes = Changes(written);
+        var closing = Closing(2);
 
-        var violations = RecordWatchDeliveryChecker.Check(history, changes, Closing(2), true);
+        var violations = RecordWatchDeliveryChecker.Check(history, changes, closing, true);
 
         Assert.Equal(
             [
@@ -328,9 +366,12 @@ public sealed class RecordWatchDeliveryCheckerTests
             Write(RecordCall.Create, "a", 1),
             Write(RecordCall.CompareAndSwap, "b", 2),
         ];
-        var changes = Changes(Written(3, "a", 1), Resync(4, 2));
+        var written = Written(3, "a", 1);
+        var resync = Resync(4, 2);
+        var changes = Changes(written, resync);
+        var closing = Closing(2);
 
-        var violations = RecordWatchDeliveryChecker.Check(history, changes, Closing(2), true);
+        var violations = RecordWatchDeliveryChecker.Check(history, changes, closing, true);
 
         Assert.Empty(violations);
     }
@@ -339,9 +380,11 @@ public sealed class RecordWatchDeliveryCheckerTests
     public void Check_WhenAResyncPrecedesTheClosingWrite_ReportsIt()
     {
         HistoryOperation[] history = [Write(RecordCall.Create, "a", 3)];
-        var changes = Changes(Resync(4, 1));
+        var resync = Resync(4, 1);
+        var changes = Changes(resync);
+        var closing = Closing(3);
 
-        var violations = RecordWatchDeliveryChecker.Check(history, changes, Closing(3), true);
+        var violations = RecordWatchDeliveryChecker.Check(history, changes, closing, true);
 
         Assert.Single(violations);
     }
@@ -351,8 +394,9 @@ public sealed class RecordWatchDeliveryCheckerTests
     {
         HistoryOperation[] history = [Write(RecordCall.Create, "a", 1)];
         var changes = Changes();
+        var closing = Closing(1);
 
-        var violations = RecordWatchDeliveryChecker.Check(history, changes, Closing(1), false);
+        var violations = RecordWatchDeliveryChecker.Check(history, changes, closing, false);
 
         Assert.Empty(violations);
     }

@@ -40,10 +40,8 @@ public sealed class TransactionModelTests
     public void TryApply_WhenExecuteSucceedsAndTheConditionHolds_WritesBothKeys()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Returned(
-            ExecuteWhenAbsent,
-            Result(TransactionStatus.Succeeded)
-        );
+        var result = Result(TransactionStatus.Succeeded);
+        var operation = HistoryTesting.Returned(ExecuteWhenAbsent, result);
 
         var applied = model.TryApply(model.Initial, operation, out var next);
 
@@ -55,10 +53,8 @@ public sealed class TransactionModelTests
     public void TryApply_WhenExecuteSucceedsAndTheConditionDoesNotHold_Rejects()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Returned(
-            ExecuteWhenOld,
-            Result(TransactionStatus.Succeeded)
-        );
+        var result = Result(TransactionStatus.Succeeded);
+        var operation = HistoryTesting.Returned(ExecuteWhenOld, result);
 
         var applied = model.TryApply(model.Initial, operation, out _);
 
@@ -69,10 +65,8 @@ public sealed class TransactionModelTests
     public void TryApply_WhenExecuteFailsAndTheConditionDoesNotHold_KeepsTheState()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Returned(
-            ExecuteWhenAbsent,
-            Result(TransactionStatus.Failed)
-        );
+        var result = Result(TransactionStatus.Failed);
+        var operation = HistoryTesting.Returned(ExecuteWhenAbsent, result);
 
         var applied = model.TryApply(PresentState, operation, out var next);
 
@@ -84,10 +78,8 @@ public sealed class TransactionModelTests
     public void TryApply_WhenExecuteFailsAndTheConditionHolds_Rejects()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Returned(
-            ExecuteWhenAbsent,
-            Result(TransactionStatus.Failed)
-        );
+        var result = Result(TransactionStatus.Failed);
+        var operation = HistoryTesting.Returned(ExecuteWhenAbsent, result);
 
         var applied = model.TryApply(model.Initial, operation, out _);
 
@@ -98,10 +90,8 @@ public sealed class TransactionModelTests
     public void TryApply_WhenExecuteReplacesTheValueOfBothKeys_WritesBothKeys()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Returned(
-            ExecuteWhenOld,
-            Result(TransactionStatus.Succeeded)
-        );
+        var result = Result(TransactionStatus.Succeeded);
+        var operation = HistoryTesting.Returned(ExecuteWhenOld, result);
 
         var applied = model.TryApply(PresentState, operation, out var next);
 
@@ -125,7 +115,8 @@ public sealed class TransactionModelTests
     public void TryApply_WhenReadOfTheFirstKeyReturnsTheValue_KeepsTheState()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Returned(ReadFirst, Stored("old"));
+        var record = Stored("old");
+        var operation = HistoryTesting.Returned(ReadFirst, record);
 
         var applied = model.TryApply(PresentState, operation, out var next);
 
@@ -149,7 +140,8 @@ public sealed class TransactionModelTests
     public void TryApply_WhenReadOfTheSecondKeyReturnsTheValue_KeepsTheState()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Returned(ReadSecond, Stored("old"));
+        var record = Stored("old");
+        var operation = HistoryTesting.Returned(ReadSecond, record);
 
         var applied = model.TryApply(PresentState, operation, out var next);
 
@@ -161,7 +153,8 @@ public sealed class TransactionModelTests
     public void TryApply_WhenReadReturnsAWrongValue_Rejects()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Returned(ReadFirst, Stored("other"));
+        var record = Stored("other");
+        var operation = HistoryTesting.Returned(ReadFirst, record);
 
         var applied = model.TryApply(PresentState, operation, out _);
 
@@ -194,7 +187,8 @@ public sealed class TransactionModelTests
     public void TryApply_WhenReadOfTheSecondKeyReturnsAValueWhileTheFirstKeyIsAbsent_Rejects()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Returned(ReadSecond, Stored("new"));
+        var record = Stored("new");
+        var operation = HistoryTesting.Returned(ReadSecond, record);
 
         var applied = model.TryApply(model.Initial, operation, out _);
 
@@ -241,10 +235,8 @@ public sealed class TransactionModelTests
     public void TryApply_WhenExecuteReturnsSessionEnded_Rejects()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Returned(
-            ExecuteWhenAbsent,
-            Result(TransactionStatus.SessionEnded)
-        );
+        var result = Result(TransactionStatus.SessionEnded);
+        var operation = HistoryTesting.Returned(ExecuteWhenAbsent, result);
 
         var applied = model.TryApply(model.Initial, operation, out _);
 
@@ -283,7 +275,8 @@ public sealed class TransactionModelTests
     public void TryApply_WhenInputIsForeign_Rejects()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Returned("execute", Result(TransactionStatus.Succeeded));
+        var result = Result(TransactionStatus.Succeeded);
+        var operation = HistoryTesting.Returned("execute", result);
 
         var applied = model.TryApply(model.Initial, operation, out _);
 

@@ -16,7 +16,9 @@ public sealed class LinearizedSetTests
 
         for (var index = 0; index < count; index++)
         {
-            Assert.False(set.Contains(index));
+            var contains = set.Contains(index);
+
+            Assert.False(contains);
         }
     }
 
@@ -29,9 +31,13 @@ public sealed class LinearizedSetTests
     {
         var set = LinearizedSet.Empty(10).Add(3);
 
-        Assert.True(set.Contains(3));
-        Assert.False(set.Contains(2));
-        Assert.False(set.Contains(4));
+        var containsThree = set.Contains(3);
+        var containsTwo = set.Contains(2);
+        var containsFour = set.Contains(4);
+
+        Assert.True(containsThree);
+        Assert.False(containsTwo);
+        Assert.False(containsFour);
     }
 
     [Fact]
@@ -41,8 +47,11 @@ public sealed class LinearizedSetTests
 
         var added = original.Add(3);
 
-        Assert.False(original.Contains(3));
-        Assert.True(added.Contains(3));
+        var originalContains = original.Contains(3);
+        var addedContains = added.Contains(3);
+
+        Assert.False(originalContains);
+        Assert.True(addedContains);
     }
 
     [Fact]
@@ -52,10 +61,15 @@ public sealed class LinearizedSetTests
 
         var set = LinearizedSet.Empty(100).Add(index);
 
-        Assert.True(set.Contains(index));
-        Assert.False(set.Contains(index - 64));
-        Assert.False(set.Contains(index - 1));
-        Assert.False(set.Contains(index + 1));
+        var containsIndex = set.Contains(index);
+        var containsFirstWordIndex = set.Contains(index - 64);
+        var containsPrevious = set.Contains(index - 1);
+        var containsNext = set.Contains(index + 1);
+
+        Assert.True(containsIndex);
+        Assert.False(containsFirstWordIndex);
+        Assert.False(containsPrevious);
+        Assert.False(containsNext);
     }
 
     #endregion
@@ -68,9 +82,14 @@ public sealed class LinearizedSetTests
         var left = LinearizedSet.Empty(100).Add(3).Add(70);
         var right = LinearizedSet.Empty(100).Add(70).Add(3);
 
-        Assert.True(left.Equals(right));
-        Assert.True(left.Equals((object)right));
-        Assert.Equal(left.GetHashCode(), right.GetHashCode());
+        var equalsSet = left.Equals(right);
+        var equalsObject = left.Equals((object)right);
+        var leftHash = left.GetHashCode();
+        var rightHash = right.GetHashCode();
+
+        Assert.True(equalsSet);
+        Assert.True(equalsObject);
+        Assert.Equal(leftHash, rightHash);
     }
 
     [Fact]
@@ -79,8 +98,11 @@ public sealed class LinearizedSetTests
         var left = LinearizedSet.Empty(100).Add(3);
         var right = LinearizedSet.Empty(100).Add(70);
 
-        Assert.False(left.Equals(right));
-        Assert.False(left.Equals((object)right));
+        var equalsSet = left.Equals(right);
+        var equalsObject = left.Equals((object)right);
+
+        Assert.False(equalsSet);
+        Assert.False(equalsObject);
     }
 
     [Fact]
@@ -89,16 +111,22 @@ public sealed class LinearizedSetTests
         var left = LinearizedSet.Empty(64);
         var right = LinearizedSet.Empty(65);
 
-        Assert.False(left.Equals(right));
+        var equalsSet = left.Equals(right);
+
+        Assert.False(equalsSet);
     }
 
     [Fact]
     public void Equals_WhenOtherIsNull_ReturnsFalse()
     {
         var set = LinearizedSet.Empty(10);
+        var copy = LinearizedSet.Empty(10);
 
-        Assert.False(set.Equals(null));
-        Assert.False(set.Equals((object?)null));
+        var equalsNull = set.Equals(null);
+        var equalsNullObject = copy.Equals((object?)null);
+
+        Assert.False(equalsNull);
+        Assert.False(equalsNullObject);
     }
 
     #endregion

@@ -48,7 +48,8 @@ public sealed class SemaphoreModelTests
     public void TryApply_WhenFirstSlotIsAcquiredWhileEmpty_HoldsTheFirstSlot()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Returned(Acquire, Acquired(0, 5, First));
+        var result = Acquired(0, 5, First);
+        var operation = HistoryTesting.Returned(Acquire, result);
 
         var applied = model.TryApply(model.Initial, operation, out var next);
 
@@ -60,7 +61,8 @@ public sealed class SemaphoreModelTests
     public void TryApply_WhenSecondSlotIsAcquiredWhileEmpty_HoldsTheSecondSlot()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Returned(Acquire, Acquired(1, 7, Second));
+        var result = Acquired(1, 7, Second);
+        var operation = HistoryTesting.Returned(Acquire, result);
 
         var applied = model.TryApply(model.Initial, operation, out var next);
 
@@ -72,8 +74,10 @@ public sealed class SemaphoreModelTests
     public void TryApply_WhenSecondSlotIsAcquiredAfterTheFirst_HoldsBothSlots()
     {
         var model = CreateModel();
-        var first = HistoryTesting.Returned(Acquire, Acquired(0, 5, First));
-        var second = HistoryTesting.Returned(Acquire, Acquired(1, 7, Second));
+        var firstGrant = Acquired(0, 5, First);
+        var secondGrant = Acquired(1, 7, Second);
+        var first = HistoryTesting.Returned(Acquire, firstGrant);
+        var second = HistoryTesting.Returned(Acquire, secondGrant);
 
         model.TryApply(model.Initial, first, out var afterFirst);
         Assert.NotNull(afterFirst);
@@ -87,7 +91,8 @@ public sealed class SemaphoreModelTests
     public void TryApply_WhenATakenSlotIsGrantedAgain_Rejects()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Returned(Acquire, Acquired(0, 6, Second));
+        var result = Acquired(0, 6, Second);
+        var operation = HistoryTesting.Returned(Acquire, result);
 
         var applied = model.TryApply(FirstHeldState, operation, out _);
 
@@ -98,7 +103,8 @@ public sealed class SemaphoreModelTests
     public void TryApply_WhenAcquireTokenIsNotAboveTheFloor_Rejects()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Returned(Acquire, Acquired(0, 5, First));
+        var result = Acquired(0, 5, First);
+        var operation = HistoryTesting.Returned(Acquire, result);
         var state = model.Initial with { FirstFloor = 5 };
 
         var applied = model.TryApply(state, operation, out _);
@@ -110,7 +116,8 @@ public sealed class SemaphoreModelTests
     public void TryApply_WhenAcquireSlotIsOutsideTheCapacity_Rejects()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Returned(Acquire, Acquired(2, 5, First));
+        var result = Acquired(2, 5, First);
+        var operation = HistoryTesting.Returned(Acquire, result);
 
         var applied = model.TryApply(model.Initial, operation, out _);
 
@@ -121,7 +128,8 @@ public sealed class SemaphoreModelTests
     public void TryApply_WhenAcquireIsAcquiredWhileBothAreHeld_Rejects()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Returned(Acquire, Acquired(0, 9, First));
+        var result = Acquired(0, 9, First);
+        var operation = HistoryTesting.Returned(Acquire, result);
 
         var applied = model.TryApply(BothHeldState, operation, out _);
 
@@ -189,7 +197,8 @@ public sealed class SemaphoreModelTests
     public void TryApply_WhenRenewIsStaleAndReturnsFalse_KeepsTheState()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Returned(Renew with { Token = 4 }, false);
+        var call = Renew with { Token = 4 };
+        var operation = HistoryTesting.Returned(call, false);
 
         var applied = model.TryApply(FirstHeldState, operation, out var next);
 
@@ -201,7 +210,8 @@ public sealed class SemaphoreModelTests
     public void TryApply_WhenRenewIsStaleAndReturnsTrue_Rejects()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Returned(Renew with { Token = 4 }, true);
+        var call = Renew with { Token = 4 };
+        var operation = HistoryTesting.Returned(call, true);
 
         var applied = model.TryApply(FirstHeldState, operation, out _);
 
@@ -235,10 +245,8 @@ public sealed class SemaphoreModelTests
     public void TryApply_WhenReleaseByTheSecondHolderReturnsTrue_FreesTheSecondSlot()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Returned(
-            new SemaphoreCall(SemaphoreCall.Release, 1, Second, 7),
-            true
-        );
+        var call = new SemaphoreCall(SemaphoreCall.Release, 1, Second, 7);
+        var operation = HistoryTesting.Returned(call, true);
 
         var applied = model.TryApply(BothHeldState, operation, out var next);
 
@@ -250,7 +258,8 @@ public sealed class SemaphoreModelTests
     public void TryApply_WhenReleaseIsStaleAndReturnsFalse_KeepsTheState()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Returned(Release with { Owner = "other" }, false);
+        var call = Release with { Owner = "other" };
+        var operation = HistoryTesting.Returned(call, false);
 
         var applied = model.TryApply(FirstHeldState, operation, out var next);
 
@@ -262,7 +271,8 @@ public sealed class SemaphoreModelTests
     public void TryApply_WhenReleaseIsStaleAndReturnsTrue_Rejects()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Returned(Release with { Owner = "other" }, true);
+        var call = Release with { Owner = "other" };
+        var operation = HistoryTesting.Returned(call, true);
 
         var applied = model.TryApply(FirstHeldState, operation, out _);
 
@@ -286,7 +296,8 @@ public sealed class SemaphoreModelTests
     public void TryApply_WhenACallCarriesASlotOutsideTheCapacityAndReturnsFalse_KeepsTheState()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Returned(Release with { Slot = 2 }, false);
+        var call = Release with { Slot = 2 };
+        var operation = HistoryTesting.Returned(call, false);
 
         var applied = model.TryApply(FirstHeldState, operation, out var next);
 
@@ -338,7 +349,8 @@ public sealed class SemaphoreModelTests
     {
         var model = CreateModel();
         var indeterminate = HistoryTesting.Indeterminate(Acquire);
-        var acquire = HistoryTesting.Returned(Acquire, Acquired(1, 7, Second));
+        var result = Acquired(1, 7, Second);
+        var acquire = HistoryTesting.Returned(Acquire, result);
 
         model.TryApply(FirstHeldState, indeterminate, out var state);
         Assert.NotNull(state);
@@ -375,7 +387,8 @@ public sealed class SemaphoreModelTests
     public void TryApply_WhenReleaseIsIndeterminateAndStale_KeepsTheState()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Indeterminate(Release with { Token = 4 });
+        var call = Release with { Token = 4 };
+        var operation = HistoryTesting.Indeterminate(call);
 
         var applied = model.TryApply(FirstHeldState, operation, out var next);
 
@@ -398,7 +411,8 @@ public sealed class SemaphoreModelTests
     public void TryApply_WhenInputIsForeign_Rejects()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Returned("acquire", Acquired(0, 5, First));
+        var result = Acquired(0, 5, First);
+        var operation = HistoryTesting.Returned("acquire", result);
 
         var applied = model.TryApply(model.Initial, operation, out _);
 

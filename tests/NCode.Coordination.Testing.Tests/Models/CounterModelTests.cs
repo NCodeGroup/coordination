@@ -22,7 +22,8 @@ public sealed class CounterModelTests
     public void TryApply_WhenIncrementReturnsTheSum_AppliesIt()
     {
         var model = new CounterModel();
-        var operation = HistoryTesting.Returned(Increment(3), 8L);
+        var call = Increment(3);
+        var operation = HistoryTesting.Returned(call, 8L);
 
         var applied = model.TryApply(5, operation, out var next);
 
@@ -34,7 +35,8 @@ public sealed class CounterModelTests
     public void TryApply_WhenIncrementReturnsAWrongCount_Rejects()
     {
         var model = new CounterModel();
-        var operation = HistoryTesting.Returned(Increment(3), 7L);
+        var call = Increment(3);
+        var operation = HistoryTesting.Returned(call, 7L);
 
         var applied = model.TryApply(5, operation, out _);
 
@@ -45,8 +47,9 @@ public sealed class CounterModelTests
     public void TryApply_WhenBatchReturnsTheSum_AppliesIt()
     {
         var model = new CounterModel();
+        var call = Batch(2, 10);
         var result = new CounterBatchResult([7L]);
-        var operation = HistoryTesting.Returned(Batch(2, 10), result);
+        var operation = HistoryTesting.Returned(call, result);
 
         var applied = model.TryApply(5, operation, out var next);
 
@@ -58,8 +61,9 @@ public sealed class CounterModelTests
     public void TryApply_WhenBatchExceedsItsLimitAndReportsIt_AppliesIt()
     {
         var model = new CounterModel();
+        var call = Batch(2, 10);
         var result = new CounterBatchResult([12L]) { ExceededIndex = 0 };
-        var operation = HistoryTesting.Returned(Batch(2, 10), result);
+        var operation = HistoryTesting.Returned(call, result);
 
         var applied = model.TryApply(10, operation, out var next);
 
@@ -71,8 +75,9 @@ public sealed class CounterModelTests
     public void TryApply_WhenBatchReturnsAWrongCount_Rejects()
     {
         var model = new CounterModel();
+        var call = Batch(2, 10);
         var result = new CounterBatchResult([8L]);
-        var operation = HistoryTesting.Returned(Batch(2, 10), result);
+        var operation = HistoryTesting.Returned(call, result);
 
         var applied = model.TryApply(5, operation, out _);
 
@@ -83,8 +88,9 @@ public sealed class CounterModelTests
     public void TryApply_WhenBatchExceedsItsLimitWithoutExceededIndex_Rejects()
     {
         var model = new CounterModel();
+        var call = Batch(2, 10);
         var result = new CounterBatchResult([12L]);
-        var operation = HistoryTesting.Returned(Batch(2, 10), result);
+        var operation = HistoryTesting.Returned(call, result);
 
         var applied = model.TryApply(10, operation, out _);
 
@@ -95,8 +101,9 @@ public sealed class CounterModelTests
     public void TryApply_WhenBatchReportsAnExceededIndexWithinItsLimit_Rejects()
     {
         var model = new CounterModel();
+        var call = Batch(2, 10);
         var result = new CounterBatchResult([7L]) { ExceededIndex = 0 };
-        var operation = HistoryTesting.Returned(Batch(2, 10), result);
+        var operation = HistoryTesting.Returned(call, result);
 
         var applied = model.TryApply(5, operation, out _);
 
@@ -107,7 +114,8 @@ public sealed class CounterModelTests
     public void TryApply_WhenBatchReturnsANumber_Rejects()
     {
         var model = new CounterModel();
-        var operation = HistoryTesting.Returned(Batch(2, 10), 7L);
+        var call = Batch(2, 10);
+        var operation = HistoryTesting.Returned(call, 7L);
 
         var applied = model.TryApply(5, operation, out _);
 
@@ -153,7 +161,8 @@ public sealed class CounterModelTests
     public void TryApply_WhenIncrementIsIndeterminate_AppliesTheSum()
     {
         var model = new CounterModel();
-        var operation = HistoryTesting.Indeterminate(Increment(3));
+        var call = Increment(3);
+        var operation = HistoryTesting.Indeterminate(call);
 
         var applied = model.TryApply(5, operation, out var next);
 
@@ -165,7 +174,8 @@ public sealed class CounterModelTests
     public void TryApply_WhenBatchIsIndeterminate_AppliesTheSum()
     {
         var model = new CounterModel();
-        var operation = HistoryTesting.Indeterminate(Batch(2, 10));
+        var call = Batch(2, 10);
+        var operation = HistoryTesting.Indeterminate(call);
 
         var applied = model.TryApply(5, operation, out var next);
 

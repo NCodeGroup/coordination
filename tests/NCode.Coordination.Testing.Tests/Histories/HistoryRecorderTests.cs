@@ -31,7 +31,9 @@ public sealed class HistoryRecorderTests
         Assert.Equal(Partition, operation.Partition);
         Assert.Equal(input, operation.Input);
         Assert.True(operation.Invoked < operation.Responded);
-        Assert.Equal(operation, Assert.Single(recorder.ToHistory()));
+        var history = recorder.ToHistory();
+        var recorded = Assert.Single(history);
+        Assert.Equal(operation, recorded);
     }
 
     [Fact]
@@ -138,7 +140,8 @@ public sealed class HistoryRecorderTests
             )
         );
 
-        Assert.Empty(recorder.ToHistory());
+        var history = recorder.ToHistory();
+        Assert.Empty(history);
     }
 
     [Fact]
@@ -156,7 +159,8 @@ public sealed class HistoryRecorderTests
             )
         );
 
-        Assert.Empty(recorder.ToHistory());
+        var history = recorder.ToHistory();
+        Assert.Empty(history);
     }
 
     [Fact]

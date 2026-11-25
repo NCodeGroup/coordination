@@ -65,7 +65,8 @@ public sealed class SessionModelTests
     public void TryApply_WhenKeepAliveIsRenewedWhileOpen_KeepsTheState()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Returned(KeepAlive, KeepAliveResult.Renewed(Lifetime));
+        var result = KeepAliveResult.Renewed(Lifetime);
+        var operation = HistoryTesting.Returned(KeepAlive, result);
 
         var applied = model.TryApply(OpenState, operation, out var next);
 
@@ -77,7 +78,8 @@ public sealed class SessionModelTests
     public void TryApply_WhenKeepAliveIsRenewedAfterClose_Rejects()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Returned(KeepAlive, KeepAliveResult.Renewed(Lifetime));
+        var result = KeepAliveResult.Renewed(Lifetime);
+        var operation = HistoryTesting.Returned(KeepAlive, result);
 
         var applied = model.TryApply(OpenState with { Ended = true }, operation, out _);
 

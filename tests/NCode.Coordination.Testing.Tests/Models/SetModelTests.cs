@@ -26,7 +26,8 @@ public sealed class SetModelTests
     public void TryApply_WhenAddReturnsTrueForAnAbsentMember_AppliesIt()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Returned(Add(1), true);
+        var call = Add(1);
+        var operation = HistoryTesting.Returned(call, true);
 
         var applied = model.TryApply(0b001, operation, out var next);
 
@@ -38,7 +39,8 @@ public sealed class SetModelTests
     public void TryApply_WhenAddReturnsFalseForAPresentMember_KeepsTheState()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Returned(Add(0), false);
+        var call = Add(0);
+        var operation = HistoryTesting.Returned(call, false);
 
         var applied = model.TryApply(0b001, operation, out var next);
 
@@ -50,7 +52,8 @@ public sealed class SetModelTests
     public void TryApply_WhenAddReturnsTrueForAPresentMember_Rejects()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Returned(Add(0), true);
+        var call = Add(0);
+        var operation = HistoryTesting.Returned(call, true);
 
         var applied = model.TryApply(0b001, operation, out _);
 
@@ -61,7 +64,8 @@ public sealed class SetModelTests
     public void TryApply_WhenAddReturnsFalseForAnAbsentMember_Rejects()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Returned(Add(1), false);
+        var call = Add(1);
+        var operation = HistoryTesting.Returned(call, false);
 
         var applied = model.TryApply(0b001, operation, out _);
 
@@ -72,7 +76,8 @@ public sealed class SetModelTests
     public void TryApply_WhenRemoveReturnsTrueForAPresentMember_AppliesIt()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Returned(Remove(0), true);
+        var call = Remove(0);
+        var operation = HistoryTesting.Returned(call, true);
 
         var applied = model.TryApply(0b011, operation, out var next);
 
@@ -84,7 +89,8 @@ public sealed class SetModelTests
     public void TryApply_WhenRemoveReturnsFalseForAnAbsentMember_KeepsTheState()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Returned(Remove(2), false);
+        var call = Remove(2);
+        var operation = HistoryTesting.Returned(call, false);
 
         var applied = model.TryApply(0b011, operation, out var next);
 
@@ -96,7 +102,8 @@ public sealed class SetModelTests
     public void TryApply_WhenRemoveReturnsTrueForAnAbsentMember_Rejects()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Returned(Remove(2), true);
+        var call = Remove(2);
+        var operation = HistoryTesting.Returned(call, true);
 
         var applied = model.TryApply(0b011, operation, out _);
 
@@ -107,7 +114,8 @@ public sealed class SetModelTests
     public void TryApply_WhenAddReturnsANumber_Rejects()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Returned(Add(1), 1L);
+        var call = Add(1);
+        var operation = HistoryTesting.Returned(call, 1L);
 
         var applied = model.TryApply(0, operation, out _);
 
@@ -202,7 +210,8 @@ public sealed class SetModelTests
     public void TryApply_WhenAddIsIndeterminate_AddsTheMember()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Indeterminate(Add(2));
+        var call = Add(2);
+        var operation = HistoryTesting.Indeterminate(call);
 
         var applied = model.TryApply(0b001, operation, out var next);
 
@@ -214,7 +223,8 @@ public sealed class SetModelTests
     public void TryApply_WhenRemoveIsIndeterminate_RemovesTheMember()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Indeterminate(Remove(0));
+        var call = Remove(0);
+        var operation = HistoryTesting.Indeterminate(call);
 
         var applied = model.TryApply(0b011, operation, out var next);
 
@@ -250,7 +260,8 @@ public sealed class SetModelTests
     public void TryApply_WhenMemberIsUnknown_Rejects()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Returned(Add(3), true);
+        var call = Add(3);
+        var operation = HistoryTesting.Returned(call, true);
 
         var applied = model.TryApply(0, operation, out _);
 

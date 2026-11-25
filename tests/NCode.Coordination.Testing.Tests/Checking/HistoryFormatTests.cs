@@ -83,7 +83,8 @@ public sealed class HistoryFormatTests
     [Fact]
     public void DescribeValue_WhenStoredRecord_ReturnsValueAndRevision()
     {
-        var record = new StoredRecord(Key, HistoryValues.Encode("hello"), new Revision(9));
+        var value = HistoryValues.Encode("hello");
+        var record = new StoredRecord(Key, value, new Revision(9));
 
         var text = HistoryFormat.DescribeValue(record);
 
@@ -153,7 +154,8 @@ public sealed class HistoryFormatTests
     [Fact]
     public void DescribeValue_WhenElectionElected_ReturnsStatusAndTerm()
     {
-        var leader = new Leader(Key, new FencingToken(6), HistoryValues.Encode("alpha"));
+        var value = HistoryValues.Encode("alpha");
+        var leader = new Leader(Key, new FencingToken(6), value);
         var result = ElectionResult.Elected(new Leadership(leader, Owner, Terms));
 
         var text = HistoryFormat.DescribeValue(result);
@@ -182,7 +184,8 @@ public sealed class HistoryFormatTests
     [Fact]
     public void DescribeValue_WhenElectionViewHasLeader_ReturnsTermAndValue()
     {
-        var leader = new Leader(Key, new FencingToken(8), HistoryValues.Encode("alpha"));
+        var value = HistoryValues.Encode("alpha");
+        var leader = new Leader(Key, new FencingToken(8), value);
         var view = new ElectionView(Key, leader);
 
         var text = HistoryFormat.DescribeValue(view);
@@ -215,7 +218,9 @@ public sealed class HistoryFormatTests
 
         var text = HistoryFormat.DescribeValue(grant);
 
-        Assert.Equal(id.ToString(), text);
+        var expected = id.ToString();
+
+        Assert.Equal(expected, text);
     }
 
     [Fact]
@@ -248,10 +253,12 @@ public sealed class HistoryFormatTests
     public void DescribeValue_WhenRecordPage_ReturnsRevisionAndEachRecord()
     {
         var other = new CoordinationKey(Space, "other");
+        var firstValue = HistoryValues.Encode("one");
+        var secondValue = HistoryValues.Encode("two");
         var page = new RecordPage(
             new Revision(8),
-            new StoredRecord(Key, HistoryValues.Encode("one"), new Revision(3)),
-            new StoredRecord(other, HistoryValues.Encode("two"), new Revision(6))
+            new StoredRecord(Key, firstValue, new Revision(3)),
+            new StoredRecord(other, secondValue, new Revision(6))
         );
 
         var text = HistoryFormat.DescribeValue(page);

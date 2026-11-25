@@ -35,7 +35,8 @@ public sealed class RecordModelTests
     public void TryApply_WhenCreateIsWrittenWhileAbsent_StoresTheRecord()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Returned(Create, RecordWriteResult.Written(new Revision(3)));
+        var result = RecordWriteResult.Written(new Revision(3));
+        var operation = HistoryTesting.Returned(Create, result);
 
         var applied = model.TryApply(model.Initial, operation, out var next);
 
@@ -47,7 +48,8 @@ public sealed class RecordModelTests
     public void TryApply_WhenCreateRevisionIsNotAboveTheFloor_Rejects()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Returned(Create, RecordWriteResult.Written(new Revision(3)));
+        var result = RecordWriteResult.Written(new Revision(3));
+        var operation = HistoryTesting.Returned(Create, result);
         var state = model.Initial with { Floor = 3 };
 
         var applied = model.TryApply(state, operation, out _);
@@ -82,7 +84,8 @@ public sealed class RecordModelTests
     public void TryApply_WhenCreateIsWrittenWhilePresent_Rejects()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Returned(Create, RecordWriteResult.Written(new Revision(6)));
+        var result = RecordWriteResult.Written(new Revision(6));
+        var operation = HistoryTesting.Returned(Create, result);
 
         var applied = model.TryApply(PresentState, operation, out _);
 
@@ -116,7 +119,8 @@ public sealed class RecordModelTests
     public void TryApply_WhenReadReturnsTheRecordWhilePresent_KeepsTheState()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Returned(Read, Stored("old", 5));
+        var record = Stored("old", 5);
+        var operation = HistoryTesting.Returned(Read, record);
 
         var applied = model.TryApply(PresentState, operation, out var next);
 
@@ -128,7 +132,8 @@ public sealed class RecordModelTests
     public void TryApply_WhenReadReturnsARecordWhileAbsent_Rejects()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Returned(Read, Stored("old", 5));
+        var record = Stored("old", 5);
+        var operation = HistoryTesting.Returned(Read, record);
 
         var applied = model.TryApply(model.Initial, operation, out _);
 
@@ -139,7 +144,8 @@ public sealed class RecordModelTests
     public void TryApply_WhenReadReturnsAWrongValue_Rejects()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Returned(Read, Stored("other", 5));
+        var record = Stored("other", 5);
+        var operation = HistoryTesting.Returned(Read, record);
 
         var applied = model.TryApply(PresentState, operation, out _);
 
@@ -150,7 +156,8 @@ public sealed class RecordModelTests
     public void TryApply_WhenReadReturnsAWrongRevision_Rejects()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Returned(Read, Stored("old", 6));
+        var record = Stored("old", 6);
+        var operation = HistoryTesting.Returned(Read, record);
 
         var applied = model.TryApply(PresentState, operation, out _);
 
@@ -161,7 +168,8 @@ public sealed class RecordModelTests
     public void TryApply_WhenSwapIsWrittenAtTheExpectedRevision_StoresTheValue()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Returned(Swap, RecordWriteResult.Written(new Revision(6)));
+        var result = RecordWriteResult.Written(new Revision(6));
+        var operation = HistoryTesting.Returned(Swap, result);
 
         var applied = model.TryApply(PresentState, operation, out var next);
 
@@ -173,13 +181,8 @@ public sealed class RecordModelTests
     public void TryApply_WhenSwapIsWrittenAtAnotherRevision_Rejects()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Returned(
-            Swap with
-            {
-                Expected = 4,
-            },
-            RecordWriteResult.Written(new Revision(6))
-        );
+        var result = RecordWriteResult.Written(new Revision(6));
+        var operation = HistoryTesting.Returned(Swap with { Expected = 4 }, result);
 
         var applied = model.TryApply(PresentState, operation, out _);
 
@@ -301,7 +304,8 @@ public sealed class RecordModelTests
     public void TryApply_WhenTakeReturnsTheRecordWhilePresent_RemovesTheRecord()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Returned(Take, Stored("old", 5));
+        var record = Stored("old", 5);
+        var operation = HistoryTesting.Returned(Take, record);
 
         var applied = model.TryApply(PresentState, operation, out var next);
 
@@ -336,7 +340,8 @@ public sealed class RecordModelTests
     public void TryApply_WhenTakeReturnsAWrongValue_Rejects()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Returned(Take, Stored("other", 5));
+        var record = Stored("other", 5);
+        var operation = HistoryTesting.Returned(Take, record);
 
         var applied = model.TryApply(PresentState, operation, out _);
 
@@ -360,7 +365,8 @@ public sealed class RecordModelTests
     {
         var model = CreateModel();
         var create = HistoryTesting.Indeterminate(Create);
-        var read = HistoryTesting.Returned(Read, Stored("new", 7));
+        var record = Stored("new", 7);
+        var read = HistoryTesting.Returned(Read, record);
 
         model.TryApply(model.Initial, create, out var unknown);
         Assert.NotNull(unknown);
@@ -374,7 +380,8 @@ public sealed class RecordModelTests
     public void TryApply_WhenReadShowsARevisionNotAboveTheFloorAfterAnIndeterminateCreate_Rejects()
     {
         var model = CreateModel();
-        var read = HistoryTesting.Returned(Read, Stored("new", 7));
+        var record = Stored("new", 7);
+        var read = HistoryTesting.Returned(Read, record);
         var state = new RecordState("new", 0, 7);
 
         var applied = model.TryApply(state, read, out _);
@@ -398,7 +405,8 @@ public sealed class RecordModelTests
     public void TryApply_WhenSwapIsIndeterminateAtAnotherRevision_KeepsTheState()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Indeterminate(Swap with { Expected = 4 });
+        var call = Swap with { Expected = 4 };
+        var operation = HistoryTesting.Indeterminate(call);
 
         var applied = model.TryApply(PresentState, operation, out var next);
 
@@ -472,10 +480,8 @@ public sealed class RecordModelTests
     public void TryApply_WhenInputIsForeign_Rejects()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Returned(
-            "create",
-            RecordWriteResult.Written(new Revision(3))
-        );
+        var result = RecordWriteResult.Written(new Revision(3));
+        var operation = HistoryTesting.Returned("create", result);
 
         var applied = model.TryApply(model.Initial, operation, out _);
 

@@ -10,23 +10,25 @@ public sealed class DroppingProviderTests
     [Fact]
     public void GetPrimitiveService_WhenSessions_ReturnsTheInnerService()
     {
-        var inner = new InProcessProvider(InProcessTesting.CreateTime());
+        var time = InProcessTesting.CreateTime();
+        var inner = new InProcessProvider(time);
         using var provider = new DroppingProvider(inner);
 
         var service = provider.GetPrimitiveService(typeof(ISessionService));
 
-        Assert.Same(inner.GetPrimitiveService(typeof(ISessionService)), service);
+        var expected = inner.GetPrimitiveService(typeof(ISessionService));
+        Assert.Same(expected, service);
     }
 
     [Fact]
     public async Task GetPrimitiveService_WhenRecordsAfterADrop_FailsThreeCreatesAndWritesTheFourth()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        var inner = new InProcessProvider(InProcessTesting.CreateTime());
+        var time = InProcessTesting.CreateTime();
+        var inner = new InProcessProvider(time);
         using var provider = new DroppingProvider(inner);
-        var service = Assert.IsAssignableFrom<IRecordService>(
-            provider.GetPrimitiveService(typeof(IRecordService))
-        );
+        var primitive = provider.GetPrimitiveService(typeof(IRecordService));
+        var service = Assert.IsAssignableFrom<IRecordService>(primitive);
         var a = InProcessTesting.Keyspace.CreateKey("a");
         var b = InProcessTesting.Keyspace.CreateKey("b");
         var c = InProcessTesting.Keyspace.CreateKey("c");
@@ -70,35 +72,41 @@ public sealed class DroppingProviderTests
     public async Task GetPrimitiveService_WhenNotificationsAfterADrop_YieldsAResyncInPlaceOfTheLostMessage()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        var inner = new InProcessProvider(InProcessTesting.CreateTime());
+        var time = InProcessTesting.CreateTime();
+        var inner = new InProcessProvider(time);
         using var provider = new DroppingProvider(inner);
-        var service = Assert.IsAssignableFrom<INotificationService>(
-            provider.GetPrimitiveService(typeof(INotificationService))
-        );
+        var primitive = provider.GetPrimitiveService(typeof(INotificationService));
+        var service = Assert.IsAssignableFrom<INotificationService>(primitive);
         var topic = InProcessTesting.Keyspace.CreateKey("t");
+        var onePayload = "one"u8.ToArray();
+        var twoPayload = "two"u8.ToArray();
+        var threePayload = "three"u8.ToArray();
+        var fourPayload = "four"u8.ToArray();
+        var fivePayload = "five"u8.ToArray();
         await using var stream = service
             .SubscribeAsync(topic, null, cancellationToken)
             .GetAsyncEnumerator(cancellationToken);
         var moved = await stream.MoveNextAsync();
         Assert.True(moved);
         Assert.True(stream.Current.IsResync);
-        await service.PublishAsync(topic, "one"u8.ToArray(), null, cancellationToken);
+        await service.PublishAsync(topic, onePayload, null, cancellationToken);
         moved = await stream.MoveNextAsync();
+        var delivered = stream.Current.Payload.ToArray();
         Assert.True(moved);
         Assert.Equal(1, stream.Current.Sequence);
-        Assert.Equal("one"u8.ToArray(), stream.Current.Payload.ToArray());
+        Assert.Equal(onePayload, delivered);
         await provider.Connection.DropAsync(cancellationToken);
 
         var first = await Assert.ThrowsAsync<CoordinationException>(async () =>
-            await service.PublishAsync(topic, "two"u8.ToArray(), null, cancellationToken)
+            await service.PublishAsync(topic, twoPayload, null, cancellationToken)
         );
         var second = await Assert.ThrowsAsync<CoordinationException>(async () =>
-            await service.PublishAsync(topic, "three"u8.ToArray(), null, cancellationToken)
+            await service.PublishAsync(topic, threePayload, null, cancellationToken)
         );
         var third = await Assert.ThrowsAsync<CoordinationException>(async () =>
-            await service.PublishAsync(topic, "four"u8.ToArray(), null, cancellationToken)
+            await service.PublishAsync(topic, fourPayload, null, cancellationToken)
         );
-        await service.PublishAsync(topic, "five"u8.ToArray(), null, cancellationToken);
+        await service.PublishAsync(topic, fivePayload, null, cancellationToken);
 
         moved = await stream.MoveNextAsync();
         var resync = stream.Current;
@@ -115,7 +123,7 @@ public sealed class DroppingProviderTests
         Assert.Equal(1, resync.Sequence);
         Assert.False(next.IsResync);
         Assert.Equal(3, next.Sequence);
-        Assert.Equal("five"u8.ToArray(), payload);
+        Assert.Equal(fivePayload, payload);
     }
 
     #endregion

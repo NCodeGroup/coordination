@@ -40,7 +40,9 @@ public sealed class SequenceModelTests
     public void TryApply_WhenReserveReturnsTheFollowingBlock_AppliesIt()
     {
         var model = new SequenceModel();
-        var operation = HistoryTesting.Returned(Reserve(3), new SequenceBlock(6, 3));
+        var call = Reserve(3);
+        var block = new SequenceBlock(6, 3);
+        var operation = HistoryTesting.Returned(call, block);
 
         var applied = model.TryApply(5, operation, out var next);
 
@@ -52,7 +54,8 @@ public sealed class SequenceModelTests
     public void TryApply_WhenReserveReturnsABlockStartingElsewhere_Rejects()
     {
         var model = new SequenceModel();
-        var operation = HistoryTesting.Returned(Reserve(3), new SequenceBlock(7, 3));
+        var call = Reserve(3);
+        var operation = HistoryTesting.Returned(call, new SequenceBlock(7, 3));
 
         var applied = model.TryApply(5, operation, out _);
 
@@ -63,7 +66,8 @@ public sealed class SequenceModelTests
     public void TryApply_WhenReserveReturnsABlockOfAnotherSize_Rejects()
     {
         var model = new SequenceModel();
-        var operation = HistoryTesting.Returned(Reserve(3), new SequenceBlock(6, 2));
+        var call = Reserve(3);
+        var operation = HistoryTesting.Returned(call, new SequenceBlock(6, 2));
 
         var applied = model.TryApply(5, operation, out _);
 
@@ -74,7 +78,8 @@ public sealed class SequenceModelTests
     public void TryApply_WhenReserveReturnsANumber_Rejects()
     {
         var model = new SequenceModel();
-        var operation = HistoryTesting.Returned(Reserve(3), 6L);
+        var call = Reserve(3);
+        var operation = HistoryTesting.Returned(call, 6L);
 
         var applied = model.TryApply(5, operation, out _);
 
@@ -97,7 +102,8 @@ public sealed class SequenceModelTests
     public void TryApply_WhenReserveIsIndeterminate_AppliesTheWholeBlock()
     {
         var model = new SequenceModel();
-        var operation = HistoryTesting.Indeterminate(Reserve(3));
+        var call = Reserve(3);
+        var operation = HistoryTesting.Indeterminate(call);
 
         var applied = model.TryApply(5, operation, out var next);
 

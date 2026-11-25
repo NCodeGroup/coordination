@@ -127,7 +127,9 @@ public sealed class DroppingConnectionTests
         connection.Unsubscribe(subscription);
         await connection.DropAsync(TestContext.Current.CancellationToken);
 
-        Assert.False(subscription.TakeDrop());
+        var taken = subscription.TakeDrop();
+
+        Assert.False(taken);
     }
 
     #endregion

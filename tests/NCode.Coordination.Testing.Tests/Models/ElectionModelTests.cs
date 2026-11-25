@@ -50,7 +50,8 @@ public sealed class ElectionModelTests
     public void TryApply_WhenLeadIsElectedWhileVacant_HoldsTheLeadership()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Returned(Lead, Elected(5, Owner, Alpha));
+        var result = Elected(5, Owner, Alpha);
+        var operation = HistoryTesting.Returned(Lead, result);
 
         var applied = model.TryApply(model.Initial, operation, out var next);
 
@@ -62,7 +63,8 @@ public sealed class ElectionModelTests
     public void TryApply_WhenLeadTermIsNotAboveTheFloor_Rejects()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Returned(Lead, Elected(5, Owner, Alpha));
+        var result = Elected(5, Owner, Alpha);
+        var operation = HistoryTesting.Returned(Lead, result);
         var state = model.Initial with { Floor = 5 };
 
         var applied = model.TryApply(state, operation, out _);
@@ -74,7 +76,8 @@ public sealed class ElectionModelTests
     public void TryApply_WhenLeadValueIsWrong_Rejects()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Returned(Lead, Elected(5, Owner, "beta"));
+        var result = Elected(5, Owner, "beta");
+        var operation = HistoryTesting.Returned(Lead, result);
 
         var applied = model.TryApply(model.Initial, operation, out _);
 
@@ -85,7 +88,8 @@ public sealed class ElectionModelTests
     public void TryApply_WhenLeadIsElectedWhileLed_Rejects()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Returned(Lead, Elected(6, "other", Alpha));
+        var result = Elected(6, "other", Alpha);
+        var operation = HistoryTesting.Returned(Lead, result);
 
         var applied = model.TryApply(LedState, operation, out _);
 
@@ -238,7 +242,8 @@ public sealed class ElectionModelTests
     {
         var model = CreateModel();
         var resign = HistoryTesting.Returned(Resign, true);
-        var read = HistoryTesting.Returned(Read, ViewOf(5, Alpha));
+        var view = ViewOf(5, Alpha);
+        var read = HistoryTesting.Returned(Read, view);
 
         model.TryApply(LedState, resign, out var vacated);
         Assert.NotNull(vacated);
@@ -274,7 +279,8 @@ public sealed class ElectionModelTests
     public void TryApply_WhenReadSeesTheLeader_KeepsTheState()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Returned(Read, ViewOf(5, Alpha));
+        var view = ViewOf(5, Alpha);
+        var operation = HistoryTesting.Returned(Read, view);
 
         var applied = model.TryApply(LedState, operation, out var next);
 
@@ -309,7 +315,8 @@ public sealed class ElectionModelTests
     public void TryApply_WhenReadSeesALeaderWhileVacant_Rejects()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Returned(Read, ViewOf(5, Alpha));
+        var view = ViewOf(5, Alpha);
+        var operation = HistoryTesting.Returned(Read, view);
 
         var applied = model.TryApply(model.Initial, operation, out _);
 
@@ -320,7 +327,8 @@ public sealed class ElectionModelTests
     public void TryApply_WhenReadTermIsWrong_Rejects()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Returned(Read, ViewOf(6, Alpha));
+        var view = ViewOf(6, Alpha);
+        var operation = HistoryTesting.Returned(Read, view);
 
         var applied = model.TryApply(LedState, operation, out _);
 
@@ -331,7 +339,8 @@ public sealed class ElectionModelTests
     public void TryApply_WhenReadValueIsWrong_Rejects()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Returned(Read, ViewOf(5, "beta"));
+        var view = ViewOf(5, "beta");
+        var operation = HistoryTesting.Returned(Read, view);
 
         var applied = model.TryApply(LedState, operation, out _);
 
@@ -378,7 +387,8 @@ public sealed class ElectionModelTests
     {
         var model = CreateModel();
         var indeterminate = HistoryTesting.Indeterminate(Lead);
-        var read = HistoryTesting.Returned(Read, ViewOf(7, Alpha));
+        var view = ViewOf(7, Alpha);
+        var read = HistoryTesting.Returned(Read, view);
 
         model.TryApply(model.Initial, indeterminate, out var unknown);
         Assert.NotNull(unknown);
@@ -393,7 +403,8 @@ public sealed class ElectionModelTests
     {
         var model = CreateModel();
         var indeterminate = HistoryTesting.Indeterminate(Lead);
-        var read = HistoryTesting.Returned(Read, ViewOf(5, Alpha));
+        var view = ViewOf(5, Alpha);
+        var read = HistoryTesting.Returned(Read, view);
         var state = model.Initial with { Floor = 5 };
 
         model.TryApply(state, indeterminate, out var unknown);
@@ -408,7 +419,8 @@ public sealed class ElectionModelTests
     {
         var model = CreateModel();
         var indeterminate = HistoryTesting.Indeterminate(Lead);
-        var read = HistoryTesting.Returned(Read, ViewOf(7, "beta"));
+        var view = ViewOf(7, "beta");
+        var read = HistoryTesting.Returned(Read, view);
 
         model.TryApply(model.Initial, indeterminate, out var unknown);
         Assert.NotNull(unknown);
@@ -480,7 +492,8 @@ public sealed class ElectionModelTests
     public void TryApply_WhenInputIsForeign_Rejects()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Returned("lead", Elected(5, Owner, Alpha));
+        var result = Elected(5, Owner, Alpha);
+        var operation = HistoryTesting.Returned("lead", result);
 
         var applied = model.TryApply(model.Initial, operation, out _);
 

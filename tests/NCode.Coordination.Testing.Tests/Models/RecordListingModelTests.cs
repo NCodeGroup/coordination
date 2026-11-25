@@ -37,10 +37,9 @@ public sealed class RecordListingModelTests
     public void TryApply_WhenKeyedCreateIsWritten_AppliesToItsKeyOnly()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Returned(
-            new KeyedCall(1, Create),
-            RecordWriteResult.Written(new Revision(3))
-        );
+        var call = new KeyedCall(1, Create);
+        var result = RecordWriteResult.Written(new Revision(3));
+        var operation = HistoryTesting.Returned(call, result);
 
         var applied = model.TryApply(model.Initial, operation, out var next);
 
@@ -55,10 +54,9 @@ public sealed class RecordListingModelTests
     public void TryApply_WhenKeyedCallNamesAThirdKey_Rejects()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Returned(
-            new KeyedCall(2, Create),
-            RecordWriteResult.Written(new Revision(3))
-        );
+        var call = new KeyedCall(2, Create);
+        var result = RecordWriteResult.Written(new Revision(3));
+        var operation = HistoryTesting.Returned(call, result);
 
         var applied = model.TryApply(model.Initial, operation, out _);
 
@@ -69,7 +67,8 @@ public sealed class RecordListingModelTests
     public void TryApply_WhenLastPageOfEmptyPairIsEmpty_KeepsTheState()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Returned(List, Page(1));
+        var page = Page(1);
+        var operation = HistoryTesting.Returned(List, page);
 
         var applied = model.TryApply(model.Initial, operation, out var next);
 
@@ -81,7 +80,9 @@ public sealed class RecordListingModelTests
     public void TryApply_WhenLastPageShowsBothPresentRecords_KeepsTheState()
     {
         var model = CreateModel();
-        var page = Page(6, Stored(FirstKey, "one", 5), Stored(SecondKey, "two", 6));
+        var first = Stored(FirstKey, "one", 5);
+        var second = Stored(SecondKey, "two", 6);
+        var page = Page(6, first, second);
         var operation = HistoryTesting.Returned(List, page);
 
         var applied = model.TryApply(PresentState, operation, out var next);
@@ -95,7 +96,8 @@ public sealed class RecordListingModelTests
     {
         var model = CreateModel();
         var state = model.Initial with { First = new RecordState("new", 0, 0) };
-        var page = Page(4, Stored(FirstKey, "new", 4));
+        var record = Stored(FirstKey, "new", 4);
+        var page = Page(4, record);
         var operation = HistoryTesting.Returned(List, page);
 
         var applied = model.TryApply(state, operation, out var next);
@@ -111,7 +113,9 @@ public sealed class RecordListingModelTests
     public void TryApply_WhenLastPageMissesAPresentRecord_Rejects()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Returned(List, Page(6, Stored(FirstKey, "one", 5)));
+        var record = Stored(FirstKey, "one", 5);
+        var page = Page(6, record);
+        var operation = HistoryTesting.Returned(List, page);
 
         var applied = model.TryApply(PresentState, operation, out _);
 
@@ -122,10 +126,8 @@ public sealed class RecordListingModelTests
     public void TryApply_WhenPageWithContinuationTokenMissesAPresentRecord_KeepsTheState()
     {
         var model = CreateModel();
-        var page = new RecordPage(new Revision(6), Stored(FirstKey, "one", 5))
-        {
-            ContinuationToken = "more",
-        };
+        var record = Stored(FirstKey, "one", 5);
+        var page = new RecordPage(new Revision(6), record) { ContinuationToken = "more" };
         var operation = HistoryTesting.Returned(List, page);
 
         var applied = model.TryApply(PresentState, operation, out var next);
@@ -138,7 +140,9 @@ public sealed class RecordListingModelTests
     public void TryApply_WhenPageShowsAWrongValue_Rejects()
     {
         var model = CreateModel();
-        var page = Page(6, Stored(FirstKey, "other", 5), Stored(SecondKey, "two", 6));
+        var first = Stored(FirstKey, "other", 5);
+        var second = Stored(SecondKey, "two", 6);
+        var page = Page(6, first, second);
         var operation = HistoryTesting.Returned(List, page);
 
         var applied = model.TryApply(PresentState, operation, out _);
@@ -150,7 +154,8 @@ public sealed class RecordListingModelTests
     public void TryApply_WhenPageListsAKeyOutsideTheRun_Rejects()
     {
         var model = CreateModel();
-        var page = Page(6, Stored(OtherKey, "one", 5));
+        var record = Stored(OtherKey, "one", 5);
+        var page = Page(6, record);
         var operation = HistoryTesting.Returned(List, page);
 
         var applied = model.TryApply(model.Initial, operation, out _);
@@ -162,7 +167,9 @@ public sealed class RecordListingModelTests
     public void TryApply_WhenPageListsAKeyTwice_Rejects()
     {
         var model = CreateModel();
-        var page = Page(6, Stored(FirstKey, "one", 5), Stored(FirstKey, "one", 5));
+        var first = Stored(FirstKey, "one", 5);
+        var second = Stored(FirstKey, "one", 5);
+        var page = Page(6, first, second);
         var operation = HistoryTesting.Returned(List, page);
 
         var applied = model.TryApply(PresentState, operation, out _);
@@ -186,7 +193,8 @@ public sealed class RecordListingModelTests
     public void TryApply_WhenRecordRevisionIsAboveThePageRevision_Rejects()
     {
         var model = CreateModel();
-        var page = Page(4, Stored(FirstKey, "one", 5));
+        var record = Stored(FirstKey, "one", 5);
+        var page = Page(4, record);
         var operation = HistoryTesting.Returned(List, page);
 
         var state = model.Initial with { First = new RecordState("one", 0, 0) };

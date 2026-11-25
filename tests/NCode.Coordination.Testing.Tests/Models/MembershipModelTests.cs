@@ -36,7 +36,8 @@ public sealed class MembershipModelTests
     public void TryApply_WhenJoinReturnsJoined_AppliesIt()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Returned(Join(1), MembershipJoinStatus.Joined);
+        var call = Join(1);
+        var operation = HistoryTesting.Returned(call, MembershipJoinStatus.Joined);
 
         var applied = model.TryApply(0b001, operation, out var next);
 
@@ -48,7 +49,8 @@ public sealed class MembershipModelTests
     public void TryApply_WhenJoinReturnsNodeIdTaken_Rejects()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Returned(Join(1), MembershipJoinStatus.NodeIdTaken);
+        var call = Join(1);
+        var operation = HistoryTesting.Returned(call, MembershipJoinStatus.NodeIdTaken);
 
         var applied = model.TryApply(0, operation, out _);
 
@@ -59,7 +61,8 @@ public sealed class MembershipModelTests
     public void TryApply_WhenLeaveReturns_RemovesTheMember()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Returned(Leave(0), true);
+        var call = Leave(0);
+        var operation = HistoryTesting.Returned(call, true);
 
         var applied = model.TryApply(0b011, operation, out var next);
 
@@ -71,7 +74,8 @@ public sealed class MembershipModelTests
     public void TryApply_WhenLeaveNamesAnAbsentMember_KeepsTheState()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Returned(Leave(2), false);
+        var call = Leave(2);
+        var operation = HistoryTesting.Returned(call, false);
 
         var applied = model.TryApply(0b011, operation, out var next);
 
@@ -83,7 +87,8 @@ public sealed class MembershipModelTests
     public void TryApply_WhenReadReturnsTheMembers_KeepsTheState()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Returned(Read, ViewOf(Sessions[2], Sessions[0]));
+        var view = ViewOf(Sessions[2], Sessions[0]);
+        var operation = HistoryTesting.Returned(Read, view);
 
         var applied = model.TryApply(0b101, operation, out var next);
 
@@ -95,7 +100,8 @@ public sealed class MembershipModelTests
     public void TryApply_WhenReadReturnsNoMembersForAnEmptyGroup_KeepsTheState()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Returned(Read, ViewOf());
+        var view = ViewOf();
+        var operation = HistoryTesting.Returned(Read, view);
 
         var applied = model.TryApply(0, operation, out var next);
 
@@ -107,7 +113,8 @@ public sealed class MembershipModelTests
     public void TryApply_WhenReadMissesAMember_Rejects()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Returned(Read, ViewOf(Sessions[0]));
+        var view = ViewOf(Sessions[0]);
+        var operation = HistoryTesting.Returned(Read, view);
 
         var applied = model.TryApply(0b101, operation, out _);
 
@@ -118,10 +125,8 @@ public sealed class MembershipModelTests
     public void TryApply_WhenReadReturnsAnUnknownSession_Rejects()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Returned(
-            Read,
-            ViewOf(Sessions[0], new SessionId(Space, "other"))
-        );
+        var view = ViewOf(Sessions[0], new SessionId(Space, "other"));
+        var operation = HistoryTesting.Returned(Read, view);
 
         var applied = model.TryApply(0b001, operation, out _);
 
@@ -132,7 +137,8 @@ public sealed class MembershipModelTests
     public void TryApply_WhenReadRepeatsASession_Rejects()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Returned(Read, ViewOf(Sessions[0], Sessions[0]));
+        var view = ViewOf(Sessions[0], Sessions[0]);
+        var operation = HistoryTesting.Returned(Read, view);
 
         var applied = model.TryApply(0b001, operation, out _);
 
@@ -154,7 +160,8 @@ public sealed class MembershipModelTests
     public void TryApply_WhenJoinIsIndeterminate_AddsTheMember()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Indeterminate(Join(2));
+        var call = Join(2);
+        var operation = HistoryTesting.Indeterminate(call);
 
         var applied = model.TryApply(0b001, operation, out var next);
 
@@ -166,7 +173,8 @@ public sealed class MembershipModelTests
     public void TryApply_WhenLeaveIsIndeterminate_RemovesTheMember()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Indeterminate(Leave(0));
+        var call = Leave(0);
+        var operation = HistoryTesting.Indeterminate(call);
 
         var applied = model.TryApply(0b011, operation, out var next);
 
@@ -190,7 +198,8 @@ public sealed class MembershipModelTests
     public void TryApply_WhenClientIsUnknown_Rejects()
     {
         var model = CreateModel();
-        var operation = HistoryTesting.Returned(Join(3), MembershipJoinStatus.Joined);
+        var call = Join(3);
+        var operation = HistoryTesting.Returned(call, MembershipJoinStatus.Joined);
 
         var applied = model.TryApply(0, operation, out _);
 

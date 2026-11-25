@@ -17,11 +17,18 @@ public sealed class NotificationDeliveryCheckerTests
     private static HistoryOperation Publish(string payload) =>
         HistoryTesting.Operation(0, "p", new NotificationCall(payload), 1, 2, null);
 
-    private static Delivery<Notification> Message(long stamp, long sequence, string payload) =>
-        new(stamp, Notification.Message(Topic, sequence, HistoryValues.Encode(payload)));
+    private static Delivery<Notification> Message(long stamp, long sequence, string payload)
+    {
+        var value = HistoryValues.Encode(payload);
+        var notification = Notification.Message(Topic, sequence, value);
+        return new(stamp, notification);
+    }
 
-    private static Delivery<Notification> Resync(long stamp, long sequence) =>
-        new(stamp, Notification.Resync(Topic, sequence));
+    private static Delivery<Notification> Resync(long stamp, long sequence)
+    {
+        var notification = Notification.Resync(Topic, sequence);
+        return new(stamp, notification);
+    }
 
     private static ImmutableArray<Delivery<Notification>> Subscriber(
         params Delivery<Notification>[] deliveries
@@ -33,8 +40,13 @@ public sealed class NotificationDeliveryCheckerTests
     public void Check_WhenDeliveriesAreClean_ReportsNothing()
     {
         HistoryOperation[] history = [Publish("a"), Publish("b")];
-        var first = Subscriber(Resync(3, 0), Message(4, 1, "a"), Message(5, 2, "b"));
-        var second = Subscriber(Resync(3, 0), Message(4, 1, "a"), Resync(5, 1), Message(6, 2, "b"));
+        var resync = Resync(3, 0);
+        var messageA = Message(4, 1, "a");
+        var messageB = Message(5, 2, "b");
+        var laterResync = Resync(5, 1);
+        var laterMessageB = Message(6, 2, "b");
+        var first = Subscriber(resync, messageA, messageB);
+        var second = Subscriber(resync, messageA, laterResync, laterMessageB);
 
         var violations = NotificationDeliveryChecker.Check(history, [first, second], true);
 
@@ -45,7 +57,8 @@ public sealed class NotificationDeliveryCheckerTests
     public void Check_WhenNoCallPublishedAMessage_ReportsIt()
     {
         HistoryOperation[] history = [Publish("a")];
-        var subscriber = Subscriber(Message(3, 1, "x"));
+        var message = Message(3, 1, "x");
+        var subscriber = Subscriber(message);
 
         var violations = NotificationDeliveryChecker.Check(history, [subscriber], false);
 
@@ -59,7 +72,8 @@ public sealed class NotificationDeliveryCheckerTests
         [
             HistoryTesting.Operation(0, "p", new NotificationCall("a"), 5, 6, null),
         ];
-        var subscriber = Subscriber(Message(3, 1, "a"));
+        var message = Message(3, 1, "a");
+        var subscriber = Subscriber(message);
 
         var violations = NotificationDeliveryChecker.Check(history, [subscriber], false);
 
@@ -73,7 +87,8 @@ public sealed class NotificationDeliveryCheckerTests
         [
             new(0, "p", new NotificationCall("a"), 1, 2, HistoryOutcome.Failed, null),
         ];
-        var subscriber = Subscriber(Message(3, 1, "a"));
+        var message = Message(3, 1, "a");
+        var subscriber = Subscriber(message);
 
         var violations = NotificationDeliveryChecker.Check(history, [subscriber], false);
 
@@ -84,7 +99,8 @@ public sealed class NotificationDeliveryCheckerTests
     public void Check_WhenThePublishIsIndeterminate_AcceptsTheMessage()
     {
         HistoryOperation[] history = [HistoryTesting.Indeterminate(new NotificationCall("a"))];
-        var subscriber = Subscriber(Message(3, 1, "a"));
+        var message = Message(3, 1, "a");
+        var subscriber = Subscriber(message);
 
         var violations = NotificationDeliveryChecker.Check(history, [subscriber], false);
 
@@ -95,7 +111,9 @@ public sealed class NotificationDeliveryCheckerTests
     public void Check_WhenANumberDoesNotIncrease_ReportsIt()
     {
         HistoryOperation[] history = [Publish("a"), Publish("b")];
-        var subscriber = Subscriber(Message(3, 2, "a"), Message(4, 2, "b"));
+        var firstMessage = Message(3, 2, "a");
+        var secondMessage = Message(4, 2, "b");
+        var subscriber = Subscriber(firstMessage, secondMessage);
 
         var violations = NotificationDeliveryChecker.Check(history, [subscriber], false);
 
@@ -106,7 +124,9 @@ public sealed class NotificationDeliveryCheckerTests
     public void Check_WhenAGapHasNoResync_ReportsIt()
     {
         HistoryOperation[] history = [Publish("a"), Publish("b")];
-        var subscriber = Subscriber(Message(3, 1, "a"), Message(4, 3, "b"));
+        var firstMessage = Message(3, 1, "a");
+        var secondMessage = Message(4, 3, "b");
+        var subscriber = Subscriber(firstMessage, secondMessage);
 
         var violations = NotificationDeliveryChecker.Check(history, [subscriber], true);
 
@@ -120,7 +140,9 @@ public sealed class NotificationDeliveryCheckerTests
     public void Check_WhenAGapHasNoResyncAndGapDetectionIsNotDeclared_ReportsNothing()
     {
         HistoryOperation[] history = [Publish("a"), Publish("b")];
-        var subscriber = Subscriber(Message(3, 1, "a"), Message(4, 3, "b"));
+        var firstMessage = Message(3, 1, "a");
+        var secondMessage = Message(4, 3, "b");
+        var subscriber = Subscriber(firstMessage, secondMessage);
 
         var violations = NotificationDeliveryChecker.Check(history, [subscriber], false);
 
@@ -131,7 +153,9 @@ public sealed class NotificationDeliveryCheckerTests
     public void Check_WhenAResyncCarriesTheWrongNumber_ReportsIt()
     {
         HistoryOperation[] history = [Publish("a")];
-        var subscriber = Subscriber(Message(3, 1, "a"), Resync(4, 2));
+        var message = Message(3, 1, "a");
+        var resync = Resync(4, 2);
+        var subscriber = Subscriber(message, resync);
 
         var violations = NotificationDeliveryChecker.Check(history, [subscriber], true);
 
@@ -142,7 +166,9 @@ public sealed class NotificationDeliveryCheckerTests
     public void Check_WhenAResyncCarriesTheWrongNumberAndGapDetectionIsNotDeclared_ReportsNothing()
     {
         HistoryOperation[] history = [Publish("a")];
-        var subscriber = Subscriber(Message(3, 1, "a"), Resync(4, 2));
+        var message = Message(3, 1, "a");
+        var resync = Resync(4, 2);
+        var subscriber = Subscriber(message, resync);
 
         var violations = NotificationDeliveryChecker.Check(history, [subscriber], false);
 
@@ -153,8 +179,10 @@ public sealed class NotificationDeliveryCheckerTests
     public void Check_WhenTwoSubscribersSeeDifferentPayloadsForANumber_ReportsIt()
     {
         HistoryOperation[] history = [Publish("a"), Publish("b")];
-        var first = Subscriber(Message(3, 1, "a"));
-        var second = Subscriber(Message(4, 1, "b"));
+        var firstMessage = Message(3, 1, "a");
+        var secondMessage = Message(4, 1, "b");
+        var first = Subscriber(firstMessage);
+        var second = Subscriber(secondMessage);
 
         var violations = NotificationDeliveryChecker.Check(history, [first, second], true);
 
@@ -165,8 +193,10 @@ public sealed class NotificationDeliveryCheckerTests
     public void Check_WhenTwoSubscribersSeeDifferentNumbersForAPayload_ReportsIt()
     {
         HistoryOperation[] history = [Publish("a")];
-        var first = Subscriber(Message(3, 1, "a"));
-        var second = Subscriber(Message(4, 2, "a"));
+        var firstMessage = Message(3, 1, "a");
+        var secondMessage = Message(4, 2, "a");
+        var first = Subscriber(firstMessage);
+        var second = Subscriber(secondMessage);
 
         var violations = NotificationDeliveryChecker.Check(history, [first, second], false);
 
