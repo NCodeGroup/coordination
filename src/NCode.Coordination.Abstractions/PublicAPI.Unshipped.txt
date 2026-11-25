@@ -106,6 +106,10 @@ NCode.Coordination.Keyspace.CreateKey(params System.Collections.Generic.IEnumera
 NCode.Coordination.Keyspace.Equals(NCode.Coordination.Keyspace? other) -> bool
 NCode.Coordination.Keyspace.Keyspace(string! cluster, params System.Collections.Generic.IEnumerable<NCode.Coordination.KeySegment!>! segments) -> void
 NCode.Coordination.Keyspace.Segments.get -> System.Collections.Immutable.ImmutableArray<NCode.Coordination.KeySegment!>
+NCode.Coordination.LeaseTerms
+NCode.Coordination.LeaseTerms.IsBoundToSession.get -> bool
+NCode.Coordination.LeaseTerms.Session.get -> NCode.Coordination.SessionId?
+NCode.Coordination.LeaseTerms.TimeToLive.get -> NCode.Coordination.TimeToLive?
 NCode.Coordination.Member
 NCode.Coordination.Member.Address.get -> string!
 NCode.Coordination.Member.Member(NCode.Coordination.SessionId! session, string! nodeId, string! address) -> void
@@ -262,6 +266,8 @@ static NCode.Coordination.KeySegment.operator !=(NCode.Coordination.KeySegment? 
 static NCode.Coordination.KeySegment.operator ==(NCode.Coordination.KeySegment? left, NCode.Coordination.KeySegment? right) -> bool
 static NCode.Coordination.Keyspace.operator !=(NCode.Coordination.Keyspace? left, NCode.Coordination.Keyspace? right) -> bool
 static NCode.Coordination.Keyspace.operator ==(NCode.Coordination.Keyspace? left, NCode.Coordination.Keyspace? right) -> bool
+static NCode.Coordination.LeaseTerms.ForSession(NCode.Coordination.SessionId! session) -> NCode.Coordination.LeaseTerms!
+static NCode.Coordination.LeaseTerms.ForTimeToLive(NCode.Coordination.TimeToLive! timeToLive) -> NCode.Coordination.LeaseTerms!
 static NCode.Coordination.Operation.operator !=(NCode.Coordination.Operation? left, NCode.Coordination.Operation? right) -> bool
 static NCode.Coordination.Operation.operator ==(NCode.Coordination.Operation? left, NCode.Coordination.Operation? right) -> bool
 static NCode.Coordination.Operations.ClaimTryClaim.get -> NCode.Coordination.Operation!
