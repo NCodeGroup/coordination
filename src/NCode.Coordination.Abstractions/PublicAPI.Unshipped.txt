@@ -120,6 +120,9 @@ NCode.Coordination.IMembershipService.JoinAsync(NCode.Coordination.CoordinationK
 NCode.Coordination.IMembershipService.LeaveAsync(NCode.Coordination.CoordinationKey! group, NCode.Coordination.SessionId! session, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
 NCode.Coordination.IMembershipService.ReadAsync(NCode.Coordination.CoordinationKey! group, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.MembershipView!>
 NCode.Coordination.IMembershipService.WatchAsync(NCode.Coordination.CoordinationKey! group, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Collections.Generic.IAsyncEnumerable<NCode.Coordination.MembershipView!>!
+NCode.Coordination.INotificationService
+NCode.Coordination.INotificationService.PublishAsync(NCode.Coordination.CoordinationKey! topic, System.ReadOnlyMemory<byte> payload, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
+NCode.Coordination.INotificationService.SubscribeAsync(NCode.Coordination.CoordinationKey! topic, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Collections.Generic.IAsyncEnumerable<NCode.Coordination.Notification!>!
 NCode.Coordination.IOccurrenceService
 NCode.Coordination.IOccurrenceService.TryRecordAsync(NCode.Coordination.CoordinationKey! key, NCode.Coordination.TimeToLive! timeToLive, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.OccurrenceStatus>
 NCode.Coordination.IRecordService
@@ -221,6 +224,15 @@ NCode.Coordination.MembershipView.Group.get -> NCode.Coordination.CoordinationKe
 NCode.Coordination.MembershipView.Members.get -> System.Collections.Immutable.ImmutableArray<NCode.Coordination.Member!>
 NCode.Coordination.MembershipView.MembershipView(NCode.Coordination.CoordinationKey! group, NCode.Coordination.Revision! revision, params System.Collections.Generic.IEnumerable<NCode.Coordination.Member!>! members) -> void
 NCode.Coordination.MembershipView.Revision.get -> NCode.Coordination.Revision!
+NCode.Coordination.Notification
+NCode.Coordination.Notification.IsResync.get -> bool
+NCode.Coordination.Notification.Kind.get -> NCode.Coordination.NotificationKind
+NCode.Coordination.Notification.Payload.get -> System.ReadOnlyMemory<byte>
+NCode.Coordination.Notification.Sequence.get -> long
+NCode.Coordination.Notification.Topic.get -> NCode.Coordination.CoordinationKey!
+NCode.Coordination.NotificationKind
+NCode.Coordination.NotificationKind.Message = 0 -> NCode.Coordination.NotificationKind
+NCode.Coordination.NotificationKind.Resync = 1 -> NCode.Coordination.NotificationKind
 NCode.Coordination.OccurrenceStatus
 NCode.Coordination.OccurrenceStatus.Duplicate = 1 -> NCode.Coordination.OccurrenceStatus
 NCode.Coordination.OccurrenceStatus.Recorded = 0 -> NCode.Coordination.OccurrenceStatus
@@ -464,6 +476,8 @@ static NCode.Coordination.LeaseAcquireResult.Held.get -> NCode.Coordination.Leas
 static NCode.Coordination.LeaseAcquireResult.SessionEnded.get -> NCode.Coordination.LeaseAcquireResult!
 static NCode.Coordination.LeaseTerms.ForSession(NCode.Coordination.SessionId! session) -> NCode.Coordination.LeaseTerms!
 static NCode.Coordination.LeaseTerms.ForTimeToLive(NCode.Coordination.TimeToLive! timeToLive) -> NCode.Coordination.LeaseTerms!
+static NCode.Coordination.Notification.Message(NCode.Coordination.CoordinationKey! topic, long sequence, System.ReadOnlyMemory<byte> payload) -> NCode.Coordination.Notification!
+static NCode.Coordination.Notification.Resync(NCode.Coordination.CoordinationKey! topic, long sequence) -> NCode.Coordination.Notification!
 static NCode.Coordination.Operation.operator !=(NCode.Coordination.Operation? left, NCode.Coordination.Operation? right) -> bool
 static NCode.Coordination.Operation.operator ==(NCode.Coordination.Operation? left, NCode.Coordination.Operation? right) -> bool
 static NCode.Coordination.Operations.ClaimTryClaim.get -> NCode.Coordination.Operation!
