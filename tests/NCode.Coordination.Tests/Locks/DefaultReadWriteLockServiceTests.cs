@@ -210,12 +210,8 @@ public sealed class DefaultReadWriteLockServiceTests
         Assert.NotNull(write);
     }
 
-    #endregion
-
-    #region Concurrency Tests
-
     [Fact]
-    public async Task AcquireAsync_WhenReadersAndWritersRace_NeverOverlapAWriter()
+    public async Task AcquireWriteAsync_WhenReadersAndWritersRace_HoldsEachWriterAlone()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var time = InProcessTesting.CreateTime();
