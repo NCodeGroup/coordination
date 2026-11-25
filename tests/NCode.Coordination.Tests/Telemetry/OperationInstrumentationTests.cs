@@ -6,6 +6,7 @@ using System.Diagnostics.Metrics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.Metrics.Testing;
 using NCode.Coordination.Composition;
+using NCode.Coordination.Tests;
 
 namespace NCode.Coordination.Telemetry.Tests;
 
@@ -17,15 +18,6 @@ public sealed class OperationInstrumentationTests
         new("memory", Primitives.Occurrence, "service");
 
     private static Operation Operation { get; } = Operations.OccurrenceTryRecord;
-
-    private static async IAsyncEnumerable<string> Items(IReadOnlyList<string> items)
-    {
-        foreach (var item in items)
-        {
-            await Task.Yield();
-            yield return item;
-        }
-    }
 
     private static async IAsyncEnumerable<string> Failing(Exception exception)
     {
@@ -274,7 +266,7 @@ public sealed class OperationInstrumentationTests
             var item in fixture.Instrumentation.MeasureStreamAsync(
                 Target,
                 Operation,
-                (_, _) => Items(["a", "b"]),
+                (_, _) => TestComposition.Stream("a", "b"),
                 cancellationToken
             )
         )
@@ -304,7 +296,7 @@ public sealed class OperationInstrumentationTests
             var item in fixture.Instrumentation.MeasureStreamAsync(
                 Target,
                 Operation,
-                (_, _) => Items(["a", "b"]),
+                (_, _) => TestComposition.Stream("a", "b"),
                 cancellationToken
             )
         )
@@ -397,7 +389,7 @@ public sealed class OperationInstrumentationTests
         _ = fixture.Instrumentation.MeasureStreamAsync(
             Target,
             Operation,
-            (_, _) => Items(["a"]),
+            (_, _) => TestComposition.Stream("a"),
             cancellationToken
         );
 
