@@ -10,7 +10,8 @@ namespace NCode.Coordination.InProcess;
 /// <param name="time">The clock the records' expiries are measured on.</param>
 /// <remarks>
 /// The table is not thread-safe: every method, except <see cref="Time"/> and <see cref="Gate"/>, is called while
-/// holding <see cref="Gate"/>. A keyspace's revision is 1 before its first write.
+/// holding <see cref="Gate"/>. A keyspace's revision is 1 before its first write. Each keyspace's records are held in
+/// a table of their own, which, like the keyspace's revision, stays once written.
 /// </remarks>
 internal class InProcessRecordTable(TimeProvider time)
 {
@@ -25,10 +26,12 @@ internal class InProcessRecordTable(TimeProvider time)
     public Lock Gate { get; } = new();
 
     /// <summary>
-    /// Gets the live records by key, each with the sequence of its write.
+    /// Gets the live records of each keyspace that was written, each with the sequence of its write.
     /// </summary>
-    private InProcessExpiringTable<CoordinationKey, InProcessRecordEntry> Records { get; } =
-        new(time);
+    private Dictionary<
+        Keyspace,
+        InProcessExpiringTable<CoordinationKey, InProcessRecordEntry>
+    > RecordsByKeyspace { get; } = [];
 
     /// <summary>
     /// Gets the latest revision of each keyspace that was written.
@@ -47,7 +50,12 @@ internal class InProcessRecordTable(TimeProvider time)
     /// <returns>The record, or null when the key is absent or the record has ended.</returns>
     public StoredRecord? Find(CoordinationKey key)
     {
-        return Records.TryGet(key, out var entry) ? entry.Record : null;
+        if (!RecordsByKeyspace.TryGetValue(key.Keyspace, out var records))
+        {
+            return null;
+        }
+
+        return records.TryGet(key, out var entry) ? entry.Record : null;
     }
 
     /// <summary>
@@ -80,8 +88,15 @@ internal class InProcessRecordTable(TimeProvider time)
     /// <param name="expiry">The expiry of the record, or null when it never ends.</param>
     public void Put(StoredRecord record, InProcessExpiry? expiry)
     {
+        var keyspace = record.Key.Keyspace;
+        if (!RecordsByKeyspace.TryGetValue(keyspace, out var records))
+        {
+            records = new InProcessExpiringTable<CoordinationKey, InProcessRecordEntry>(Time);
+            RecordsByKeyspace[keyspace] = records;
+        }
+
         var entry = new InProcessRecordEntry(record, ++WriteSequence);
-        Records.Set(record.Key, entry, expiry);
+        records.Set(record.Key, entry, expiry);
     }
 
     /// <summary>
@@ -91,7 +106,7 @@ internal class InProcessRecordTable(TimeProvider time)
     /// <returns>True when a live record was removed.</returns>
     public bool Remove(CoordinationKey key)
     {
-        return Records.Remove(key);
+        return RecordsByKeyspace.TryGetValue(key.Keyspace, out var records) && records.Remove(key);
     }
 
     /// <summary>
@@ -101,13 +116,16 @@ internal class InProcessRecordTable(TimeProvider time)
     /// <returns>The entries whose key the prefix is a prefix of, in the order they were written.</returns>
     public IReadOnlyList<InProcessRecordEntry> ListLive(CoordinationKey prefix)
     {
-        var entries = new List<InProcessRecordEntry>();
-        foreach (var (key, entry) in Records.ListLive())
+        if (!RecordsByKeyspace.TryGetValue(prefix.Keyspace, out var records))
         {
-            if (prefix.IsPrefixOf(key))
-            {
-                entries.Add(entry);
-            }
+            return [];
+        }
+
+        var live = records.ListLive(prefix.IsPrefixOf);
+        var entries = new List<InProcessRecordEntry>(live.Count);
+        foreach (var (_, entry) in live)
+        {
+            entries.Add(entry);
         }
 
         entries.Sort((left, right) => left.Sequence.CompareTo(right.Sequence));

@@ -132,11 +132,28 @@ internal class InProcessExpiringTable<TKey, TValue>(TimeProvider time)
     /// <returns>A snapshot of every live entry, in no particular order.</returns>
     public IReadOnlyList<KeyValuePair<TKey, TValue>> ListLive()
     {
+        return ListLive(static _ => true);
+    }
+
+    /// <summary>
+    /// Lists the live entries whose key a filter accepts after removing the ended ones.
+    /// </summary>
+    /// <param name="include">Decides whether the entry of a key is listed.</param>
+    /// <returns>A snapshot of every live entry whose key <paramref name="include"/> accepts, in no particular order.</returns>
+    public IReadOnlyList<KeyValuePair<TKey, TValue>> ListLive(Func<TKey, bool> include)
+    {
+        ArgumentNullException.ThrowIfNull(include);
+
         Sweep();
 
-        var list = new List<KeyValuePair<TKey, TValue>>(Entries.Count);
+        var list = new List<KeyValuePair<TKey, TValue>>();
         foreach (var (key, entry) in Entries)
         {
+            if (!include(key))
+            {
+                continue;
+            }
+
             var pair = new KeyValuePair<TKey, TValue>(key, entry.Value);
             list.Add(pair);
         }

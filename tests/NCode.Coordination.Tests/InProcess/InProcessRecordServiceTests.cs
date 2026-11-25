@@ -134,5 +134,39 @@ public sealed class InProcessRecordServiceTests
         Assert.Empty(result.Records);
     }
 
+    [Fact]
+    public async Task ListAsync_WhenAnotherKeyspaceHasRecordsUnderTheSameSegments_ListsOnlyItsOwnKeyspace()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var service = CreateService();
+        var ownKey = InProcessTesting.Keyspace.CreateKey("cfg", "a");
+        var otherKeyspace = new Keyspace("other");
+        var otherKey = otherKeyspace.CreateKey("cfg", "a");
+        ReadOnlyMemory<byte> value = (byte[])[1];
+        var ownCreated = await service.CreateAsync(
+            ownKey,
+            value,
+            RecordLifetime.Persistent,
+            null,
+            cancellationToken
+        );
+        Assert.True(ownCreated.IsWritten);
+        var otherCreated = await service.CreateAsync(
+            otherKey,
+            value,
+            RecordLifetime.Persistent,
+            null,
+            cancellationToken
+        );
+        Assert.True(otherCreated.IsWritten);
+        var prefix = InProcessTesting.Keyspace.CreateKey("cfg");
+        var page = new RecordPageRequest(10);
+
+        var result = await service.ListAsync(prefix, page, null, cancellationToken);
+
+        var record = Assert.Single(result.Records);
+        Assert.Equal(ownKey, record.Key);
+    }
+
     #endregion
 }

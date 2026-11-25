@@ -167,6 +167,24 @@ public sealed class InProcessExpiringTableTests
         Assert.Equal(2, entry.Value);
     }
 
+    [Fact]
+    public void ListLive_WhenGivenAFilter_ListsOnlyTheLiveEntriesItAccepts()
+    {
+        var time = InProcessTesting.CreateTime();
+        var table = new InProcessExpiringTable<string, int>(time);
+        var expiry = TwoSecondExpiry(time);
+        table.Set("a-ended", 1, expiry);
+        table.Set("a-live", 2, null);
+        table.Set("a-other", 3, null);
+        table.Set("b-live", 4, null);
+
+        time.Advance(TwoSeconds);
+
+        var live = table.ListLive(static key => key.StartsWith('a'));
+        var keys = live.Select(entry => entry.Key).Order().ToArray();
+        Assert.Equal(["a-live", "a-other"], keys);
+    }
+
     #endregion
 
     #region Set Tests

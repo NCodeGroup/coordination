@@ -210,7 +210,8 @@ internal class InProcessRecordService(InProcessRecordTable table) : IRecordServi
         lock (Table.Gate)
         {
             var live = Table.ListLive(prefix);
-            var records = new List<StoredRecord>(Math.Min(page.Limit, live.Count));
+            var capacity = Math.Min(page.Limit, live.Count);
+            var records = new List<StoredRecord>(capacity);
             var more = false;
             long lastSequence = 0;
 
