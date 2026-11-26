@@ -1,8 +1,19 @@
--- The start of every record script, which the provider puts before the script's own text when it loads it.
+-- The start of every keyspace script, which the provider puts before the script's own text when it loads it.
 -- KEYS[1] is the keyspace's revision. KEYS[2] holds its records: a hash with three fields per record, 'r:', 'n:' and
 -- 'v:' followed by the record's member, which hold its revision, its name and its value. KEYS[3] is the index of the
 -- records' members, a sorted set whose scores are all 0, read in lexicographic order. KEYS[4] holds the deadline, in
 -- milliseconds on the server's clock, of each record that has a time to live.
+-- KEYS[5] is the sessions: a hash from each session to its time to live in milliseconds. KEYS[6] holds the deadline
+-- of each session, in milliseconds on the server's clock; 0 marks a session that has ended and is not yet cleaned up.
+-- KEYS[7] holds the bindings of sessions: a sorted set whose scores are all 0 of '<session> <kind> <item>', where the
+-- kind is 'g' for a grant field, 'r' for a record member and 'm' for a group member, '<group> <node>'.
+-- KEYS[8] is the grants: a hash whose fields are 'l <name>' (a lease), 'e <name>' (a leadership), 'v <name>' (a
+-- leadership's value), 's <slot> <name>' (a semaphore slot) and 'c <name>' (a semaphore's capacity), each holder line
+-- being '<owner> <fencing> <session or ->'. KEYS[9] holds the deadline of each grant field that has a time to live.
+-- KEYS[10] is the fencing counters, a hash with fields 'l <name>', 'e <name>' and 's <name>', which never expire.
+-- KEYS[11] is the members of groups, a sorted set whose scores are all 0 of '<group> <node>'. KEYS[12] is the fields
+-- of those members, a hash with fields 's <group> <node>' (the session), 'a <group> <node>' (the address),
+-- 'm <group> <node>' (the metadata) and 'n <group> <session>' (the session's node in the group).
 -- ARGV[1] is the keyspace's watch channel, ARGV[2] is '1' to publish on it with SPUBLISH and '0' with PUBLISH, and
 -- ARGV[3] is how many milliseconds the records outlive their last deadline when none of them is persistent.
 -- A record whose deadline is not after the server's current time is absent. Each change takes the keyspace's next
@@ -13,6 +24,14 @@ local revisionKey = KEYS[1]
 local records = KEYS[2]
 local index = KEYS[3]
 local deadlines = KEYS[4]
+local sessions = KEYS[5]
+local sessionDeadlines = KEYS[6]
+local bindings = KEYS[7]
+local grants = KEYS[8]
+local grantDeadlines = KEYS[9]
+local fencingKey = KEYS[10]
+local members = KEYS[11]
+local memberFields = KEYS[12]
 local time = redis.call('TIME')
 local now = tonumber(time[1]) * 1000 + math.floor(tonumber(time[2]) / 1000)
 local changes = {}

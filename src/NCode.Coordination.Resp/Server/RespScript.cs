@@ -21,9 +21,9 @@ internal sealed class RespScript(string name, string text)
     private const string ResourceSuffix = ".lua";
 
     /// <summary>
-    /// The name of the start that every record script shares.
+    /// The name of the start that every keyspace script shares.
     /// </summary>
-    private const string RecordPrelude = "record-prelude";
+    private const string KeyspacePrelude = "keyspace-prelude";
 
     /// <summary>
     /// Gets the startup probe: it proves the server runs Lua and lets the user run scripts,
@@ -61,37 +61,37 @@ internal sealed class RespScript(string name, string text)
     /// <summary>
     /// Gets the record-create script: it creates a record when its key is absent.
     /// </summary>
-    public static RespScript RecordCreate { get; } = LoadRecord("record-create");
+    public static RespScript RecordCreate { get; } = LoadKeyspace("record-create");
 
     /// <summary>
     /// Gets the record-read script: it reads a live record.
     /// </summary>
-    public static RespScript RecordRead { get; } = LoadRecord("record-read");
+    public static RespScript RecordRead { get; } = LoadKeyspace("record-read");
 
     /// <summary>
     /// Gets the record-swap script: it replaces a record's value when its revision matches.
     /// </summary>
-    public static RespScript RecordSwap { get; } = LoadRecord("record-swap");
+    public static RespScript RecordSwap { get; } = LoadKeyspace("record-swap");
 
     /// <summary>
     /// Gets the record-delete script: it deletes a record when its revision matches.
     /// </summary>
-    public static RespScript RecordDelete { get; } = LoadRecord("record-delete");
+    public static RespScript RecordDelete { get; } = LoadKeyspace("record-delete");
 
     /// <summary>
     /// Gets the record-take script: it reads a record and deletes it.
     /// </summary>
-    public static RespScript RecordTake { get; } = LoadRecord("record-take");
+    public static RespScript RecordTake { get; } = LoadKeyspace("record-take");
 
     /// <summary>
     /// Gets the record-list script: it lists a page of the live records under a prefix.
     /// </summary>
-    public static RespScript RecordList { get; } = LoadRecord("record-list");
+    public static RespScript RecordList { get; } = LoadKeyspace("record-list");
 
     /// <summary>
     /// Gets the record-transaction script: it checks conditions and runs one of two branches of writes.
     /// </summary>
-    public static RespScript RecordTransaction { get; } = LoadRecord("record-transaction");
+    public static RespScript RecordTransaction { get; } = LoadKeyspace("record-transaction");
 
     /// <summary>
     /// Gets the session script: it manages session creation, keep-alive, closing, and liveness checks.
@@ -141,18 +141,18 @@ internal sealed class RespScript(string name, string text)
     }
 
     /// <summary>
-    /// Loads a record script: the start that every record script shares, a line feed and the named script's text.
+    /// Loads a keyspace script: the start that every keyspace script shares, a line feed and the named script's text.
     /// </summary>
     /// <param name="name">The name of the script, without its folder and extension.</param>
     /// <returns>The script.</returns>
     /// <exception cref="ArgumentNullException">The name is null.</exception>
     /// <exception cref="ArgumentException">The name is empty or white space.</exception>
     /// <exception cref="InvalidOperationException">The assembly has no such resource.</exception>
-    public static RespScript LoadRecord(string name)
+    public static RespScript LoadKeyspace(string name)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
 
-        var prelude = ReadResource(RecordPrelude);
+        var prelude = ReadResource(KeyspacePrelude);
         var body = ReadResource(name);
 
         return new RespScript(name, prelude + "\n" + body);
