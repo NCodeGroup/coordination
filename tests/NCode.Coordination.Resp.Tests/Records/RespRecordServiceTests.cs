@@ -305,6 +305,63 @@ public sealed class RespRecordServiceTests(RespServers servers) : IDisposable
         Assert.NotNull(page.ContinuationToken);
     }
 
+    private static async Task AssertListPagesPastExpiredMembersToTheRecordAsync(
+        string endpoint,
+        RespProfile profile
+    )
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var multiplexer = await ConnectAsync(endpoint, cancellationToken);
+        var service = CreateService(multiplexer, profile);
+        var keyspace = CreateKeyspace();
+        var value = "v"u8.ToArray();
+        var lifetime = ForMilliseconds(1_000);
+        const int count = 200;
+        var creates = new List<Task<RecordWriteResult>>(count);
+        for (var index = 0; index < count; index++)
+        {
+            var key = keyspace.CreateKey("e", index);
+            var creating = service.CreateAsync(key, value, lifetime, null, cancellationToken);
+            var task = creating.AsTask();
+            creates.Add(task);
+        }
+        var results = await Task.WhenAll(creates);
+        Assert.All(results, result => Assert.True(result.IsWritten));
+        var liveKey = keyspace.CreateKey("e", "live");
+        var live = await service.CreateAsync(
+            liveKey,
+            value,
+            RecordLifetime.Persistent,
+            null,
+            cancellationToken
+        );
+        Assert.True(live.IsWritten);
+        var database = multiplexer.GetDatabase();
+        var deadlinesKey = RespRecordTable.Keys(keyspace)[3];
+        var pending = await database.SortedSetLengthAsync(deadlinesKey);
+        Assert.Equal(count, pending);
+
+        await WaitUntilExpiredAsync(multiplexer, keyspace, cancellationToken);
+        var prefix = keyspace.CreateKey("e");
+        var seen = new List<CoordinationKey>();
+        string? token = null;
+        var pages = 0;
+        do
+        {
+            var request = new RecordPageRequest(1) { ContinuationToken = token };
+            var page = await service.ListAsync(prefix, request, null, cancellationToken);
+            Assert.True(page.Records.Length <= 1);
+            var pageKeys = page.Records.Select(record => record.Key);
+            seen.AddRange(pageKeys);
+            token = page.ContinuationToken;
+            pages++;
+        } while (token is not null && pages <= 20);
+
+        Assert.Null(token);
+        var single = Assert.Single(seen);
+        Assert.Equal(liveKey, single);
+    }
+
     private static async Task AssertReadDeletesAtMost64ExpiredRecordsAsync(
         string endpoint,
         RespProfile profile
@@ -447,6 +504,14 @@ public sealed class RespRecordServiceTests(RespServers servers) : IDisposable
     [RespServerFact]
     public Task ListAsync_Garnet_ExpiredMembersPastTheBudget_ReturnsAnEmptyPageWithAToken() =>
         AssertListStopsAfterItsBudgetAsync(servers.Garnet, RespProfiles.Garnet);
+
+    [RespServerFact]
+    public Task ListAsync_Valkey_ExpiredMembersAndOneRecord_PagesToTheRecord() =>
+        AssertListPagesPastExpiredMembersToTheRecordAsync(servers.Valkey, RespProfiles.Valkey);
+
+    [RespServerFact]
+    public Task ListAsync_Garnet_ExpiredMembersAndOneRecord_PagesToTheRecord() =>
+        AssertListPagesPastExpiredMembersToTheRecordAsync(servers.Garnet, RespProfiles.Garnet);
 
     [Fact]
     public async Task ListAsync_TokenOfAnotherPrefix_ThrowsArgumentException()
