@@ -59,5 +59,14 @@ public sealed class RespScriptTests
         Assert.StartsWith(prelude, RespScript.RecordTransaction.Text, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void KeyspaceRevision_Always_StartsWithThePreludeAndReadsTheRevision()
+    {
+        var prelude = RespScript.Load("keyspace-prelude").Text;
+
+        Assert.StartsWith(prelude, RespScript.KeyspaceRevision.Text, StringComparison.Ordinal);
+        Assert.Equal("keyspace-revision", RespScript.KeyspaceRevision.Name);
+    }
+
     #endregion
 }

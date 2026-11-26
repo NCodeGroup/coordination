@@ -169,6 +169,11 @@ internal sealed class RespScript(string name, string text)
     public static RespScript MemberList { get; } = LoadKeyspace("member-list");
 
     /// <summary>
+    /// Gets the keyspace-revision script: it reads the keyspace's revision.
+    /// </summary>
+    public static RespScript KeyspaceRevision { get; } = LoadKeyspace("keyspace-revision");
+
+    /// <summary>
     /// Loads a script from the embedded resource <c>NCode.Coordination.Resp.Scripts.&lt;name&gt;.lua</c>.
     /// </summary>
     /// <param name="name">The name of the script, without its folder and extension.</param>
