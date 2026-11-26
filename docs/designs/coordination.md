@@ -18,8 +18,9 @@ duration on a declared clock ([D9](#d9-expiry-clock)), the shapes of the primiti
 ([D10](#d10-contract-values) to [D15](#d15-counting-sequences-and-notifications)), the composition that binds
 providers and checks requirements when the host starts ([D16](#d16-composition)), the conformance kit's contract
 suites ([D17](#d17-conformance-kit)), the holder's local deadline ([D18](#d18-holder-deadline)), the history checker
-that verifies concurrent runs of every primitive ([D19](#d19-history-checker)), and the recipes built on the primitives'
-contracts ([D20](#d20-recipes)).
+that verifies concurrent runs of every primitive ([D19](#d19-history-checker)), the recipes built on the primitives'
+contracts ([D20](#d20-recipes)), and the hosting that ties a node's session to its host's lifetime
+([D21](#d21-hosting)).
 
 ## Goals and Non-Goals
 
@@ -167,6 +168,7 @@ plug in through a configurator of their own, an in-process provider, and one tes
 | `NCode.Coordination.Testing`      | The conformance kit, fault injection and the history checker                   |
 
 The core depends on the `Microsoft.Extensions` abstractions and the .NET runtime's `System.Threading.RateLimiting` only.
+The hosting package adds the `Microsoft.Extensions` options, logging and health checks packages.
 A provider depends on its protocol's client library, consumed as a permissively licensed package through its public API.
 
 ## Security Analysis
@@ -307,6 +309,13 @@ Each recipe is an interface whose implementation calls only the primitives' serv
 guarantees it relies on so a host requires them with `RequireRecipe`, and waits on releases and watches, never on a
 timer. The rate limiters are `System.Threading.RateLimiting` limiters.
 [ADR-1020](../decisions/1020-recipes-use-only-the-primitives-contracts-declare-the-guarantees-they-rely-on-and-wait-on-releases-and-watches.md)
+
+### D21. Hosting
+
+The host opens one session once its composition's requirements pass, joins its cluster's membership with it, renews it
+on its own clock and opens another when it is lost, and closes it once every hosted service has stopped; features take
+the session from `IHostSessionService`, and a health check reports the host not ready while it holds none.
+[ADR-1021](../decisions/1021-a-host-holds-one-session-for-its-lifetime-joins-its-membership-with-it-and-closes-it-as-it-stops.md)
 
 ## Open Questions
 
