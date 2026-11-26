@@ -45,6 +45,9 @@ internal static class RespConformance
         return new ConformanceTarget(provider) { AdvanceClock = WaitAsync };
     }
 
-    private static ValueTask WaitAsync(TimeSpan duration, CancellationToken cancellationToken) =>
-        new(Task.Delay(duration, cancellationToken));
+    private static ValueTask WaitAsync(TimeSpan duration, CancellationToken cancellationToken)
+    {
+        var delay = Task.Delay(duration, cancellationToken);
+        return new ValueTask(delay);
+    }
 }

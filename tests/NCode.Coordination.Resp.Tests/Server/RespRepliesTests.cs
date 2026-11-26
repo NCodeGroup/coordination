@@ -12,11 +12,10 @@ public sealed class RespRepliesTests
     [Fact]
     public void Script_StatusAndFields_ReturnsThem()
     {
-        var reply = RedisResult.Create([
-            RedisResult.Create((RedisValue)1, ResultType.Integer),
-            RedisResult.Create((RedisValue)7, ResultType.Integer),
-            RedisResult.Create((RedisValue)"text"),
-        ]);
+        var statusReply = RedisResult.Create((RedisValue)1, ResultType.Integer);
+        var number = RedisResult.Create((RedisValue)7, ResultType.Integer);
+        var text = RedisResult.Create((RedisValue)"text");
+        var reply = RedisResult.Create([statusReply, number, text]);
 
         var (status, fields) = RespReplies.Script(reply);
 
@@ -40,7 +39,8 @@ public sealed class RespRepliesTests
     [Fact]
     public void Script_EmptyArray_ThrowsUnavailable()
     {
-        var reply = RedisResult.Create(Array.Empty<RedisResult>());
+        RedisResult[] elements = [];
+        var reply = RedisResult.Create(elements);
 
         var exception = Assert.Throws<CoordinationException>(() => RespReplies.Script(reply));
 
@@ -50,7 +50,8 @@ public sealed class RespRepliesTests
     [Fact]
     public void Script_StatusNotAnInteger_ThrowsUnavailable()
     {
-        var reply = RedisResult.Create([RedisResult.Create((RedisValue)"text")]);
+        var status = RedisResult.Create((RedisValue)"text");
+        var reply = RedisResult.Create([status]);
 
         var exception = Assert.Throws<CoordinationException>(() => RespReplies.Script(reply));
 

@@ -175,10 +175,11 @@ public sealed class RespKeysTests
     public void DecodeSegment_EscapedBraces_ReturnsTheText()
     {
         const string encoded = "ta%7Bb%7D%2Fc";
+        var expected = KeySegment.FromString("a{b}/c");
 
         var decoded = RespKeys.DecodeSegment(encoded);
 
-        Assert.Equal(KeySegment.FromString("a{b}/c"), decoded);
+        Assert.Equal(expected, decoded);
     }
 
     [Theory]

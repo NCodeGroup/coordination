@@ -65,8 +65,21 @@ public sealed class RespCallTests
     [Fact]
     public void ToMilliseconds_PartOfAMillisecond_RoundsUp()
     {
-        Assert.Equal(2, RespCall.ToMilliseconds(new TimeToLive(TimeSpan.FromTicks(15_001))));
-        Assert.Equal(1, RespCall.ToMilliseconds(new TimeToLive(TimeSpan.FromTicks(1))));
+        var timeToLive = new TimeToLive(TimeSpan.FromTicks(15_001));
+
+        var result = RespCall.ToMilliseconds(timeToLive);
+
+        Assert.Equal(2, result);
+    }
+
+    [Fact]
+    public void ToMilliseconds_OneTick_RoundsUpToOne()
+    {
+        var timeToLive = new TimeToLive(TimeSpan.FromTicks(1));
+
+        var result = RespCall.ToMilliseconds(timeToLive);
+
+        Assert.Equal(1, result);
     }
 
     [Fact]
