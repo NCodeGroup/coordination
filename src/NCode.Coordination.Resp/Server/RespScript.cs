@@ -149,11 +149,6 @@ internal sealed class RespScript(string name, string text)
     public static RespScript Membership { get; } = Load("membership");
 
     /// <summary>
-    /// Gets the semaphore script: it manages semaphore slot acquisition, renewal, and release operations.
-    /// </summary>
-    public static RespScript Semaphore { get; } = Load("semaphores");
-
-    /// <summary>
     /// Gets the election script: it manages election leadership acquisition, resignation, and reading operations.
     /// </summary>
     public static RespScript Election { get; } = Load("elections");

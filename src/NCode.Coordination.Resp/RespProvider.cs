@@ -194,7 +194,7 @@ internal sealed class RespProvider : ICoordinationProvider, IAsyncDisposable, ID
             [typeof(ISessionService)] = new Sessions.RespSessionService(records, tokens),
             [typeof(IMembershipService)] = new Membership.RespMembershipService(Server),
             [typeof(ILeaseService)] = new Leases.RespLeaseService(records, tokens),
-            [typeof(ISemaphoreService)] = new Leases.RespSemaphoreService(Server),
+            [typeof(ISemaphoreService)] = new Leases.RespSemaphoreService(records, tokens),
             [typeof(IElectionService)] = new Elections.RespElectionService(Server),
             [typeof(IClaimService)] = new Claims.RespClaimService(Server),
         };
