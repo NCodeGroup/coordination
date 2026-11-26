@@ -370,12 +370,20 @@ periodic check, and state a watch can see expires through scripts.
    ([#13](https://github.com/NCodeGroup/coordination/issues/13)).
 3. **RESP.** The RESP provider with Valkey and Garnet profiles, covering every NCode.Identity need, with gap-detecting
    notifications.
-4. **PostgreSQL.** A provider that needs no infrastructure beyond the database a service already runs.
+4. **PostgreSQL.** A provider that needs no infrastructure beyond the database a service already runs. NCode.Identity's
+   hosted platform runs PostgreSQL as a managed three-node service in the cluster's datacenter
+   ([hosting analysis](https://github.com/NCodeGroup/identity/blob/main/docs/hosting-analysis.md)), so the provider's
+   declaration for a managed service follows how that service replicates and fails over, read from its documentation
+   and verified by the conformance kit.
 5. **First-consumer adoption.** NCode.Identity depends on NCode.Coordination and retires its shared-state packages;
    its interval passes and refresh lease become claims and fenced leases. This phase is planned and landed in
    NCode.Identity, and the first stable release follows it ([D8](#d8-first-stable-release)).
 6. **etcd and Consul.** Providers whose servers keep sessions, leases and watches natively, linearizable across
-   failover.
+   failover. On the first consumer's hosting, at least three small Kubernetes nodes in one datacenter whose first limit
+   is memory, an etcd cluster adds three members, nodes with room for them and storage with a low sync latency,
+   measured before it is relied on. The phase follows a consumer's need for a guarantee that holds across failover,
+   and a distributed SQL database that speaks PostgreSQL's protocol, through the PostgreSQL provider, is the
+   alternative to weigh then.
 7. **Native server, if needed.** A coordination server of the product's own, built from the published consensus
    literature, only for a need no provider meets.
 
