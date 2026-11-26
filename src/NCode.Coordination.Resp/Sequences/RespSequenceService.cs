@@ -37,8 +37,9 @@ internal sealed class RespSequenceService(RespServer server) : ISequenceService
         ArgumentNullException.ThrowIfNull(key);
         RespCall.Check(options, cancellationToken);
 
+        var serverKey = RespKeys.ForKey(key, Kind);
         var reply = await Server
-            .ExecuteAsync("INCR", [RespKeys.ForKey(key, Kind)], cancellationToken)
+            .ExecuteAsync("INCR", [serverKey], cancellationToken)
             .ConfigureAwait(false);
 
         return RespReplies.Integer(reply);
@@ -60,12 +61,10 @@ internal sealed class RespSequenceService(RespServer server) : ISequenceService
         ArgumentOutOfRangeException.ThrowIfGreaterThan(count, CoordinationLimits.MaxSequenceBlock);
         RespCall.Check(options, cancellationToken);
 
+        var serverKey = RespKeys.ForKey(key, Kind);
+        var amount = count.ToString(CultureInfo.InvariantCulture);
         var reply = await Server
-            .ExecuteAsync(
-                "INCRBY",
-                [RespKeys.ForKey(key, Kind), count.ToString(CultureInfo.InvariantCulture)],
-                cancellationToken
-            )
+            .ExecuteAsync("INCRBY", [serverKey, amount], cancellationToken)
             .ConfigureAwait(false);
 
         var last = RespReplies.Integer(reply);

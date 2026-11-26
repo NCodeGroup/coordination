@@ -39,15 +39,14 @@ internal sealed class RespSetService(RespServer server) : ISetService
         ArgumentNullException.ThrowIfNull(timeToLive);
         RespCall.Check(options, cancellationToken);
 
+        var serverKey = RespKeys.ForKey(key, Kind);
+        var encoded = RespKeys.EncodeSegment(member);
+        var milliseconds = RespCall.ToMilliseconds(timeToLive);
         var reply = await Server
             .EvaluateAsync(
                 RespScript.SetAdd,
-                [RespKeys.ForKey(key, Kind)],
-                [
-                    RespKeys.EncodeSegment(member),
-                    RespCall.ToMilliseconds(timeToLive),
-                    CoordinationLimits.MaxSetMembers,
-                ],
+                [serverKey],
+                [encoded, milliseconds, CoordinationLimits.MaxSetMembers],
                 cancellationToken
             )
             .ConfigureAwait(false);
@@ -82,13 +81,10 @@ internal sealed class RespSetService(RespServer server) : ISetService
         ArgumentNullException.ThrowIfNull(member);
         RespCall.Check(options, cancellationToken);
 
+        var serverKey = RespKeys.ForKey(key, Kind);
+        var encoded = RespKeys.EncodeSegment(member);
         var reply = await Server
-            .EvaluateAsync(
-                RespScript.SetRemove,
-                [RespKeys.ForKey(key, Kind)],
-                [RespKeys.EncodeSegment(member)],
-                cancellationToken
-            )
+            .EvaluateAsync(RespScript.SetRemove, [serverKey], [encoded], cancellationToken)
             .ConfigureAwait(false);
 
         var (status, fields) = RespReplies.Script(reply);
@@ -110,8 +106,9 @@ internal sealed class RespSetService(RespServer server) : ISetService
         ArgumentNullException.ThrowIfNull(key);
         RespCall.Check(options, cancellationToken);
 
+        var serverKey = RespKeys.ForKey(key, Kind);
         var reply = await Server
-            .EvaluateAsync(RespScript.SetList, [RespKeys.ForKey(key, Kind)], [], cancellationToken)
+            .EvaluateAsync(RespScript.SetList, [serverKey], [], cancellationToken)
             .ConfigureAwait(false);
 
         var (status, fields) = RespReplies.Script(reply);
@@ -145,8 +142,7 @@ internal sealed class RespSetService(RespServer server) : ISetService
         ArgumentNullException.ThrowIfNull(key);
         RespCall.Check(options, cancellationToken);
 
-        await Server
-            .ExecuteAsync("DEL", [RespKeys.ForKey(key, Kind)], cancellationToken)
-            .ConfigureAwait(false);
+        var serverKey = RespKeys.ForKey(key, Kind);
+        await Server.ExecuteAsync("DEL", [serverKey], cancellationToken).ConfigureAwait(false);
     }
 }

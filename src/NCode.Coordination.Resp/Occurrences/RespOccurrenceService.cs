@@ -41,13 +41,10 @@ internal sealed class RespOccurrenceService(RespServer server) : IOccurrenceServ
         ArgumentNullException.ThrowIfNull(timeToLive);
         RespCall.Check(options, cancellationToken);
 
+        var serverKey = RespKeys.ForKey(key, Kind);
         var ms = RespCall.ToMilliseconds(timeToLive).ToString(CultureInfo.InvariantCulture);
         var reply = await Server
-            .ExecuteAsync(
-                "SET",
-                [RespKeys.ForKey(key, Kind), "1", "NX", "PX", ms],
-                cancellationToken
-            )
+            .ExecuteAsync("SET", [serverKey, "1", "NX", "PX", ms], cancellationToken)
             .ConfigureAwait(false);
 
         if (reply.IsNull)

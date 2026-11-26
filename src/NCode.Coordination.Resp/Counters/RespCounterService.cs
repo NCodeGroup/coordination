@@ -48,11 +48,8 @@ internal sealed class RespCounterService(RespServer server) : ICounterService
         ArgumentOutOfRangeException.ThrowIfLessThan(amount, 1);
         RespCall.Check(options, cancellationToken);
 
-        var result = await RunAsync(
-                [new CounterIncrement(key, amount, long.MaxValue, timeToLive)],
-                cancellationToken
-            )
-            .ConfigureAwait(false);
+        var increment = new CounterIncrement(key, amount, long.MaxValue, timeToLive);
+        var result = await RunAsync([increment], cancellationToken).ConfigureAwait(false);
 
         return result.Counts[^1];
     }
@@ -67,8 +64,9 @@ internal sealed class RespCounterService(RespServer server) : ICounterService
         ArgumentNullException.ThrowIfNull(key);
         RespCall.Check(options, cancellationToken);
 
+        var serverKey = RespKeys.ForKey(key, Kind);
         var reply = await Server
-            .ExecuteAsync("GET", [RespKeys.ForKey(key, Kind)], cancellationToken)
+            .ExecuteAsync("GET", [serverKey], cancellationToken)
             .ConfigureAwait(false);
 
         return reply.IsNull ? 0 : RespReplies.Integer(reply);
@@ -84,9 +82,8 @@ internal sealed class RespCounterService(RespServer server) : ICounterService
         ArgumentNullException.ThrowIfNull(key);
         RespCall.Check(options, cancellationToken);
 
-        await Server
-            .ExecuteAsync("DEL", [RespKeys.ForKey(key, Kind)], cancellationToken)
-            .ConfigureAwait(false);
+        var serverKey = RespKeys.ForKey(key, Kind);
+        await Server.ExecuteAsync("DEL", [serverKey], cancellationToken).ConfigureAwait(false);
     }
 
     /// <inheritdoc />
