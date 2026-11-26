@@ -356,6 +356,13 @@ page examining at most its limit plus 64 members, with a short continuation toke
 expiry included, is a script that numbers and publishes it.
 [ADR-1027](../decisions/1027-resp-records-live-in-one-table-per-keyspace-indexed-by-digests-of-their-segments.md)
 
+### D28. RESP ownership
+
+A keyspace's sessions, grants and members live in fixed keys beside its record table; every keyspace script receives
+all twelve and first ends expired sessions and grants; a session's end removes what is bound to it through one index;
+and a claim is one `SET` with `NX` and the caller's time to live.
+[ADR-1028](../decisions/1028-resp-ownership-state-lives-in-fixed-keys-per-keyspace-bound-to-sessions-through-one-index.md)
+
 ## Open Questions
 
 - **Q1.** How NCode.Identity consumes the packages while both repositories change together: prerelease packages from a

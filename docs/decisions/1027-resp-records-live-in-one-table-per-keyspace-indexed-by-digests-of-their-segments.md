@@ -1,6 +1,6 @@
 # 1027. RESP records live in one table per keyspace, indexed by digests of their segments
 
-- **Status:** Proposed
+- **Status:** Proposed (amended by 1028)
 - **Date:** 2026-11-26
 - **Deciders:** NCode Group
 - **Amends:** 1023, 1025

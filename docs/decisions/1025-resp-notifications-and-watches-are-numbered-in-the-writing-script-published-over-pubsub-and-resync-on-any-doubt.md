@@ -1,6 +1,6 @@
 # 1025. RESP notifications and watches are numbered in the writing script, published over Pub/Sub, and resync on any doubt
 
-- **Status:** Proposed (amended by 1027)
+- **Status:** Proposed (amended by 1027, 1028)
 - **Date:** 2026-11-25
 - **Deciders:** NCode Group
 - **Amends:** 1023
