@@ -19,11 +19,6 @@ namespace NCode.Coordination.Resp.Sessions;
 internal class RespSessionService(RespRecordTable table, IRespTokens tokens) : ISessionService
 {
     /// <summary>
-    /// The text a session id starts with.
-    /// </summary>
-    private const string Prefix = "s-";
-
-    /// <summary>
     /// Gets the table that runs the keyspace scripts.
     /// </summary>
     private RespRecordTable Table { get; } =
@@ -46,7 +41,7 @@ internal class RespSessionService(RespRecordTable table, IRespTokens tokens) : I
         ArgumentNullException.ThrowIfNull(timeToLive);
         RespCall.Check(options, cancellationToken);
 
-        var token = Tokens.Next(Prefix);
+        var token = Tokens.Next(RespTokenPrefixes.Session);
         var milliseconds = RespCall.ToMilliseconds(timeToLive);
 
         RedisValue[] arguments = [token, milliseconds];

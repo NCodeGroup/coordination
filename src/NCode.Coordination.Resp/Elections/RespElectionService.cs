@@ -21,11 +21,6 @@ namespace NCode.Coordination.Resp.Elections;
 internal class RespElectionService(RespRecordTable table, IRespTokens tokens) : IElectionService
 {
     /// <summary>
-    /// The text an owner token starts with.
-    /// </summary>
-    private const string OwnerPrefix = "o-";
-
-    /// <summary>
     /// The text a leadership's grant field starts with.
     /// </summary>
     private const string FieldPrefix = "e ";
@@ -55,14 +50,13 @@ internal class RespElectionService(RespRecordTable table, IRespTokens tokens) : 
         CheckValue(value, nameof(value));
         RespCall.Check(options, cancellationToken);
 
-        RedisValue[] arguments =
-        [
-            RespKeys.Name(role),
-            value.ToArray(),
-            Tokens.Next(OwnerPrefix),
-            terms.IsBoundToSession ? terms.Session.Value : "",
-            terms.IsBoundToSession ? 0 : RespCall.ToMilliseconds(terms.TimeToLive),
-        ];
+        var name = RespKeys.Name(role);
+        var bytes = value.ToArray();
+        var owner = Tokens.Next(RespTokenPrefixes.Owner);
+        var session = terms.IsBoundToSession ? terms.Session.Value : "";
+        var milliseconds = terms.IsBoundToSession ? 0 : RespCall.ToMilliseconds(terms.TimeToLive);
+
+        RedisValue[] arguments = [name, bytes, owner, session, milliseconds];
         var reply = await Table
             .EvaluateAsync(RespScript.ElectionLead, role.Keyspace, arguments, cancellationToken)
             .ConfigureAwait(false);
@@ -71,7 +65,7 @@ internal class RespElectionService(RespRecordTable table, IRespTokens tokens) : 
 
         return status switch
         {
-            0 when fields.Length == 3 => ToElected(role, terms, reply, fields),
+            0 when fields.Length == 3 => ToElected(role, terms, fields),
             1 when fields.Length == 0 => ElectionResult.Led,
             2 when fields.Length == 0 => ElectionResult.SessionEnded,
             _ => throw RespReplies.Unexpected(reply),
@@ -83,14 +77,12 @@ internal class RespElectionService(RespRecordTable table, IRespTokens tokens) : 
     /// </summary>
     /// <param name="role">The role that the leader fills.</param>
     /// <param name="terms">The terms of the leadership.</param>
-    /// <param name="reply">The reply of the script.</param>
     /// <param name="fields">The fields of the reply after its status: owner token, fencing token and value.</param>
     /// <returns>The result that carries the leadership.</returns>
     /// <exception cref="CoordinationException">The owner token is missing from the reply.</exception>
     private static ElectionResult ToElected(
         CoordinationKey role,
         LeaseTerms terms,
-        RedisResult reply,
         RedisResult[] fields
     )
     {
@@ -98,7 +90,7 @@ internal class RespElectionService(RespRecordTable table, IRespTokens tokens) : 
         var fencing = new FencingToken(fencingValue);
         var value = (byte[]?)fields[2] ?? [];
         var leader = new Leader(role, fencing, value);
-        var ownerValue = (string?)fields[0] ?? throw RespReplies.Unexpected(reply);
+        var ownerValue = RespReplies.Text(fields[0]);
         var owner = new OwnerToken(ownerValue);
         var leadership = new Leadership(leader, owner, terms);
         var elected = ElectionResult.Elected(leadership);
@@ -126,12 +118,10 @@ internal class RespElectionService(RespRecordTable table, IRespTokens tokens) : 
         }
 
         var role = leadership.Leader.Role;
-        RedisValue[] arguments =
-        [
-            FieldPrefix + RespKeys.Name(role),
-            leadership.Owner.Value,
-            RespCall.ToMilliseconds(timeToLive),
-        ];
+        var field = FieldPrefix + RespKeys.Name(role);
+        var milliseconds = RespCall.ToMilliseconds(timeToLive);
+
+        RedisValue[] arguments = [field, leadership.Owner.Value, milliseconds];
         var reply = await Table
             .EvaluateAsync(RespScript.GrantRenew, role.Keyspace, arguments, cancellationToken)
             .ConfigureAwait(false);
@@ -157,7 +147,9 @@ internal class RespElectionService(RespRecordTable table, IRespTokens tokens) : 
         RespCall.Check(options, cancellationToken);
 
         var role = leadership.Leader.Role;
-        RedisValue[] arguments = [FieldPrefix + RespKeys.Name(role), leadership.Owner.Value];
+        var field = FieldPrefix + RespKeys.Name(role);
+
+        RedisValue[] arguments = [field, leadership.Owner.Value];
         var reply = await Table
             .EvaluateAsync(RespScript.GrantRelease, role.Keyspace, arguments, cancellationToken)
             .ConfigureAwait(false);
@@ -182,7 +174,9 @@ internal class RespElectionService(RespRecordTable table, IRespTokens tokens) : 
         ArgumentNullException.ThrowIfNull(role);
         RespCall.Check(options, cancellationToken);
 
-        RedisValue[] arguments = [RespKeys.Name(role)];
+        var name = RespKeys.Name(role);
+
+        RedisValue[] arguments = [name];
         var reply = await Table
             .EvaluateAsync(RespScript.ElectionRead, role.Keyspace, arguments, cancellationToken)
             .ConfigureAwait(false);
