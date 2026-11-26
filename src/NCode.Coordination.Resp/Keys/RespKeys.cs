@@ -103,10 +103,20 @@ internal static class RespKeys
         ArgumentNullException.ThrowIfNull(key);
 
         var depth = key.PartitionDepth.ToString(CultureInfo.InvariantCulture);
-        var encoded = key.Segments.Select(EncodeSegment);
-        var segments = string.Join('/', encoded);
+        var builder = new StringBuilder(depth).Append(':');
 
-        return depth + ":" + segments;
+        for (var index = 0; index < key.Segments.Length; index++)
+        {
+            if (index > 0)
+            {
+                builder.Append('/');
+            }
+
+            var encoded = EncodeSegment(key.Segments[index]);
+            builder.Append(encoded);
+        }
+
+        return builder.ToString();
     }
 
     /// <summary>
@@ -122,14 +132,15 @@ internal static class RespKeys
         ArgumentNullException.ThrowIfNull(keyspace);
         ArgumentNullException.ThrowIfNull(name);
 
-        var colon = name.IndexOf(':', StringComparison.Ordinal);
+        var span = name.AsSpan();
+        var colon = span.IndexOf(':');
 
         if (colon < 1)
         {
             throw NotAName(name);
         }
 
-        var depthText = name[..colon];
+        var depthText = span[..colon];
 
         if (
             !int.TryParse(depthText, NumberStyles.None, CultureInfo.InvariantCulture, out var depth)
@@ -138,15 +149,23 @@ internal static class RespKeys
             throw NotAName(name);
         }
 
-        var canonical = depth.ToString(CultureInfo.InvariantCulture);
-
-        if (!string.Equals(canonical, depthText, StringComparison.Ordinal))
+        // NumberStyles.None allows digits only, so a leading zero is the one way the text differs from the canonical
+        // form.
+        if (depthText.Length > 1 && depthText[0] == '0')
         {
             throw NotAName(name);
         }
 
-        var parts = name[(colon + 1)..].Split('/');
-        var segments = parts.Select(DecodeSegment).ToList();
+        var rest = span[(colon + 1)..];
+        var count = rest.Count('/') + 1;
+        var segments = new List<KeySegment>(count);
+
+        foreach (var range in rest.Split('/'))
+        {
+            var part = rest[range].ToString();
+            var segment = DecodeSegment(part);
+            segments.Add(segment);
+        }
 
         try
         {
