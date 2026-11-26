@@ -1,7 +1,11 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
+using NCode.Coordination.Hosting.Sessions;
 
 namespace NCode.Coordination.Hosting.Tests;
 
@@ -30,6 +34,41 @@ internal static class HostingTesting
     /// </summary>
     /// <returns>The fake clock.</returns>
     public static FakeTimeProvider CreateTime() => new(Start);
+
+    /// <summary>
+    /// Builds the coordination services over the in-process provider and the given clock.
+    /// </summary>
+    /// <param name="time">The clock the in-process provider expires on.</param>
+    /// <returns>The built service provider.</returns>
+    public static ServiceProvider BuildCoordination(FakeTimeProvider time)
+    {
+        var services = new ServiceCollection();
+        services.AddMetrics();
+        services.AddSingleton<TimeProvider>(time);
+        var binding = new ProviderBinding(InProcessCoordinationBuilderExtensions.ProviderName);
+        services.AddCoordination(b => b.AddInProcessProvider().Bind(binding));
+        return services.BuildServiceProvider();
+    }
+
+    /// <summary>
+    /// Creates the host session service over the given operations, with <see cref="CreateOptions" />.
+    /// </summary>
+    /// <param name="time">The clock the service runs on.</param>
+    /// <param name="sessions">The session operations the service calls.</param>
+    /// <param name="membership">The membership operations the service calls.</param>
+    /// <returns>The service.</returns>
+    public static DefaultHostSessionService CreateService(
+        TimeProvider time,
+        ISessionService sessions,
+        IMembershipService membership
+    ) =>
+        new(
+            sessions,
+            membership,
+            Options.Create(CreateOptions()),
+            time,
+            NullLogger<DefaultHostSessionService>.Instance
+        );
 
     /// <summary>
     /// Creates valid options for a node of the tests' cluster.
