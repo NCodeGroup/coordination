@@ -15,6 +15,12 @@ internal static class RecipeMessages
     public const string WatchEnded = "The watch ended without a failure.";
 
     /// <summary>
+    /// The message of the failure the cache invalidation throws when the subscription it listens on ends without a
+    /// failure, which the contracts never do.
+    /// </summary>
+    public const string SubscriptionEnded = "The subscription ended without a failure.";
+
+    /// <summary>
     /// The message of the failure a rate limiter throws when the window it counts in has already ended.
     /// </summary>
     public const string WindowEnded = "The window has already ended.";

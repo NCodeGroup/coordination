@@ -1,6 +1,8 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using NCode.Coordination.Recipes;
+
 namespace NCode.Coordination.Caching;
 
 /// <summary>
@@ -62,7 +64,7 @@ internal class DefaultCacheInvalidationService(INotificationService notification
                 }
             }
 
-            throw new InvalidOperationException("The subscription ended without a failure.");
+            throw new InvalidOperationException(RecipeMessages.SubscriptionEnded);
         }
         finally
         {
