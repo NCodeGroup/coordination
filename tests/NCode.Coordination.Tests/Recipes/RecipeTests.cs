@@ -58,7 +58,9 @@ public sealed class RecipeTests
     {
         var need = new RecipeNeed(Primitives.Lease);
 
-        Assert.ThrowsAny<ArgumentException>(() => new Recipe(" ", need));
+        var exception = Assert.Throws<ArgumentException>(() => new Recipe(" ", need));
+
+        Assert.Equal("name", exception.ParamName);
     }
 
     #endregion

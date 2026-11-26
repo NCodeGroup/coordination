@@ -64,7 +64,9 @@ public sealed class TokenBucketStateTests
     {
         var value = new byte[TokenBucketState.EncodedLength - 1];
 
-        Assert.Throws<InvalidDataException>(() => TokenBucketState.Decode(value));
+        var exception = Assert.Throws<InvalidDataException>(() => TokenBucketState.Decode(value));
+
+        Assert.Equal("A token bucket's state is 16 bytes.", exception.Message);
     }
 
     [Fact]
@@ -72,7 +74,9 @@ public sealed class TokenBucketStateTests
     {
         var value = new TokenBucketState(-1, NowMilliseconds).Encode();
 
-        Assert.Throws<InvalidDataException>(() => TokenBucketState.Decode(value));
+        var exception = Assert.Throws<InvalidDataException>(() => TokenBucketState.Decode(value));
+
+        Assert.Equal("A token bucket's state holds no negative number.", exception.Message);
     }
 
     #endregion

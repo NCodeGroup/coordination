@@ -127,9 +127,11 @@ public sealed class CoordinationFixedWindowLimiterTests
         await using var services = RecipeTesting.Build(time);
         using var limiter = CreateLimiter(services, time, Limit);
 
-        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(async () =>
+        var exception = await Assert.ThrowsAsync<ArgumentOutOfRangeException>(async () =>
             await limiter.AcquireAsync(permitCount, cancellationToken)
         );
+
+        Assert.Equal("permitCount", exception.ParamName);
     }
 
     [Fact]
