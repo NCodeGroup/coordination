@@ -145,6 +145,12 @@ internal class DefaultHostSessionService(
     /// </summary>
     private TimeSpan RetryWait { get; set; }
 
+    /// <summary>
+    /// Gets or sets a session the loop opened and has neither published nor closed, so a stop that interrupts the loop
+    /// still closes it. Only the session loop writes it, and the stop reads it once the loop has ended.
+    /// </summary>
+    private SessionId? Unclosed { get; set; }
+
     /// <inheritdoc />
     public HostSessionState State
     {
@@ -305,16 +311,18 @@ internal class DefaultHostSessionService(
 
             EndQuietly(ended);
 
-            if (session is null)
+            // A session the loop opened and had not published, or had lost and not yet closed, is closed too.
+            var closing = session?.Id ?? Unclosed;
+            Unclosed = null;
+
+            if (closing is null)
             {
                 return;
             }
 
             try
             {
-                await Sessions
-                    .CloseAsync(session.Id, null, cancellationToken)
-                    .ConfigureAwait(false);
+                await Sessions.CloseAsync(closing, null, cancellationToken).ConfigureAwait(false);
                 Logger.SessionClosed();
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -425,6 +433,8 @@ internal class DefaultHostSessionService(
             return null;
         }
 
+        Unclosed = grant.Id;
+
         var member = Settings.CreateMember(grant.Id);
         MembershipJoinStatus status;
 
@@ -440,6 +450,7 @@ internal class DefaultHostSessionService(
             Logger.SessionOpenFailed(exception, wait);
             SetState(HostSessionState.Unreachable);
             await CloseQuietlyAsync(grant.Id, stopping).ConfigureAwait(false);
+            Unclosed = null;
             return null;
         }
 
@@ -449,6 +460,7 @@ internal class DefaultHostSessionService(
             Logger.NodeIdTaken(Settings.NodeId, wait);
             SetState(HostSessionState.Opening);
             await CloseQuietlyAsync(grant.Id, stopping).ConfigureAwait(false);
+            Unclosed = null;
             return null;
         }
 
@@ -458,6 +470,7 @@ internal class DefaultHostSessionService(
             _ = PlanRetry();
             Logger.SessionLost();
             SetState(HostSessionState.Opening);
+            Unclosed = null;
             return null;
         }
 
@@ -478,6 +491,7 @@ internal class DefaultHostSessionService(
         TaskCompletionSource<HostSession> next;
 
         Failures = 0;
+        Unclosed = null;
 
         lock (Gate)
         {
@@ -598,7 +612,9 @@ internal class DefaultHostSessionService(
         EndQuietly(ended);
 
         // Releases what is bound to the session when the provider still holds it.
+        Unclosed = session.Id;
         await CloseQuietlyAsync(session.Id, stopping).ConfigureAwait(false);
+        Unclosed = null;
     }
 
     /// <summary>

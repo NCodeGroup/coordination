@@ -852,6 +852,62 @@ public sealed class DefaultHostSessionServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task StoppedAsync_WhenTheHostStopsDuringTheJoin_ClosesTheOpenedSession()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var time = HostingTesting.CreateTime();
+        var grant = CreateGrant("s1");
+        var sessions = Mocks.Create<ISessionService>();
+        var membership = Mocks.Create<IMembershipService>();
+        sessions
+            .Setup(x =>
+                x.OpenAsync(
+                    It.IsAny<Keyspace>(),
+                    It.IsAny<TimeToLive>(),
+                    It.IsAny<OperationOptions?>(),
+                    It.IsAny<CancellationToken>()
+                )
+            )
+            .ReturnsAsync(grant)
+            .Verifiable();
+        sessions
+            .Setup(x =>
+                x.CloseAsync(grant.Id, It.IsAny<OperationOptions?>(), It.IsAny<CancellationToken>())
+            )
+            .Returns(ValueTask.CompletedTask)
+            .Verifiable();
+        membership
+            .Setup(x =>
+                x.JoinAsync(
+                    It.IsAny<CoordinationKey>(),
+                    It.IsAny<Member>(),
+                    It.IsAny<OperationOptions?>(),
+                    It.IsAny<CancellationToken>()
+                )
+            )
+            .Returns(
+                (CoordinationKey _, Member _, OperationOptions? _, CancellationToken token) =>
+                {
+                    var join = new TaskCompletionSource<MembershipJoinStatus>();
+                    token.Register(() => join.TrySetCanceled(token));
+                    return new ValueTask<MembershipJoinStatus>(join.Task);
+                }
+            )
+            .Verifiable();
+        await using var service = HostingTesting.CreateService(
+            time,
+            sessions.Object,
+            membership.Object
+        );
+        await service.StartAsync(cancellationToken);
+        Assert.Null(service.Current);
+
+        await service.StoppedAsync(cancellationToken);
+
+        Assert.Equal(HostSessionState.Stopped, service.State);
+    }
+
+    [Fact]
     public async Task StoppedAsync_WhenTheSessionLoopFaulted_StillStops()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
