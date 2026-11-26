@@ -50,8 +50,10 @@ waits on releases and watches, never on a timer.**
 5. **Outcomes.** A wait returns the grant, or nothing when the session in its terms has ended. Failures propagate as
    the primitives throw them
    ([ADR-1011](1011-an-operation-returns-its-outcome-and-throws-a-coded-failure-that-says-whether-it-may-have-taken-effect.md)),
-   and state a recipe took for itself before a failure or a cancellation is given back. A recipe that returns a grant
-   leaves the holder's deadline to its caller, and a singleton relies on its session, whose holder keeps the deadline
+   and state a recipe took for itself before a failure or a cancellation is given back. A failure to give it back is
+   not thrown, since the state ends with its time to live or its session, so the outcome or the failure before it
+   stands. A recipe that returns a grant leaves the holder's deadline to its caller, and a singleton relies on its
+   session, whose holder keeps the deadline
    ([ADR-1018](1018-a-holders-local-deadline-starts-before-its-request-and-ends-an-allowance-for-drift-before-the-time-to-live.md)
    rule 3).
 6. **Locks.** A lock retries the lease each time the resource has no holder, and its grant carries the lease's fencing
