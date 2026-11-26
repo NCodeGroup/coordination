@@ -129,15 +129,21 @@ public sealed class PartitionAssignmentTests
     {
         var view = CreateView("node-a");
 
-        Assert.Throws<ArgumentOutOfRangeException>(() =>
+        var exception = Assert.Throws<ArgumentOutOfRangeException>(() =>
             PartitionAssignment.Assign(view, partitionCount)
         );
+
+        Assert.Equal("partitionCount", exception.ParamName);
     }
 
     [Fact]
     public void Assign_WhenTheViewIsNull_Throws()
     {
-        Assert.Throws<ArgumentNullException>(() => PartitionAssignment.Assign(null!, 8));
+        var exception = Assert.Throws<ArgumentNullException>(() =>
+            PartitionAssignment.Assign(null!, 8)
+        );
+
+        Assert.Equal("view", exception.ParamName);
     }
 
     #endregion
@@ -198,7 +204,11 @@ public sealed class PartitionAssignmentTests
         var view = CreateView("node-a");
         var assignment = PartitionAssignment.Assign(view, 8);
 
-        Assert.Throws<ArgumentOutOfRangeException>(() => assignment.GetOwner(partition));
+        var exception = Assert.Throws<ArgumentOutOfRangeException>(() =>
+            assignment.GetOwner(partition)
+        );
+
+        Assert.Equal("partition", exception.ParamName);
     }
 
     #endregion

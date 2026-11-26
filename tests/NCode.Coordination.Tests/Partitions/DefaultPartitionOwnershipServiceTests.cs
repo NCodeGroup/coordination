@@ -103,9 +103,11 @@ public sealed class DefaultPartitionOwnershipServiceTests
         var partitions = new DefaultPartitionOwnershipService(memberships);
         var group = CreateGroup();
 
-        Assert.Throws<ArgumentOutOfRangeException>(() =>
+        var exception = Assert.Throws<ArgumentOutOfRangeException>(() =>
             partitions.WatchAsync(group, 0, null, cancellationToken)
         );
+
+        Assert.Equal("partitionCount", exception.ParamName);
     }
 
     #endregion

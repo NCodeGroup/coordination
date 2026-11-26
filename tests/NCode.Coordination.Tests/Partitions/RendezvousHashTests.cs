@@ -29,13 +29,19 @@ public sealed class RendezvousHashTests
     [Fact]
     public void Score_WhenTheNodeIdIsNull_Throws()
     {
-        Assert.Throws<ArgumentNullException>(() => RendezvousHash.Score(null!, 0));
+        var exception = Assert.Throws<ArgumentNullException>(() => RendezvousHash.Score(null!, 0));
+
+        Assert.Equal("nodeId", exception.ParamName);
     }
 
     [Fact]
     public void Score_WhenThePartitionIsNegative_Throws()
     {
-        Assert.Throws<ArgumentOutOfRangeException>(() => RendezvousHash.Score("node-a", -1));
+        var exception = Assert.Throws<ArgumentOutOfRangeException>(() =>
+            RendezvousHash.Score("node-a", -1)
+        );
+
+        Assert.Equal("partition", exception.ParamName);
     }
 
     #endregion
