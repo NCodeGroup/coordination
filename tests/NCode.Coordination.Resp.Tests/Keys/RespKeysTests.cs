@@ -121,7 +121,8 @@ public sealed class RespKeysTests
     public void DecodeName_Name_ReturnsTheKey()
     {
         var keyspace = new Keyspace("prod");
-        var uuid = KeySegment.FromGuid(Guid.NewGuid());
+        var id = Guid.NewGuid();
+        var uuid = KeySegment.FromGuid(id);
         var key = keyspace.CreateKey("a{b}/c %\u00e9", -42, uuid) with { PartitionDepth = 2 };
         var name = RespKeys.Name(key);
 
@@ -174,8 +175,9 @@ public sealed class RespKeysTests
 
         var prefixText = RespKeys.MemberPrefix(prefix);
         var member = RespKeys.Member(key);
+        var starts = member.StartsWith(prefixText, StringComparison.Ordinal);
 
-        Assert.False(member.StartsWith(prefixText, StringComparison.Ordinal));
+        Assert.False(starts);
     }
 
     #endregion

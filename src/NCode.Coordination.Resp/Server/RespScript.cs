@@ -99,7 +99,9 @@ internal sealed class RespScript(string name, string text)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
 
-        return new RespScript(name, ReadResource(name));
+        var text = ReadResource(name);
+
+        return new RespScript(name, text);
     }
 
     /// <summary>

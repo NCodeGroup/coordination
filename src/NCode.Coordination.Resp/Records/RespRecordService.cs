@@ -287,7 +287,8 @@ internal class RespRecordService(RespRecordTable table) : IRecordService
 
             var recordRevision = RespRecordTable.ReadRevision(fields[index + 1], reply);
             var recordValue = RespRecordTable.ReadValue(fields[index + 2], reply);
-            records.Add(new StoredRecord(key, recordValue, recordRevision));
+            var record = new StoredRecord(key, recordValue, recordRevision);
+            records.Add(record);
         }
 
         return new RecordPage(revision, records)
