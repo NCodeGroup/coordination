@@ -54,10 +54,12 @@ internal class DefaultBarrierService(IRecordService records, IRecordWatchService
         }
 
         // A conflict means this party already arrived, which is fine: it counts once.
-        var arrived = new HashSet<CoordinationKey>();
+        var arrived = new HashSet<CoordinationKey>(terms.Parties);
 
-        var page = await ListArrivalsAsync(barrier, arrived, options, cancellationToken)
+        var page = await ListArrivalsAsync(barrier, options, cancellationToken)
             .ConfigureAwait(false);
+
+        AddArrivals(page, barrier, arrived);
 
         if (arrived.Count >= terms.Parties)
         {
@@ -72,8 +74,10 @@ internal class DefaultBarrierService(IRecordService records, IRecordWatchService
         {
             if (change.IsResync)
             {
-                await ListArrivalsAsync(barrier, arrived, options, cancellationToken)
+                var relisted = await ListArrivalsAsync(barrier, options, cancellationToken)
                     .ConfigureAwait(false);
+
+                AddArrivals(relisted, barrier, arrived);
             }
             else if (change.Kind == RecordChangeKind.Written && !change.Key.Equals(barrier))
             {
@@ -91,26 +95,37 @@ internal class DefaultBarrierService(IRecordService records, IRecordWatchService
     }
 
     /// <summary>
-    /// Lists the arrival records of a barrier and adds each arrived party to the set.
+    /// Lists the arrival records of a barrier.
     /// </summary>
     /// <param name="barrier">The barrier whose arrivals to list.</param>
-    /// <param name="arrived">The set of arrival keys to add the listed arrivals to.</param>
     /// <param name="options">Options for the listing, or null for none.</param>
     /// <param name="cancellationToken">The token that cancels the listing.</param>
     /// <returns>The page that was listed, whose revision a watch can resume from.</returns>
     private async ValueTask<RecordPage> ListArrivalsAsync(
         CoordinationKey barrier,
-        HashSet<CoordinationKey> arrived,
         OperationOptions? options,
         CancellationToken cancellationToken
     )
     {
         var request = new RecordPageRequest(CoordinationLimits.MaxPageSize);
 
-        var page = await Records
+        return await Records
             .ListAsync(barrier, request, options, cancellationToken)
             .ConfigureAwait(false);
+    }
 
+    /// <summary>
+    /// Adds each arrived party in a page to the set.
+    /// </summary>
+    /// <param name="page">The page of arrival records.</param>
+    /// <param name="barrier">The barrier whose own record is not an arrival.</param>
+    /// <param name="arrived">The set of arrival keys to add the page's arrivals to.</param>
+    private static void AddArrivals(
+        RecordPage page,
+        CoordinationKey barrier,
+        HashSet<CoordinationKey> arrived
+    )
+    {
         foreach (var record in page.Records)
         {
             if (!record.Key.Equals(barrier))
@@ -118,7 +133,5 @@ internal class DefaultBarrierService(IRecordService records, IRecordWatchService
                 arrived.Add(record.Key);
             }
         }
-
-        return page;
     }
 }
