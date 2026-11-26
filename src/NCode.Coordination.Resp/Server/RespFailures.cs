@@ -11,6 +11,7 @@ namespace NCode.Coordination.Resp.Server;
 /// </summary>
 internal static class RespFailures
 {
+    /// <summary>The prefix a server error reply may repeat before its token.</summary>
     private const string ErrorPrefix = "ERR ";
 
     /// <summary>
@@ -84,7 +85,8 @@ internal static class RespFailures
                 return (CoordinationErrorCodes.Unavailable, !NotSent(timeout.Commandstatus));
 
             case RedisServerException server:
-                return ClassifyServerError(ErrorToken(server.Message), isScript);
+                var token = ErrorToken(server.Message);
+                return ClassifyServerError(token, isScript);
 
             case RedisCommandException:
                 return (CoordinationErrorCodes.Unavailable, false);

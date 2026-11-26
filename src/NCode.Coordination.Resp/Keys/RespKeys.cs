@@ -70,7 +70,8 @@ internal static class RespKeys
 
         var tag = KeyspaceTag(key.Keyspace);
         var depth = key.PartitionDepth.ToString(CultureInfo.InvariantCulture);
-        var segments = string.Join('/', key.Segments.Select(EncodeSegment));
+        var encoded = key.Segments.Select(EncodeSegment);
+        var segments = string.Join('/', encoded);
 
         return tag + ":" + kind + ":" + depth + ":" + segments;
     }
@@ -125,7 +126,8 @@ internal static class RespKeys
             }
             else
             {
-                builder.Append('%').Append(value.ToString("X2", CultureInfo.InvariantCulture));
+                var hex = value.ToString("X2", CultureInfo.InvariantCulture);
+                builder.Append('%').Append(hex);
             }
         }
 

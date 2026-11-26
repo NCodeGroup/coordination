@@ -10,7 +10,10 @@ namespace NCode.Coordination.Resp.Server;
 /// </summary>
 internal sealed class RespScript
 {
+    /// <summary>The start of a script's manifest resource name.</summary>
     private const string ResourcePrefix = "NCode.Coordination.Resp.Scripts.";
+
+    /// <summary>The end of a script's manifest resource name.</summary>
     private const string ResourceSuffix = ".lua";
 
     /// <summary>
@@ -64,6 +67,7 @@ internal sealed class RespScript
             );
         using var reader = new StreamReader(stream, Encoding.UTF8);
 
-        return new RespScript(name, reader.ReadToEnd());
+        var text = reader.ReadToEnd();
+        return new RespScript(name, text);
     }
 }
