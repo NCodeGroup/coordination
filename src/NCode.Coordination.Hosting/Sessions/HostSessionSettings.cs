@@ -11,22 +11,68 @@ namespace NCode.Coordination.Hosting.Sessions;
 internal sealed class HostSessionSettings
 {
     /// <summary>
+    /// The text a check puts in the fields of a member and its session that it doesn't check.
+    /// </summary>
+    private const string PlaceholderText = "validation";
+
+    /// <summary>
     /// Checks the options against the rules the contracts enforce and builds the settings from them.
     /// </summary>
     /// <param name="options">The options to check.</param>
-    /// <param name="failures">Receives one failure for each property that breaks its rule.</param>
-    /// <returns>The settings, or null when a property failed.</returns>
-    /// <exception cref="ArgumentNullException">The options or the failures are null.</exception>
-    public static HostSessionSettings? Create(
-        CoordinationHostOptions options,
-        ICollection<string> failures
-    )
+    /// <returns>The settings when every rule passed, otherwise one failure for each property that broke its rule.</returns>
+    /// <exception cref="ArgumentNullException">The options are null.</exception>
+    public static HostSessionSettingsResult Create(CoordinationHostOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
-        ArgumentNullException.ThrowIfNull(failures);
 
-        var failureCount = failures.Count;
+        var failures = new List<string>();
 
+        var keyspace = CheckKeyspace(options, failures);
+
+        var group = Check(failures, nameof(CoordinationHostOptions.Group), () =>
+            KeySegment.FromString(options.Group)
+        );
+
+        var member = CheckMember(options, failures);
+
+        var timeToLive = CheckPeriods(options, failures);
+
+        if (
+            failures.Count != 0
+            || keyspace is null
+            || group is null
+            || member is null
+            || timeToLive is null
+        )
+        {
+            return new HostSessionSettingsResult { Failures = failures };
+        }
+
+        var settings = new HostSessionSettings
+        {
+            Keyspace = keyspace,
+            Group = keyspace.CreateKey(group),
+            NodeId = member.NodeId,
+            Address = member.Address,
+            Metadata = member.Metadata,
+            TimeToLive = timeToLive,
+            DriftAllowance = options.DriftAllowance,
+            KeepAliveInterval = options.KeepAliveInterval,
+            RetryDelay = options.RetryDelay,
+            MaxRetryDelay = options.MaxRetryDelay,
+        };
+
+        return new HostSessionSettingsResult { Settings = settings, Failures = [] };
+    }
+
+    /// <summary>
+    /// Checks the cluster and the keyspace segments, which build the keyspace the host's session and group live in.
+    /// </summary>
+    /// <param name="options">The options to check.</param>
+    /// <param name="failures">Receives one failure for each property that breaks its rule.</param>
+    /// <returns>The keyspace, or null when a property failed.</returns>
+    private static Keyspace? CheckKeyspace(CoordinationHostOptions options, List<string> failures)
+    {
         var keyspace = Check(failures, nameof(CoordinationHostOptions.Cluster), () =>
             new Keyspace(options.Cluster)
         );
@@ -40,28 +86,51 @@ internal sealed class HostSessionSettings
             });
         }
 
-        var group = Check(failures, nameof(CoordinationHostOptions.Group), () =>
-            KeySegment.FromString(options.Group)
-        );
+        return keyspace;
+    }
 
+    /// <summary>
+    /// Checks the node id, the address and the metadata, which build the member the node joins its group as.
+    /// </summary>
+    /// <param name="options">The options to check.</param>
+    /// <param name="failures">Receives one failure for each property that breaks its rule.</param>
+    /// <returns>A member with the node's identity, address and metadata, or null when a property failed.</returns>
+    private static Member? CheckMember(CoordinationHostOptions options, List<string> failures)
+    {
         var nodeId = Check(failures, nameof(CoordinationHostOptions.NodeId), () =>
-            new Member(Placeholder, options.NodeId, "validation").NodeId
+            new Member(Placeholder, options.NodeId, PlaceholderText).NodeId
         );
 
         var address = Check(failures, nameof(CoordinationHostOptions.Address), () =>
-            new Member(Placeholder, "validation", options.Address).Address
+            new Member(Placeholder, PlaceholderText, options.Address).Address
         );
 
         var metadata = Check(failures, nameof(CoordinationHostOptions.Metadata), () =>
-            new Member(Placeholder, "validation", "validation")
+        {
+            var entries = ImmutableDictionary.CreateRange(StringComparer.Ordinal, options.Metadata);
+            return new Member(Placeholder, PlaceholderText, PlaceholderText)
             {
-                Metadata = ImmutableDictionary.CreateRange(
-                    StringComparer.Ordinal,
-                    options.Metadata
-                ),
-            }.Metadata
-        );
+                Metadata = entries,
+            }.Metadata;
+        });
 
+        if (nodeId is null || address is null || metadata is null)
+        {
+            return null;
+        }
+
+        return new Member(Placeholder, nodeId, address) { Metadata = metadata };
+    }
+
+    /// <summary>
+    /// Checks the session's time to live, the drift allowance, the keep-alive interval, the retry delay and the longest
+    /// retry delay, which depend on one another.
+    /// </summary>
+    /// <param name="options">The options to check.</param>
+    /// <param name="failures">Receives one failure for each property that breaks its rule.</param>
+    /// <returns>The time to live, or null when it failed; a period that failed leaves a failure.</returns>
+    private static TimeToLive? CheckPeriods(CoordinationHostOptions options, List<string> failures)
+    {
         var timeToLive = Check(failures, nameof(CoordinationHostOptions.SessionTimeToLive), () =>
             new TimeToLive(options.SessionTimeToLive)
         );
@@ -110,32 +179,7 @@ internal sealed class HostSessionSettings
             );
         }
 
-        if (
-            failures.Count != failureCount
-            || keyspace is null
-            || group is null
-            || nodeId is null
-            || address is null
-            || metadata is null
-            || timeToLive is null
-        )
-        {
-            return null;
-        }
-
-        return new HostSessionSettings
-        {
-            Keyspace = keyspace,
-            Group = keyspace.CreateKey(group),
-            NodeId = nodeId,
-            Address = address,
-            Metadata = metadata,
-            TimeToLive = timeToLive,
-            DriftAllowance = options.DriftAllowance,
-            KeepAliveInterval = keepAliveInterval,
-            RetryDelay = retryDelay,
-            MaxRetryDelay = maxRetryDelay,
-        };
+        return timeToLive;
     }
 
     /// <summary>
@@ -146,7 +190,7 @@ internal sealed class HostSessionSettings
     /// <param name="key">The name of the property that is checked.</param>
     /// <param name="create">Builds the value from the property.</param>
     /// <returns>The value, or null when the constructor refused the property.</returns>
-    private static T? Check<T>(ICollection<string> failures, string key, Func<T> create)
+    private static T? Check<T>(List<string> failures, string key, Func<T> create)
         where T : class
     {
         try
@@ -163,7 +207,8 @@ internal sealed class HostSessionSettings
     /// <summary>
     /// Gets a session id the contracts' constructors need to build a member for a check.
     /// </summary>
-    private static SessionId Placeholder { get; } = new(new Keyspace("validation"), "validation");
+    private static SessionId Placeholder { get; } =
+        new(new Keyspace(PlaceholderText), PlaceholderText);
 
     /// <summary>
     /// Gets the shortest keep-alive interval, retry delay and longest retry delay, one millisecond, the shortest period a

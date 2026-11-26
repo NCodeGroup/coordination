@@ -18,12 +18,10 @@ internal class CoordinationHostOptionsValidator : IValidateOptions<CoordinationH
     /// <returns>Success, or a failure that lists each invalid property.</returns>
     public ValidateOptionsResult Validate(string? name, CoordinationHostOptions options)
     {
-        var failures = new List<string>();
+        var result = HostSessionSettings.Create(options);
 
-        _ = HostSessionSettings.Create(options, failures);
-
-        return failures.Count == 0
+        return result.Failures.Count == 0
             ? ValidateOptionsResult.Success
-            : ValidateOptionsResult.Fail(failures);
+            : ValidateOptionsResult.Fail(result.Failures);
     }
 }

@@ -49,13 +49,13 @@ internal class DefaultHostSessionService(
     {
         ArgumentNullException.ThrowIfNull(options);
 
-        var failures = new List<string>();
+        var result = HostSessionSettings.Create(options.Value);
 
-        return HostSessionSettings.Create(options.Value, failures)
+        return result.Settings
             ?? throw new OptionsValidationException(
                 Options.DefaultName,
                 typeof(CoordinationHostOptions),
-                failures
+                result.Failures
             );
     }
 

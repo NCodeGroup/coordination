@@ -14,11 +14,11 @@ public sealed class HostSessionSettingsTests
     {
         var options = HostingTesting.CreateOptions();
         options.KeyspaceSegments.Add("cell-1");
-        var failures = new List<string>();
 
-        var settings = HostSessionSettings.Create(options, failures);
+        var result = HostSessionSettings.Create(options);
 
-        Assert.Empty(failures);
+        var settings = result.Settings;
+        Assert.Empty(result.Failures);
         Assert.NotNull(settings);
         Assert.Equal(new Keyspace("hosting", "cell-1"), settings.Keyspace);
         Assert.Equal(settings.Keyspace.CreateKey("members"), settings.Group);
@@ -48,12 +48,11 @@ public sealed class HostSessionSettingsTests
     {
         var options = HostingTesting.CreateOptions();
         Break(options, property);
-        var failures = new List<string>();
 
-        var settings = HostSessionSettings.Create(options, failures);
+        var result = HostSessionSettings.Create(options);
 
-        Assert.Null(settings);
-        var failure = Assert.Single(failures);
+        Assert.Null(result.Settings);
+        var failure = Assert.Single(result.Failures);
         Assert.StartsWith($"{property}: ", failure);
     }
 
@@ -69,12 +68,11 @@ public sealed class HostSessionSettingsTests
     {
         var options = HostingTesting.CreateOptions();
         SetPeriods(options, boundCase);
-        var failures = new List<string>();
 
-        var settings = HostSessionSettings.Create(options, failures);
+        var result = HostSessionSettings.Create(options);
 
-        Assert.Empty(failures);
-        Assert.NotNull(settings);
+        Assert.Empty(result.Failures);
+        Assert.NotNull(result.Settings);
     }
 
     [Theory]
@@ -92,12 +90,13 @@ public sealed class HostSessionSettingsTests
     {
         var options = HostingTesting.CreateOptions();
         SetPeriods(options, boundCase);
-        var failures = new List<string>();
 
-        var settings = HostSessionSettings.Create(options, failures);
+        var result = HostSessionSettings.Create(options);
 
-        Assert.Null(settings);
-        Assert.Contains(failures, x => x.StartsWith($"{property}: ", StringComparison.Ordinal));
+        Assert.Null(result.Settings);
+        Assert.Contains(result.Failures, x =>
+            x.StartsWith($"{property}: ", StringComparison.Ordinal)
+        );
     }
 
     [Fact]
@@ -106,11 +105,11 @@ public sealed class HostSessionSettingsTests
         var options = HostingTesting.CreateOptions();
         options.NodeId = "";
         options.RetryDelay = TimeSpan.Zero;
-        var failures = new List<string>();
 
-        var settings = HostSessionSettings.Create(options, failures);
+        var result = HostSessionSettings.Create(options);
 
-        Assert.Null(settings);
+        var failures = result.Failures;
+        Assert.Null(result.Settings);
         Assert.Equal(2, failures.Count);
         Assert.StartsWith($"{nameof(CoordinationHostOptions.NodeId)}: ", failures[0]);
         Assert.StartsWith($"{nameof(CoordinationHostOptions.RetryDelay)}: ", failures[1]);
@@ -123,8 +122,9 @@ public sealed class HostSessionSettingsTests
     [Fact]
     public void CreateMember_WhenGivenASession_CarriesTheNodesIdentity()
     {
-        var failures = new List<string>();
-        var settings = HostSessionSettings.Create(HostingTesting.CreateOptions(), failures);
+        var options = HostingTesting.CreateOptions();
+        var result = HostSessionSettings.Create(options);
+        var settings = result.Settings;
         Assert.NotNull(settings);
         var session = new SessionId(HostingTesting.Keyspace, "session-1");
 
@@ -153,10 +153,8 @@ public sealed class HostSessionSettingsTests
         int expectedSeconds
     )
     {
-        var settings = HostSessionSettings.Create(
-            HostingTesting.CreateOptions(),
-            new List<string>()
-        );
+        var options = HostingTesting.CreateOptions();
+        var settings = HostSessionSettings.Create(options).Settings;
         Assert.NotNull(settings);
 
         var delay = settings.GetRetryDelay(failures, 0);
@@ -174,10 +172,8 @@ public sealed class HostSessionSettingsTests
         int expectedMilliseconds
     )
     {
-        var settings = HostSessionSettings.Create(
-            HostingTesting.CreateOptions(),
-            new List<string>()
-        );
+        var options = HostingTesting.CreateOptions();
+        var settings = HostSessionSettings.Create(options).Settings;
         Assert.NotNull(settings);
 
         var delay = settings.GetRetryDelay(failures, jitter);
@@ -188,10 +184,8 @@ public sealed class HostSessionSettingsTests
     [Fact]
     public void GetRetryDelay_WhenFailuresAreBelowOne_Throws()
     {
-        var settings = HostSessionSettings.Create(
-            HostingTesting.CreateOptions(),
-            new List<string>()
-        );
+        var options = HostingTesting.CreateOptions();
+        var settings = HostSessionSettings.Create(options).Settings;
         Assert.NotNull(settings);
 
         var exception = Assert.Throws<ArgumentOutOfRangeException>(() =>
@@ -207,10 +201,8 @@ public sealed class HostSessionSettingsTests
     [InlineData(double.NaN)]
     public void GetRetryDelay_WhenTheJitterIsOutOfRange_Throws(double jitter)
     {
-        var settings = HostSessionSettings.Create(
-            HostingTesting.CreateOptions(),
-            new List<string>()
-        );
+        var options = HostingTesting.CreateOptions();
+        var settings = HostSessionSettings.Create(options).Settings;
         Assert.NotNull(settings);
 
         var exception = Assert.Throws<ArgumentOutOfRangeException>(() =>
