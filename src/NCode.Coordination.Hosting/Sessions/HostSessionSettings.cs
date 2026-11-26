@@ -78,35 +78,35 @@ internal sealed class HostSessionSettings
         var keepAliveInterval = options.KeepAliveInterval;
 
         if (
-            keepAliveInterval <= TimeSpan.Zero
+            keepAliveInterval < MinInterval
             || keepAliveInterval > MaxInterval
             || (deadline is not null && keepAliveInterval >= deadline.Lifetime)
         )
         {
             failures.Add(
-                $"{nameof(CoordinationHostOptions.KeepAliveInterval)}: the interval is more than zero, at most {MaxInterval}, and shorter than {nameof(CoordinationHostOptions.SessionTimeToLive)} less {nameof(CoordinationHostOptions.DriftAllowance)}."
+                $"{nameof(CoordinationHostOptions.KeepAliveInterval)}: the interval is at least {MinInterval}, at most {MaxInterval}, and shorter than {nameof(CoordinationHostOptions.SessionTimeToLive)} less {nameof(CoordinationHostOptions.DriftAllowance)}."
             );
         }
 
         var retryDelay = options.RetryDelay;
 
-        if (retryDelay <= TimeSpan.Zero || retryDelay > MaxInterval)
+        if (retryDelay < MinInterval || retryDelay > MaxInterval)
         {
             failures.Add(
-                $"{nameof(CoordinationHostOptions.RetryDelay)}: the delay is more than zero and at most {MaxInterval}."
+                $"{nameof(CoordinationHostOptions.RetryDelay)}: the delay is at least {MinInterval} and at most {MaxInterval}."
             );
         }
 
         var maxRetryDelay = options.MaxRetryDelay;
 
         if (
-            maxRetryDelay <= TimeSpan.Zero
+            maxRetryDelay < MinInterval
             || maxRetryDelay < retryDelay
             || maxRetryDelay > MaxInterval
         )
         {
             failures.Add(
-                $"{nameof(CoordinationHostOptions.MaxRetryDelay)}: the delay is more than zero, at least {nameof(CoordinationHostOptions.RetryDelay)}, and at most {MaxInterval}."
+                $"{nameof(CoordinationHostOptions.MaxRetryDelay)}: the delay is at least {MinInterval}, at least {nameof(CoordinationHostOptions.RetryDelay)}, and at most {MaxInterval}."
             );
         }
 
@@ -164,6 +164,12 @@ internal sealed class HostSessionSettings
     /// Gets a session id the contracts' constructors need to build a member for a check.
     /// </summary>
     private static SessionId Placeholder { get; } = new(new Keyspace("validation"), "validation");
+
+    /// <summary>
+    /// Gets the shortest keep-alive interval, retry delay and longest retry delay, one millisecond, the shortest period a
+    /// timer accepts.
+    /// </summary>
+    public static TimeSpan MinInterval { get; } = TimeSpan.FromMilliseconds(1);
 
     /// <summary>
     /// Gets the longest keep-alive interval, retry delay and longest retry delay, one day. A timer refuses a period of

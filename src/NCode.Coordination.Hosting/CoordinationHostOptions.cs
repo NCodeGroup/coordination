@@ -59,7 +59,7 @@ public sealed class CoordinationHostOptions
     public TimeSpan SessionTimeToLive { get; set; } = TimeSpan.FromSeconds(30);
 
     /// <summary>
-    /// Gets or sets how often the host renews its session: above zero, at most one day, and shorter than the
+    /// Gets or sets how often the host renews its session: at least one millisecond, at most one day, and shorter than the
     /// session's time to live less the drift allowance; 10 seconds by default.
     /// </summary>
     public TimeSpan KeepAliveInterval { get; set; } = TimeSpan.FromSeconds(10);
@@ -72,8 +72,8 @@ public sealed class CoordinationHostOptions
 
     /// <summary>
     /// Gets or sets how long the host waits before it first tries again after a failed attempt to open its session or
-    /// join its group; each further failure in a row doubles the wait, up to <see cref="MaxRetryDelay" />: above zero
-    /// and at most one day; 2 seconds by default.
+    /// join its group; each further failure in a row doubles the wait, up to <see cref="MaxRetryDelay" />: at least one
+    /// millisecond and at most one day; 2 seconds by default.
     /// </summary>
     public TimeSpan RetryDelay { get; set; } = TimeSpan.FromSeconds(2);
 

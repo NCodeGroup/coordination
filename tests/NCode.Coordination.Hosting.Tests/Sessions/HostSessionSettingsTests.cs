@@ -57,6 +57,49 @@ public sealed class HostSessionSettingsTests
         Assert.StartsWith($"{property}: ", failure);
     }
 
+    [Theory]
+    [InlineData("KeepAliveIntervalAtMin")]
+    [InlineData("KeepAliveIntervalBelowLifetime")]
+    [InlineData("KeepAliveIntervalAtMax")]
+    [InlineData("RetryDelayAtMin")]
+    [InlineData("RetryDelayAtMax")]
+    [InlineData("MaxRetryDelayAtRetryDelay")]
+    [InlineData("MaxRetryDelayAtMax")]
+    public void Create_WhenAPeriodIsAtItsBound_Succeeds(string boundCase)
+    {
+        var options = HostingTesting.CreateOptions();
+        SetPeriods(options, boundCase);
+        var failures = new List<string>();
+
+        var settings = HostSessionSettings.Create(options, failures);
+
+        Assert.Empty(failures);
+        Assert.NotNull(settings);
+    }
+
+    [Theory]
+    [InlineData("KeepAliveIntervalBelowMin", nameof(CoordinationHostOptions.KeepAliveInterval))]
+    [InlineData("KeepAliveIntervalAtLifetime", nameof(CoordinationHostOptions.KeepAliveInterval))]
+    [InlineData("KeepAliveIntervalAboveMax", nameof(CoordinationHostOptions.KeepAliveInterval))]
+    [InlineData("RetryDelayBelowMin", nameof(CoordinationHostOptions.RetryDelay))]
+    [InlineData("RetryDelayAboveMax", nameof(CoordinationHostOptions.RetryDelay))]
+    [InlineData("MaxRetryDelayBelowRetryDelay", nameof(CoordinationHostOptions.MaxRetryDelay))]
+    [InlineData("MaxRetryDelayAboveMax", nameof(CoordinationHostOptions.MaxRetryDelay))]
+    public void Create_WhenAPeriodIsJustPastItsBound_NamesItsProperty(
+        string boundCase,
+        string property
+    )
+    {
+        var options = HostingTesting.CreateOptions();
+        SetPeriods(options, boundCase);
+        var failures = new List<string>();
+
+        var settings = HostSessionSettings.Create(options, failures);
+
+        Assert.Null(settings);
+        Assert.Contains(failures, x => x.StartsWith($"{property}: ", StringComparison.Ordinal));
+    }
+
     [Fact]
     public void Create_WhenSeveralValuesAreInvalid_ReportsEach()
     {
@@ -178,6 +221,68 @@ public sealed class HostSessionSettingsTests
     }
 
     #endregion
+
+    private static void SetPeriods(CoordinationHostOptions options, string boundCase)
+    {
+        var oneMillisecond = TimeSpan.FromMilliseconds(1);
+        var oneTick = TimeSpan.FromTicks(1);
+        var oneDay = TimeSpan.FromDays(1);
+        var twoDays = TimeSpan.FromDays(2);
+        var twoSeconds = TimeSpan.FromSeconds(2);
+        var lifetime = TimeSpan.FromSeconds(28);
+
+        switch (boundCase)
+        {
+            case "KeepAliveIntervalAtMin":
+                options.KeepAliveInterval = oneMillisecond;
+                break;
+            case "KeepAliveIntervalBelowLifetime":
+                options.KeepAliveInterval = lifetime - oneTick;
+                break;
+            case "KeepAliveIntervalAtMax":
+                options.SessionTimeToLive = twoDays;
+                options.KeepAliveInterval = oneDay;
+                break;
+            case "RetryDelayAtMin":
+                options.RetryDelay = oneMillisecond;
+                break;
+            case "RetryDelayAtMax":
+                options.RetryDelay = oneDay;
+                options.MaxRetryDelay = oneDay;
+                break;
+            case "MaxRetryDelayAtRetryDelay":
+                options.MaxRetryDelay = twoSeconds;
+                break;
+            case "MaxRetryDelayAtMax":
+                options.MaxRetryDelay = oneDay;
+                break;
+            case "KeepAliveIntervalBelowMin":
+                options.KeepAliveInterval = oneMillisecond - oneTick;
+                break;
+            case "KeepAliveIntervalAtLifetime":
+                options.KeepAliveInterval = lifetime;
+                break;
+            case "KeepAliveIntervalAboveMax":
+                options.SessionTimeToLive = twoDays;
+                options.KeepAliveInterval = oneDay + oneTick;
+                break;
+            case "RetryDelayBelowMin":
+                options.RetryDelay = oneMillisecond - oneTick;
+                break;
+            case "RetryDelayAboveMax":
+                options.RetryDelay = oneDay + oneTick;
+                options.MaxRetryDelay = oneDay + oneTick;
+                break;
+            case "MaxRetryDelayBelowRetryDelay":
+                options.MaxRetryDelay = twoSeconds - oneTick;
+                break;
+            case "MaxRetryDelayAboveMax":
+                options.MaxRetryDelay = oneDay + oneTick;
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(boundCase), boundCase, null);
+        }
+    }
 
     private static void Break(CoordinationHostOptions options, string property)
     {
