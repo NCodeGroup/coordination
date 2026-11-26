@@ -2,10 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging.Testing;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using Moq;
+using NCode.Coordination.Hosting.Logging;
 using NCode.Coordination.Hosting.Tests;
 
 namespace NCode.Coordination.Hosting.Sessions.Tests;
@@ -451,16 +454,22 @@ public sealed class DefaultHostSessionServiceTests : IDisposable
             )
             .ReturnsAsync(MembershipJoinStatus.Joined)
             .Verifiable();
+        var logger = new FakeLogger<DefaultHostSessionService>();
         await using var service = HostingTesting.CreateService(
             time,
             sessions.Object,
-            membership.Object
+            membership.Object,
+            logger: logger
         );
 
         await service.StartAsync(cancellationToken);
 
         Assert.Equal(HostSessionState.Unreachable, service.State);
         Assert.Null(service.Current);
+        var records = logger.Collector.GetSnapshot();
+        Assert.Contains(records, x =>
+            x.Id.Id == EventIds.SessionOpenFailed && x.Level == LogLevel.Warning
+        );
 
         time.Advance(TimeSpan.FromSeconds(2));
 
@@ -933,10 +942,12 @@ public sealed class DefaultHostSessionServiceTests : IDisposable
             )
             .ReturnsAsync(MembershipJoinStatus.Joined)
             .Verifiable();
+        var logger = new FakeLogger<DefaultHostSessionService>();
         await using var service = HostingTesting.CreateService(
             time,
             sessions.Object,
-            membership.Object
+            membership.Object,
+            logger: logger
         );
         await service.StartAsync(cancellationToken);
 
@@ -944,6 +955,10 @@ public sealed class DefaultHostSessionServiceTests : IDisposable
 
         Assert.Equal(HostSessionState.Stopped, service.State);
         Assert.Null(service.Current);
+        var records = logger.Collector.GetSnapshot();
+        Assert.Contains(records, x =>
+            x.Id.Id == EventIds.SessionCloseFailed && x.Level == LogLevel.Warning
+        );
     }
 
     [Fact]
@@ -1009,10 +1024,12 @@ public sealed class DefaultHostSessionServiceTests : IDisposable
         var time = new ThrowingTimerTimeProvider(HostingTesting.Start);
         var sessions = Mocks.Create<ISessionService>();
         var membership = Mocks.Create<IMembershipService>();
+        var logger = new FakeLogger<DefaultHostSessionService>();
         await using var service = HostingTesting.CreateService(
             time,
             sessions.Object,
-            membership.Object
+            membership.Object,
+            logger: logger
         );
         await service.StartAsync(cancellationToken);
         Assert.Equal(HostSessionState.Unreachable, service.State);
@@ -1021,6 +1038,10 @@ public sealed class DefaultHostSessionServiceTests : IDisposable
         await service.StoppedAsync(cancellationToken);
 
         Assert.Equal(HostSessionState.Stopped, service.State);
+        var records = logger.Collector.GetSnapshot();
+        Assert.Contains(records, x =>
+            x.Id.Id == EventIds.SessionLoopFailed && x.Level == LogLevel.Error
+        );
     }
 
     [Fact]

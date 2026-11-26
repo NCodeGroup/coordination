@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
@@ -57,12 +58,14 @@ internal static class HostingTesting
     /// <param name="sessions">The session operations the service calls.</param>
     /// <param name="membership">The membership operations the service calls.</param>
     /// <param name="jitter">The source of the random part of each wait; a fixed zero when null.</param>
+    /// <param name="logger">The logger the service writes to; a logger that discards its entries when null.</param>
     /// <returns>The service.</returns>
     public static DefaultHostSessionService CreateService(
         TimeProvider time,
         ISessionService sessions,
         IMembershipService membership,
-        IJitter? jitter = null
+        IJitter? jitter = null,
+        ILogger<DefaultHostSessionService>? logger = null
     ) =>
         new(
             sessions,
@@ -70,7 +73,7 @@ internal static class HostingTesting
             Options.Create(CreateOptions()),
             time,
             jitter ?? new FixedJitter(0),
-            NullLogger<DefaultHostSessionService>.Instance
+            logger ?? NullLogger<DefaultHostSessionService>.Instance
         );
 
     /// <summary>
