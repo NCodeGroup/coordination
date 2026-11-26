@@ -21,11 +21,6 @@ namespace NCode.Coordination.Resp.Leases;
 internal class RespSemaphoreService(RespRecordTable table, IRespTokens tokens) : ISemaphoreService
 {
     /// <summary>
-    /// The text an owner token starts with.
-    /// </summary>
-    private const string OwnerPrefix = "o-";
-
-    /// <summary>
     /// Gets the table that runs the keyspace scripts.
     /// </summary>
     private RespRecordTable Table { get; } =
@@ -54,14 +49,11 @@ internal class RespSemaphoreService(RespRecordTable table, IRespTokens tokens) :
         ArgumentNullException.ThrowIfNull(terms);
         RespCall.Check(options, cancellationToken);
 
-        RedisValue[] arguments =
-        [
-            RespKeys.Name(resource),
-            capacity,
-            Tokens.Next(OwnerPrefix),
-            terms.IsBoundToSession ? terms.Session.Value : "",
-            terms.IsBoundToSession ? 0 : RespCall.ToMilliseconds(terms.TimeToLive),
-        ];
+        var name = RespKeys.Name(resource);
+        var owner = Tokens.Next(RespTokenPrefixes.Owner);
+        var session = terms.IsBoundToSession ? terms.Session.Value : "";
+        var milliseconds = terms.IsBoundToSession ? 0 : RespCall.ToMilliseconds(terms.TimeToLive);
+        RedisValue[] arguments = [name, capacity, owner, session, milliseconds];
         var reply = await Table
             .EvaluateAsync(
                 RespScript.SemaphoreAcquire,
@@ -75,7 +67,7 @@ internal class RespSemaphoreService(RespRecordTable table, IRespTokens tokens) :
 
         return status switch
         {
-            0 when fields.Length == 3 => ToAcquired(resource, terms, reply, fields),
+            0 when fields.Length == 3 => ToAcquired(resource, terms, fields),
             1 when fields.Length == 0 => SemaphoreAcquireResult.Full,
             2 when fields.Length == 0 => SemaphoreAcquireResult.SessionEnded,
             3 when fields.Length == 0 => SemaphoreAcquireResult.CapacityConflict,
@@ -88,21 +80,19 @@ internal class RespSemaphoreService(RespRecordTable table, IRespTokens tokens) :
     /// </summary>
     /// <param name="resource">The resource that the semaphore guards.</param>
     /// <param name="terms">The terms of the slot's grant.</param>
-    /// <param name="reply">The reply of the script.</param>
     /// <param name="fields">The fields of the reply after its status: slot, owner token and fencing token.</param>
     /// <returns>The result that carries the slot's grant.</returns>
     /// <exception cref="CoordinationException">The owner token is missing from the reply.</exception>
     private static SemaphoreAcquireResult ToAcquired(
         CoordinationKey resource,
         LeaseTerms terms,
-        RedisResult reply,
         RedisResult[] fields
     )
     {
         var slot = (int)RespReplies.Integer(fields[0]);
         var fencingValue = RespReplies.Integer(fields[2]);
         var fencing = new FencingToken(fencingValue);
-        var ownerValue = (string?)fields[1] ?? throw RespReplies.Unexpected(reply);
+        var ownerValue = RespReplies.Text(fields[1]);
         var owner = new OwnerToken(ownerValue);
         var grant = new SemaphoreGrant(resource, slot, fencing, owner, terms);
         var acquired = SemaphoreAcquireResult.Acquired(grant);
@@ -129,12 +119,9 @@ internal class RespSemaphoreService(RespRecordTable table, IRespTokens tokens) :
             );
         }
 
-        RedisValue[] arguments =
-        [
-            SlotField(grant),
-            grant.Owner.Value,
-            RespCall.ToMilliseconds(timeToLive),
-        ];
+        var field = SlotField(grant);
+        var milliseconds = RespCall.ToMilliseconds(timeToLive);
+        RedisValue[] arguments = [field, grant.Owner.Value, milliseconds];
         var reply = await Table
             .EvaluateAsync(
                 RespScript.GrantRenew,
@@ -164,7 +151,8 @@ internal class RespSemaphoreService(RespRecordTable table, IRespTokens tokens) :
         ArgumentNullException.ThrowIfNull(grant);
         RespCall.Check(options, cancellationToken);
 
-        RedisValue[] arguments = [SlotField(grant), grant.Owner.Value];
+        var field = SlotField(grant);
+        RedisValue[] arguments = [field, grant.Owner.Value];
         var reply = await Table
             .EvaluateAsync(
                 RespScript.GrantRelease,
@@ -222,7 +210,8 @@ internal class RespSemaphoreService(RespRecordTable table, IRespTokens tokens) :
         CancellationToken cancellationToken
     )
     {
-        RedisValue[] arguments = [RespKeys.Name(resource)];
+        var name = RespKeys.Name(resource);
+        RedisValue[] arguments = [name];
         var reply = await Table
             .EvaluateAsync(
                 RespScript.SemaphoreCheck,

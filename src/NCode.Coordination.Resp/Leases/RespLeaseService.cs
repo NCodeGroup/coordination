@@ -20,11 +20,6 @@ namespace NCode.Coordination.Resp.Leases;
 internal class RespLeaseService(RespRecordTable table, IRespTokens tokens) : ILeaseService
 {
     /// <summary>
-    /// The text an owner token starts with.
-    /// </summary>
-    private const string OwnerPrefix = "o-";
-
-    /// <summary>
     /// The text a lease's grant field starts with.
     /// </summary>
     private const string FieldPrefix = "l ";
@@ -52,13 +47,11 @@ internal class RespLeaseService(RespRecordTable table, IRespTokens tokens) : ILe
         ArgumentNullException.ThrowIfNull(terms);
         RespCall.Check(options, cancellationToken);
 
-        RedisValue[] arguments =
-        [
-            RespKeys.Name(resource),
-            Tokens.Next(OwnerPrefix),
-            terms.IsBoundToSession ? terms.Session.Value : "",
-            terms.IsBoundToSession ? 0 : RespCall.ToMilliseconds(terms.TimeToLive),
-        ];
+        var name = RespKeys.Name(resource);
+        var owner = Tokens.Next(RespTokenPrefixes.Owner);
+        var session = terms.IsBoundToSession ? terms.Session.Value : "";
+        var milliseconds = terms.IsBoundToSession ? 0 : RespCall.ToMilliseconds(terms.TimeToLive);
+        RedisValue[] arguments = [name, owner, session, milliseconds];
         var reply = await Table
             .EvaluateAsync(RespScript.LeaseAcquire, resource.Keyspace, arguments, cancellationToken)
             .ConfigureAwait(false);
@@ -67,7 +60,7 @@ internal class RespLeaseService(RespRecordTable table, IRespTokens tokens) : ILe
 
         return status switch
         {
-            0 when fields.Length == 2 => ToAcquired(resource, terms, reply, fields),
+            0 when fields.Length == 2 => ToAcquired(resource, terms, fields),
             1 when fields.Length == 0 => LeaseAcquireResult.Held,
             2 when fields.Length == 0 => LeaseAcquireResult.SessionEnded,
             _ => throw RespReplies.Unexpected(reply),
@@ -79,20 +72,18 @@ internal class RespLeaseService(RespRecordTable table, IRespTokens tokens) : ILe
     /// </summary>
     /// <param name="resource">The resource that the lease guards.</param>
     /// <param name="terms">The terms of the lease.</param>
-    /// <param name="reply">The reply of the script.</param>
     /// <param name="fields">The fields of the reply after its status: owner token and fencing token.</param>
     /// <returns>The result that carries the lease's grant.</returns>
     /// <exception cref="CoordinationException">The owner token is missing from the reply.</exception>
     private static LeaseAcquireResult ToAcquired(
         CoordinationKey resource,
         LeaseTerms terms,
-        RedisResult reply,
         RedisResult[] fields
     )
     {
         var fencingValue = RespReplies.Integer(fields[1]);
         var fencing = new FencingToken(fencingValue);
-        var ownerValue = (string?)fields[0] ?? throw RespReplies.Unexpected(reply);
+        var ownerValue = RespReplies.Text(fields[0]);
         var owner = new OwnerToken(ownerValue);
         var grant = new LeaseGrant(resource, fencing, owner, terms);
         var acquired = LeaseAcquireResult.Acquired(grant);
@@ -119,12 +110,9 @@ internal class RespLeaseService(RespRecordTable table, IRespTokens tokens) : ILe
             );
         }
 
-        RedisValue[] arguments =
-        [
-            FieldPrefix + RespKeys.Name(grant.Resource),
-            grant.Owner.Value,
-            RespCall.ToMilliseconds(timeToLive),
-        ];
+        var field = FieldPrefix + RespKeys.Name(grant.Resource);
+        var milliseconds = RespCall.ToMilliseconds(timeToLive);
+        RedisValue[] arguments = [field, grant.Owner.Value, milliseconds];
         var reply = await Table
             .EvaluateAsync(
                 RespScript.GrantRenew,
@@ -154,7 +142,8 @@ internal class RespLeaseService(RespRecordTable table, IRespTokens tokens) : ILe
         ArgumentNullException.ThrowIfNull(grant);
         RespCall.Check(options, cancellationToken);
 
-        RedisValue[] arguments = [FieldPrefix + RespKeys.Name(grant.Resource), grant.Owner.Value];
+        var field = FieldPrefix + RespKeys.Name(grant.Resource);
+        RedisValue[] arguments = [field, grant.Owner.Value];
         var reply = await Table
             .EvaluateAsync(
                 RespScript.GrantRelease,
@@ -201,7 +190,8 @@ internal class RespLeaseService(RespRecordTable table, IRespTokens tokens) : ILe
         CancellationToken cancellationToken
     )
     {
-        RedisValue[] arguments = [FieldPrefix + RespKeys.Name(resource)];
+        var field = FieldPrefix + RespKeys.Name(resource);
+        RedisValue[] arguments = [field];
         var reply = await Table
             .EvaluateAsync(RespScript.GrantCheck, resource.Keyspace, arguments, cancellationToken)
             .ConfigureAwait(false);
