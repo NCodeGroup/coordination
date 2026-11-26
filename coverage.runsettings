@@ -3,7 +3,7 @@
 <RunSettings>
   <DataCollectionRunSettings>
     <DataCollectors>
-      <DataCollector friendlyName="Code Coverage">
+      <DataCollector friendlyName="Code Coverage" enabled="false">
         <Configuration>
           <CodeCoverage>
             <ModulePaths>
