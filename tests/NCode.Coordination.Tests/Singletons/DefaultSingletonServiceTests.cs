@@ -45,7 +45,7 @@ public sealed class DefaultSingletonServiceTests
             .RunAsync(role, secondCandidate, Work, null, cancellationToken)
             .AsTask();
 
-        await RecipeTesting.WaitUntilAsync(() => !events.IsEmpty);
+        await RecipeTesting.WaitUntilAsync(() => !events.IsEmpty, cancellationToken);
         release.SetResult();
         var results = await Task.WhenAll(firstTask, secondTask);
         var recorded = events.ToArray();
@@ -84,7 +84,7 @@ public sealed class DefaultSingletonServiceTests
         var task = singletons.RunAsync(role, candidate, Work, null, cancellationToken).AsTask();
 
         Func<bool> hasLeadership = () => Volatile.Read(ref firstLeadership) is not null;
-        await RecipeTesting.WaitUntilAsync(hasLeadership);
+        await RecipeTesting.WaitUntilAsync(hasLeadership, cancellationToken);
         var observed = Volatile.Read(ref firstLeadership);
         var leadership = Assert.IsType<Leadership>(observed);
         var resigned = await elections.ResignAsync(leadership, null, cancellationToken);

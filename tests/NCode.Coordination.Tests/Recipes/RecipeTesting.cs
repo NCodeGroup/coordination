@@ -88,8 +88,12 @@ internal static class RecipeTesting
     /// Waits until the condition holds, and fails the test when it does not within 15 seconds.
     /// </summary>
     /// <param name="condition">The condition to poll.</param>
+    /// <param name="cancellationToken">The token that cancels the wait.</param>
     /// <returns>A task that completes when the condition holds.</returns>
-    public static async Task WaitUntilAsync(Func<bool> condition)
+    public static async Task WaitUntilAsync(
+        Func<bool> condition,
+        CancellationToken cancellationToken
+    )
     {
         var stopwatch = Stopwatch.StartNew();
         while (!condition())
@@ -99,7 +103,7 @@ internal static class RecipeTesting
                 Assert.Fail("The condition was not met within 15 seconds.");
             }
 
-            await Task.Delay(10);
+            await Task.Delay(10, cancellationToken);
         }
     }
 }

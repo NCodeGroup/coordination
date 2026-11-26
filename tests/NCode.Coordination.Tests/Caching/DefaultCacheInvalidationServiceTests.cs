@@ -31,9 +31,9 @@ public sealed class DefaultCacheInvalidationServiceTests
 
         var task = cache.RunAsync(topic, handler, null, stop.Token).AsTask();
 
-        await RecipeTesting.WaitUntilAsync(hasCleared);
+        await RecipeTesting.WaitUntilAsync(hasCleared, cancellationToken);
         await cache.InvalidateAsync(topic, (byte[])[1, 2], null, cancellationToken);
-        await RecipeTesting.WaitUntilAsync(hasInvalidated);
+        await RecipeTesting.WaitUntilAsync(hasInvalidated, cancellationToken);
         await stop.CancelAsync();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => task);
         var entries = handler.Entries.ToArray();
@@ -56,7 +56,7 @@ public sealed class DefaultCacheInvalidationServiceTests
 
         var task = cache.RunAsync(topic, handler, null, stop.Token).AsTask();
 
-        await RecipeTesting.WaitUntilAsync(hasCleared);
+        await RecipeTesting.WaitUntilAsync(hasCleared, cancellationToken);
         await stop.CancelAsync();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => task);
         var lastEntry = handler.Entries.Last();
