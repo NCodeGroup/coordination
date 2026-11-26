@@ -17,6 +17,7 @@ namespace NCode.Coordination;
 /// </remarks>
 public sealed partial record RespProfile
 {
+    /// <summary>The longest profile name, in characters.</summary>
     private const int MaxNameLength = 128;
 
     /// <summary>
