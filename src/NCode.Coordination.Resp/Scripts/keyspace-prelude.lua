@@ -1,7 +1,9 @@
 -- The start of every keyspace script, which the provider puts before the script's own text when it loads it.
 -- KEYS[1] is the keyspace's revision. KEYS[2] holds its records: a hash with three fields per record, 'r:', 'n:' and
--- 'v:' followed by the record's member, which hold its revision, its name and its value. KEYS[3] is the index of the
--- records' members, a sorted set whose scores are all 0, read in lexicographic order. KEYS[4] holds the deadline, in
+-- 'v:' followed by the record's member, which hold its revision, its name and its value, and a fourth, 's:' followed
+-- by the member, when the record is bound to a session (the record is absent once that session is not live). KEYS[3]
+-- is the index of the records' members, a sorted set whose scores are all 0, read in lexicographic order. KEYS[4]
+-- holds the deadline, in
 -- milliseconds on the server's clock, of each record that has a time to live.
 -- KEYS[5] is the sessions: a hash from each session to its time to live in milliseconds. KEYS[6] holds the deadline
 -- of each session, in milliseconds on the server's clock; 0 marks a session that has ended and is not yet cleaned up.
@@ -40,13 +42,24 @@ local function current()
   return tonumber(redis.call('GET', revisionKey) or '1')
 end
 
+local function live(session)
+  local deadline = redis.call('ZSCORE', sessionDeadlines, session)
+  if not deadline then
+    return false
+  end
+  return tonumber(deadline) > now
+end
+
 local function find(member)
   local deadline = redis.call('ZSCORE', deadlines, member)
   if deadline and tonumber(deadline) <= now then
     return nil
   end
-  local fields = redis.call('HMGET', records, 'r:' .. member, 'n:' .. member, 'v:' .. member)
+  local fields = redis.call('HMGET', records, 'r:' .. member, 'n:' .. member, 'v:' .. member, 's:' .. member)
   if not fields[1] then
+    return nil
+  end
+  if fields[4] and not live(fields[4]) then
     return nil
   end
   return fields
@@ -58,8 +71,18 @@ local function advance()
   return revision
 end
 
-local function put(member, name, value, timeToLive, revision)
+local function put(member, name, value, timeToLive, revision, session)
+  local previous = redis.call('HGET', records, 's:' .. member)
+  if previous then
+    redis.call('ZREM', bindings, previous .. ' r ' .. member)
+  end
   redis.call('HSET', records, 'r:' .. member, revision, 'n:' .. member, name, 'v:' .. member, value)
+  if session and session ~= '' then
+    redis.call('HSET', records, 's:' .. member, session)
+    redis.call('ZADD', bindings, 0, session .. ' r ' .. member)
+  else
+    redis.call('HDEL', records, 's:' .. member)
+  end
   redis.call('ZADD', index, 0, member)
   if timeToLive > 0 then
     redis.call('ZADD', deadlines, now + timeToLive, member)
@@ -70,7 +93,11 @@ local function put(member, name, value, timeToLive, revision)
 end
 
 local function remove(member, name)
-  redis.call('HDEL', records, 'r:' .. member, 'n:' .. member, 'v:' .. member)
+  local previous = redis.call('HGET', records, 's:' .. member)
+  if previous then
+    redis.call('ZREM', bindings, previous .. ' r ' .. member)
+  end
+  redis.call('HDEL', records, 'r:' .. member, 'n:' .. member, 'v:' .. member, 's:' .. member)
   redis.call('ZREM', index, member)
   redis.call('ZREM', deadlines, member)
   changes[#changes + 1] = 'd' .. name
