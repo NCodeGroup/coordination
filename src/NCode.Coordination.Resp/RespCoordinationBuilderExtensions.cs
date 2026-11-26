@@ -42,22 +42,31 @@ public static class RespCoordinationBuilderExtensions
             var factory = options.Connection;
             var profile = options.Profile;
 
+            async Task<IConnectionMultiplexer> StartConnect()
+            {
+                ArgumentException.ThrowIfNullOrWhiteSpace(configuration);
+
+                return await ConnectionMultiplexer
+                    .ConnectAsync(configuration)
+                    .ConfigureAwait(false);
+            }
+
             Func<IServiceProvider, RespConnection> createConnection;
             if (factory is not null && string.IsNullOrWhiteSpace(configuration))
             {
                 createConnection = services => new RespConnection(
-                    _ => Task.FromResult(factory(services)),
+                    _ =>
+                    {
+                        var multiplexer = factory(services);
+                        return Task.FromResult(multiplexer);
+                    },
                     owned: false
                 );
             }
             else if (factory is null && !string.IsNullOrWhiteSpace(configuration))
             {
                 createConnection = _ => new RespConnection(
-                    async ct =>
-                        await ConnectionMultiplexer
-                            .ConnectAsync(configuration)
-                            .WaitAsync(ct)
-                            .ConfigureAwait(false),
+                    ct => RespConnection.ConnectOwnedAsync(StartConnect, ct),
                     owned: true
                 );
             }
@@ -71,10 +80,11 @@ public static class RespCoordinationBuilderExtensions
 
             ArgumentNullException.ThrowIfNull(profile);
 
-            return builder.AddProvider(services => new RespProvider(
-                createConnection(services),
-                profile
-            ));
+            return builder.AddProvider(services =>
+            {
+                var connection = createConnection(services);
+                return new RespProvider(connection, profile);
+            });
         }
     }
 }

@@ -12,6 +12,8 @@ public sealed class RespConnectionTests : IDisposable
 
     public void Dispose() => Mocks.Verify();
 
+    #region GetAsync Tests
+
     [Fact]
     public async Task GetAsync_CalledTwice_ConnectsOnce()
     {
@@ -99,6 +101,26 @@ public sealed class RespConnectionTests : IDisposable
     }
 
     [Fact]
+    public async Task GetAsync_DisposedWhileConnecting_DisposesOwnedMultiplexerAndThrows()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var source = new TaskCompletionSource<IConnectionMultiplexer>();
+        var multiplexer = Mocks.Create<IConnectionMultiplexer>();
+        multiplexer.Setup(x => x.DisposeAsync()).Returns(ValueTask.CompletedTask).Verifiable();
+        var connection = new RespConnection(_ => source.Task, owned: true);
+        var pending = connection.GetAsync(cancellationToken).AsTask();
+        await connection.DisposeAsync();
+
+        source.SetResult(multiplexer.Object);
+
+        await Assert.ThrowsAsync<ObjectDisposedException>(async () => await pending);
+    }
+
+    #endregion
+
+    #region DisposeAsync Tests
+
+    [Fact]
     public async Task DisposeAsync_Owned_DisposesMultiplexer()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
@@ -120,4 +142,37 @@ public sealed class RespConnectionTests : IDisposable
 
         await connection.DisposeAsync();
     }
+
+    #endregion
+
+    #region ConnectOwnedAsync Tests
+
+    [Fact]
+    public async Task ConnectOwnedAsync_CanceledBeforeConnect_DisposesLateMultiplexer()
+    {
+        var source = new TaskCompletionSource<IConnectionMultiplexer>();
+        var disposed = new TaskCompletionSource();
+        var multiplexer = Mocks.Create<IConnectionMultiplexer>();
+        multiplexer
+            .Setup(x => x.DisposeAsync())
+            .Returns(() =>
+            {
+                disposed.SetResult();
+                return ValueTask.CompletedTask;
+            })
+            .Verifiable();
+        using var cts = new CancellationTokenSource();
+        var pending = RespConnection.ConnectOwnedAsync(() => source.Task, cts.Token);
+        await cts.CancelAsync();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await pending);
+
+        source.SetResult(multiplexer.Object);
+
+        await disposed.Task.WaitAsync(
+            TimeSpan.FromSeconds(5),
+            TestContext.Current.CancellationToken
+        );
+    }
+
+    #endregion
 }
