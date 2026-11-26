@@ -5,13 +5,24 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
+using Moq;
 using NCode.Coordination.Hosting.Tests;
 
 namespace NCode.Coordination.Hosting.Sessions.Tests;
 
-public sealed class DefaultHostSessionServiceTests
+public sealed class DefaultHostSessionServiceTests : IDisposable
 {
     private static CoordinationKey LeaseKey { get; } = HostingTesting.Keyspace.CreateKey("lease");
+
+    private MockRepository Mocks { get; } = new(MockBehavior.Strict);
+
+    public void Dispose() => Mocks.Verify();
+
+    private static SessionGrant CreateGrant(string token) =>
+        new(
+            new SessionId(HostingTesting.Keyspace, token),
+            new TimeToLive(TimeSpan.FromSeconds(30))
+        );
 
     private static DefaultHostSessionService CreateHostService(
         IServiceProvider services,
@@ -122,6 +133,172 @@ public sealed class DefaultHostSessionServiceTests
         var view = await membership.ReadAsync(HostingTesting.Group, null, cancellationToken);
         var member = Assert.Single(view.Members);
         Assert.Equal(session.Id, member.Session);
+    }
+
+    [Fact]
+    public async Task StartAsync_WhenTheSessionIsRenewed_ExtendsItsDeadline()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var time = HostingTesting.CreateTime();
+        var grant = CreateGrant("s1");
+        var called = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var gate = new TaskCompletionSource<KeepAliveResult>();
+        var sessions = Mocks.Create<ISessionService>();
+        var membership = Mocks.Create<IMembershipService>();
+        sessions
+            .Setup(x =>
+                x.OpenAsync(
+                    It.IsAny<Keyspace>(),
+                    It.IsAny<TimeToLive>(),
+                    It.IsAny<OperationOptions?>(),
+                    It.IsAny<CancellationToken>()
+                )
+            )
+            .ReturnsAsync(grant)
+            .Verifiable();
+        sessions
+            .Setup(x =>
+                x.KeepAliveAsync(
+                    grant.Id,
+                    It.IsAny<OperationOptions?>(),
+                    It.IsAny<CancellationToken>()
+                )
+            )
+            .Callback(() => called.TrySetResult())
+            .Returns(new ValueTask<KeepAliveResult>(gate.Task))
+            .Verifiable();
+        membership
+            .Setup(x =>
+                x.JoinAsync(
+                    It.IsAny<CoordinationKey>(),
+                    It.IsAny<Member>(),
+                    It.IsAny<OperationOptions?>(),
+                    It.IsAny<CancellationToken>()
+                )
+            )
+            .ReturnsAsync(MembershipJoinStatus.Joined)
+            .Verifiable();
+        await using var service = HostingTesting.CreateService(
+            time,
+            sessions.Object,
+            membership.Object
+        );
+
+        await service.StartAsync(cancellationToken);
+        var session = await service.WaitForSessionAsync(cancellationToken);
+        time.Advance(TimeSpan.FromSeconds(10));
+        await called.Task.WaitAsync(cancellationToken);
+        gate.SetResult(KeepAliveResult.Renewed(new TimeToLive(TimeSpan.FromSeconds(30))));
+        time.Advance(TimeSpan.FromSeconds(20));
+
+        Assert.False(session.Ended.IsCancellationRequested);
+        Assert.Same(session, service.Current);
+        Assert.Equal(HostSessionState.Active, service.State);
+    }
+
+    [Fact]
+    public async Task StartAsync_WhenRenewalsFailPastTheDeadline_EndsTheSessionAndOpensAnother()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var time = HostingTesting.CreateTime();
+        var first = CreateGrant("s1");
+        var second = CreateGrant("s2");
+        var unavailable = new CoordinationException(
+            CoordinationErrorCodes.Unavailable,
+            true,
+            "The provider is unavailable."
+        );
+        var sessions = Mocks.Create<ISessionService>();
+        var membership = Mocks.Create<IMembershipService>();
+        sessions
+            .SetupSequence(x =>
+                x.OpenAsync(
+                    It.IsAny<Keyspace>(),
+                    It.IsAny<TimeToLive>(),
+                    It.IsAny<OperationOptions?>(),
+                    It.IsAny<CancellationToken>()
+                )
+            )
+            .ReturnsAsync(first)
+            .ReturnsAsync(second);
+        sessions
+            .Setup(x =>
+                x.KeepAliveAsync(
+                    first.Id,
+                    It.IsAny<OperationOptions?>(),
+                    It.IsAny<CancellationToken>()
+                )
+            )
+            .ThrowsAsync(unavailable)
+            .Verifiable();
+        sessions
+            .Setup(x =>
+                x.CloseAsync(first.Id, It.IsAny<OperationOptions?>(), It.IsAny<CancellationToken>())
+            )
+            .ThrowsAsync(unavailable)
+            .Verifiable();
+        membership
+            .Setup(x =>
+                x.JoinAsync(
+                    It.IsAny<CoordinationKey>(),
+                    It.IsAny<Member>(),
+                    It.IsAny<OperationOptions?>(),
+                    It.IsAny<CancellationToken>()
+                )
+            )
+            .ReturnsAsync(MembershipJoinStatus.Joined)
+            .Verifiable();
+        await using var service = HostingTesting.CreateService(
+            time,
+            sessions.Object,
+            membership.Object
+        );
+
+        await service.StartAsync(cancellationToken);
+        var session = await service.WaitForSessionAsync(cancellationToken);
+        time.Advance(TimeSpan.FromSeconds(28));
+
+        Assert.Equal(first.Id, session.Id);
+        Assert.True(session.Ended.IsCancellationRequested);
+
+        var reopened = await service.WaitForSessionAsync(cancellationToken);
+
+        Assert.Equal(second.Id, reopened.Id);
+        sessions.Verify(
+            x =>
+                x.OpenAsync(
+                    It.IsAny<Keyspace>(),
+                    It.IsAny<TimeToLive>(),
+                    It.IsAny<OperationOptions?>(),
+                    It.IsAny<CancellationToken>()
+                ),
+            Times.Exactly(2)
+        );
+    }
+
+    [Fact]
+    public async Task StartAsync_WhenTheProviderEndsTheSession_OpensAnother()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var time = HostingTesting.CreateTime();
+        await using var services = HostingTesting.BuildCoordination(time);
+        await using var service = CreateHostService(services, time);
+        var sessions = services.GetRequiredService<ISessionService>();
+        var membership = services.GetRequiredService<IMembershipService>();
+        await service.StartAsync(cancellationToken);
+        var first = await service.WaitForSessionAsync(cancellationToken);
+        var ended = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        first.Ended.Register(() => ended.TrySetResult());
+
+        await sessions.CloseAsync(first.Id, null, cancellationToken);
+        time.Advance(TimeSpan.FromSeconds(10));
+        await ended.Task.WaitAsync(cancellationToken);
+
+        var second = await service.WaitForSessionAsync(cancellationToken);
+        var view = await membership.ReadAsync(HostingTesting.Group, null, cancellationToken);
+        var member = Assert.Single(view.Members);
+        Assert.NotEqual(first.Id, second.Id);
+        Assert.Equal(second.Id, member.Session);
     }
 
     #endregion
