@@ -20,10 +20,10 @@ namespace NCode.Coordination.Resp.Records;
 /// <exception cref="ArgumentNullException">The server or the profile is null.</exception>
 internal class RespRecordTable(RespServer server, RespProfile profile)
 {
-    // ADR-1025 rule 7.
     /// <summary>
     /// The hour, in milliseconds, after the latest deadline that the table's keys expire.
     /// </summary>
+    // The backstop of ADR-1027 rule 6, which amends ADR-1025 rule 7.
     internal const long BackstopMilliseconds = 3_600_000;
 
     /// <summary>
