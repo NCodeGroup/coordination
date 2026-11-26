@@ -87,7 +87,7 @@ internal class DefaultBarrierService(IRecordService records, IRecordWatchService
             }
         }
 
-        throw new InvalidOperationException("The watch ended without a failure.");
+        throw new InvalidOperationException(RecipeMessages.WatchEnded);
     }
 
     /// <summary>

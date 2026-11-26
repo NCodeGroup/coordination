@@ -258,7 +258,7 @@ internal class DefaultReadWriteLockService(
             }
         }
 
-        throw new InvalidOperationException("The watch ended without a failure.");
+        throw new InvalidOperationException(RecipeMessages.WatchEnded);
     }
 
     /// <summary>
