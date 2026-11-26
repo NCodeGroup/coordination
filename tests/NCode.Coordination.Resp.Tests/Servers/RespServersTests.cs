@@ -7,6 +7,8 @@ namespace NCode.Coordination.Resp.Tests.Servers;
 
 public sealed class RespServersTests(RespServers servers)
 {
+    #region Valkey Property Tests
+
     [RespServerFact]
     public async Task Valkey_Started_AnswersPing()
     {
@@ -17,6 +19,10 @@ public sealed class RespServersTests(RespServers servers)
         Assert.True(latency >= TimeSpan.Zero);
     }
 
+    #endregion
+
+    #region Garnet Property Tests
+
     [RespServerFact]
     public async Task Garnet_Started_AnswersPing()
     {
@@ -26,4 +32,6 @@ public sealed class RespServersTests(RespServers servers)
 
         Assert.True(latency >= TimeSpan.Zero);
     }
+
+    #endregion
 }
