@@ -394,10 +394,9 @@ internal class DefaultHostSessionService(
     }
 
     /// <summary>
-    /// Counts one more failed attempt and plans the wait before the next one.
+    /// Counts one more failed attempt and sets the wait before the next one.
     /// </summary>
-    /// <returns>The wait, which doubles with each failure in a row up to the longest and is shortened at random.</returns>
-    private TimeSpan PlanRetry()
+    private void PlanRetry()
     {
         if (Failures != int.MaxValue)
         {
@@ -406,7 +405,6 @@ internal class DefaultHostSessionService(
 
         var jitter = Jitter.Next();
         RetryWait = Settings.GetRetryDelay(Failures, jitter);
-        return RetryWait;
     }
 
     /// <summary>
@@ -427,8 +425,8 @@ internal class DefaultHostSessionService(
         }
         catch (Exception exception) when (!stopping.IsCancellationRequested)
         {
-            var wait = PlanRetry();
-            Logger.SessionOpenFailed(exception, wait);
+            PlanRetry();
+            Logger.SessionOpenFailed(exception, RetryWait);
             SetState(HostSessionState.Unreachable);
             return null;
         }
@@ -446,8 +444,8 @@ internal class DefaultHostSessionService(
         }
         catch (Exception exception) when (!stopping.IsCancellationRequested)
         {
-            var wait = PlanRetry();
-            Logger.SessionOpenFailed(exception, wait);
+            PlanRetry();
+            Logger.SessionOpenFailed(exception, RetryWait);
             SetState(HostSessionState.Unreachable);
             await CloseQuietlyAsync(grant.Id, stopping).ConfigureAwait(false);
             Unclosed = null;
@@ -456,8 +454,8 @@ internal class DefaultHostSessionService(
 
         if (status == MembershipJoinStatus.NodeIdTaken)
         {
-            var wait = PlanRetry();
-            Logger.NodeIdTaken(Settings.NodeId, wait);
+            PlanRetry();
+            Logger.NodeIdTaken(Settings.NodeId, RetryWait);
             SetState(HostSessionState.Opening);
             await CloseQuietlyAsync(grant.Id, stopping).ConfigureAwait(false);
             Unclosed = null;
@@ -467,7 +465,7 @@ internal class DefaultHostSessionService(
         if (status != MembershipJoinStatus.Joined)
         {
             // The session ended before it joined.
-            _ = PlanRetry();
+            PlanRetry();
             Logger.SessionLost();
             SetState(HostSessionState.Opening);
             Unclosed = null;
