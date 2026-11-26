@@ -71,8 +71,16 @@ public sealed class CoordinationHostOptions
     public TimeSpan DriftAllowance { get; set; } = TimeSpan.FromSeconds(2);
 
     /// <summary>
-    /// Gets or sets how long the host waits before it tries again after a failed call to open its session or join
-    /// its group: above zero and at most one day; 2 seconds by default.
+    /// Gets or sets how long the host waits before it first tries again after a failed attempt to open its session or
+    /// join its group; each further failure in a row doubles the wait, up to <see cref="MaxRetryDelay" />: above zero
+    /// and at most one day; 2 seconds by default.
     /// </summary>
     public TimeSpan RetryDelay { get; set; } = TimeSpan.FromSeconds(2);
+
+    /// <summary>
+    /// Gets or sets the longest the host waits between attempts to open its session or join its group, however many
+    /// fail in a row; each wait is also shortened at random by up to half, so a cluster's nodes spread their
+    /// attempts: at least <see cref="RetryDelay" /> and at most one day; 30 seconds by default.
+    /// </summary>
+    public TimeSpan MaxRetryDelay { get; set; } = TimeSpan.FromSeconds(30);
 }

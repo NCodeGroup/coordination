@@ -97,6 +97,19 @@ internal sealed class HostSessionSettings
             );
         }
 
+        var maxRetryDelay = options.MaxRetryDelay;
+
+        if (
+            maxRetryDelay <= TimeSpan.Zero
+            || maxRetryDelay < retryDelay
+            || maxRetryDelay > MaxInterval
+        )
+        {
+            failures.Add(
+                $"{nameof(CoordinationHostOptions.MaxRetryDelay)}: the delay is more than zero, at least {nameof(CoordinationHostOptions.RetryDelay)}, and at most {MaxInterval}."
+            );
+        }
+
         if (
             failures.Count != failureCount
             || keyspace is null
@@ -121,6 +134,7 @@ internal sealed class HostSessionSettings
             DriftAllowance = options.DriftAllowance,
             KeepAliveInterval = keepAliveInterval,
             RetryDelay = retryDelay,
+            MaxRetryDelay = maxRetryDelay,
         };
     }
 
@@ -203,10 +217,50 @@ internal sealed class HostSessionSettings
     public required TimeSpan RetryDelay { get; init; }
 
     /// <summary>
+    /// Gets the longest the host waits between attempts to open its session or join its group.
+    /// </summary>
+    public required TimeSpan MaxRetryDelay { get; init; }
+
+    /// <summary>
     /// Creates the member the node joins its group as.
     /// </summary>
     /// <param name="session">The session that keeps the member alive.</param>
     /// <returns>The member, with the node's identity, address and metadata.</returns>
     public Member CreateMember(SessionId session) =>
         new(session, NodeId, Address) { Metadata = Metadata };
+
+    /// <summary>
+    /// Gets how long the host waits before its next attempt after some failed attempts in a row. The wait starts at
+    /// the retry delay, doubles with each further failure up to the longest retry delay, and is shortened by the
+    /// jitter, up to half of it.
+    /// </summary>
+    /// <param name="failures">The number of failed attempts in a row, at least one.</param>
+    /// <param name="jitter">The random fraction, zero up to, not including, one, that shortens the wait.</param>
+    /// <returns>The wait, more than half of the doubled delay and at most the doubled delay.</returns>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// The failures are below one, or the jitter is not a number from zero up to, not including, one.
+    /// </exception>
+    public TimeSpan GetRetryDelay(int failures, double jitter)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(failures, 1);
+
+        if (double.IsNaN(jitter) || jitter < 0 || jitter >= 1)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(jitter),
+                jitter,
+                "The jitter is from zero up to, not including, one."
+            );
+        }
+
+        var ceiling = RetryDelay;
+
+        for (var attempt = 1; attempt < failures && ceiling < MaxRetryDelay; attempt++)
+        {
+            var doubled = ceiling * 2;
+            ceiling = doubled < MaxRetryDelay ? doubled : MaxRetryDelay;
+        }
+
+        return ceiling - (ceiling * (jitter / 2));
+    }
 }

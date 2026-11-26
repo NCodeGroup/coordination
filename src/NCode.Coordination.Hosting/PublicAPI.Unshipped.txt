@@ -24,6 +24,8 @@ NCode.Coordination.CoordinationHostOptions.Group.set -> void
 NCode.Coordination.CoordinationHostOptions.KeepAliveInterval.get -> System.TimeSpan
 NCode.Coordination.CoordinationHostOptions.KeepAliveInterval.set -> void
 NCode.Coordination.CoordinationHostOptions.KeyspaceSegments.get -> System.Collections.Generic.List<string!>!
+NCode.Coordination.CoordinationHostOptions.MaxRetryDelay.get -> System.TimeSpan
+NCode.Coordination.CoordinationHostOptions.MaxRetryDelay.set -> void
 NCode.Coordination.CoordinationHostOptions.Metadata.get -> System.Collections.Generic.Dictionary<string!, string!>!
 NCode.Coordination.CoordinationHostOptions.NodeId.get -> string!
 NCode.Coordination.CoordinationHostOptions.NodeId.set -> void

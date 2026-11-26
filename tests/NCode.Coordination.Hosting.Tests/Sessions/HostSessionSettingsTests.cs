@@ -28,6 +28,7 @@ public sealed class HostSessionSettingsTests
         Assert.Equal(TimeSpan.FromSeconds(10), settings.KeepAliveInterval);
         Assert.Equal(TimeSpan.FromSeconds(2), settings.DriftAllowance);
         Assert.Equal(TimeSpan.FromSeconds(2), settings.RetryDelay);
+        Assert.Equal(TimeSpan.FromSeconds(30), settings.MaxRetryDelay);
         Assert.Equal("eu-1", settings.Metadata["zone"]);
     }
 
@@ -42,6 +43,7 @@ public sealed class HostSessionSettingsTests
     [InlineData(nameof(CoordinationHostOptions.DriftAllowance))]
     [InlineData(nameof(CoordinationHostOptions.KeepAliveInterval))]
     [InlineData(nameof(CoordinationHostOptions.RetryDelay))]
+    [InlineData(nameof(CoordinationHostOptions.MaxRetryDelay))]
     public void Create_WhenAValueIsInvalid_NamesItsProperty(string property)
     {
         var options = HostingTesting.CreateOptions();
@@ -93,6 +95,90 @@ public sealed class HostSessionSettingsTests
 
     #endregion
 
+    #region GetRetryDelay Tests
+
+    [Theory]
+    [InlineData(1, 2)]
+    [InlineData(2, 4)]
+    [InlineData(3, 8)]
+    [InlineData(4, 16)]
+    [InlineData(5, 30)]
+    [InlineData(6, 30)]
+    [InlineData(int.MaxValue, 30)]
+    public void GetRetryDelay_WhenFailuresRepeat_DoublesUpToTheLongest(
+        int failures,
+        int expectedSeconds
+    )
+    {
+        var settings = HostSessionSettings.Create(
+            HostingTesting.CreateOptions(),
+            new List<string>()
+        );
+        Assert.NotNull(settings);
+
+        var delay = settings.GetRetryDelay(failures, 0);
+
+        Assert.Equal(TimeSpan.FromSeconds(expectedSeconds), delay);
+    }
+
+    [Theory]
+    [InlineData(1, 0.5, 1500)]
+    [InlineData(3, 0.25, 7000)]
+    [InlineData(5, 0.5, 22500)]
+    public void GetRetryDelay_WhenJittered_ShortensTheWaitByUpToHalf(
+        int failures,
+        double jitter,
+        int expectedMilliseconds
+    )
+    {
+        var settings = HostSessionSettings.Create(
+            HostingTesting.CreateOptions(),
+            new List<string>()
+        );
+        Assert.NotNull(settings);
+
+        var delay = settings.GetRetryDelay(failures, jitter);
+
+        Assert.Equal(TimeSpan.FromMilliseconds(expectedMilliseconds), delay);
+    }
+
+    [Fact]
+    public void GetRetryDelay_WhenFailuresAreBelowOne_Throws()
+    {
+        var settings = HostSessionSettings.Create(
+            HostingTesting.CreateOptions(),
+            new List<string>()
+        );
+        Assert.NotNull(settings);
+
+        var exception = Assert.Throws<ArgumentOutOfRangeException>(() =>
+            settings.GetRetryDelay(0, 0)
+        );
+
+        Assert.Equal("failures", exception.ParamName);
+    }
+
+    [Theory]
+    [InlineData(-0.1)]
+    [InlineData(1.0)]
+    [InlineData(double.NaN)]
+    public void GetRetryDelay_WhenTheJitterIsOutOfRange_Throws(double jitter)
+    {
+        var settings = HostSessionSettings.Create(
+            HostingTesting.CreateOptions(),
+            new List<string>()
+        );
+        Assert.NotNull(settings);
+
+        var exception = Assert.Throws<ArgumentOutOfRangeException>(() =>
+            settings.GetRetryDelay(1, jitter)
+        );
+
+        Assert.Equal("jitter", exception.ParamName);
+    }
+
+    #endregion
+
     private static void Break(CoordinationHostOptions options, string property)
     {
         switch (property)
@@ -126,6 +212,9 @@ public sealed class HostSessionSettingsTests
                 break;
             case nameof(CoordinationHostOptions.RetryDelay):
                 options.RetryDelay = TimeSpan.Zero;
+                break;
+            case nameof(CoordinationHostOptions.MaxRetryDelay):
+                options.MaxRetryDelay = TimeSpan.FromSeconds(1);
                 break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(property), property, null);
