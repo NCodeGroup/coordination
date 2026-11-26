@@ -78,7 +78,7 @@ public sealed class RespProviderTests(RespServers servers) : IDisposable
             support =>
             {
                 Assert.Equal(Primitives.Occurrence, support.Primitive);
-                Assert.Equal(
+                Assert.Equal<Guarantee>(
                     [
                         Guarantees.LinearizableUntilFailover,
                         Guarantees.Volatile,
@@ -90,7 +90,7 @@ public sealed class RespProviderTests(RespServers servers) : IDisposable
             support =>
             {
                 Assert.Equal(Primitives.Set, support.Primitive);
-                Assert.Equal(
+                Assert.Equal<Guarantee>(
                     [
                         Guarantees.LinearizableUntilFailover,
                         Guarantees.Volatile,
@@ -102,7 +102,7 @@ public sealed class RespProviderTests(RespServers servers) : IDisposable
             support =>
             {
                 Assert.Equal(Primitives.Counter, support.Primitive);
-                Assert.Equal(
+                Assert.Equal<Guarantee>(
                     [
                         Guarantees.LinearizableUntilFailover,
                         Guarantees.Volatile,
@@ -115,7 +115,7 @@ public sealed class RespProviderTests(RespServers servers) : IDisposable
             support =>
             {
                 Assert.Equal(Primitives.Sequence, support.Primitive);
-                Assert.Equal(
+                Assert.Equal<Guarantee>(
                     [Guarantees.LinearizableUntilFailover, Guarantees.Volatile],
                     support.Guarantees
                 );
