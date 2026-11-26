@@ -20,3 +20,18 @@ NCode.Coordination.CoordinationHostOptions.RetryDelay.get -> System.TimeSpan
 NCode.Coordination.CoordinationHostOptions.RetryDelay.set -> void
 NCode.Coordination.CoordinationHostOptions.SessionTimeToLive.get -> System.TimeSpan
 NCode.Coordination.CoordinationHostOptions.SessionTimeToLive.set -> void
+NCode.Coordination.HostSession
+NCode.Coordination.HostSession.Ended.get -> System.Threading.CancellationToken
+NCode.Coordination.HostSession.HostSession(NCode.Coordination.SessionId! id, NCode.Coordination.Member! member, System.Threading.CancellationToken ended) -> void
+NCode.Coordination.HostSession.Id.get -> NCode.Coordination.SessionId!
+NCode.Coordination.HostSession.Member.get -> NCode.Coordination.Member!
+NCode.Coordination.HostSessionState
+NCode.Coordination.HostSessionState.Active = 2 -> NCode.Coordination.HostSessionState
+NCode.Coordination.HostSessionState.NotStarted = 0 -> NCode.Coordination.HostSessionState
+NCode.Coordination.HostSessionState.Opening = 1 -> NCode.Coordination.HostSessionState
+NCode.Coordination.HostSessionState.Stopped = 4 -> NCode.Coordination.HostSessionState
+NCode.Coordination.HostSessionState.Unreachable = 3 -> NCode.Coordination.HostSessionState
+NCode.Coordination.IHostSessionService
+NCode.Coordination.IHostSessionService.Current.get -> NCode.Coordination.HostSession?
+NCode.Coordination.IHostSessionService.State.get -> NCode.Coordination.HostSessionState
+NCode.Coordination.IHostSessionService.WaitForSessionAsync(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.HostSession!>
