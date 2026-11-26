@@ -1,40 +1,33 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
-using System.Collections.Immutable;
+using System.Runtime.CompilerServices;
 using NCode.Coordination.Resp.Keys;
+using NCode.Coordination.Resp.Records;
 using NCode.Coordination.Resp.Server;
 using StackExchange.Redis;
 
 namespace NCode.Coordination.Resp.Membership;
 
 /// <summary>
-/// The membership groups of the RESP provider: each operation is one membership script that runs over the keyspace's membership table.
+/// The membership groups of the RESP provider: each member is an entry in the keyspace's <c>members</c> and
+/// <c>member-fields</c> keys bound to its session, so it is absent once its session ends. One keyspace script serves
+/// each operation, and a watch polls the server until the caller cancels.
 /// </summary>
-/// <param name="server">The seam between the provider and its server.</param>
-/// <exception cref="ArgumentNullException">The server is null.</exception>
-internal class RespMembershipService(RespServer server) : IMembershipService
+/// <param name="table">The table that runs the keyspace scripts.</param>
+/// <exception cref="ArgumentNullException">The table is null.</exception>
+internal class RespMembershipService(RespRecordTable table) : IMembershipService
 {
     /// <summary>
-    /// Gets the seam between the provider and its server.
+    /// The number of fields a listed member takes in the reply: node id, session, address and metadata.
     /// </summary>
-    private RespServer Server { get; } = server ?? throw new ArgumentNullException(nameof(server));
+    private const int MemberFields = 4;
 
     /// <summary>
-    /// Reads the members from the script reply.
+    /// Gets the table that runs the keyspace scripts.
     /// </summary>
-    /// <param name="reply">The script's reply.</param>
-    /// <returns>An array of fields (count, then quadruplets of nodeId, sessionId, address, metadata).</returns>
-    private static RedisResult[] ReadMembers(RedisResult reply)
-    {
-        var (status, fields) = RespReplies.Script(reply);
-        if (status != 0 || fields.Length < 1)
-        {
-            throw RespReplies.Unexpected(reply);
-        }
-
-        return fields;
-    }
+    private RespRecordTable Table { get; } =
+        table ?? throw new ArgumentNullException(nameof(table));
 
     /// <inheritdoc />
     public async ValueTask<MembershipJoinStatus> JoinAsync(
@@ -46,29 +39,27 @@ internal class RespMembershipService(RespServer server) : IMembershipService
     {
         ArgumentNullException.ThrowIfNull(group);
         ArgumentNullException.ThrowIfNull(member);
+        RespCall.Check(options, cancellationToken);
 
-        var keyspace = group.Keyspace;
-        var groupId = RespKeys.Member(group);
-        var sessionId = member.Session.Value;
-        var nodeId = member.NodeId;
-        var address = member.Address;
-        var metadata = string.Join('|', member.Metadata.Select(x => $"{x.Key}={x.Value}"));
-
-        var keys = new[] { RespKeys.ForKeyspace(keyspace, "members") };
-        var arguments = new RedisValue[] { "join", groupId, nodeId, sessionId, address, metadata };
-
-        var reply = await Server.EvaluateAsync(
-            RespScript.Membership,
-            keys,
-            arguments,
-            cancellationToken
-        );
+        RedisValue[] arguments =
+        [
+            RespKeys.Member(group),
+            member.NodeId,
+            member.Session.Value,
+            member.Address,
+            RespMembershipMetadata.Encode(member.Metadata),
+        ];
+        var reply = await Table
+            .EvaluateAsync(RespScript.MemberJoin, group.Keyspace, arguments, cancellationToken)
+            .ConfigureAwait(false);
 
         var (status, _) = RespReplies.Script(reply);
+
         return status switch
         {
             0 => MembershipJoinStatus.Joined,
             1 => MembershipJoinStatus.NodeIdTaken,
+            2 => MembershipJoinStatus.SessionEnded,
             _ => throw RespReplies.Unexpected(reply),
         };
     }
@@ -83,20 +74,12 @@ internal class RespMembershipService(RespServer server) : IMembershipService
     {
         ArgumentNullException.ThrowIfNull(group);
         ArgumentNullException.ThrowIfNull(session);
+        RespCall.Check(options, cancellationToken);
 
-        var keyspace = group.Keyspace;
-        var groupId = RespKeys.Member(group);
-        var sessionId = session.Value;
-
-        var keys = new[] { RespKeys.ForKeyspace(keyspace, "members") };
-        var arguments = new RedisValue[] { "leave", groupId, "", sessionId, "", "" };
-
-        var reply = await Server.EvaluateAsync(
-            RespScript.Membership,
-            keys,
-            arguments,
-            cancellationToken
-        );
+        RedisValue[] arguments = [RespKeys.Member(group), session.Value];
+        var reply = await Table
+            .EvaluateAsync(RespScript.MemberLeave, group.Keyspace, arguments, cancellationToken)
+            .ConfigureAwait(false);
 
         var (status, _) = RespReplies.Script(reply);
         if (status != 0)
@@ -113,93 +96,72 @@ internal class RespMembershipService(RespServer server) : IMembershipService
     )
     {
         ArgumentNullException.ThrowIfNull(group);
+        RespCall.Check(options, cancellationToken);
 
-        var keyspace = group.Keyspace;
-        var groupId = RespKeys.Member(group);
+        RedisValue[] arguments = [RespKeys.Member(group)];
+        var reply = await Table
+            .EvaluateAsync(RespScript.MemberList, group.Keyspace, arguments, cancellationToken)
+            .ConfigureAwait(false);
 
-        var keys = new[] { RespKeys.ForKeyspace(keyspace, "members") };
-        var arguments = new RedisValue[] { "list", groupId, "", "", "", "" };
-
-        var reply = await Server.EvaluateAsync(
-            RespScript.Membership,
-            keys,
-            arguments,
-            cancellationToken
-        );
-
-        var fields = ReadMembers(reply);
-
-        // First field is member count, then quadruplets of (nodeId, sessionId, address, metadata)
-        if (fields.Length < 1)
+        var (status, fields) = RespReplies.Script(reply);
+        if (status != 0 || fields.Length < 1 || (fields.Length - 1) % MemberFields != 0)
         {
             throw RespReplies.Unexpected(reply);
         }
 
-        var count = (long?)fields[0] ?? 0;
-        if (fields.Length != 1 + count * 4)
+        var revision = RespRecordTable.ReadRevision(fields[0], reply);
+        var members = new List<Member>((fields.Length - 1) / MemberFields);
+        for (var index = 1; index < fields.Length; index += MemberFields)
         {
-            throw RespReplies.Unexpected(reply);
-        }
-
-        var members = new List<Member>();
-        for (int i = 0; i < count; i++)
-        {
-            var nodeId = (string?)fields[1 + i * 4];
-            var sessionIdStr = (string?)fields[1 + i * 4 + 1];
-            var address = (string?)fields[1 + i * 4 + 2];
-            var metadataStr = (string?)fields[1 + i * 4 + 3];
-
-            if (nodeId is null || sessionIdStr is null || address is null)
+            var node = (string?)fields[index];
+            var session = (string?)fields[index + 1];
+            var address = (string?)fields[index + 2];
+            var encoded = (string?)fields[index + 3];
+            if (
+                node is null
+                || session is null
+                || address is null
+                || encoded is null
+                || !RespMembershipMetadata.TryDecode(encoded, out var metadata)
+            )
             {
                 throw RespReplies.Unexpected(reply);
             }
 
-            // Parse session ID
-            var sessionId = new SessionId(keyspace, sessionIdStr);
-
-            // Parse metadata
-            var metadataDict = ImmutableDictionary<string, string>.Empty;
-            if (!string.IsNullOrEmpty(metadataStr))
-            {
-                var metadataBuilder = metadataDict.ToBuilder();
-                foreach (var pair in metadataStr.Split('|'))
+            members.Add(
+                new Member(new SessionId(group.Keyspace, session), node, address)
                 {
-                    if (string.IsNullOrEmpty(pair))
-                        continue;
-                    var eqPos = pair.IndexOf('=');
-                    if (eqPos > 0)
-                    {
-                        var key = pair.Substring(0, eqPos);
-                        var value = pair.Substring(eqPos + 1);
-                        metadataBuilder[key] = value;
-                    }
+                    Metadata = metadata,
                 }
-                metadataDict = metadataBuilder.ToImmutable();
-            }
-
-            var member = new Member(sessionId, nodeId, address) { Metadata = metadataDict };
-            members.Add(member);
+            );
         }
 
-        // Revision is 1 for now (membership doesn't track revisions yet in this simple implementation)
-        var revision = new Revision(1);
         return new MembershipView(group, revision, members);
     }
 
     /// <inheritdoc />
-#pragma warning disable CS8425
     public async IAsyncEnumerable<MembershipView> WatchAsync(
         CoordinationKey group,
         OperationOptions? options,
-        CancellationToken cancellationToken
+        [EnumeratorCancellation] CancellationToken cancellationToken
     )
-#pragma warning restore CS8425
     {
         ArgumentNullException.ThrowIfNull(group);
+        RespCall.Check(options, cancellationToken);
 
-        // For now, yield the current view once, then end.
-        // Full watch support with pub/sub channels will come later.
-        var view = await ReadAsync(group, options, cancellationToken);
-        yield return view;
+        var last = await ReadAsync(group, options, cancellationToken).ConfigureAwait(false);
+        yield return last;
+
+        while (true)
+        {
+            await Task.Delay(RespPolling.Interval, cancellationToken).ConfigureAwait(false);
+
+            var view = await ReadAsync(group, options, cancellationToken).ConfigureAwait(false);
+            if (view.Revision.Value > last.Revision.Value)
+            {
+                last = view;
+                yield return view;
+            }
+        }
     }
 }

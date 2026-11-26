@@ -169,11 +169,6 @@ internal sealed class RespScript(string name, string text)
     public static RespScript MemberList { get; } = LoadKeyspace("member-list");
 
     /// <summary>
-    /// Gets the membership script: it manages group membership with join, leave, and listing operations.
-    /// </summary>
-    public static RespScript Membership { get; } = Load("membership");
-
-    /// <summary>
     /// Gets the claim script: it manages claim acquisition and status checking operations.
     /// </summary>
     public static RespScript Claim { get; } = Load("claims");
