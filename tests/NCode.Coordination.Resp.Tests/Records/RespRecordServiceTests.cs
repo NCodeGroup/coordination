@@ -269,6 +269,42 @@ public sealed class RespRecordServiceTests(RespServers servers) : IDisposable
         Assert.All(keys, key => Assert.Contains(key, seen));
     }
 
+    private static async Task AssertListStopsAfterItsBudgetAsync(
+        string endpoint,
+        RespProfile profile
+    )
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var multiplexer = await ConnectAsync(endpoint, cancellationToken);
+        var service = CreateService(multiplexer, profile);
+        var keyspace = CreateKeyspace();
+        var value = "v"u8.ToArray();
+        var lifetime = ForMilliseconds(1_000);
+        const int count = 200;
+        var creates = new List<Task<RecordWriteResult>>(count);
+        for (var index = 0; index < count; index++)
+        {
+            var key = keyspace.CreateKey("e", index);
+            var creating = service.CreateAsync(key, value, lifetime, null, cancellationToken);
+            var task = creating.AsTask();
+            creates.Add(task);
+        }
+        var results = await Task.WhenAll(creates);
+        Assert.All(results, result => Assert.True(result.IsWritten));
+        var database = multiplexer.GetDatabase();
+        var deadlinesKey = RespRecordTable.Keys(keyspace)[3];
+        var pending = await database.SortedSetLengthAsync(deadlinesKey);
+        Assert.Equal(count, pending);
+
+        await WaitUntilExpiredAsync(multiplexer, keyspace, cancellationToken);
+        var prefix = keyspace.CreateKey("e");
+        var request = new RecordPageRequest(1);
+        var page = await service.ListAsync(prefix, request, null, cancellationToken);
+
+        Assert.Empty(page.Records);
+        Assert.NotNull(page.ContinuationToken);
+    }
+
     private static async Task AssertReadDeletesAtMost64ExpiredRecordsAsync(
         string endpoint,
         RespProfile profile
@@ -403,6 +439,14 @@ public sealed class RespRecordServiceTests(RespServers servers) : IDisposable
     [RespServerFact]
     public Task ListAsync_Garnet_PagesThroughKeysOfTheLongestSegments() =>
         AssertListPagesThroughKeysOfTheLongestSegmentsAsync(servers.Garnet, RespProfiles.Garnet);
+
+    [RespServerFact]
+    public Task ListAsync_Valkey_ExpiredMembersPastTheBudget_ReturnsAnEmptyPageWithAToken() =>
+        AssertListStopsAfterItsBudgetAsync(servers.Valkey, RespProfiles.Valkey);
+
+    [RespServerFact]
+    public Task ListAsync_Garnet_ExpiredMembersPastTheBudget_ReturnsAnEmptyPageWithAToken() =>
+        AssertListStopsAfterItsBudgetAsync(servers.Garnet, RespProfiles.Garnet);
 
     [Fact]
     public async Task ListAsync_TokenOfAnotherPrefix_ThrowsArgumentException()
