@@ -1,6 +1,7 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using System.Diagnostics;
 using Moq;
 using NCode.Coordination.Resp.Keys;
 using NCode.Coordination.Resp.Server;
@@ -32,7 +33,12 @@ public sealed class RespRecordServiceTests(RespServers servers) : IDisposable
     private static async Task<ConnectionMultiplexer> ConnectAsync(
         string endpoint,
         CancellationToken cancellationToken
-    ) => await ConnectionMultiplexer.ConnectAsync(endpoint).WaitAsync(cancellationToken);
+    )
+    {
+        var connecting = ConnectionMultiplexer.ConnectAsync(endpoint);
+
+        return await connecting.WaitAsync(cancellationToken);
+    }
 
     private static RespRecordService CreateService(
         IConnectionMultiplexer multiplexer,
@@ -68,10 +74,9 @@ public sealed class RespRecordServiceTests(RespServers servers) : IDisposable
     )
     {
         var timeout = TimeSpan.FromSeconds(15);
-        var message = await queue
-            .ReadAsync(cancellationToken)
-            .AsTask()
-            .WaitAsync(timeout, cancellationToken);
+        var reading = queue.ReadAsync(cancellationToken);
+        var task = reading.AsTask();
+        var message = await task.WaitAsync(timeout, cancellationToken);
         var text = (string?)message.Message;
         Assert.NotNull(text);
 
@@ -86,6 +91,38 @@ public sealed class RespRecordServiceTests(RespServers servers) : IDisposable
         return RecordLifetime.ForTimeToLive(timeToLive);
     }
 
+    private static async Task WaitUntilExpiredAsync(
+        IConnectionMultiplexer multiplexer,
+        Keyspace keyspace,
+        CancellationToken cancellationToken
+    )
+    {
+        var database = multiplexer.GetDatabase();
+        var servers = multiplexer.GetServers();
+        var server = servers[0];
+        var deadlinesKey = RespRecordTable.Keys(keyspace)[3];
+        var latest = await database.SortedSetRangeByRankWithScoresAsync(deadlinesKey, -1, -1);
+        var deadline = Assert.Single(latest).Score;
+        var timeout = TimeSpan.FromSeconds(15);
+
+        var elapsed = Stopwatch.StartNew();
+        while (true)
+        {
+            var time = await server.TimeAsync();
+            var now = (time - DateTime.UnixEpoch).TotalMilliseconds;
+            if (now >= deadline)
+            {
+                return;
+            }
+
+            Assert.True(
+                elapsed.Elapsed < timeout,
+                "The deadlines did not pass on the server's clock."
+            );
+            await Task.Delay(50, cancellationToken);
+        }
+    }
+
     private static async Task AssertCreatePublishesTheWriteAsync(
         string endpoint,
         RespProfile profile
@@ -98,7 +135,8 @@ public sealed class RespRecordServiceTests(RespServers servers) : IDisposable
         var key = keyspace.CreateKey("cfg", 7);
         var value = "v"u8.ToArray();
         var channel = WatchChannel(keyspace, profile);
-        var queue = await multiplexer.GetSubscriber().SubscribeAsync(channel);
+        var subscriber = multiplexer.GetSubscriber();
+        var queue = await subscriber.SubscribeAsync(channel);
 
         var result = await service.CreateAsync(
             key,
@@ -131,14 +169,16 @@ public sealed class RespRecordServiceTests(RespServers servers) : IDisposable
         var created = await service.CreateAsync(a, value, lifetime, null, cancellationToken);
         Assert.True(created.IsWritten);
         var channel = WatchChannel(keyspace, profile);
-        var queue = await multiplexer.GetSubscriber().SubscribeAsync(channel);
+        var subscriber = multiplexer.GetSubscriber();
+        var queue = await subscriber.SubscribeAsync(channel);
 
-        await Task.Delay(400, cancellationToken);
+        await WaitUntilExpiredAsync(multiplexer, keyspace, cancellationToken);
         var read = await service.ReadAsync(b, null, cancellationToken);
         var message = await ReadMessageAsync(queue, cancellationToken);
         await queue.UnsubscribeAsync();
         var recordsKey = RespRecordTable.Keys(keyspace)[1];
-        var exists = await multiplexer.GetDatabase().KeyExistsAsync(recordsKey);
+        var database = multiplexer.GetDatabase();
+        var exists = await database.KeyExistsAsync(recordsKey);
 
         var name = RespKeys.Name(a);
         Assert.Null(read);
@@ -239,17 +279,22 @@ public sealed class RespRecordServiceTests(RespServers servers) : IDisposable
         var service = CreateService(multiplexer, profile);
         var keyspace = CreateKeyspace();
         var value = "v"u8.ToArray();
-        var lifetime = ForMilliseconds(300);
+        var lifetime = ForMilliseconds(1_000);
         for (var index = 0; index < 65; index++)
         {
             var key = keyspace.CreateKey("e", index);
             var result = await service.CreateAsync(key, value, lifetime, null, cancellationToken);
             Assert.True(result.IsWritten);
         }
+        var database = multiplexer.GetDatabase();
+        var deadlinesKey = RespRecordTable.Keys(keyspace)[3];
+        var pending = await database.SortedSetLengthAsync(deadlinesKey);
+        Assert.Equal(65, pending);
         var channel = WatchChannel(keyspace, profile);
-        var queue = await multiplexer.GetSubscriber().SubscribeAsync(channel);
+        var subscriber = multiplexer.GetSubscriber();
+        var queue = await subscriber.SubscribeAsync(channel);
 
-        await Task.Delay(500, cancellationToken);
+        await WaitUntilExpiredAsync(multiplexer, keyspace, cancellationToken);
         var other = keyspace.CreateKey("other");
         await service.ReadAsync(other, null, cancellationToken);
         var first = await ReadMessageAsync(queue, cancellationToken);
