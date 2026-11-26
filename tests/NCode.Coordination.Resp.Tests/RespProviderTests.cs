@@ -67,7 +67,7 @@ public sealed class RespProviderTests(RespServers servers) : IDisposable
     }
 
     [Fact]
-    public async Task Declaration_Always_DeclaresOccurrencesSetsCountersAndSequences()
+    public async Task Declaration_Always_DeclaresTheServedPrimitives()
     {
         await using var provider = CreateProvider();
 
@@ -75,6 +75,31 @@ public sealed class RespProviderTests(RespServers servers) : IDisposable
 
         Assert.Collection(
             primitives,
+            support =>
+            {
+                Assert.Equal(Primitives.Record, support.Primitive);
+                Assert.Equal<Guarantee>(
+                    [
+                        Guarantees.LinearizableUntilFailover,
+                        Guarantees.Volatile,
+                        Guarantees.ServerClock,
+                    ],
+                    support.Guarantees
+                );
+            },
+            support =>
+            {
+                Assert.Equal(Primitives.Transaction, support.Primitive);
+                Assert.Equal<Guarantee>(
+                    [
+                        Guarantees.LinearizableUntilFailover,
+                        Guarantees.Volatile,
+                        Guarantees.ServerClock,
+                        Guarantees.AtomicAcrossPartitions,
+                    ],
+                    support.Guarantees
+                );
+            },
             support =>
             {
                 Assert.Equal(Primitives.Occurrence, support.Primitive);
@@ -138,6 +163,8 @@ public sealed class RespProviderTests(RespServers servers) : IDisposable
     }
 
     [Theory]
+    [InlineData(typeof(IRecordService))]
+    [InlineData(typeof(ITransactionService))]
     [InlineData(typeof(IOccurrenceService))]
     [InlineData(typeof(ISetService))]
     [InlineData(typeof(ICounterService))]

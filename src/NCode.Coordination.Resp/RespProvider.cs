@@ -5,9 +5,11 @@ using System.Collections.Frozen;
 using System.Collections.Immutable;
 using NCode.Coordination.Resp.Counters;
 using NCode.Coordination.Resp.Occurrences;
+using NCode.Coordination.Resp.Records;
 using NCode.Coordination.Resp.Sequences;
 using NCode.Coordination.Resp.Server;
 using NCode.Coordination.Resp.Sets;
+using NCode.Coordination.Resp.Transactions;
 using StackExchange.Redis;
 
 namespace NCode.Coordination.Resp;
@@ -21,10 +23,24 @@ internal sealed class RespProvider : ICoordinationProvider, IAsyncDisposable, ID
     /// Gets the primitives that the provider serves, in the order of <see cref="Primitives.All"/>. The server keeps
     /// every one of them in memory and its clock measures every expiry. The provider can't see whether the server
     /// persists or replicates its writes, so it declares them volatile and linearizable only until a failover. A
-    /// counter's batch runs as one script on one slot, so it is atomic across partitions. A sequence has no expiry.
+    /// counter's batch runs as one script on one slot, so it is atomic across partitions, and a transaction, like a
+    /// counter's batch, runs as one script on one slot. A sequence has no expiry.
     /// </summary>
     private static ImmutableArray<PrimitiveSupport> SupportedPrimitives { get; } =
     [
+        PrimitiveSupport.Supported(
+            Primitives.Record,
+            Guarantees.LinearizableUntilFailover,
+            Guarantees.Volatile,
+            Guarantees.ServerClock
+        ),
+        PrimitiveSupport.Supported(
+            Primitives.Transaction,
+            Guarantees.LinearizableUntilFailover,
+            Guarantees.Volatile,
+            Guarantees.ServerClock,
+            Guarantees.AtomicAcrossPartitions
+        ),
         PrimitiveSupport.Supported(
             Primitives.Occurrence,
             Guarantees.LinearizableUntilFailover,
@@ -80,8 +96,11 @@ internal sealed class RespProvider : ICoordinationProvider, IAsyncDisposable, ID
         {
             Profile = profile.Name,
         };
+        var records = new RespRecordTable(Server, profile);
         var services = new Dictionary<Type, object>
         {
+            [typeof(IRecordService)] = new RespRecordService(records),
+            [typeof(ITransactionService)] = new RespTransactionService(records),
             [typeof(IOccurrenceService)] = new RespOccurrenceService(Server),
             [typeof(ISetService)] = new RespSetService(Server),
             [typeof(ICounterService)] = new RespCounterService(Server),
