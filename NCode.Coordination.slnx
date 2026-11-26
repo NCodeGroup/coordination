@@ -3,6 +3,7 @@
     <Project Path="src/NCode.Coordination.Abstractions/NCode.Coordination.Abstractions.csproj" />
     <Project Path="src/NCode.Coordination/NCode.Coordination.csproj" />
     <Project Path="src/NCode.Coordination.Hosting/NCode.Coordination.Hosting.csproj" />
+    <Project Path="src/NCode.Coordination.Resp/NCode.Coordination.Resp.csproj" />
     <Project Path="src/NCode.Coordination.Testing/NCode.Coordination.Testing.csproj" />
   </Folder>
   <Folder Name="/tests/">
