@@ -54,9 +54,16 @@ internal class CoordinationTokenBucketLimiter(
                 .ReadAsync(Key, null, cancellationToken)
                 .ConfigureAwait(false);
 
-            var state = stored is null
-                ? TokenBucketState.Full(Limit, nowMs)
-                : TokenBucketState.Decode(stored.Value.Span).Replenish(Limit, nowMs);
+            TokenBucketState state;
+            if (stored is null)
+            {
+                state = TokenBucketState.Full(Limit, nowMs);
+            }
+            else
+            {
+                var decoded = TokenBucketState.Decode(stored.Value.Span);
+                state = decoded.Replenish(Limit, nowMs);
+            }
 
             if (state.Tokens < permitCount)
             {
@@ -70,11 +77,16 @@ internal class CoordinationTokenBucketLimiter(
             var lifetime = RecordLifetime.ForTimeToLive(timeToLive);
             var encoded = next.Encode();
 
-            var written = stored is null
-                ? await Records
+            RecordWriteResult written;
+            if (stored is null)
+            {
+                written = await Records
                     .CreateAsync(Key, encoded, lifetime, null, cancellationToken)
-                    .ConfigureAwait(false)
-                : await Records
+                    .ConfigureAwait(false);
+            }
+            else
+            {
+                written = await Records
                     .CompareAndSwapAsync(
                         Key,
                         stored.Revision,
@@ -84,6 +96,7 @@ internal class CoordinationTokenBucketLimiter(
                         cancellationToken
                     )
                     .ConfigureAwait(false);
+            }
 
             if (written.IsWritten)
             {
