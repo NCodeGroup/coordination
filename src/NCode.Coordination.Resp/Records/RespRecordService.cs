@@ -253,16 +253,7 @@ internal class RespRecordService(RespRecordTable table) : IRecordService
         var member = RespKeys.Member(key);
         var name = RespKeys.Name(key);
 
-        RedisValue[] arguments;
-        if (lifetime.Session is not null)
-        {
-            arguments = [member, name, expected.Value, value, timeToLive, lifetime.Session.Value];
-        }
-        else
-        {
-            arguments = [member, name, expected.Value, value, timeToLive];
-        }
-
+        RedisValue[] arguments = [member, name, expected.Value, value, timeToLive];
         var reply = await Table
             .EvaluateAsync(RespScript.RecordSwap, key.Keyspace, arguments, cancellationToken)
             .ConfigureAwait(false);
