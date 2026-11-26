@@ -17,11 +17,13 @@ public sealed class RespServers : IAsyncLifetime
     /// <summary>The environment variable that turns the server tests on when its value is <c>docker</c>.</summary>
     public const string EnvironmentVariable = "NCODE_COORDINATION_RESP_SERVERS";
 
-    /// <summary>The Valkey image the tests run against.</summary>
-    public const string ValkeyImage = "valkey/valkey:9.2.0";
+    /// <summary>The Valkey image the tests run against, pinned by its tag and the digest of its multi-architecture index.</summary>
+    public const string ValkeyImage =
+        "valkey/valkey:9.2.0@sha256:1c2b25b09f354c66fe994733acdf12fcfd4bdf6f3bd92b88a93a70378d884056";
 
-    /// <summary>The Garnet image the tests run against.</summary>
-    public const string GarnetImage = "ghcr.io/microsoft/garnet:2.2.13";
+    /// <summary>The Garnet image the tests run against, pinned by its tag and the digest of its multi-architecture index.</summary>
+    public const string GarnetImage =
+        "ghcr.io/microsoft/garnet:2.2.13@sha256:a5b11ca8292400a6239437c34c96aaa515a55ab3613ef2e41a33914405f89442";
 
     private const string ReadyMessage = "Ready to accept connections";
 
@@ -30,6 +32,25 @@ public sealed class RespServers : IAsyncLifetime
     /// <summary>Gets a value indicating whether the server tests run.</summary>
     public static bool Enabled =>
         Environment.GetEnvironmentVariable(EnvironmentVariable) == "docker";
+
+    private static IContainer CreateContainer(string image, params IEnumerable<string> command)
+    {
+        string[] arguments = [.. command];
+        var waitStrategy = Wait.ForUnixContainer().UntilMessageIsLogged(ReadyMessage);
+        var builder = new ContainerBuilder(image)
+            .WithPortBinding(Port, true)
+            .WithWaitStrategy(waitStrategy);
+
+        if (arguments.Length > 0)
+        {
+            builder = builder.WithCommand(arguments);
+        }
+
+        return builder.Build();
+    }
+
+    private static string GetEndpoint(IContainer container) =>
+        $"{container.Hostname}:{container.GetMappedPublicPort(Port)}";
 
     /// <summary>Gets the <c>host:port</c> of the Valkey server, empty until it is started.</summary>
     public string Valkey { get; private set; } = "";
@@ -89,22 +110,4 @@ public sealed class RespServers : IAsyncLifetime
             await garnetWithoutLua.DisposeAsync();
         }
     }
-
-    private static IContainer CreateContainer(string image, params string[] command)
-    {
-        var waitStrategy = Wait.ForUnixContainer().UntilMessageIsLogged(ReadyMessage);
-        var builder = new ContainerBuilder(image)
-            .WithPortBinding(Port, true)
-            .WithWaitStrategy(waitStrategy);
-
-        if (command.Length > 0)
-        {
-            builder = builder.WithCommand(command);
-        }
-
-        return builder.Build();
-    }
-
-    private static string GetEndpoint(IContainer container) =>
-        $"{container.Hostname}:{container.GetMappedPublicPort(Port)}";
 }
