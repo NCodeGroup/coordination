@@ -94,6 +94,11 @@ internal sealed class RespScript(string name, string text)
     public static RespScript RecordTransaction { get; } = LoadRecord("record-transaction");
 
     /// <summary>
+    /// Gets the session script: it manages session creation, keep-alive, closing, and liveness checks.
+    /// </summary>
+    public static RespScript Session { get; } = Load("sessions");
+
+    /// <summary>
     /// Loads a script from the embedded resource <c>NCode.Coordination.Resp.Scripts.&lt;name&gt;.lua</c>.
     /// </summary>
     /// <param name="name">The name of the script, without its folder and extension.</param>
