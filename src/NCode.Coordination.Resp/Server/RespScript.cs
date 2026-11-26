@@ -114,11 +114,6 @@ internal sealed class RespScript(string name, string text)
     public static RespScript SessionCheck { get; } = LoadKeyspace("session-check");
 
     /// <summary>
-    /// Gets the session script: it manages session creation, keep-alive, closing, and liveness checks.
-    /// </summary>
-    public static RespScript Session { get; } = Load("sessions");
-
-    /// <summary>
     /// Gets the membership script: it manages group membership with join, leave, and listing operations.
     /// </summary>
     public static RespScript Membership { get; } = Load("membership");

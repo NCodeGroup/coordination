@@ -1,43 +1,38 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
-using NCode.Coordination.Resp.Keys;
+using NCode.Coordination.Resp.Records;
 using NCode.Coordination.Resp.Server;
 using StackExchange.Redis;
 
 namespace NCode.Coordination.Resp.Sessions;
 
 /// <summary>
-/// The sessions of the RESP provider: each session stores its TTL, liveness check timestamp and bound leases,
-/// with one Lua script per operation.
+/// The sessions of the RESP provider: each session is a field of the keyspace's <c>sessions</c> hash with its time to
+/// live and a deadline in its <c>session-deadlines</c> sorted set, and ending one removes what is bound to it. One
+/// keyspace script serves each operation, and a wait for a session's end polls until the session has ended or the
+/// caller cancels.
 /// </summary>
-/// <param name="server">The seam between the provider and its server.</param>
-/// <exception cref="ArgumentNullException">The server is null.</exception>
-internal class RespSessionService(RespServer server) : ISessionService
+/// <param name="table">The table that runs the keyspace scripts.</param>
+/// <param name="tokens">The source of session ids.</param>
+/// <exception cref="ArgumentNullException">The table or the tokens are null.</exception>
+internal class RespSessionService(RespRecordTable table, IRespTokens tokens) : ISessionService
 {
     /// <summary>
-    /// Gets the seam between the provider and its server.
+    /// The text a session id starts with.
     /// </summary>
-    private RespServer Server { get; } = server ?? throw new ArgumentNullException(nameof(server));
+    private const string Prefix = "s-";
 
     /// <summary>
-    /// Generates a session ID.
+    /// Gets the table that runs the keyspace scripts.
     /// </summary>
-    /// <param name="keyspace">The keyspace.</param>
-    /// <returns>The session ID.</returns>
-    private static string GenerateSessionId(Keyspace keyspace)
-    {
-        // Generate a base64-ish session ID using timestamp and random bytes
-        var timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-        var random = new byte[8];
-        using (var rng = System.Security.Cryptography.RandomNumberGenerator.Create())
-        {
-            rng.GetBytes(random);
-        }
+    private RespRecordTable Table { get; } =
+        table ?? throw new ArgumentNullException(nameof(table));
 
-        var id = $"s-{timestamp:X}-{BitConverter.ToUInt64(random):X}";
-        return id;
-    }
+    /// <summary>
+    /// Gets the source of session ids.
+    /// </summary>
+    private IRespTokens Tokens { get; } = tokens ?? throw new ArgumentNullException(nameof(tokens));
 
     /// <inheritdoc />
     public async ValueTask<SessionGrant> OpenAsync(
@@ -51,23 +46,21 @@ internal class RespSessionService(RespServer server) : ISessionService
         ArgumentNullException.ThrowIfNull(timeToLive);
         RespCall.Check(options, cancellationToken);
 
-        var ttlMs = RespCall.ToMilliseconds(timeToLive);
-        var sessionIdValue = GenerateSessionId(keyspace);
+        var token = Tokens.Next(Prefix);
+        var milliseconds = RespCall.ToMilliseconds(timeToLive);
 
-        var keys = new[] { RespKeys.ForKeyspace(keyspace, "sessions") };
-        var arguments = new RedisValue[] { "open", sessionIdValue, ttlMs };
-
-        var reply = await Server
-            .EvaluateAsync(RespScript.Session, keys, arguments, cancellationToken)
+        RedisValue[] arguments = [token, milliseconds];
+        var reply = await Table
+            .EvaluateAsync(RespScript.SessionOpen, keyspace, arguments, cancellationToken)
             .ConfigureAwait(false);
 
         var (status, fields) = RespReplies.Script(reply);
 
         return status switch
         {
-            0 when fields.Length >= 1 => new SessionGrant(
-                new SessionId(keyspace, (string?)fields[0] ?? throw RespReplies.Unexpected(reply)),
-                timeToLive
+            0 when fields.Length == 0 => new SessionGrant(
+                new SessionId(keyspace, token),
+                new TimeToLive(TimeSpan.FromMilliseconds(milliseconds))
             ),
             _ => throw RespReplies.Unexpected(reply),
         };
@@ -83,22 +76,24 @@ internal class RespSessionService(RespServer server) : ISessionService
         ArgumentNullException.ThrowIfNull(session);
         RespCall.Check(options, cancellationToken);
 
-        // Default 30 second TTL for keep-alive
-        var ttlMs = 30_000L;
-
-        var keys = new[] { RespKeys.ForKeyspace(session.Keyspace, "sessions") };
-        var arguments = new RedisValue[] { "keepAlive", session.Value, ttlMs };
-
-        var reply = await Server
-            .EvaluateAsync(RespScript.Session, keys, arguments, cancellationToken)
+        RedisValue[] arguments = [session.Value];
+        var reply = await Table
+            .EvaluateAsync(
+                RespScript.SessionKeepAlive,
+                session.Keyspace,
+                arguments,
+                cancellationToken
+            )
             .ConfigureAwait(false);
 
-        var (status, _) = RespReplies.Script(reply);
+        var (status, fields) = RespReplies.Script(reply);
 
         return status switch
         {
-            0 => KeepAliveResult.Renewed(new TimeToLive(TimeSpan.FromMilliseconds(ttlMs))),
-            1 => KeepAliveResult.Ended,
+            0 when fields.Length == 1 => KeepAliveResult.Renewed(
+                new TimeToLive(TimeSpan.FromMilliseconds(RespReplies.Integer(fields[0])))
+            ),
+            1 when fields.Length == 0 => KeepAliveResult.Ended,
             _ => throw RespReplies.Unexpected(reply),
         };
     }
@@ -113,11 +108,9 @@ internal class RespSessionService(RespServer server) : ISessionService
         ArgumentNullException.ThrowIfNull(session);
         RespCall.Check(options, cancellationToken);
 
-        var keys = new[] { RespKeys.ForKeyspace(session.Keyspace, "sessions") };
-        var arguments = new RedisValue[] { "close", session.Value };
-
-        var reply = await Server
-            .EvaluateAsync(RespScript.Session, keys, arguments, cancellationToken)
+        RedisValue[] arguments = [session.Value];
+        var reply = await Table
+            .EvaluateAsync(RespScript.SessionClose, session.Keyspace, arguments, cancellationToken)
             .ConfigureAwait(false);
 
         var (status, _) = RespReplies.Script(reply);
@@ -138,38 +131,35 @@ internal class RespSessionService(RespServer server) : ISessionService
         ArgumentNullException.ThrowIfNull(session);
         RespCall.Check(options, cancellationToken);
 
-        // Poll for session expiry with backoff
-        var maxRetries = 300; // 30 seconds with 100ms intervals
-        var retryCount = 0;
-        var retryDelay = TimeSpan.FromMilliseconds(100);
+        await RespPolling
+            .UntilAsync(token => HasEndedAsync(session, token), cancellationToken)
+            .ConfigureAwait(false);
+    }
 
-        while (retryCount < maxRetries)
+    /// <summary>
+    /// Asks the server whether a session has ended.
+    /// </summary>
+    /// <param name="session">The session.</param>
+    /// <param name="cancellationToken">The token that cancels the wait for the server.</param>
+    /// <returns><see langword="true"/> when the session is no longer live.</returns>
+    /// <exception cref="CoordinationException">The call failed or the reply was not one the script sends.</exception>
+    private async ValueTask<bool> HasEndedAsync(
+        SessionId session,
+        CancellationToken cancellationToken
+    )
+    {
+        RedisValue[] arguments = [session.Value];
+        var reply = await Table
+            .EvaluateAsync(RespScript.SessionCheck, session.Keyspace, arguments, cancellationToken)
+            .ConfigureAwait(false);
+
+        var (status, _) = RespReplies.Script(reply);
+
+        return status switch
         {
-            var keys = new[] { RespKeys.ForKeyspace(session.Keyspace, "sessions") };
-            var arguments = new RedisValue[] { "check-liveness", session.Value };
-
-            var reply = await Server
-                .EvaluateAsync(RespScript.Session, keys, arguments, cancellationToken)
-                .ConfigureAwait(false);
-
-            var (status, _) = RespReplies.Script(reply);
-
-            if (status == 1)
-            {
-                // Session has ended
-                return;
-            }
-
-            if (status != 0)
-            {
-                throw RespReplies.Unexpected(reply);
-            }
-
-            await Task.Delay(retryDelay, cancellationToken).ConfigureAwait(false);
-            retryCount++;
-        }
-
-        // Timeout - session might be stuck or the timeout was too short
-        // For now, just return as if the session ended
+            0 => false,
+            1 => true,
+            _ => throw RespReplies.Unexpected(reply),
+        };
     }
 }

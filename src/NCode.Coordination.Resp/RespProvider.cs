@@ -182,6 +182,7 @@ internal sealed class RespProvider : ICoordinationProvider, IAsyncDisposable, ID
             Profile = profile.Name,
         };
         var records = new RespRecordTable(Server, profile);
+        var tokens = new RespRandomTokens();
         var services = new Dictionary<Type, object>
         {
             [typeof(IRecordService)] = new RespRecordService(records),
@@ -190,7 +191,7 @@ internal sealed class RespProvider : ICoordinationProvider, IAsyncDisposable, ID
             [typeof(ISetService)] = new RespSetService(Server),
             [typeof(ICounterService)] = new RespCounterService(Server),
             [typeof(ISequenceService)] = new RespSequenceService(Server),
-            [typeof(ISessionService)] = new Sessions.RespSessionService(Server),
+            [typeof(ISessionService)] = new Sessions.RespSessionService(records, tokens),
             [typeof(IMembershipService)] = new Membership.RespMembershipService(Server),
             [typeof(ILeaseService)] = new Leases.RespLeaseService(Server),
             [typeof(ISemaphoreService)] = new Leases.RespSemaphoreService(Server),
