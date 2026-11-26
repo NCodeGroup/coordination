@@ -351,8 +351,9 @@ every count before it writes; an increment past it fails as `limit-exceeded` and
 ### D27. RESP records
 
 A keyspace's records live in one hash, an index and a set of deadlines beside its revision, so every record script
-receives every key it touches; the index holds a digest of each key segment, so a prefix lists as one range with a
-short continuation token; and every change, a take and an expiry included, is a script that numbers and publishes it.
+receives every key it touches; the index holds a digest of each key segment, so a prefix lists as one range, each
+page examining at most its limit plus 64 members, with a short continuation token; and every change, a take and an
+expiry included, is a script that numbers and publishes it.
 [ADR-1027](../decisions/1027-resp-records-live-in-one-table-per-keyspace-indexed-by-digests-of-their-segments.md)
 
 ## Open Questions

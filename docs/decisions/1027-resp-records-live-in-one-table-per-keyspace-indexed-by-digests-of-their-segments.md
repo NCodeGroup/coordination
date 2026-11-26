@@ -46,8 +46,8 @@ so a continuation token stays short whatever a key's length.**
 2. **Names and members.** A record's name is its partition depth, `:` and its encoded segments joined by `/`. Its
    member is, for each segment, the unpadded Base64Url form of the SHA-256 digest of the encoded segment followed by
    `/`, and last the partition depth: at most 706 characters. The members of the keys under a prefix are those that
-   start with the prefix's digests, so a page is one range read, and its continuation token is the member of its last
-   record.
+   start with the prefix's digests, so a page is one range read, and its continuation token is the last member the
+   page examined (rule 7).
 3. **Every operation is a script.** Create, read, compare-and-swap, compare-and-delete, take, list and transaction
    each run as one script: a start that every record script shares, then the operation's own text, joined once when
    the provider loads them, so each script is constant text (ADR-1023 rule 2). A take is a script, not `GETDEL`, since
@@ -63,6 +63,11 @@ so a continuation token stays short whatever a key's length.**
    three keys together: when every record has a time to live, they expire one hour after the latest deadline; when
    any record is persistent, they don't expire; when no record is left, they are deleted. This amends ADR-1025 rule 7,
    which gives each key a backstop of its own.
+7. **Bounded listing.** A page examines at most its limit plus 64 members of the index, the number of expired records
+   every record script deletes, and reads one more to tell whether any follow. A member whose record has expired but
+   is not yet deleted counts toward that bound, so a page can hold fewer records than its limit, or none, and still
+   carry a continuation token: the last member it examined. This amends ADR-1023 rule 6: a listing's work is bounded
+   by the page size, 1,000 records, plus 64.
 
 ## Options considered
 
@@ -81,6 +86,8 @@ so a continuation token stays short whatever a key's length.**
 - Records bound to a session, and the periodic expiry removal of ADR-1025 rule 6, build on the same table.
 - A listing's order is the digests' order, which ADR-1014 rule 3 leaves to the provider.
 - Two keys whose segments have the same SHA-256 digests would share a record; finding such a pair is impractical.
+- A listing over many expired records not yet deleted returns short or empty pages with a token, and a caller pages on
+  until a page has none.
 - You chose wrong if one keyspace's records grow past what a script can read in bounded time, or if a consumer needs
   listings in key order. Then a record that supersedes this one weighs per-record keys with a listing that receives
   them.
