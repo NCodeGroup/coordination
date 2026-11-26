@@ -20,6 +20,12 @@ internal static class RespKeys
     private const int StackBufferLength = 1024;
 
     /// <summary>
+    /// Gets the UTF-8 encoding that throws on bytes that are not well-formed UTF-8, which <see cref="Unescape"/> uses.
+    /// </summary>
+    private static UTF8Encoding StrictUtf8 { get; } =
+        new(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
+
+    /// <summary>
     /// Returns the hash tag of a keyspace: its cluster and each segment joined by "/", in braces.
     /// </summary>
     /// <param name="keyspace">The keyspace.</param>
@@ -107,6 +113,145 @@ internal static class RespKeys
             ),
         };
     }
+
+    /// <summary>
+    /// Decodes one segment that <see cref="EncodeSegment"/> wrote: the inverse of <see cref="EncodeSegment"/>.
+    /// </summary>
+    /// <param name="encoded">The encoded segment.</param>
+    /// <returns>The segment.</returns>
+    /// <exception cref="ArgumentNullException">The text is null.</exception>
+    /// <exception cref="FormatException">The text is not a segment that EncodeSegment writes.</exception>
+    internal static KeySegment DecodeSegment(string encoded)
+    {
+        ArgumentNullException.ThrowIfNull(encoded);
+
+        if (encoded.Length == 0)
+        {
+            throw NotEncoded(encoded);
+        }
+
+        var rest = encoded[1..];
+
+        switch (encoded[0])
+        {
+            case 't':
+                var text = Unescape(rest);
+
+                if (text.Length == 0 || text.Length > KeySegment.MaxTextLength)
+                {
+                    throw NotEncoded(encoded);
+                }
+
+                return KeySegment.FromString(text);
+
+            case 'n':
+                if (
+                    !long.TryParse(
+                        rest,
+                        NumberStyles.AllowLeadingSign,
+                        CultureInfo.InvariantCulture,
+                        out var number
+                    )
+                    || !string.Equals(
+                        number.ToString(CultureInfo.InvariantCulture),
+                        rest,
+                        StringComparison.Ordinal
+                    )
+                )
+                {
+                    throw NotEncoded(encoded);
+                }
+
+                return KeySegment.FromInt64(number);
+
+            case 'u':
+                if (
+                    !Guid.TryParseExact(rest, "N", out var uuid)
+                    || !string.Equals(
+                        uuid.ToString("N", CultureInfo.InvariantCulture),
+                        rest,
+                        StringComparison.Ordinal
+                    )
+                )
+                {
+                    throw NotEncoded(encoded);
+                }
+
+                return KeySegment.FromGuid(uuid);
+
+            default:
+                throw NotEncoded(encoded);
+        }
+    }
+
+    /// <summary>
+    /// Reverses <see cref="Escape"/>: reads each unreserved character as its own byte and each '%' and two uppercase
+    /// hex digits as one byte, then decodes the bytes as strict UTF-8.
+    /// </summary>
+    /// <param name="escaped">The escaped text.</param>
+    /// <returns>The text.</returns>
+    /// <exception cref="FormatException">The text is not one that <see cref="Escape"/> writes.</exception>
+    private static string Unescape(string escaped)
+    {
+        var bytes = new List<byte>(escaped.Length);
+
+        for (var index = 0; index < escaped.Length; index++)
+        {
+            var character = escaped[index];
+
+            if (IsUnreserved(character))
+            {
+                bytes.Add((byte)character);
+            }
+            else if (character == '%' && index + 2 < escaped.Length)
+            {
+                var high = HexValue(escaped[index + 1]);
+                var low = HexValue(escaped[index + 2]);
+
+                if (high < 0 || low < 0)
+                {
+                    throw NotEncoded(escaped);
+                }
+
+                bytes.Add((byte)((high << 4) | low));
+                index += 2;
+            }
+            else
+            {
+                throw NotEncoded(escaped);
+            }
+        }
+
+        try
+        {
+            return StrictUtf8.GetString(bytes.ToArray());
+        }
+        catch (DecoderFallbackException exception)
+        {
+            throw new FormatException($"'{escaped}' is not an encoded key segment.", exception);
+        }
+    }
+
+    /// <summary>
+    /// Gets the value of one uppercase hex digit.
+    /// </summary>
+    /// <param name="character">The character.</param>
+    /// <returns>The value of '0' to '9' and 'A' to 'F', and -1 for any other character.</returns>
+    private static int HexValue(char character) =>
+        character switch
+        {
+            >= '0' and <= '9' => character - '0',
+            >= 'A' and <= 'F' => character - 'A' + 10,
+            _ => -1,
+        };
+
+    /// <summary>
+    /// Creates the exception for text that is not an encoded key segment.
+    /// </summary>
+    /// <param name="encoded">The text.</param>
+    /// <returns>The exception.</returns>
+    private static FormatException NotEncoded(string encoded) =>
+        new($"'{encoded}' is not an encoded key segment.");
 
     /// <summary>
     /// Escapes text so it holds none of the characters a key name uses as a separator: it keeps the ASCII letters,
