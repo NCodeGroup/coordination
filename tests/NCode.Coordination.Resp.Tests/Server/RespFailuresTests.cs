@@ -7,6 +7,8 @@ namespace NCode.Coordination.Resp.Server.Tests;
 
 public sealed class RespFailuresTests
 {
+    #region Translate Tests
+
     [Fact]
     public void Translate_ConnectionFailureWaitingToBeSent_IsUnavailableAndKnown()
     {
@@ -157,6 +159,10 @@ public sealed class RespFailuresTests
         Assert.True(result.OutcomeUnknown);
     }
 
+    #endregion
+
+    #region IsClientFailure Tests
+
     [Fact]
     public void IsClientFailure_TimeoutException_IsTrue()
     {
@@ -177,6 +183,10 @@ public sealed class RespFailuresTests
         Assert.False(result);
     }
 
+    #endregion
+
+    #region ErrorToken Tests
+
     [Theory]
     [InlineData("ERR ERR stop", "stop")]
     [InlineData("ERR stop now", "stop")]
@@ -189,4 +199,6 @@ public sealed class RespFailuresTests
 
         Assert.Equal(expected, token);
     }
+
+    #endregion
 }

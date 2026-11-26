@@ -5,6 +5,8 @@ namespace NCode.Coordination.Resp.Keys.Tests;
 
 public sealed class RespKeysTests
 {
+    #region KeyspaceTag Tests
+
     [Fact]
     public void KeyspaceTag_ClusterOnly_WrapsClusterInBraces()
     {
@@ -25,12 +27,18 @@ public sealed class RespKeysTests
         Assert.Equal("{prod/ta%7Bb%7D%2Fc}", tag);
     }
 
+    #endregion
+
+    #region ForKey Tests
+
     [Fact]
     public void ForKey_TextAndNumberOne_Differ()
     {
         var keyspace = new Keyspace("prod");
-        var textKey = keyspace.CreateKey(KeySegment.FromString("1"));
-        var numberKey = keyspace.CreateKey(KeySegment.FromInt64(1));
+        var textSegment = KeySegment.FromString("1");
+        var numberSegment = KeySegment.FromInt64(1);
+        var textKey = keyspace.CreateKey(textSegment);
+        var numberKey = keyspace.CreateKey(numberSegment);
 
         var text = RespKeys.ForKey(textKey, "lock");
         var number = RespKeys.ForKey(numberKey, "lock");
@@ -55,7 +63,9 @@ public sealed class RespKeysTests
     public void ForKey_Uuid_UsesThirtyTwoHexDigits()
     {
         var uuid = Guid.Parse("00112233-4455-6677-8899-aabbccddeeff");
-        var key = new Keyspace("prod").CreateKey(KeySegment.FromGuid(uuid));
+        var keyspace = new Keyspace("prod");
+        var uuidSegment = KeySegment.FromGuid(uuid);
+        var key = keyspace.CreateKey(uuidSegment);
 
         var name = RespKeys.ForKey(key, "lock");
 
@@ -65,7 +75,8 @@ public sealed class RespKeysTests
     [Fact]
     public void ForKey_NonAsciiText_PercentEncodesUtf8()
     {
-        var key = new Keyspace("prod").CreateKey("é");
+        var keyspace = new Keyspace("prod");
+        var key = keyspace.CreateKey("é");
 
         var name = RespKeys.ForKey(key, "lock");
 
@@ -76,14 +87,21 @@ public sealed class RespKeysTests
     public void ForKey_AnyKey_FirstClosingBraceEndsTag()
     {
         var keyspace = new Keyspace("prod", "x}y");
-        var key = keyspace.CreateKey("a}b", KeySegment.FromInt64(7));
+        var numberSegment = KeySegment.FromInt64(7);
+        var key = keyspace.CreateKey("a}b", numberSegment);
 
         var name = (string?)RespKeys.ForKey(key, "lock");
 
         Assert.NotNull(name);
         var end = name.IndexOf('}', StringComparison.Ordinal);
-        Assert.Equal(RespKeys.KeyspaceTag(keyspace), name[..(end + 1)]);
+        var expected = RespKeys.KeyspaceTag(keyspace);
+        var tag = name[..(end + 1)];
+        Assert.Equal(expected, tag);
     }
+
+    #endregion
+
+    #region ForKeyspace Tests
 
     [Fact]
     public void ForKeyspace_InvalidKind_Throws()
@@ -96,4 +114,6 @@ public sealed class RespKeysTests
 
         Assert.Equal("kind", exception.ParamName);
     }
+
+    #endregion
 }

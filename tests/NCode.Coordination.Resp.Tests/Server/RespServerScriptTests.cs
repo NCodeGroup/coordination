@@ -8,16 +8,16 @@ namespace NCode.Coordination.Resp.Server.Tests;
 
 public sealed class RespServerScriptTests(RespServers servers)
 {
-    private static readonly RespScript FailAfterWrite = new(
-        "fail",
-        "redis.call('SET', KEYS[1], '1') return redis.error_reply('ERR stop')"
-    );
+    private static RespScript FailAfterWrite { get; } =
+        new("fail", "redis.call('SET', KEYS[1], '1') return redis.error_reply('ERR stop')");
 
     private static RespConnection CreateConnection(string endpoint) =>
         new(
             async ct => await ConnectionMultiplexer.ConnectAsync(endpoint).WaitAsync(ct),
             owned: true
         );
+
+    #region EvaluateAsync Tests
 
     [RespServerFact]
     public async Task EvaluateAsync_ValkeyScriptErrorAfterWrite_ThrowsOutcomeUnknown()
@@ -49,6 +49,10 @@ public sealed class RespServerScriptTests(RespServers servers)
         Assert.True(exception.OutcomeUnknown);
     }
 
+    #endregion
+
+    #region ExecuteAsync Tests
+
     [RespServerFact]
     public async Task ExecuteAsync_Valkey_ReturnsPong()
     {
@@ -58,6 +62,10 @@ public sealed class RespServerScriptTests(RespServers servers)
 
         var result = await server.ExecuteAsync("PING", [], cancellationToken);
 
-        Assert.Equal("PONG", result.ToString());
+        var text = result.ToString();
+
+        Assert.Equal("PONG", text);
     }
+
+    #endregion
 }
