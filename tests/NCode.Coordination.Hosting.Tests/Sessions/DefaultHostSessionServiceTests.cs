@@ -222,6 +222,101 @@ public sealed class DefaultHostSessionServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task StartAsync_WhenARenewalFailsAndTheNextSucceeds_KeepsTheSession()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var time = HostingTesting.CreateTime();
+        var grant = CreateGrant("s1");
+        var renewed = new TimeToLive(TimeSpan.FromSeconds(30));
+        var renewedResult = KeepAliveResult.Renewed(renewed);
+        DefaultHostSessionService? observed = null;
+        HostSessionState? stateAtSecond = null;
+        var calls = 0;
+        var first = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var second = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        // No options, so SetResult runs the loop's continuation inline.
+        var renewal = new TaskCompletionSource<KeepAliveResult>();
+        var sessions = Mocks.Create<ISessionService>();
+        var membership = Mocks.Create<IMembershipService>();
+        sessions
+            .Setup(x =>
+                x.OpenAsync(
+                    It.IsAny<Keyspace>(),
+                    It.IsAny<TimeToLive>(),
+                    It.IsAny<OperationOptions?>(),
+                    It.IsAny<CancellationToken>()
+                )
+            )
+            .ReturnsAsync(grant)
+            .Verifiable();
+        sessions
+            .Setup(x =>
+                x.KeepAliveAsync(
+                    grant.Id,
+                    It.IsAny<OperationOptions?>(),
+                    It.IsAny<CancellationToken>()
+                )
+            )
+            .Returns(() =>
+            {
+                var count = Interlocked.Increment(ref calls);
+                if (count == 1)
+                {
+                    var unavailable = CreateUnavailable();
+                    first.TrySetResult();
+                    return ValueTask.FromException<KeepAliveResult>(unavailable);
+                }
+
+                if (count == 2)
+                {
+                    stateAtSecond = observed?.State;
+                    second.TrySetResult();
+                    return new ValueTask<KeepAliveResult>(renewal.Task);
+                }
+
+                return ValueTask.FromResult(renewedResult);
+            })
+            .Verifiable();
+        membership
+            .Setup(x =>
+                x.JoinAsync(
+                    It.IsAny<CoordinationKey>(),
+                    It.IsAny<Member>(),
+                    It.IsAny<OperationOptions?>(),
+                    It.IsAny<CancellationToken>()
+                )
+            )
+            .ReturnsAsync(MembershipJoinStatus.Joined)
+            .Verifiable();
+        await using var service = HostingTesting.CreateService(
+            time,
+            sessions.Object,
+            membership.Object
+        );
+        observed = service;
+        await service.StartAsync(cancellationToken);
+        var session = service.Current;
+        Assert.NotNull(session);
+
+        time.Advance(TimeSpan.FromSeconds(10));
+        await first.Task.WaitAsync(cancellationToken);
+        time.Advance(TimeSpan.FromSeconds(10));
+        await second.Task.WaitAsync(cancellationToken);
+
+        Assert.Equal(HostSessionState.Unreachable, stateAtSecond);
+
+        renewal.SetResult(renewedResult);
+
+        Assert.Equal(HostSessionState.Active, service.State);
+        Assert.Same(session, service.Current);
+        Assert.False(session.Ended.IsCancellationRequested);
+
+        time.Advance(TimeSpan.FromSeconds(10));
+
+        Assert.False(session.Ended.IsCancellationRequested);
+    }
+
+    [Fact]
     public async Task StartAsync_WhenRenewalsFailPastTheDeadline_EndsTheSessionAndOpensAnother()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
@@ -926,6 +1021,39 @@ public sealed class DefaultHostSessionServiceTests : IDisposable
         await service.StoppedAsync(cancellationToken);
 
         Assert.Equal(HostSessionState.Stopped, service.State);
+    }
+
+    [Fact]
+    public async Task StoppedAsync_WhenTheHostStopsDuringTheRetryWait_Stops()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var time = HostingTesting.CreateTime();
+        var unavailable = CreateUnavailable();
+        var sessions = Mocks.Create<ISessionService>();
+        var membership = Mocks.Create<IMembershipService>();
+        sessions
+            .Setup(x =>
+                x.OpenAsync(
+                    It.IsAny<Keyspace>(),
+                    It.IsAny<TimeToLive>(),
+                    It.IsAny<OperationOptions?>(),
+                    It.IsAny<CancellationToken>()
+                )
+            )
+            .ThrowsAsync(unavailable)
+            .Verifiable();
+        await using var service = HostingTesting.CreateService(
+            time,
+            sessions.Object,
+            membership.Object
+        );
+        await service.StartAsync(cancellationToken);
+        Assert.Equal(HostSessionState.Unreachable, service.State);
+
+        await service.StoppedAsync(cancellationToken);
+
+        Assert.Equal(HostSessionState.Stopped, service.State);
+        VerifyOpens(sessions, Times.Once());
     }
 
     #endregion
