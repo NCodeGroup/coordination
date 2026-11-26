@@ -32,6 +32,12 @@ internal sealed class RespScript(string name, string text)
     public static RespScript Probe { get; } = Load("probe");
 
     /// <summary>
+    /// Gets the startup probe's permission check: it returns the commands among its arguments
+    /// that the server's user may not run, without running any of them.
+    /// </summary>
+    public static RespScript ProbeCommands { get; } = Load("probe-commands");
+
+    /// <summary>
     /// Gets the counter script: it applies the increments of a batch in order, and stops after the first
     /// whose count exceeds its limit.
     /// </summary>

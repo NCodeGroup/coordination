@@ -1,6 +1,8 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using System.Reflection;
+using System.Text.RegularExpressions;
 using Moq;
 using NCode.Coordination.Resp.Server;
 using NCode.Coordination.Resp.Tests.Servers;
@@ -8,8 +10,11 @@ using StackExchange.Redis;
 
 namespace NCode.Coordination.Resp.Tests;
 
-public sealed class RespProviderTests(RespServers servers) : IDisposable
+public sealed partial class RespProviderTests(RespServers servers) : IDisposable
 {
+    [GeneratedRegex(@"redis\.p?call\('([A-Z]+)'")]
+    private static partial Regex ScriptCommand();
+
     private static RespProvider CreateProvider(string endpoint, RespProfile profile)
     {
         var connection = new RespConnection(
@@ -462,6 +467,177 @@ public sealed class RespProviderTests(RespServers servers) : IDisposable
 
         Assert.Equal(CoordinationErrorCodes.AccessDenied, exception.Code);
         Assert.False(exception.OutcomeUnknown);
+    }
+
+    [Fact]
+    public async Task ProbeAsync_UserMayNotRunCommands_ThrowsAccessDeniedNamingThem()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var database = Mocks.Create<IDatabase>();
+        await using var provider = CreateProvider(database);
+        var info = new RedisValue("# Server\r\nserver_name:valkey\r\nvalkey_version:9.2.0\r\n");
+        var infoReply = RedisResult.Create(info);
+        var hset = RedisResult.Create((RedisValue)"HSET");
+        var zrangebylex = RedisResult.Create((RedisValue)"ZRANGEBYLEX");
+        RedisResult[] denied = [hset, zrangebylex];
+        var deniedReply = RedisResult.Create(denied);
+        RedisValue[]? values = null;
+        database
+            .Setup(x =>
+                x.ScriptEvaluateAsync(
+                    It.Is<string>(s => s == RespScript.Probe.Text),
+                    It.IsAny<RedisKey[]?>(),
+                    It.IsAny<RedisValue[]?>(),
+                    It.IsAny<CommandFlags>()
+                )
+            )
+            .ReturnsAsync(infoReply)
+            .Verifiable();
+        database
+            .Setup(x =>
+                x.ScriptEvaluateAsync(
+                    It.Is<string>(s => s == RespScript.ProbeCommands.Text),
+                    It.IsAny<RedisKey[]?>(),
+                    It.IsAny<RedisValue[]?>(),
+                    It.IsAny<CommandFlags>()
+                )
+            )
+            .Callback<string, RedisKey[]?, RedisValue[]?, CommandFlags>(
+                (_, _, v, _) =>
+                {
+                    values = v;
+                }
+            )
+            .ReturnsAsync(deniedReply)
+            .Verifiable();
+
+        var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
+            await provider.ProbeAsync(cancellationToken)
+        );
+
+        Assert.Equal(CoordinationErrorCodes.AccessDenied, exception.Code);
+        Assert.False(exception.OutcomeUnknown);
+        Assert.Equal(
+            "The RESP server's user may not run HSET, ZRANGEBYLEX, which the provider sends.",
+            exception.Message
+        );
+        var expected = RespProvider.ProbedCommands(RespProfiles.Valkey);
+        Assert.NotNull(values);
+        Assert.Equal(expected, values);
+    }
+
+    [RespServerFact]
+    public async Task ProbeAsync_UserWithoutHset_ThrowsAccessDeniedNamingIt()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var admin = await ConnectionMultiplexer.ConnectAsync(servers.Valkey);
+        await admin
+            .GetDatabase()
+            .ExecuteAsync(
+                "ACL",
+                "SETUSER",
+                "probe-no-hset",
+                "on",
+                ">probe-no-hset-pass",
+                "~*",
+                "&*",
+                "+@all",
+                "-hset"
+            );
+        await using var provider = CreateProvider(
+            $"{servers.Valkey},user=probe-no-hset,password=probe-no-hset-pass",
+            RespProfiles.Valkey
+        );
+
+        var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
+            await provider.ProbeAsync(cancellationToken)
+        );
+
+        Assert.Equal(CoordinationErrorCodes.AccessDenied, exception.Code);
+        Assert.False(exception.OutcomeUnknown);
+        Assert.Equal(
+            "The RESP server's user may not run HSET, which the provider sends.",
+            exception.Message
+        );
+    }
+
+    #endregion
+
+    #region ProbedCommands Tests
+
+    [Fact]
+    public void ProbedCommands_Always_CoverEveryCommandTheProviderSends()
+    {
+        var assembly = typeof(RespProvider).Assembly;
+        var prefix = "NCode.Coordination.Resp.Scripts.";
+        var excluded = "NCode.Coordination.Resp.Scripts.probe";
+        var sent = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var resource in assembly.GetManifestResourceNames())
+        {
+            if (
+                !resource.StartsWith(prefix, StringComparison.Ordinal)
+                || !resource.EndsWith(".lua", StringComparison.Ordinal)
+                || resource.StartsWith(excluded, StringComparison.Ordinal)
+            )
+            {
+                continue;
+            }
+
+            using var stream = assembly.GetManifestResourceStream(resource);
+            Assert.NotNull(stream);
+            using var reader = new StreamReader(stream);
+            var text = reader.ReadToEnd();
+            var matches = ScriptCommand().Matches(text);
+            foreach (var command in matches.Select(m => m.Groups[1].Value))
+            {
+                sent.Add(command);
+            }
+        }
+
+        const BindingFlags flags =
+            BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static;
+        foreach (var field in typeof(RespCommands).GetFields(flags))
+        {
+            if (!field.IsLiteral)
+            {
+                continue;
+            }
+
+            var value = field.GetRawConstantValue();
+            var command = Assert.IsType<string>(value);
+            sent.Add(command);
+        }
+
+        var valkey = RespProvider
+            .ProbedCommands(RespProfiles.Valkey)
+            .Select(c => (string?)c)
+            .ToList();
+        var garnet = RespProvider
+            .ProbedCommands(RespProfiles.Garnet)
+            .Select(c => (string?)c)
+            .ToList();
+        var missing = sent.Where(c => !valkey.Contains(c) && !garnet.Contains(c)).Order().ToList();
+
+        Assert.NotEmpty(sent);
+        Assert.Empty(missing);
+    }
+
+    [Fact]
+    public void ProbedCommands_Profile_PublishesOnItsChannels()
+    {
+        var valkey = RespProvider
+            .ProbedCommands(RespProfiles.Valkey)
+            .Select(c => (string?)c)
+            .ToList();
+        var garnet = RespProvider
+            .ProbedCommands(RespProfiles.Garnet)
+            .Select(c => (string?)c)
+            .ToList();
+
+        Assert.Contains("SPUBLISH", valkey);
+        Assert.DoesNotContain("PUBLISH", valkey);
+        Assert.Contains("PUBLISH", garnet);
+        Assert.DoesNotContain("SPUBLISH", garnet);
     }
 
     #endregion

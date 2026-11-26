@@ -22,8 +22,8 @@ and works with any backlog policy, reporting a call that times out as possibly a
 ## Profiles
 
 `Profile` names the server, `RespProfiles.Valkey` by default. When the host starts, the provider checks that the
-server is that vendor, at that profile's version or later, runs Lua scripts and lets its user run them, and fails the
-start otherwise.
+server is that vendor, at that profile's version or later, runs Lua scripts and lets its user run them and every
+command the provider sends, and fails the start otherwise.
 
 - **Valkey** 7.2 or later.
 - **Garnet** 2.2.13 or later, started with `--lua --lua-transaction-mode`: without them Garnet runs no scripts, or
