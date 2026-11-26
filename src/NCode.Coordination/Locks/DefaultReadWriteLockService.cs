@@ -102,7 +102,7 @@ internal class DefaultReadWriteLockService(
             catch
             {
                 await Leases
-                    .ReleaseAsync(probe.Grant, options, CancellationToken.None)
+                    .ReleaseQuietlyAsync(probe.Grant, options, CancellationToken.None)
                     .ConfigureAwait(false);
                 throw;
             }
@@ -188,7 +188,9 @@ internal class DefaultReadWriteLockService(
         }
         catch
         {
-            await Leases.ReleaseAsync(grant, options, CancellationToken.None).ConfigureAwait(false);
+            await Leases
+                .ReleaseQuietlyAsync(grant, options, CancellationToken.None)
+                .ConfigureAwait(false);
             throw;
         }
 

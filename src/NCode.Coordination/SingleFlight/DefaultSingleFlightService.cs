@@ -94,7 +94,7 @@ internal class DefaultSingleFlightService(IRecordService records, ILeaseService 
             finally
             {
                 await Leases
-                    .ReleaseAsync(lease.Grant, options, CancellationToken.None)
+                    .ReleaseQuietlyAsync(lease.Grant, options, CancellationToken.None)
                     .ConfigureAwait(false);
             }
         }
