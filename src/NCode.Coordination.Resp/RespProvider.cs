@@ -65,6 +65,42 @@ internal sealed class RespProvider : ICoordinationProvider, IAsyncDisposable, ID
             Guarantees.LinearizableUntilFailover,
             Guarantees.Volatile
         ),
+        PrimitiveSupport.Supported(
+            Primitives.Session,
+            Guarantees.LinearizableUntilFailover,
+            Guarantees.Volatile,
+            Guarantees.ServerClock
+        ),
+        PrimitiveSupport.Supported(
+            Primitives.Membership,
+            Guarantees.LinearizableUntilFailover,
+            Guarantees.Volatile,
+            Guarantees.ServerClock
+        ),
+        PrimitiveSupport.Supported(
+            Primitives.Lease,
+            Guarantees.LinearizableUntilFailover,
+            Guarantees.Volatile,
+            Guarantees.ServerClock
+        ),
+        PrimitiveSupport.Supported(
+            Primitives.Semaphore,
+            Guarantees.LinearizableUntilFailover,
+            Guarantees.Volatile,
+            Guarantees.ServerClock
+        ),
+        PrimitiveSupport.Supported(
+            Primitives.Election,
+            Guarantees.LinearizableUntilFailover,
+            Guarantees.Volatile,
+            Guarantees.ServerClock
+        ),
+        PrimitiveSupport.Supported(
+            Primitives.Claim,
+            Guarantees.LinearizableUntilFailover,
+            Guarantees.Volatile,
+            Guarantees.ServerClock
+        ),
     ];
 
     /// <summary>
@@ -150,6 +186,12 @@ internal sealed class RespProvider : ICoordinationProvider, IAsyncDisposable, ID
             [typeof(ISetService)] = new RespSetService(Server),
             [typeof(ICounterService)] = new RespCounterService(Server),
             [typeof(ISequenceService)] = new RespSequenceService(Server),
+            [typeof(ISessionService)] = new Sessions.RespSessionService(Server),
+            [typeof(IMembershipService)] = new Membership.RespMembershipService(Server),
+            [typeof(ILeaseService)] = new Leases.RespLeaseService(Server),
+            [typeof(ISemaphoreService)] = new Leases.RespSemaphoreService(Server),
+            [typeof(IElectionService)] = new Elections.RespElectionService(Server),
+            [typeof(IClaimService)] = new Claims.RespClaimService(Server),
         };
         Services = services.ToFrozenDictionary();
     }
