@@ -21,7 +21,19 @@
 -- A record whose deadline is not after the server's current time is absent. Each change takes the keyspace's next
 -- revision and publishes an event on the watch channel: the revision, then a line for each record it wrote, 'w' and
 -- the record's name, or deleted, 'd' and the record's name, the lines separated by line feeds. The script first
--- deletes up to 64 records whose deadline has passed, as one change.
+-- deletes up to 64 records whose deadline has passed, as one change, and drops up to 64 grants whose deadline has
+-- passed.
+-- Functions the script's own text calls: live(session) is true when the session's deadline is after now. holdBackstop()
+-- deletes the sessions, session deadlines, bindings, grants, grant deadlines, members and member fields keys when no
+-- session deadline and no grant deadline is left, and else expires each of them ARGV[3] milliseconds after the latest
+-- of the two deadlines (it never touches the fencing counters). publish(revision) sends the changes, then holds both
+-- backstops, and finish(reply) holds the backstop of the ownership keys and returns the reply, for a script that
+-- publishes nothing. holder(field) reads the grants hash and returns { owner, fencing, session } for a grant that is
+-- held, or nil when the field is absent, its session is not live, or (for a grant with no session) its deadline in
+-- KEYS[9] is missing or not after now. grant(field, owner, counter, session, timeToLive) takes the next fencing token
+-- of the counter in KEYS[10], writes the holder line, then binds the field to the session in KEYS[7], or, with no
+-- session, gives it a deadline in KEYS[9]; it returns the token. drop(field) removes a grant field, its binding or
+-- deadline and, for a leadership 'e <name>', its value 'v <name>'.
 local revisionKey = KEYS[1]
 local records = KEYS[2]
 local index = KEYS[3]
@@ -120,6 +132,30 @@ local function backstop()
   end
 end
 
+local function holdBackstop()
+  if redis.call('ZCARD', sessionDeadlines) == 0 and redis.call('ZCARD', grantDeadlines) == 0 then
+    redis.call('DEL', sessions, sessionDeadlines, bindings, grants, grantDeadlines, members, memberFields)
+    return
+  end
+  local last = now
+  local sessionLast = redis.call('ZRANGE', sessionDeadlines, -1, -1, 'WITHSCORES')
+  if sessionLast[2] and tonumber(sessionLast[2]) > last then
+    last = tonumber(sessionLast[2])
+  end
+  local grantLast = redis.call('ZRANGE', grantDeadlines, -1, -1, 'WITHSCORES')
+  if grantLast[2] and tonumber(grantLast[2]) > last then
+    last = tonumber(grantLast[2])
+  end
+  local timeToLive = string.format('%d', last - now + tonumber(ARGV[3]))
+  redis.call('PEXPIRE', sessions, timeToLive)
+  redis.call('PEXPIRE', sessionDeadlines, timeToLive)
+  redis.call('PEXPIRE', bindings, timeToLive)
+  redis.call('PEXPIRE', grants, timeToLive)
+  redis.call('PEXPIRE', grantDeadlines, timeToLive)
+  redis.call('PEXPIRE', members, timeToLive)
+  redis.call('PEXPIRE', memberFields, timeToLive)
+end
+
 local function publish(revision)
   table.insert(changes, 1, revision)
   local event = table.concat(changes, '\n')
@@ -130,6 +166,58 @@ local function publish(revision)
   end
   changes = {}
   backstop()
+  holdBackstop()
+end
+
+local function finish(reply)
+  holdBackstop()
+  return reply
+end
+
+local function holder(field)
+  local line = redis.call('HGET', grants, field)
+  if not line then
+    return nil
+  end
+  local owner, fencing, session = string.match(line, '^(%S+) (%S+) (%S+)$')
+  if session ~= '-' then
+    if not live(session) then
+      return nil
+    end
+  else
+    local deadline = redis.call('ZSCORE', grantDeadlines, field)
+    if not deadline or tonumber(deadline) <= now then
+      return nil
+    end
+  end
+  return { owner, fencing, session }
+end
+
+local function grant(field, owner, counter, session, timeToLive)
+  local fencing = redis.call('HINCRBY', fencingKey, counter, 1)
+  local line = owner .. ' ' .. string.format('%d', fencing) .. ' ' .. (session ~= '' and session or '-')
+  redis.call('HSET', grants, field, line)
+  if session ~= '' then
+    redis.call('ZADD', bindings, 0, session .. ' g ' .. field)
+  else
+    redis.call('ZADD', grantDeadlines, now + timeToLive, field)
+  end
+  return fencing
+end
+
+local function drop(field)
+  local line = redis.call('HGET', grants, field)
+  if line then
+    local session = select(3, string.match(line, '^(%S+) (%S+) (%S+)$'))
+    if session and session ~= '-' then
+      redis.call('ZREM', bindings, session .. ' g ' .. field)
+    end
+  end
+  redis.call('HDEL', grants, field)
+  redis.call('ZREM', grantDeadlines, field)
+  if string.sub(field, 1, 2) == 'e ' then
+    redis.call('HDEL', grants, 'v ' .. string.sub(field, 3))
+  end
 end
 
 local expired = redis.call('ZRANGEBYSCORE', deadlines, '-inf', now, 'LIMIT', 0, 64)
@@ -139,4 +227,9 @@ if #expired > 0 then
     remove(expired[i], redis.call('HGET', records, 'n:' .. expired[i]))
   end
   publish(revision)
+end
+
+local expiredGrants = redis.call('ZRANGEBYSCORE', grantDeadlines, '-inf', now, 'LIMIT', 0, 64)
+for i = 1, #expiredGrants do
+  drop(expiredGrants[i])
 end
