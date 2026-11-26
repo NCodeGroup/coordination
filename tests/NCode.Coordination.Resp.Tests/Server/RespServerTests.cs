@@ -20,7 +20,10 @@ public sealed class RespServerTests : IDisposable
             .Setup(x => x.GetDatabase(It.IsAny<int>(), It.IsAny<object?>()))
             .Returns(database.Object)
             .Verifiable();
-        var connection = new RespConnection(_ => Task.FromResult(multiplexer.Object), owned: false);
+        var connection = new RespConnection(
+            _ => ValueTask.FromResult(multiplexer.Object),
+            owned: false
+        );
 
         return (new RespServer(connection), database);
     }
@@ -62,7 +65,7 @@ public sealed class RespServerTests : IDisposable
                     CommandFlags.None
                 )
             )
-            .Returns(Task.FromException<RedisResult>(failure))
+            .ThrowsAsync(failure)
             .Verifiable();
 
         var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
@@ -93,7 +96,7 @@ public sealed class RespServerTests : IDisposable
                     CommandFlags.None
                 )
             )
-            .Returns(Task.FromException<RedisResult>(failure))
+            .ThrowsAsync(failure)
             .Verifiable();
 
         var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
@@ -121,7 +124,7 @@ public sealed class RespServerTests : IDisposable
         );
         database
             .Setup(x => x.ExecuteAsync("GET", It.IsAny<object[]>()))
-            .Returns(Task.FromException<RedisResult>(failure))
+            .ThrowsAsync(failure)
             .Verifiable();
 
         var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
