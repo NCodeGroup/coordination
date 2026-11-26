@@ -239,7 +239,7 @@ internal static class RespKeys
         }
         catch (DecoderFallbackException exception)
         {
-            throw new FormatException($"'{escaped}' is not an encoded key segment.", exception);
+            throw NotEncoded(escaped, exception);
         }
     }
 
@@ -260,9 +260,10 @@ internal static class RespKeys
     /// Creates the exception for text that is not an encoded key segment.
     /// </summary>
     /// <param name="encoded">The text.</param>
+    /// <param name="innerException">The exception that showed the text is not one, if any.</param>
     /// <returns>The exception.</returns>
-    private static FormatException NotEncoded(string encoded) =>
-        new($"'{encoded}' is not an encoded key segment.");
+    private static FormatException NotEncoded(string encoded, Exception? innerException = null) =>
+        new($"'{encoded}' is not an encoded key segment.", innerException);
 
     /// <summary>
     /// Escapes text so it holds none of the characters a key name uses as a separator: it keeps the ASCII letters,
