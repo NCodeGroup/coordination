@@ -46,7 +46,8 @@ public sealed class HostSession
     /// </summary>
     /// <remarks>
     /// The token is cancelled when the holder's deadline passes without a renewal, when a renewal finds the session
-    /// ended, and as the host stops. A callback registered on it must not throw.
+    /// ended, and as the host stops. A callback registered on it should not throw: one that does is logged, and the host
+    /// goes on.
     /// </remarks>
     public CancellationToken Ended { get; }
 }
