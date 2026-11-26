@@ -144,8 +144,9 @@ public sealed class DefaultHostSessionServiceTests : IDisposable
         var cancellationToken = TestContext.Current.CancellationToken;
         var time = HostingTesting.CreateTime();
         var grant = CreateGrant("s1");
-        var called = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var gate = new TaskCompletionSource<KeepAliveResult>();
+        var calls = 0;
+        var first = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var second = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var sessions = Mocks.Create<ISessionService>();
         var membership = Mocks.Create<IMembershipService>();
         sessions
@@ -167,8 +168,15 @@ public sealed class DefaultHostSessionServiceTests : IDisposable
                     It.IsAny<CancellationToken>()
                 )
             )
-            .Callback(() => called.TrySetResult())
-            .Returns(new ValueTask<KeepAliveResult>(gate.Task))
+            .Callback(() =>
+            {
+                var count = Interlocked.Increment(ref calls);
+                if (count == 1)
+                    first.TrySetResult();
+                else if (count == 2)
+                    second.TrySetResult();
+            })
+            .ReturnsAsync(KeepAliveResult.Renewed(new TimeToLive(TimeSpan.FromSeconds(30))))
             .Verifiable();
         membership
             .Setup(x =>
@@ -190,9 +198,10 @@ public sealed class DefaultHostSessionServiceTests : IDisposable
         await service.StartAsync(cancellationToken);
         var session = await service.WaitForSessionAsync(cancellationToken);
         time.Advance(TimeSpan.FromSeconds(10));
-        await called.Task.WaitAsync(cancellationToken);
-        gate.SetResult(KeepAliveResult.Renewed(new TimeToLive(TimeSpan.FromSeconds(30))));
-        time.Advance(TimeSpan.FromSeconds(20));
+        await first.Task.WaitAsync(cancellationToken);
+        time.Advance(TimeSpan.FromSeconds(10));
+        await second.Task.WaitAsync(cancellationToken);
+        time.Advance(TimeSpan.FromSeconds(10));
 
         Assert.False(session.Ended.IsCancellationRequested);
         Assert.Same(session, service.Current);
