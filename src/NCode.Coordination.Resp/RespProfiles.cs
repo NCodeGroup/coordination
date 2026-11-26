@@ -9,13 +9,23 @@ namespace NCode.Coordination;
 public static class RespProfiles
 {
     /// <summary>
+    /// Gets the oldest Valkey version the provider accepts.
+    /// </summary>
+    private static Version ValkeyMinimumVersion { get; } = new(7, 2, 0);
+
+    /// <summary>
+    /// Gets the oldest Garnet version the provider accepts.
+    /// </summary>
+    private static Version GarnetMinimumVersion { get; } = new(2, 2, 13);
+
+    /// <summary>
     /// Gets the profile for Valkey 7.2.0 and later.
     /// </summary>
     /// <remarks>
     /// Valkey carries channel messages on sharded Pub/Sub channels.
     /// </remarks>
     public static RespProfile Valkey { get; } =
-        new("valkey", "valkey", "valkey_version", new Version(7, 2, 0), shardedChannels: true);
+        new("valkey", "valkey", "valkey_version", ValkeyMinimumVersion, shardedChannels: true);
 
     // Garnet's settings for Lua: ADR-1023 rule 9.
     /// <summary>
@@ -26,5 +36,5 @@ public static class RespProfiles
     /// a script runs as one transaction.
     /// </remarks>
     public static RespProfile Garnet { get; } =
-        new("garnet", "garnet", "garnet_version", new Version(2, 2, 13), shardedChannels: false);
+        new("garnet", "garnet", "garnet_version", GarnetMinimumVersion, shardedChannels: false);
 }

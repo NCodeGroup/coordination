@@ -10,14 +10,10 @@ public sealed class RespProfileTests
     [Fact]
     public void Constructor_InvalidName_Throws()
     {
+        var version = new Version(7, 2, 0);
+
         var exception = Assert.Throws<ArgumentException>(() =>
-            new RespProfile(
-                "Valkey",
-                "valkey",
-                "valkey_version",
-                new Version(7, 2, 0),
-                shardedChannels: true
-            )
+            new RespProfile("Valkey", "valkey", "valkey_version", version, shardedChannels: true)
         );
 
         Assert.Equal("name", exception.ParamName);
