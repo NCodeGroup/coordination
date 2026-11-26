@@ -754,5 +754,96 @@ public sealed class RespRecordServiceTests(RespServers servers) : IDisposable
         Assert.True(exception.OutcomeUnknown);
     }
 
+    [Fact]
+    public async Task ListAsync_MoreRecordsThanTheLimit_ThrowsUnavailableWithOutcomeUnknown()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var (server, database) = CreateServer();
+        var keyspace = new Keyspace("prod");
+        var status = RedisResult.Create((RedisValue)0, ResultType.Integer);
+        var revision = RedisResult.Create((RedisValue)"7");
+        var token = RedisResult.Create((RedisValue)"");
+        var firstName = RedisResult.Create((RedisValue)"0:ta");
+        var secondName = RedisResult.Create((RedisValue)"0:tb");
+        var recordRevision = RedisResult.Create((RedisValue)"5");
+        var recordValue = RedisResult.Create((RedisValue)"v");
+        var reply = RedisResult.Create([
+            status,
+            revision,
+            token,
+            firstName,
+            recordRevision,
+            recordValue,
+            secondName,
+            recordRevision,
+            recordValue,
+        ]);
+        database
+            .Setup(x =>
+                x.ScriptEvaluateAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<RedisKey[]?>(),
+                    It.IsAny<RedisValue[]?>(),
+                    CommandFlags.None
+                )
+            )
+            .ReturnsAsync(reply)
+            .Verifiable();
+        var service = CreateService(server);
+        var prefix = keyspace.CreateKey("a");
+        var request = new RecordPageRequest(1);
+
+        var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
+            await service.ListAsync(prefix, request, null, cancellationToken)
+        );
+
+        Assert.Equal(CoordinationErrorCodes.Unavailable, exception.Code);
+        Assert.True(exception.OutcomeUnknown);
+    }
+
+    [Fact]
+    public async Task ListAsync_AsManyRecordsAsTheLimit_ReturnsThem()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var (server, database) = CreateServer();
+        var keyspace = new Keyspace("prod");
+        var status = RedisResult.Create((RedisValue)0, ResultType.Integer);
+        var revision = RedisResult.Create((RedisValue)"7");
+        var token = RedisResult.Create((RedisValue)"");
+        var firstName = RedisResult.Create((RedisValue)"0:ta");
+        var secondName = RedisResult.Create((RedisValue)"0:tb");
+        var recordRevision = RedisResult.Create((RedisValue)"5");
+        var recordValue = RedisResult.Create((RedisValue)"v");
+        var reply = RedisResult.Create([
+            status,
+            revision,
+            token,
+            firstName,
+            recordRevision,
+            recordValue,
+            secondName,
+            recordRevision,
+            recordValue,
+        ]);
+        database
+            .Setup(x =>
+                x.ScriptEvaluateAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<RedisKey[]?>(),
+                    It.IsAny<RedisValue[]?>(),
+                    CommandFlags.None
+                )
+            )
+            .ReturnsAsync(reply)
+            .Verifiable();
+        var service = CreateService(server);
+        var prefix = keyspace.CreateKey("a");
+        var request = new RecordPageRequest(2);
+
+        var result = await service.ListAsync(prefix, request, null, cancellationToken);
+
+        Assert.Equal(2, result.Records.Length);
+    }
+
     #endregion
 }

@@ -15,6 +15,110 @@ namespace NCode.Coordination.Resp.Records;
 internal class RespRecordService(RespRecordTable table) : IRecordService
 {
     /// <summary>
+    /// The fields before a list page's records: the keyspace's revision and the continuation token.
+    /// </summary>
+    private const int PageHeaderLength = 2;
+
+    /// <summary>
+    /// The fields of each record on a list page: its name, its revision and its value.
+    /// </summary>
+    private const int ListedRecordLength = 3;
+
+    /// <summary>
+    /// Checks that a continuation token was issued for a prefix's member.
+    /// </summary>
+    /// <param name="member">The prefix's member.</param>
+    /// <param name="page">The page request that holds the token.</param>
+    /// <exception cref="ArgumentException">The token was not issued by the RESP provider for this prefix.</exception>
+    private static void CheckToken(string member, RecordPageRequest page)
+    {
+        var token = page.ContinuationToken;
+        if (
+            token is not null
+            && (
+                token.Length <= member.Length || !token.StartsWith(member, StringComparison.Ordinal)
+            )
+        )
+        {
+            throw new ArgumentException(
+                "The continuation token was not issued by the RESP provider for this prefix.",
+                nameof(page)
+            );
+        }
+    }
+
+    /// <summary>
+    /// Reads the name field of a listed record and decodes it to a key.
+    /// </summary>
+    /// <param name="keyspace">The keyspace of the record.</param>
+    /// <param name="field">The name field.</param>
+    /// <param name="reply">The script's reply.</param>
+    /// <returns>The key of the record.</returns>
+    /// <exception cref="CoordinationException">The name is missing or is not one the provider wrote.</exception>
+    private static CoordinationKey ReadName(Keyspace keyspace, RedisResult field, RedisResult reply)
+    {
+        var name = (string?)field;
+        if (name is null)
+        {
+            throw RespReplies.Unexpected(reply);
+        }
+
+        try
+        {
+            return RespKeys.DecodeName(keyspace, name);
+        }
+        catch (FormatException)
+        {
+            throw RespReplies.Unexpected(reply);
+        }
+    }
+
+    /// <summary>
+    /// Maps the reply of the list script to a page.
+    /// </summary>
+    /// <param name="prefix">The prefix that was listed.</param>
+    /// <param name="limit">The most records the page may hold.</param>
+    /// <param name="reply">The script's reply.</param>
+    /// <returns>The page.</returns>
+    /// <exception cref="CoordinationException">The reply is not one the list script returns.</exception>
+    private static RecordPage ReadPage(CoordinationKey prefix, int limit, RedisResult reply)
+    {
+        var (status, fields) = RespReplies.Script(reply);
+        var recordFields = fields.Length - PageHeaderLength;
+        if (
+            status != 0
+            || recordFields < 0
+            || recordFields % ListedRecordLength != 0
+            || recordFields / ListedRecordLength > limit
+        )
+        {
+            throw RespReplies.Unexpected(reply);
+        }
+
+        var revision = RespRecordTable.ReadRevision(fields[0], reply);
+        var next = (string?)fields[1];
+        if (next is null)
+        {
+            throw RespReplies.Unexpected(reply);
+        }
+
+        var records = new List<StoredRecord>(recordFields / ListedRecordLength);
+        for (var index = PageHeaderLength; index < fields.Length; index += ListedRecordLength)
+        {
+            var key = ReadName(prefix.Keyspace, fields[index], reply);
+            var recordRevision = RespRecordTable.ReadRevision(fields[index + 1], reply);
+            var recordValue = RespRecordTable.ReadValue(fields[index + 2], reply);
+            var record = new StoredRecord(key, recordValue, recordRevision);
+            records.Add(record);
+        }
+
+        return new RecordPage(revision, records)
+        {
+            ContinuationToken = next.Length == 0 ? null : next,
+        };
+    }
+
+    /// <summary>
     /// Checks that a value is no longer than the largest value.
     /// </summary>
     /// <param name="value">The value.</param>
@@ -225,22 +329,10 @@ internal class RespRecordService(RespRecordTable table) : IRecordService
         ArgumentNullException.ThrowIfNull(page);
 
         var member = RespKeys.MemberPrefix(prefix);
-        var token = page.ContinuationToken;
-        if (
-            token is not null
-            && (
-                token.Length <= member.Length || !token.StartsWith(member, StringComparison.Ordinal)
-            )
-        )
-        {
-            throw new ArgumentException(
-                "The continuation token was not issued by the RESP provider for this prefix.",
-                nameof(page)
-            );
-        }
-
+        CheckToken(member, page);
         RespCall.Check(options, cancellationToken);
 
+        var token = page.ContinuationToken;
         var start = token is null ? "[" + member : "(" + token;
         var end = "(" + member + "~";
         RedisValue[] arguments = [start, end, page.Limit];
@@ -248,52 +340,6 @@ internal class RespRecordService(RespRecordTable table) : IRecordService
             .EvaluateAsync(RespScript.RecordList, prefix.Keyspace, arguments, cancellationToken)
             .ConfigureAwait(false);
 
-        var (status, fields) = RespReplies.Script(reply);
-        if (
-            status != 0
-            || fields.Length < 2
-            || (fields.Length - 2) % 3 != 0
-            || (fields.Length - 2) / 3 > page.Limit
-        )
-        {
-            throw RespReplies.Unexpected(reply);
-        }
-
-        var revision = RespRecordTable.ReadRevision(fields[0], reply);
-        var next = (string?)fields[1];
-        if (next is null)
-        {
-            throw RespReplies.Unexpected(reply);
-        }
-
-        var records = new List<StoredRecord>((fields.Length - 2) / 3);
-        for (var index = 2; index < fields.Length; index += 3)
-        {
-            var name = (string?)fields[index];
-            if (name is null)
-            {
-                throw RespReplies.Unexpected(reply);
-            }
-
-            CoordinationKey key;
-            try
-            {
-                key = RespKeys.DecodeName(prefix.Keyspace, name);
-            }
-            catch (FormatException)
-            {
-                throw RespReplies.Unexpected(reply);
-            }
-
-            var recordRevision = RespRecordTable.ReadRevision(fields[index + 1], reply);
-            var recordValue = RespRecordTable.ReadValue(fields[index + 2], reply);
-            var record = new StoredRecord(key, recordValue, recordRevision);
-            records.Add(record);
-        }
-
-        return new RecordPage(revision, records)
-        {
-            ContinuationToken = next.Length == 0 ? null : next,
-        };
+        return ReadPage(prefix, page.Limit, reply);
     }
 }
