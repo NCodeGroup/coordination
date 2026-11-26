@@ -128,12 +128,8 @@ internal class RespMembershipService(RespRecordTable table) : IMembershipService
                 throw RespReplies.Unexpected(reply);
             }
 
-            members.Add(
-                new Member(new SessionId(group.Keyspace, session), node, address)
-                {
-                    Metadata = metadata,
-                }
-            );
+            var id = new SessionId(group.Keyspace, session);
+            members.Add(new Member(id, node, address) { Metadata = metadata });
         }
 
         return new MembershipView(group, revision, members);

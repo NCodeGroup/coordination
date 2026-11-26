@@ -58,12 +58,25 @@ internal class RespSessionService(RespRecordTable table, IRespTokens tokens) : I
 
         return status switch
         {
-            0 when fields.Length == 0 => new SessionGrant(
-                new SessionId(keyspace, token),
-                new TimeToLive(TimeSpan.FromMilliseconds(milliseconds))
-            ),
+            0 when fields.Length == 0 => ToGrant(keyspace, token, milliseconds),
             _ => throw RespReplies.Unexpected(reply),
         };
+    }
+
+    /// <summary>
+    /// Builds the grant of a session that the server opened.
+    /// </summary>
+    /// <param name="keyspace">The keyspace of the session.</param>
+    /// <param name="token">The session's token.</param>
+    /// <param name="milliseconds">The session's time to live in milliseconds.</param>
+    /// <returns>The session's grant.</returns>
+    private static SessionGrant ToGrant(Keyspace keyspace, string token, long milliseconds)
+    {
+        var id = new SessionId(keyspace, token);
+        var lifetime = TimeSpan.FromMilliseconds(milliseconds);
+        var timeToLive = new TimeToLive(lifetime);
+        var granted = new SessionGrant(id, timeToLive);
+        return granted;
     }
 
     /// <inheritdoc />
@@ -90,12 +103,24 @@ internal class RespSessionService(RespRecordTable table, IRespTokens tokens) : I
 
         return status switch
         {
-            0 when fields.Length == 1 => KeepAliveResult.Renewed(
-                new TimeToLive(TimeSpan.FromMilliseconds(RespReplies.Integer(fields[0])))
-            ),
+            0 when fields.Length == 1 => ToRenewed(fields[0]),
             1 when fields.Length == 0 => KeepAliveResult.Ended,
             _ => throw RespReplies.Unexpected(reply),
         };
+    }
+
+    /// <summary>
+    /// Builds the result of a session that the server kept alive.
+    /// </summary>
+    /// <param name="field">The reply field that holds the session's remaining time in milliseconds.</param>
+    /// <returns>The result that carries the session's remaining time to live.</returns>
+    private static KeepAliveResult ToRenewed(RedisResult field)
+    {
+        var milliseconds = RespReplies.Integer(field);
+        var remaining = TimeSpan.FromMilliseconds(milliseconds);
+        var timeToLive = new TimeToLive(remaining);
+        var renewed = KeepAliveResult.Renewed(timeToLive);
+        return renewed;
     }
 
     /// <inheritdoc />

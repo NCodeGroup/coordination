@@ -67,18 +67,36 @@ internal class RespLeaseService(RespRecordTable table, IRespTokens tokens) : ILe
 
         return status switch
         {
-            0 when fields.Length == 2 => LeaseAcquireResult.Acquired(
-                new LeaseGrant(
-                    resource,
-                    new FencingToken(RespReplies.Integer(fields[1])),
-                    new OwnerToken((string?)fields[0] ?? throw RespReplies.Unexpected(reply)),
-                    terms
-                )
-            ),
+            0 when fields.Length == 2 => ToAcquired(resource, terms, reply, fields),
             1 when fields.Length == 0 => LeaseAcquireResult.Held,
             2 when fields.Length == 0 => LeaseAcquireResult.SessionEnded,
             _ => throw RespReplies.Unexpected(reply),
         };
+    }
+
+    /// <summary>
+    /// Builds the result of a lease that the server granted.
+    /// </summary>
+    /// <param name="resource">The resource that the lease guards.</param>
+    /// <param name="terms">The terms of the lease.</param>
+    /// <param name="reply">The reply of the script.</param>
+    /// <param name="fields">The fields of the reply after its status: owner token and fencing token.</param>
+    /// <returns>The result that carries the lease's grant.</returns>
+    /// <exception cref="CoordinationException">The owner token is missing from the reply.</exception>
+    private static LeaseAcquireResult ToAcquired(
+        CoordinationKey resource,
+        LeaseTerms terms,
+        RedisResult reply,
+        RedisResult[] fields
+    )
+    {
+        var fencingValue = RespReplies.Integer(fields[1]);
+        var fencing = new FencingToken(fencingValue);
+        var ownerValue = (string?)fields[0] ?? throw RespReplies.Unexpected(reply);
+        var owner = new OwnerToken(ownerValue);
+        var grant = new LeaseGrant(resource, fencing, owner, terms);
+        var acquired = LeaseAcquireResult.Acquired(grant);
+        return acquired;
     }
 
     /// <inheritdoc />

@@ -41,10 +41,8 @@ public sealed class RespMembershipMetadataTests
             .Add("c", "x|y=z")
             .Add("d", "");
 
-        var decoded = RespMembershipMetadata.TryDecode(
-            RespMembershipMetadata.Encode(metadata),
-            out var result
-        );
+        var encoded = RespMembershipMetadata.Encode(metadata);
+        var decoded = RespMembershipMetadata.TryDecode(encoded, out var result);
 
         Assert.True(decoded);
         Assert.Equal(metadata, result);

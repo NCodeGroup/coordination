@@ -75,20 +75,38 @@ internal class RespSemaphoreService(RespRecordTable table, IRespTokens tokens) :
 
         return status switch
         {
-            0 when fields.Length == 3 => SemaphoreAcquireResult.Acquired(
-                new SemaphoreGrant(
-                    resource,
-                    (int)RespReplies.Integer(fields[0]),
-                    new FencingToken(RespReplies.Integer(fields[2])),
-                    new OwnerToken((string?)fields[1] ?? throw RespReplies.Unexpected(reply)),
-                    terms
-                )
-            ),
+            0 when fields.Length == 3 => ToAcquired(resource, terms, reply, fields),
             1 when fields.Length == 0 => SemaphoreAcquireResult.Full,
             2 when fields.Length == 0 => SemaphoreAcquireResult.SessionEnded,
             3 when fields.Length == 0 => SemaphoreAcquireResult.CapacityConflict,
             _ => throw RespReplies.Unexpected(reply),
         };
+    }
+
+    /// <summary>
+    /// Builds the result of a semaphore slot that the server granted.
+    /// </summary>
+    /// <param name="resource">The resource that the semaphore guards.</param>
+    /// <param name="terms">The terms of the slot's grant.</param>
+    /// <param name="reply">The reply of the script.</param>
+    /// <param name="fields">The fields of the reply after its status: slot, owner token and fencing token.</param>
+    /// <returns>The result that carries the slot's grant.</returns>
+    /// <exception cref="CoordinationException">The owner token is missing from the reply.</exception>
+    private static SemaphoreAcquireResult ToAcquired(
+        CoordinationKey resource,
+        LeaseTerms terms,
+        RedisResult reply,
+        RedisResult[] fields
+    )
+    {
+        var slot = (int)RespReplies.Integer(fields[0]);
+        var fencingValue = RespReplies.Integer(fields[2]);
+        var fencing = new FencingToken(fencingValue);
+        var ownerValue = (string?)fields[1] ?? throw RespReplies.Unexpected(reply);
+        var owner = new OwnerToken(ownerValue);
+        var grant = new SemaphoreGrant(resource, slot, fencing, owner, terms);
+        var acquired = SemaphoreAcquireResult.Acquired(grant);
+        return acquired;
     }
 
     /// <inheritdoc />
@@ -186,11 +204,11 @@ internal class RespSemaphoreService(RespRecordTable table, IRespTokens tokens) :
     /// </summary>
     /// <param name="grant">The grant of the slot.</param>
     /// <returns>The slot's grant field.</returns>
-    private static string SlotField(SemaphoreGrant grant) =>
-        string.Create(
-            CultureInfo.InvariantCulture,
-            $"s {grant.Slot} {RespKeys.Name(grant.Resource)}"
-        );
+    private static string SlotField(SemaphoreGrant grant)
+    {
+        var name = RespKeys.Name(grant.Resource);
+        return string.Create(CultureInfo.InvariantCulture, $"s {grant.Slot} {name}");
+    }
 
     /// <summary>
     /// Asks the server whether a semaphore has a free slot.

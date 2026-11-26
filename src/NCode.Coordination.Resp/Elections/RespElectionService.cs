@@ -71,21 +71,38 @@ internal class RespElectionService(RespRecordTable table, IRespTokens tokens) : 
 
         return status switch
         {
-            0 when fields.Length == 3 => ElectionResult.Elected(
-                new Leadership(
-                    new Leader(
-                        role,
-                        new FencingToken(RespReplies.Integer(fields[1])),
-                        (byte[]?)fields[2] ?? []
-                    ),
-                    new OwnerToken((string?)fields[0] ?? throw RespReplies.Unexpected(reply)),
-                    terms
-                )
-            ),
+            0 when fields.Length == 3 => ToElected(role, terms, reply, fields),
             1 when fields.Length == 0 => ElectionResult.Led,
             2 when fields.Length == 0 => ElectionResult.SessionEnded,
             _ => throw RespReplies.Unexpected(reply),
         };
+    }
+
+    /// <summary>
+    /// Builds the result of a leadership that the server granted.
+    /// </summary>
+    /// <param name="role">The role that the leader fills.</param>
+    /// <param name="terms">The terms of the leadership.</param>
+    /// <param name="reply">The reply of the script.</param>
+    /// <param name="fields">The fields of the reply after its status: owner token, fencing token and value.</param>
+    /// <returns>The result that carries the leadership.</returns>
+    /// <exception cref="CoordinationException">The owner token is missing from the reply.</exception>
+    private static ElectionResult ToElected(
+        CoordinationKey role,
+        LeaseTerms terms,
+        RedisResult reply,
+        RedisResult[] fields
+    )
+    {
+        var fencingValue = RespReplies.Integer(fields[1]);
+        var fencing = new FencingToken(fencingValue);
+        var value = (byte[]?)fields[2] ?? [];
+        var leader = new Leader(role, fencing, value);
+        var ownerValue = (string?)fields[0] ?? throw RespReplies.Unexpected(reply);
+        var owner = new OwnerToken(ownerValue);
+        var leadership = new Leadership(leader, owner, terms);
+        var elected = ElectionResult.Elected(leadership);
+        return elected;
     }
 
     /// <inheritdoc />
@@ -174,17 +191,26 @@ internal class RespElectionService(RespRecordTable table, IRespTokens tokens) : 
 
         return status switch
         {
-            0 when fields.Length == 2 => new ElectionView(
-                role,
-                new Leader(
-                    role,
-                    new FencingToken(RespReplies.Integer(fields[0])),
-                    (byte[]?)fields[1] ?? []
-                )
-            ),
+            0 when fields.Length == 2 => ToView(role, fields),
             1 when fields.Length == 0 => new ElectionView(role, null),
             _ => throw RespReplies.Unexpected(reply),
         };
+    }
+
+    /// <summary>
+    /// Builds the view of a role that has a leader.
+    /// </summary>
+    /// <param name="role">The role.</param>
+    /// <param name="fields">The fields of the reply after its status: fencing token and value.</param>
+    /// <returns>The view that carries the leader.</returns>
+    private static ElectionView ToView(CoordinationKey role, RedisResult[] fields)
+    {
+        var fencingValue = RespReplies.Integer(fields[0]);
+        var fencing = new FencingToken(fencingValue);
+        var value = (byte[]?)fields[1] ?? [];
+        var leader = new Leader(role, fencing, value);
+        var view = new ElectionView(role, leader);
+        return view;
     }
 
     /// <inheritdoc />
