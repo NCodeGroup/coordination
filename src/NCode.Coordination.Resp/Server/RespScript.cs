@@ -159,11 +159,6 @@ internal sealed class RespScript(string name, string text)
     public static RespScript Membership { get; } = Load("membership");
 
     /// <summary>
-    /// Gets the election script: it manages election leadership acquisition, resignation, and reading operations.
-    /// </summary>
-    public static RespScript Election { get; } = Load("elections");
-
-    /// <summary>
     /// Gets the claim script: it manages claim acquisition and status checking operations.
     /// </summary>
     public static RespScript Claim { get; } = Load("claims");

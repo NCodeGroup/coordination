@@ -3,22 +3,43 @@
 
 using System.Runtime.CompilerServices;
 using NCode.Coordination.Resp.Keys;
+using NCode.Coordination.Resp.Records;
 using NCode.Coordination.Resp.Server;
 using StackExchange.Redis;
 
 namespace NCode.Coordination.Resp.Elections;
 
 /// <summary>
-/// The elections of the RESP provider: each operation is one election script that manages leader of a role.
+/// The elections of the RESP provider: each leadership is a grant in the keyspace's <c>grants</c> hash, a leadership
+/// bound to a session lives as its session does and a leadership with a time to live has a deadline in
+/// <c>grant-deadlines</c>. One keyspace script serves each operation, every leadership has its own owner token, and a
+/// watch polls the server until the caller cancels.
 /// </summary>
-/// <param name="server">The seam between the provider and its server.</param>
-/// <exception cref="ArgumentNullException">The server is null.</exception>
-internal class RespElectionService(RespServer server) : IElectionService
+/// <param name="table">The table that runs the keyspace scripts.</param>
+/// <param name="tokens">The source of owner tokens.</param>
+/// <exception cref="ArgumentNullException">The table or the tokens are null.</exception>
+internal class RespElectionService(RespRecordTable table, IRespTokens tokens) : IElectionService
 {
     /// <summary>
-    /// Gets the seam between the provider and its server.
+    /// The text an owner token starts with.
     /// </summary>
-    private RespServer Server { get; } = server ?? throw new ArgumentNullException(nameof(server));
+    private const string OwnerPrefix = "o-";
+
+    /// <summary>
+    /// The text a leadership's grant field starts with.
+    /// </summary>
+    private const string FieldPrefix = "e ";
+
+    /// <summary>
+    /// Gets the table that runs the keyspace scripts.
+    /// </summary>
+    private RespRecordTable Table { get; } =
+        table ?? throw new ArgumentNullException(nameof(table));
+
+    /// <summary>
+    /// Gets the source of owner tokens.
+    /// </summary>
+    private IRespTokens Tokens { get; } = tokens ?? throw new ArgumentNullException(nameof(tokens));
 
     /// <inheritdoc />
     public async ValueTask<ElectionResult> TryLeadAsync(
@@ -31,56 +52,38 @@ internal class RespElectionService(RespServer server) : IElectionService
     {
         ArgumentNullException.ThrowIfNull(role);
         ArgumentNullException.ThrowIfNull(terms);
+        CheckValue(value, nameof(value));
         RespCall.Check(options, cancellationToken);
 
-        var keyspace = role.Keyspace;
-        var roleId = RespKeys.Name(role);
-
-        var sessionId = terms.IsBoundToSession ? terms.Session.Value : "";
-        var ttlMs = terms.TimeToLive is not null ? RespCall.ToMilliseconds(terms.TimeToLive) : 0;
-
-        var keys = new[]
-        {
-            RespKeys.ForKeyspace(keyspace, "elections"),
-            RespKeys.ForKeyspace(keyspace, "election-fencing"),
-        };
-
-        var arguments = new RedisValue[]
-        {
-            "tryLead",
-            roleId,
-            value.Span.ToArray(),
-            "", // ownerToken (unused on acquire)
-            sessionId,
-            ttlMs.ToString(System.Globalization.CultureInfo.InvariantCulture),
-        };
-
-        var reply = await Server
-            .EvaluateAsync(RespScript.Election, keys, arguments, cancellationToken)
+        RedisValue[] arguments =
+        [
+            RespKeys.Name(role),
+            value.ToArray(),
+            Tokens.Next(OwnerPrefix),
+            terms.IsBoundToSession ? terms.Session.Value : "",
+            terms.IsBoundToSession ? 0 : RespCall.ToMilliseconds(terms.TimeToLive),
+        ];
+        var reply = await Table
+            .EvaluateAsync(RespScript.ElectionLead, role.Keyspace, arguments, cancellationToken)
             .ConfigureAwait(false);
 
         var (status, fields) = RespReplies.Script(reply);
 
         return status switch
         {
-            0 when fields.Length >= 3 => ElectionResult.Elected(
+            0 when fields.Length == 3 => ElectionResult.Elected(
                 new Leadership(
                     new Leader(
                         role,
-                        new FencingToken(
-                            int.Parse(
-                                (string?)fields[1] ?? throw RespReplies.Unexpected(reply),
-                                System.Globalization.CultureInfo.InvariantCulture
-                            )
-                        ),
-                        value
+                        new FencingToken(RespReplies.Integer(fields[1])),
+                        (byte[]?)fields[2] ?? []
                     ),
                     new OwnerToken((string?)fields[0] ?? throw RespReplies.Unexpected(reply)),
                     terms
                 )
             ),
-            1 => ElectionResult.Led,
-            2 => ElectionResult.SessionEnded,
+            1 when fields.Length == 0 => ElectionResult.Led,
+            2 when fields.Length == 0 => ElectionResult.SessionEnded,
             _ => throw RespReplies.Unexpected(reply),
         };
     }
@@ -97,33 +100,33 @@ internal class RespElectionService(RespServer server) : IElectionService
         ArgumentNullException.ThrowIfNull(timeToLive);
         RespCall.Check(options, cancellationToken);
 
-        var keyspace = leadership.Leader.Role.Keyspace;
-        var roleId = RespKeys.Name(leadership.Leader.Role);
-        var ttlMs = RespCall.ToMilliseconds(timeToLive);
-
-        var keys = new[]
+        if (leadership.Terms.IsBoundToSession)
         {
-            RespKeys.ForKeyspace(keyspace, "elections"),
-            RespKeys.ForKeyspace(keyspace, "election-fencing"),
-        };
+            throw new ArgumentException(
+                "A leadership bound to a session lives as its session does, so it is never renewed.",
+                nameof(leadership)
+            );
+        }
 
-        var arguments = new RedisValue[]
-        {
-            "renew",
-            roleId,
-            "", // value (unused on renew)
+        var role = leadership.Leader.Role;
+        RedisValue[] arguments =
+        [
+            FieldPrefix + RespKeys.Name(role),
             leadership.Owner.Value,
-            "", // sessionId (unused on renew)
-            ttlMs.ToString(System.Globalization.CultureInfo.InvariantCulture),
-        };
-
-        var reply = await Server
-            .EvaluateAsync(RespScript.Election, keys, arguments, cancellationToken)
+            RespCall.ToMilliseconds(timeToLive),
+        ];
+        var reply = await Table
+            .EvaluateAsync(RespScript.GrantRenew, role.Keyspace, arguments, cancellationToken)
             .ConfigureAwait(false);
 
         var (status, _) = RespReplies.Script(reply);
 
-        return status == 0;
+        return status switch
+        {
+            0 => true,
+            1 => false,
+            _ => throw RespReplies.Unexpected(reply),
+        };
     }
 
     /// <inheritdoc />
@@ -136,32 +139,20 @@ internal class RespElectionService(RespServer server) : IElectionService
         ArgumentNullException.ThrowIfNull(leadership);
         RespCall.Check(options, cancellationToken);
 
-        var keyspace = leadership.Leader.Role.Keyspace;
-        var roleId = RespKeys.Name(leadership.Leader.Role);
-
-        var keys = new[]
-        {
-            RespKeys.ForKeyspace(keyspace, "elections"),
-            RespKeys.ForKeyspace(keyspace, "election-fencing"),
-        };
-
-        var arguments = new RedisValue[]
-        {
-            "resign",
-            roleId,
-            "", // value (unused on resign)
-            leadership.Owner.Value,
-            "", // sessionId (unused on resign)
-            "0", // ttl (unused on resign)
-        };
-
-        var reply = await Server
-            .EvaluateAsync(RespScript.Election, keys, arguments, cancellationToken)
+        var role = leadership.Leader.Role;
+        RedisValue[] arguments = [FieldPrefix + RespKeys.Name(role), leadership.Owner.Value];
+        var reply = await Table
+            .EvaluateAsync(RespScript.GrantRelease, role.Keyspace, arguments, cancellationToken)
             .ConfigureAwait(false);
 
         var (status, _) = RespReplies.Script(reply);
 
-        return status == 0;
+        return status switch
+        {
+            0 => true,
+            1 => false,
+            _ => throw RespReplies.Unexpected(reply),
+        };
     }
 
     /// <inheritdoc />
@@ -174,47 +165,26 @@ internal class RespElectionService(RespServer server) : IElectionService
         ArgumentNullException.ThrowIfNull(role);
         RespCall.Check(options, cancellationToken);
 
-        var keyspace = role.Keyspace;
-        var roleId = RespKeys.Name(role);
-
-        var keys = new[]
-        {
-            RespKeys.ForKeyspace(keyspace, "elections"),
-            RespKeys.ForKeyspace(keyspace, "election-fencing"),
-        };
-
-        var arguments = new RedisValue[]
-        {
-            "read-leader",
-            roleId,
-            "", // value (unused on read)
-            "", // ownerToken (unused on read)
-            "", // sessionId (unused on read)
-            "0", // ttl (unused on read)
-        };
-
-        var reply = await Server
-            .EvaluateAsync(RespScript.Election, keys, arguments, cancellationToken)
+        RedisValue[] arguments = [RespKeys.Name(role)];
+        var reply = await Table
+            .EvaluateAsync(RespScript.ElectionRead, role.Keyspace, arguments, cancellationToken)
             .ConfigureAwait(false);
 
         var (status, fields) = RespReplies.Script(reply);
 
-        if (status != 0)
-            throw RespReplies.Unexpected(reply);
-
-        if (fields.Length < 2)
-            return new ElectionView(role, null);
-
-        var term = int.Parse(
-            (string?)fields[0] ?? throw RespReplies.Unexpected(reply),
-            System.Globalization.CultureInfo.InvariantCulture
-        );
-        var value = fields.Length > 1 ? (byte[]?)fields[1] : null;
-
-        if (term == 0)
-            return new ElectionView(role, null);
-
-        return new ElectionView(role, new Leader(role, new FencingToken(term), value ?? []));
+        return status switch
+        {
+            0 when fields.Length == 2 => new ElectionView(
+                role,
+                new Leader(
+                    role,
+                    new FencingToken(RespReplies.Integer(fields[0])),
+                    (byte[]?)fields[1] ?? []
+                )
+            ),
+            1 when fields.Length == 0 => new ElectionView(role, null),
+            _ => throw RespReplies.Unexpected(reply),
+        };
     }
 
     /// <inheritdoc />
@@ -227,7 +197,36 @@ internal class RespElectionService(RespServer server) : IElectionService
         ArgumentNullException.ThrowIfNull(role);
         RespCall.Check(options, cancellationToken);
 
-        // For now, return the current view once (no watch support)
-        yield return await ReadAsync(role, options, cancellationToken).ConfigureAwait(false);
+        var last = await ReadAsync(role, options, cancellationToken).ConfigureAwait(false);
+        yield return last;
+
+        while (true)
+        {
+            await Task.Delay(RespPolling.Interval, cancellationToken).ConfigureAwait(false);
+
+            var view = await ReadAsync(role, options, cancellationToken).ConfigureAwait(false);
+            if (!Equals(view.Leader?.Term, last.Leader?.Term))
+            {
+                last = view;
+                yield return view;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Checks that a value is no longer than the largest value.
+    /// </summary>
+    /// <param name="value">The value.</param>
+    /// <param name="paramName">The name of the parameter that holds the value.</param>
+    /// <exception cref="ArgumentException">The value is longer than <see cref="CoordinationLimits.MaxValueLength"/> bytes.</exception>
+    private static void CheckValue(ReadOnlyMemory<byte> value, string paramName)
+    {
+        if (value.Length > CoordinationLimits.MaxValueLength)
+        {
+            throw new ArgumentException(
+                $"A value has at most {CoordinationLimits.MaxValueLength} bytes.",
+                paramName
+            );
+        }
     }
 }
