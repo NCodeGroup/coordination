@@ -1,6 +1,8 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using NCode.Coordination.Recipes;
+
 namespace NCode.Coordination.Locks;
 
 /// <summary>
@@ -25,24 +27,8 @@ internal class DefaultLockService(ILeaseService leases) : ILockService
         ArgumentNullException.ThrowIfNull(resource);
         ArgumentNullException.ThrowIfNull(terms);
 
-        while (true)
-        {
-            var result = await Leases
-                .TryAcquireAsync(resource, terms, options, cancellationToken)
-                .ConfigureAwait(false);
-
-            switch (result.Status)
-            {
-                case LeaseAcquireStatus.Acquired:
-                    return result.Grant;
-                case LeaseAcquireStatus.SessionEnded:
-                    return null;
-                default:
-                    await Leases
-                        .WaitForReleaseAsync(resource, options, cancellationToken)
-                        .ConfigureAwait(false);
-                    break;
-            }
-        }
+        return await Leases
+            .AcquireWhenFreeAsync(resource, terms, options, cancellationToken)
+            .ConfigureAwait(false);
     }
 }

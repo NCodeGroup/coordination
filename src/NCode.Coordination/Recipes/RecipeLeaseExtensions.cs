@@ -11,6 +11,44 @@ internal static class RecipeLeaseExtensions
     extension(ILeaseService leases)
     {
         /// <summary>
+        /// Acquires a lease, waiting for its release while another holder has it.
+        /// </summary>
+        /// <param name="resource">The key of the lease to acquire.</param>
+        /// <param name="terms">The terms of the lease.</param>
+        /// <param name="options">Options for the call, or null for none.</param>
+        /// <param name="cancellationToken">The token that cancels the wait.</param>
+        /// <returns>The grant, or null when the session the terms name has ended.</returns>
+        public async ValueTask<LeaseGrant?> AcquireWhenFreeAsync(
+            CoordinationKey resource,
+            LeaseTerms terms,
+            OperationOptions? options,
+            CancellationToken cancellationToken
+        )
+        {
+            ArgumentNullException.ThrowIfNull(leases);
+
+            while (true)
+            {
+                var result = await leases
+                    .TryAcquireAsync(resource, terms, options, cancellationToken)
+                    .ConfigureAwait(false);
+
+                switch (result.Status)
+                {
+                    case LeaseAcquireStatus.Acquired:
+                        return result.Grant;
+                    case LeaseAcquireStatus.SessionEnded:
+                        return null;
+                    default:
+                        await leases
+                            .WaitForReleaseAsync(resource, options, cancellationToken)
+                            .ConfigureAwait(false);
+                        break;
+                }
+            }
+        }
+
+        /// <summary>
         /// Gives a lease back, treating a provider failure as the lease ending with its time to live or its session.
         /// </summary>
         /// <param name="grant">The grant of the lease to give back.</param>

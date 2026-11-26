@@ -174,7 +174,8 @@ internal class DefaultReadWriteLockService(
 
         var writer = RecipeKeys.Child(resource, WriterSegment, nameof(resource));
 
-        var grant = await AcquireWriterAsync(writer, terms, options, cancellationToken)
+        var grant = await Leases
+            .AcquireWhenFreeAsync(writer, terms, options, cancellationToken)
             .ConfigureAwait(false);
 
         if (grant is null)
@@ -207,42 +208,6 @@ internal class DefaultReadWriteLockService(
         ArgumentNullException.ThrowIfNull(grant);
 
         return await Leases.ReleaseAsync(grant, options, cancellationToken).ConfigureAwait(false);
-    }
-
-    /// <summary>
-    /// Acquires the writer's lease, waiting for its release while another writer holds it.
-    /// </summary>
-    /// <param name="writer">The key of the writer's lease.</param>
-    /// <param name="terms">The terms of the lease.</param>
-    /// <param name="options">Options for this call, or null for none.</param>
-    /// <param name="cancellationToken">The token that cancels the wait.</param>
-    /// <returns>The grant, or null when the session the terms name has ended.</returns>
-    private async ValueTask<LeaseGrant?> AcquireWriterAsync(
-        CoordinationKey writer,
-        LeaseTerms terms,
-        OperationOptions? options,
-        CancellationToken cancellationToken
-    )
-    {
-        while (true)
-        {
-            var result = await Leases
-                .TryAcquireAsync(writer, terms, options, cancellationToken)
-                .ConfigureAwait(false);
-
-            switch (result.Status)
-            {
-                case LeaseAcquireStatus.Acquired:
-                    return result.Grant;
-                case LeaseAcquireStatus.SessionEnded:
-                    return null;
-                default:
-                    await Leases
-                        .WaitForReleaseAsync(writer, options, cancellationToken)
-                        .ConfigureAwait(false);
-                    break;
-            }
-        }
     }
 
     /// <summary>
