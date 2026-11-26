@@ -147,7 +147,7 @@ internal class RespRecordTable(RespServer server, RespProfile profile)
     /// Converts a record's lifetime to the time to live a record script takes.
     /// </summary>
     /// <param name="lifetime">The lifetime.</param>
-    /// <returns>The time to live in whole milliseconds, rounded up, 0 for persistent, or -1 for session-bound.</returns>
+    /// <returns>The time to live in whole milliseconds, rounded up, or 0 for a persistent or session-bound lifetime.</returns>
     /// <exception cref="ArgumentNullException">The lifetime is null.</exception>
     public static long TimeToLiveOf(RecordLifetime lifetime)
     {
@@ -155,10 +155,23 @@ internal class RespRecordTable(RespServer server, RespProfile profile)
 
         if (lifetime.Session is not null)
         {
-            return -1;
+            return 0;
         }
 
         return lifetime.TimeToLive is { } timeToLive ? RespCall.ToMilliseconds(timeToLive) : 0;
+    }
+
+    /// <summary>
+    /// Converts a record's lifetime to the session token a record script takes.
+    /// </summary>
+    /// <param name="lifetime">The lifetime.</param>
+    /// <returns>The token of the session the record is bound to, or empty.</returns>
+    /// <exception cref="ArgumentNullException">The lifetime is null.</exception>
+    public static string SessionOf(RecordLifetime lifetime)
+    {
+        ArgumentNullException.ThrowIfNull(lifetime);
+
+        return lifetime.Session?.Value ?? "";
     }
 
     /// <summary>

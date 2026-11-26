@@ -142,7 +142,7 @@ public sealed class RespRecordTableTests : IDisposable
     }
 
     [Fact]
-    public void TimeToLiveOf_Session_ReturnsNegativeOne()
+    public void TimeToLiveOf_Session_ReturnsZero()
     {
         var keyspace = new Keyspace("prod");
         var sessionId = new SessionId(keyspace, "s1");
@@ -150,7 +150,31 @@ public sealed class RespRecordTableTests : IDisposable
 
         var milliseconds = RespRecordTable.TimeToLiveOf(lifetime);
 
-        Assert.Equal(-1, milliseconds);
+        Assert.Equal(0, milliseconds);
+    }
+
+    #endregion
+
+    #region SessionOf Tests
+
+    [Fact]
+    public void SessionOf_Session_ReturnsItsToken()
+    {
+        var keyspace = new Keyspace("prod");
+        var sessionId = new SessionId(keyspace, "s1");
+        var lifetime = RecordLifetime.ForSession(sessionId);
+
+        var token = RespRecordTable.SessionOf(lifetime);
+
+        Assert.Equal("s1", token);
+    }
+
+    [Fact]
+    public void SessionOf_Persistent_ReturnsEmpty()
+    {
+        var token = RespRecordTable.SessionOf(RecordLifetime.Persistent);
+
+        Assert.Equal("", token);
     }
 
     #endregion
