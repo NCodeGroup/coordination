@@ -93,6 +93,25 @@ public sealed class CoordinationSlidingWindowLimiterTests
     }
 
     [Fact]
+    public async Task AcquireAsync_WhenTheClockIsAtTheEpoch_SkipsTheSegmentsBeforeIt()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var time = new FakeTimeProvider(DateTimeOffset.UnixEpoch);
+        await using var services = RecipeTesting.Build(time);
+        var length = TimeSpan.FromSeconds(4);
+        var limit = new SlidingWindowLimit(2, length, 4);
+        using var limiter = CreateLimiter(services, time, limit);
+        using var first = await limiter.AcquireAsync(2, cancellationToken);
+        var elapsed = TimeSpan.FromSeconds(1);
+        time.Advance(elapsed);
+
+        using var second = await limiter.AcquireAsync(1, cancellationToken);
+
+        Assert.True(first.IsAcquired);
+        Assert.False(second.IsAcquired);
+    }
+
+    [Fact]
     public async Task AcquireAsync_WhenCallersRace_AcquiresExactlyTheLimit()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
@@ -138,9 +157,9 @@ public sealed class CoordinationSlidingWindowLimiterTests
 
     private sealed class GatedCounters(ICounterService inner, int expectedReads) : ICounterService
     {
-        private int _started;
-
         private static TimeSpan ReadTimeout { get; } = TimeSpan.FromSeconds(15);
+
+        private int _started;
 
         private TaskCompletionSource Gate { get; } =
             new(TaskCreationOptions.RunContinuationsAsynchronously);
