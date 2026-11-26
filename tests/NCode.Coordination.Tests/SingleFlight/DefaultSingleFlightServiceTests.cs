@@ -148,6 +148,52 @@ public sealed class DefaultSingleFlightServiceTests
     }
 
     [Fact]
+    public async Task GetOrFetchAsync_WhenTheFetchingCallerIsCancelled_LetsAWaitingCallerFetch()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var time = InProcessTesting.CreateTime();
+        await using var services = RecipeTesting.Build(time);
+        var flights = CreateService(services);
+        var key = CreateKey();
+        using var stop = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var fetchStarted = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously
+        );
+        var never = new TaskCompletionSource<ReadOnlyMemory<byte>>(
+            TaskCreationOptions.RunContinuationsAsynchronously
+        );
+        var fetched = ValueTask.FromResult(Value);
+
+        var first = flights
+            .GetOrFetchAsync(
+                key,
+                Terms,
+                async token =>
+                {
+                    fetchStarted.TrySetResult();
+                    return await never.Task.WaitAsync(token);
+                },
+                null,
+                stop.Token
+            )
+            .AsTask();
+        await fetchStarted.Task.WaitAsync(cancellationToken);
+        var second = flights
+            .GetOrFetchAsync(key, Terms, _ => fetched, null, cancellationToken)
+            .AsTask();
+
+        Assert.False(second.IsCompleted);
+
+        await stop.CancelAsync();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => first);
+        var stored = await second.WaitAsync(cancellationToken);
+        var expected = Value.ToArray();
+        var storedBytes = stored.Value.ToArray();
+
+        Assert.Equal(expected, storedBytes);
+    }
+
+    [Fact]
     public async Task GetOrFetchAsync_WhenTheFetchFails_LetsTheNextCallerFetch()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
@@ -164,7 +210,8 @@ public sealed class DefaultSingleFlightServiceTests
                 _ =>
                 {
                     Interlocked.Increment(ref fetches);
-                    throw new InvalidOperationException("The fetch failed.");
+                    var failure = new InvalidOperationException("The fetch failed.");
+                    return ValueTask.FromException<ReadOnlyMemory<byte>>(failure);
                 },
                 null,
                 cancellationToken
@@ -271,12 +318,13 @@ public sealed class DefaultSingleFlightServiceTests
         var failingLeases = new FailingReleaseLeases(leases);
         var flights = new DefaultSingleFlightService(records, failingLeases);
         var key = CreateKey();
+        var failure = new InvalidOperationException("The fetch failed.");
 
         var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
             await flights.GetOrFetchAsync(
                 key,
                 Terms,
-                _ => throw new InvalidOperationException("The fetch failed."),
+                _ => ValueTask.FromException<ReadOnlyMemory<byte>>(failure),
                 null,
                 cancellationToken
             )
