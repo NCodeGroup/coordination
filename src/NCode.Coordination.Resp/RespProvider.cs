@@ -12,6 +12,14 @@ namespace NCode.Coordination.Resp;
 internal sealed class RespProvider : ICoordinationProvider, IAsyncDisposable, IDisposable
 {
     /// <summary>
+    /// Creates the exception of a probe that found the server unsupported.
+    /// </summary>
+    /// <param name="message">The message.</param>
+    /// <returns>The exception, which says the call did not apply.</returns>
+    private static CoordinationException Unsupported(string message) =>
+        new(CoordinationErrorCodes.Unsupported, false, message);
+
+    /// <summary>
     /// Creates the provider.
     /// </summary>
     /// <param name="connection">The connection of the provider to its server, which the provider disposes.</param>
@@ -71,11 +79,7 @@ internal sealed class RespProvider : ICoordinationProvider, IAsyncDisposable, ID
         }
         catch (CoordinationException e)
             when (e.InnerException is RedisServerException inner
-                && !string.Equals(
-                    e.Code,
-                    CoordinationErrorCodes.AccessDenied,
-                    StringComparison.Ordinal
-                )
+                && !RespFailures.IsKnownReply(inner)
             )
         {
             throw new CoordinationException(
@@ -125,14 +129,6 @@ internal sealed class RespProvider : ICoordinationProvider, IAsyncDisposable, ID
             );
         }
     }
-
-    /// <summary>
-    /// Creates the exception of a probe that found the server unsupported.
-    /// </summary>
-    /// <param name="message">The message.</param>
-    /// <returns>The exception, which says the call did not apply.</returns>
-    private static CoordinationException Unsupported(string message) =>
-        new(CoordinationErrorCodes.Unsupported, false, message);
 
     /// <inheritdoc />
     public ValueTask DisposeAsync() => Connection.DisposeAsync();
