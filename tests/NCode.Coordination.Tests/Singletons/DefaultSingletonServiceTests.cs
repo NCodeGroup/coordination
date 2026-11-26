@@ -105,7 +105,12 @@ public sealed class DefaultSingletonServiceTests
         var time = InProcessTesting.CreateTime();
         await using var services = RecipeTesting.Build(time);
         var elections = services.GetRequiredService<IElectionService>();
-        var failing = new FailingWatchElections(elections);
+        var failure = new CoordinationException(
+            CoordinationErrorCodes.Unavailable,
+            outcomeUnknown: false,
+            "The provider is unreachable."
+        );
+        var failing = new StoppingWatchElections(elections, failure);
         var singletons = new DefaultSingletonService(failing);
         var role = CreateRole();
         var session = await RecipeTesting.OpenSessionAsync(services, cancellationToken);
@@ -207,7 +212,7 @@ public sealed class DefaultSingletonServiceTests
         var time = InProcessTesting.CreateTime();
         await using var services = RecipeTesting.Build(time);
         var elections = services.GetRequiredService<IElectionService>();
-        var ending = new EndingElections(elections);
+        var ending = new StoppingWatchElections(elections, failure: null);
         var singletons = new DefaultSingletonService(ending);
         var role = CreateRole();
         var leaderSession = await RecipeTesting.OpenSessionAsync(services, cancellationToken);
@@ -252,7 +257,7 @@ public sealed class DefaultSingletonServiceTests
         var time = InProcessTesting.CreateTime();
         await using var services = RecipeTesting.Build(time);
         var elections = services.GetRequiredService<IElectionService>();
-        var ending = new EndingElections(elections);
+        var ending = new StoppingWatchElections(elections, failure: null);
         var singletons = new DefaultSingletonService(ending);
         var role = CreateRole();
         var session = await RecipeTesting.OpenSessionAsync(services, cancellationToken);
@@ -284,7 +289,10 @@ public sealed class DefaultSingletonServiceTests
 
     #endregion
 
-    private sealed class EndingElections(IElectionService inner) : IElectionService
+    private sealed class StoppingWatchElections(
+        IElectionService inner,
+        CoordinationException? failure
+    ) : IElectionService
     {
         public ValueTask<ElectionResult> TryLeadAsync(
             CoordinationKey role,
@@ -321,56 +329,12 @@ public sealed class DefaultSingletonServiceTests
         {
             await Task.Yield();
 
+            if (failure is not null)
+            {
+                throw failure;
+            }
+
             yield break;
-        }
-    }
-
-    private sealed class FailingWatchElections(IElectionService inner) : IElectionService
-    {
-        public ValueTask<ElectionResult> TryLeadAsync(
-            CoordinationKey role,
-            ReadOnlyMemory<byte> value,
-            LeaseTerms terms,
-            OperationOptions? options,
-            CancellationToken cancellationToken
-        ) => inner.TryLeadAsync(role, value, terms, options, cancellationToken);
-
-        public ValueTask<bool> RenewAsync(
-            Leadership leadership,
-            TimeToLive timeToLive,
-            OperationOptions? options,
-            CancellationToken cancellationToken
-        ) => inner.RenewAsync(leadership, timeToLive, options, cancellationToken);
-
-        public ValueTask<bool> ResignAsync(
-            Leadership leadership,
-            OperationOptions? options,
-            CancellationToken cancellationToken
-        ) => inner.ResignAsync(leadership, options, cancellationToken);
-
-        public ValueTask<ElectionView> ReadAsync(
-            CoordinationKey role,
-            OperationOptions? options,
-            CancellationToken cancellationToken
-        ) => inner.ReadAsync(role, options, cancellationToken);
-
-        public async IAsyncEnumerable<ElectionView> WatchAsync(
-            CoordinationKey role,
-            OperationOptions? options,
-            [EnumeratorCancellation] CancellationToken cancellationToken
-        )
-        {
-            await Task.Yield();
-
-            throw new CoordinationException(
-                CoordinationErrorCodes.Unavailable,
-                outcomeUnknown: false,
-                "The provider is unreachable."
-            );
-
-#pragma warning disable CS0162 // Unreachable code: the yield makes the method an iterator.
-            yield break;
-#pragma warning restore CS0162
         }
     }
 }
