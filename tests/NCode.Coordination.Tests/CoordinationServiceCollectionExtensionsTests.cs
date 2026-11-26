@@ -153,6 +153,29 @@ public sealed class CoordinationServiceCollectionExtensionsTests : IDisposable
         Assert.IsType<DefaultCacheInvalidationService>(cacheInvalidationService);
     }
 
+    [Theory]
+    [InlineData(typeof(ILockService), typeof(DefaultLockService))]
+    [InlineData(typeof(IReadWriteLockService), typeof(DefaultReadWriteLockService))]
+    [InlineData(typeof(IBarrierService), typeof(DefaultBarrierService))]
+    [InlineData(typeof(ISingletonService), typeof(DefaultSingletonService))]
+    [InlineData(typeof(IPartitionOwnershipService), typeof(DefaultPartitionOwnershipService))]
+    [InlineData(typeof(ISingleFlightService), typeof(DefaultSingleFlightService))]
+    [InlineData(typeof(IRateLimiterFactory), typeof(DefaultRateLimiterFactory))]
+    [InlineData(typeof(ICacheInvalidationService), typeof(DefaultCacheInvalidationService))]
+    public void AddCoordination_WhenCalled_RegistersTheRecipeAsASingleton(
+        Type serviceType,
+        Type implementationType
+    )
+    {
+        var services = new ServiceCollection();
+
+        services.AddCoordination(_ => { });
+
+        var descriptor = Assert.Single(services, x => x.ServiceType == serviceType);
+        Assert.Equal(ServiceLifetime.Singleton, descriptor.Lifetime);
+        Assert.Equal(implementationType, descriptor.ImplementationType);
+    }
+
     [Fact]
     public async Task AddCoordination_WhenTheHostStartsWithAnUnmetRequirement_FailsListingIt()
     {

@@ -43,8 +43,8 @@ public static class CoordinationServiceCollectionExtensions
     extension(IServiceCollection services)
     {
         /// <summary>
-        /// Adds the coordination composition and its recipes, configured by the callback; calling it again adds to the same
-        /// composition.
+        /// Adds the coordination composition and its recipes, configured by the callback; calling it again adds to
+        /// the same composition.
         /// </summary>
         /// <param name="configure">Registers providers, bindings, requirements and guarantees on the builder.</param>
         /// <returns>The services, for chaining.</returns>
