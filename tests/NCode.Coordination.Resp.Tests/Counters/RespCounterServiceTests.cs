@@ -55,6 +55,72 @@ public sealed class RespCounterServiceTests(RespServers servers) : IDisposable
 
     #endregion
 
+    #region IncrementAsync Tests
+
+    [RespServerFact]
+    public async Task IncrementAsync_ValkeyAtTheLargestCount_RefusesTheNextIncrement()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var connection = CreateConnection(servers.Valkey);
+        var server = new RespServer(connection);
+        var service = new RespCounterService(server);
+        var keyspace = new Keyspace("resp-tests");
+        var name = Guid.NewGuid().ToString("N");
+        var key = keyspace.CreateKey(name);
+        var duration = TimeSpan.FromSeconds(30);
+        var timeToLive = new TimeToLive(duration);
+
+        var largest = await service.IncrementAsync(
+            key,
+            RespCounterService.LargestCount,
+            timeToLive,
+            null,
+            cancellationToken
+        );
+        var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
+            await service.IncrementAsync(key, 1, timeToLive, null, cancellationToken)
+        );
+        var count = await service.ReadAsync(key, null, cancellationToken);
+
+        Assert.Equal(RespCounterService.LargestCount, largest);
+        Assert.Equal(CoordinationErrorCodes.LimitExceeded, exception.Code);
+        Assert.False(exception.OutcomeUnknown);
+        Assert.Equal(RespCounterService.LargestCount, count);
+    }
+
+    [RespServerFact]
+    public async Task IncrementAsync_GarnetAtTheLargestCount_RefusesTheNextIncrement()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var connection = CreateConnection(servers.Garnet);
+        var server = new RespServer(connection);
+        var service = new RespCounterService(server);
+        var keyspace = new Keyspace("resp-tests");
+        var name = Guid.NewGuid().ToString("N");
+        var key = keyspace.CreateKey(name);
+        var duration = TimeSpan.FromSeconds(30);
+        var timeToLive = new TimeToLive(duration);
+
+        var largest = await service.IncrementAsync(
+            key,
+            RespCounterService.LargestCount,
+            timeToLive,
+            null,
+            cancellationToken
+        );
+        var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
+            await service.IncrementAsync(key, 1, timeToLive, null, cancellationToken)
+        );
+        var count = await service.ReadAsync(key, null, cancellationToken);
+
+        Assert.Equal(RespCounterService.LargestCount, largest);
+        Assert.Equal(CoordinationErrorCodes.LimitExceeded, exception.Code);
+        Assert.False(exception.OutcomeUnknown);
+        Assert.Equal(RespCounterService.LargestCount, count);
+    }
+
+    #endregion
+
     #region IncrementBatchAsync Tests
 
     [Fact]
@@ -160,72 +226,6 @@ public sealed class RespCounterServiceTests(RespServers servers) : IDisposable
 
         Assert.Equal(CoordinationErrorCodes.Unavailable, exception.Code);
         Assert.True(exception.OutcomeUnknown);
-    }
-
-    #endregion
-
-    #region Largest Count Tests
-
-    [RespServerFact]
-    public async Task IncrementAsync_ValkeyAtTheLargestCount_RefusesTheNextIncrement()
-    {
-        var cancellationToken = TestContext.Current.CancellationToken;
-        await using var connection = CreateConnection(servers.Valkey);
-        var server = new RespServer(connection);
-        var service = new RespCounterService(server);
-        var keyspace = new Keyspace("resp-tests");
-        var name = Guid.NewGuid().ToString("N");
-        var key = keyspace.CreateKey(name);
-        var duration = TimeSpan.FromSeconds(30);
-        var timeToLive = new TimeToLive(duration);
-
-        var largest = await service.IncrementAsync(
-            key,
-            RespCounterService.LargestCount,
-            timeToLive,
-            null,
-            cancellationToken
-        );
-        var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
-            await service.IncrementAsync(key, 1, timeToLive, null, cancellationToken)
-        );
-        var count = await service.ReadAsync(key, null, cancellationToken);
-
-        Assert.Equal(RespCounterService.LargestCount, largest);
-        Assert.Equal(CoordinationErrorCodes.LimitExceeded, exception.Code);
-        Assert.False(exception.OutcomeUnknown);
-        Assert.Equal(RespCounterService.LargestCount, count);
-    }
-
-    [RespServerFact]
-    public async Task IncrementAsync_GarnetAtTheLargestCount_RefusesTheNextIncrement()
-    {
-        var cancellationToken = TestContext.Current.CancellationToken;
-        await using var connection = CreateConnection(servers.Garnet);
-        var server = new RespServer(connection);
-        var service = new RespCounterService(server);
-        var keyspace = new Keyspace("resp-tests");
-        var name = Guid.NewGuid().ToString("N");
-        var key = keyspace.CreateKey(name);
-        var duration = TimeSpan.FromSeconds(30);
-        var timeToLive = new TimeToLive(duration);
-
-        var largest = await service.IncrementAsync(
-            key,
-            RespCounterService.LargestCount,
-            timeToLive,
-            null,
-            cancellationToken
-        );
-        var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
-            await service.IncrementAsync(key, 1, timeToLive, null, cancellationToken)
-        );
-        var count = await service.ReadAsync(key, null, cancellationToken);
-
-        Assert.Equal(RespCounterService.LargestCount, largest);
-        Assert.Equal(CoordinationErrorCodes.LimitExceeded, exception.Code);
-        Assert.False(exception.OutcomeUnknown);
-        Assert.Equal(RespCounterService.LargestCount, count);
     }
 
     [RespServerFact]
