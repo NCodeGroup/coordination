@@ -3,12 +3,26 @@
 
 using Moq;
 using NCode.Coordination.Resp.Server;
+using NCode.Coordination.Resp.Tests.Servers;
 using StackExchange.Redis;
 
 namespace NCode.Coordination.Resp.Tests;
 
-public sealed class RespProviderTests : IDisposable
+public sealed class RespProviderTests(RespServers servers) : IDisposable
 {
+    private static RespProvider CreateProvider(string endpoint, RespProfile profile)
+    {
+        var connection = new RespConnection(
+            async ct =>
+            {
+                var connecting = ConnectionMultiplexer.ConnectAsync(endpoint);
+                return await connecting.WaitAsync(ct);
+            },
+            owned: true
+        );
+        return new RespProvider(connection, profile);
+    }
+
     private MockRepository Mocks { get; } = new(MockBehavior.Strict);
 
     public void Dispose() => Mocks.Verify();
@@ -130,13 +144,13 @@ public sealed class RespProviderTests : IDisposable
     }
 
     [Fact]
-    public async Task ProbeAsync_ReplyIsNotText_ThrowsUnsupported()
+    public async Task ProbeAsync_IntegerReply_ThrowsUnsupportedNamingItsType()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var database = Mocks.Create<IDatabase>();
         await using var provider = CreateProvider(database);
-        RedisValue[] values = [new("1"), new("2")];
-        var reply = RedisResult.Create(values);
+        RedisValue value = 42;
+        var reply = RedisResult.Create(value, ResultType.Integer);
         database
             .Setup(x =>
                 x.ScriptEvaluateAsync(
@@ -156,7 +170,38 @@ public sealed class RespProviderTests : IDisposable
         Assert.Equal(CoordinationErrorCodes.Unsupported, exception.Code);
         Assert.False(exception.OutcomeUnknown);
         Assert.Equal(
-            "The RESP server answered the probe script with an unexpected reply.",
+            "The RESP server answered the probe script with a reply of type Integer, not text.",
+            exception.Message
+        );
+    }
+
+    [Fact]
+    public async Task ProbeAsync_NullReply_ThrowsUnsupportedNamingNull()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var database = Mocks.Create<IDatabase>();
+        await using var provider = CreateProvider(database);
+        var reply = RedisResult.Create(RedisValue.Null);
+        database
+            .Setup(x =>
+                x.ScriptEvaluateAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<RedisKey[]?>(),
+                    It.IsAny<RedisValue[]?>(),
+                    It.IsAny<CommandFlags>()
+                )
+            )
+            .ReturnsAsync(reply)
+            .Verifiable();
+
+        var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
+            await provider.ProbeAsync(cancellationToken)
+        );
+
+        Assert.Equal(CoordinationErrorCodes.Unsupported, exception.Code);
+        Assert.False(exception.OutcomeUnknown);
+        Assert.Equal(
+            "The RESP server answered the probe script with a reply of type null, not text.",
             exception.Message
         );
     }
@@ -228,6 +273,97 @@ public sealed class RespProviderTests : IDisposable
             exception.Message,
             StringComparison.Ordinal
         );
+    }
+
+    [RespServerFact]
+    public async Task ProbeAsync_ValkeyWithValkeyProfile_Succeeds()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var provider = CreateProvider(servers.Valkey, RespProfiles.Valkey);
+
+        await provider.ProbeAsync(cancellationToken);
+
+        Assert.Equal("valkey", provider.Declaration.Profile);
+    }
+
+    [RespServerFact]
+    public async Task ProbeAsync_GarnetWithGarnetProfile_Succeeds()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var provider = CreateProvider(servers.Garnet, RespProfiles.Garnet);
+
+        await provider.ProbeAsync(cancellationToken);
+
+        Assert.Equal("garnet", provider.Declaration.Profile);
+    }
+
+    [RespServerFact]
+    public async Task ProbeAsync_ValkeyWithGarnetProfile_ThrowsUnsupported()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var provider = CreateProvider(servers.Valkey, RespProfiles.Garnet);
+
+        var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
+            await provider.ProbeAsync(cancellationToken)
+        );
+
+        Assert.Equal(CoordinationErrorCodes.Unsupported, exception.Code);
+        Assert.False(exception.OutcomeUnknown);
+        Assert.Equal(
+            "The RESP server is 'valkey', but the provider uses the 'garnet' profile.",
+            exception.Message
+        );
+    }
+
+    [RespServerFact]
+    public async Task ProbeAsync_GarnetWithoutLua_ThrowsUnsupported()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var provider = CreateProvider(servers.GarnetWithoutLua, RespProfiles.Garnet);
+
+        var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
+            await provider.ProbeAsync(cancellationToken)
+        );
+
+        Assert.Equal(CoordinationErrorCodes.Unsupported, exception.Code);
+        Assert.False(exception.OutcomeUnknown);
+        Assert.StartsWith(
+            "The RESP server refused the provider's probe script:",
+            exception.Message,
+            StringComparison.Ordinal
+        );
+    }
+
+    [RespServerFact]
+    public async Task ProbeAsync_UserWithoutEval_ThrowsAccessDenied()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var admin = await ConnectionMultiplexer.ConnectAsync(servers.Valkey);
+        await admin
+            .GetDatabase()
+            .ExecuteAsync(
+                "ACL",
+                "SETUSER",
+                "probe-limited",
+                "on",
+                ">probe-limited-pass",
+                "~*",
+                "&*",
+                "+@all",
+                "-eval",
+                "-evalsha"
+            );
+        await using var provider = CreateProvider(
+            $"{servers.Valkey},user=probe-limited,password=probe-limited-pass",
+            RespProfiles.Valkey
+        );
+
+        var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
+            await provider.ProbeAsync(cancellationToken)
+        );
+
+        Assert.Equal(CoordinationErrorCodes.AccessDenied, exception.Code);
+        Assert.False(exception.OutcomeUnknown);
     }
 
     #endregion
