@@ -59,18 +59,24 @@ internal class DefaultSingletonService(IElectionService elections) : ISingletonS
             catch (OperationCanceledException)
                 when (lost.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
             {
-                // The leadership ended while the work ran: campaign again.
-                await StopAsync(lost, monitor).ConfigureAwait(false);
-                continue;
+                var ended = await StopAsync(lost, monitor).ConfigureAwait(false);
+                if (!ended)
+                {
+                    // The leadership ended while the work ran: campaign again.
+                    continue;
+                }
+
+                await ResignQuietlyAsync(leadership, options).ConfigureAwait(false);
+                throw new InvalidOperationException("The watch ended without a failure.");
             }
             catch
             {
-                await StopAsync(lost, monitor).ConfigureAwait(false);
+                _ = await StopAsync(lost, monitor).ConfigureAwait(false);
                 await ResignQuietlyAsync(leadership, options).ConfigureAwait(false);
                 throw;
             }
 
-            await StopAsync(lost, monitor).ConfigureAwait(false);
+            _ = await StopAsync(lost, monitor).ConfigureAwait(false);
             await ResignQuietlyAsync(leadership, options).ConfigureAwait(false);
             return true;
         }
@@ -109,8 +115,8 @@ internal class DefaultSingletonService(IElectionService elections) : ISingletonS
     /// <param name="leadership">The leadership to vouch for.</param>
     /// <param name="lost">The source to cancel when the leadership ends, whose token also stops the watch.</param>
     /// <param name="options">Options for the watch, or null for none.</param>
-    /// <returns>A task that completes when the watch has stopped.</returns>
-    private async Task MonitorAsync(
+    /// <returns>True when the watch ended without a failure, which the contracts never do; otherwise false.</returns>
+    private async Task<bool> MonitorAsync(
         CoordinationKey role,
         Leadership leadership,
         CancellationTokenSource lost,
@@ -126,18 +132,24 @@ internal class DefaultSingletonService(IElectionService elections) : ISingletonS
                 if (view.Leader is null || view.Leader.Term != leadership.Leader.Term)
                 {
                     await lost.CancelAsync().ConfigureAwait(false);
-                    return;
+                    return false;
                 }
             }
+
+            // An ended watch cannot vouch for the leadership.
+            await lost.CancelAsync().ConfigureAwait(false);
+            return true;
         }
         catch (OperationCanceledException) when (lost.IsCancellationRequested)
         {
             // The work finished, or the leadership ended, or the call was cancelled.
+            return false;
         }
         catch (CoordinationException)
         {
             // A failed watch cannot vouch for the leadership.
             await lost.CancelAsync().ConfigureAwait(false);
+            return false;
         }
     }
 
@@ -146,11 +158,11 @@ internal class DefaultSingletonService(IElectionService elections) : ISingletonS
     /// </summary>
     /// <param name="lost">The source whose cancellation stops the monitor.</param>
     /// <param name="monitor">The monitor to wait for.</param>
-    /// <returns>A task that completes when the monitor has stopped.</returns>
-    private static async ValueTask StopAsync(CancellationTokenSource lost, Task monitor)
+    /// <returns>True when the monitor's watch ended without a failure; otherwise false.</returns>
+    private static async ValueTask<bool> StopAsync(CancellationTokenSource lost, Task<bool> monitor)
     {
         await lost.CancelAsync().ConfigureAwait(false);
-        await monitor.ConfigureAwait(false);
+        return await monitor.ConfigureAwait(false);
     }
 
     /// <summary>

@@ -244,6 +244,43 @@ public sealed class DefaultSingletonServiceTests
         Assert.Equal(0, totalCalls);
     }
 
+    [Fact]
+    public async Task RunAsync_WhenTheLeadersWatchEndsWithoutAFailure_ResignsAndThrows()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var time = InProcessTesting.CreateTime();
+        await using var services = RecipeTesting.Build(time);
+        var elections = services.GetRequiredService<IElectionService>();
+        var ending = new EndingElections(elections);
+        var singletons = new DefaultSingletonService(ending);
+        var role = CreateRole();
+        var session = await RecipeTesting.OpenSessionAsync(services, cancellationToken);
+        var candidate = new SingletonCandidate(session);
+        var started = new int[1];
+
+        var task = singletons
+            .RunAsync(
+                role,
+                candidate,
+                async (_, token) =>
+                {
+                    Interlocked.Increment(ref started[0]);
+                    await Task.Delay(Timeout.InfiniteTimeSpan, token);
+                },
+                null,
+                cancellationToken
+            )
+            .AsTask();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => task);
+        var view = await elections.ReadAsync(role, null, cancellationToken);
+        var totalStarted = Volatile.Read(ref started[0]);
+
+        Assert.Equal("The watch ended without a failure.", exception.Message);
+        Assert.Equal(1, totalStarted);
+        Assert.Null(view.Leader);
+    }
+
     #endregion
 
     private sealed class EndingElections(IElectionService inner) : IElectionService
