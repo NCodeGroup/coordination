@@ -21,6 +21,11 @@ internal sealed class RespOccurrenceService(RespServer server) : IOccurrenceServ
     private const string Kind = "occurrence";
 
     /// <summary>
+    /// The status text with which the server accepts a <c>SET … NX</c> that wrote the key.
+    /// </summary>
+    private const string Accepted = "OK";
+
+    /// <summary>
     /// Gets the seam between the provider and its server.
     /// </summary>
     private RespServer Server { get; } = server ?? throw new ArgumentNullException(nameof(server));
@@ -52,7 +57,7 @@ internal sealed class RespOccurrenceService(RespServer server) : IOccurrenceServ
             return OccurrenceStatus.Duplicate;
         }
 
-        if (reply.Resp2Type == ResultType.SimpleString)
+        if (reply.Resp2Type == ResultType.SimpleString && (string?)reply == Accepted)
         {
             return OccurrenceStatus.Recorded;
         }
