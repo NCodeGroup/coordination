@@ -39,8 +39,9 @@ up.
   deadlines of those with a time to live. Every change is one script that takes the keyspace's next revision and
   publishes it, with the keys it wrote or deleted, on the keyspace's watch channel. A record whose time to live has
   passed is absent at once, and the next script on its keyspace deletes it and announces the delete; a keyspace
-  whose records all have a time to live leaves the server an hour after the last of them ends. Binding a record to
-  a session fails as `unsupported`.
+  whose records all have a time to live leaves the server an hour after the last of them ends. A page of a listing
+  examines at most its limit plus 64 entries of the index, so expired records not yet deleted can leave a page short, or
+  empty, with a continuation token; page on until a page has none. Binding a record to a session fails as `unsupported`.
 - **Transactions**: up to 64 conditions and two branches of up to 64 writes, run as one script on one keyspace's
   records.
 - **Occurrences**: `SET` with `NX` and a time to live. A call the server doesn't answer throws, so a replay guard
