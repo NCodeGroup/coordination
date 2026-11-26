@@ -86,7 +86,12 @@ public sealed class ValkeyIntegrationTests(RespServers servers) : IntegrationTes
 {
     protected override ValueTask<ConformanceTarget> CreateTargetAsync(
         CancellationToken cancellationToken
-    ) => Conformance.RespConformance.CreateTargetAsync(servers.Valkey, RespProfiles.Valkey, cancellationToken);
+    ) =>
+        Conformance.RespConformance.CreateTargetAsync(
+            servers.Valkey,
+            RespProfiles.Valkey,
+            cancellationToken
+        );
 }
 
 /// <summary>
@@ -96,5 +101,10 @@ public sealed class GarnetIntegrationTests(RespServers servers) : IntegrationTes
 {
     protected override ValueTask<ConformanceTarget> CreateTargetAsync(
         CancellationToken cancellationToken
-    ) => Conformance.RespConformance.CreateTargetAsync(servers.Garnet, RespProfiles.Garnet, cancellationToken);
+    ) =>
+        Conformance.RespConformance.CreateTargetAsync(
+            servers.Garnet,
+            RespProfiles.Garnet,
+            cancellationToken
+        );
 }

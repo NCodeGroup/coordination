@@ -37,13 +37,12 @@ internal class RespElectionService(RespServer server) : IElectionService
         var roleId = RespKeys.Name(role);
 
         var sessionId = terms.IsBoundToSession ? terms.Session.Value : "";
-        var ttlMs = terms.TimeToLive is not null
-            ? RespCall.ToMilliseconds(terms.TimeToLive)
-            : 0;
+        var ttlMs = terms.TimeToLive is not null ? RespCall.ToMilliseconds(terms.TimeToLive) : 0;
 
-        var keys = new[] {
+        var keys = new[]
+        {
             RespKeys.ForKeyspace(keyspace, "elections"),
-            RespKeys.ForKeyspace(keyspace, "election-fencing")
+            RespKeys.ForKeyspace(keyspace, "election-fencing"),
         };
 
         var arguments = new RedisValue[]
@@ -51,9 +50,9 @@ internal class RespElectionService(RespServer server) : IElectionService
             "tryLead",
             roleId,
             value.Span.ToArray(),
-            "",  // ownerToken (unused on acquire)
+            "", // ownerToken (unused on acquire)
             sessionId,
-            ttlMs.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            ttlMs.ToString(System.Globalization.CultureInfo.InvariantCulture),
         };
 
         var reply = await Server
@@ -64,19 +63,25 @@ internal class RespElectionService(RespServer server) : IElectionService
 
         return status switch
         {
-            0 when fields.Length >= 3 =>
-                ElectionResult.Elected(new Leadership(
+            0 when fields.Length >= 3 => ElectionResult.Elected(
+                new Leadership(
                     new Leader(
                         role,
-                        new FencingToken(int.Parse((string?)fields[2] ?? throw RespReplies.Unexpected(reply), System.Globalization.CultureInfo.InvariantCulture)),
+                        new FencingToken(
+                            int.Parse(
+                                (string?)fields[2] ?? throw RespReplies.Unexpected(reply),
+                                System.Globalization.CultureInfo.InvariantCulture
+                            )
+                        ),
                         value
                     ),
                     new OwnerToken((string?)fields[1] ?? throw RespReplies.Unexpected(reply)),
                     terms
-                )),
+                )
+            ),
             1 => ElectionResult.Led,
             2 => ElectionResult.SessionEnded,
-            _ => throw RespReplies.Unexpected(reply)
+            _ => throw RespReplies.Unexpected(reply),
         };
     }
 
@@ -96,19 +101,20 @@ internal class RespElectionService(RespServer server) : IElectionService
         var roleId = RespKeys.Name(leadership.Leader.Role);
         var ttlMs = RespCall.ToMilliseconds(timeToLive);
 
-        var keys = new[] {
+        var keys = new[]
+        {
             RespKeys.ForKeyspace(keyspace, "elections"),
-            RespKeys.ForKeyspace(keyspace, "election-fencing")
+            RespKeys.ForKeyspace(keyspace, "election-fencing"),
         };
 
         var arguments = new RedisValue[]
         {
             "renew",
             roleId,
-            "",  // value (unused on renew)
+            "", // value (unused on renew)
             leadership.Owner.Value,
-            "",  // sessionId (unused on renew)
-            ttlMs.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            "", // sessionId (unused on renew)
+            ttlMs.ToString(System.Globalization.CultureInfo.InvariantCulture),
         };
 
         var reply = await Server
@@ -133,19 +139,20 @@ internal class RespElectionService(RespServer server) : IElectionService
         var keyspace = leadership.Leader.Role.Keyspace;
         var roleId = RespKeys.Name(leadership.Leader.Role);
 
-        var keys = new[] {
+        var keys = new[]
+        {
             RespKeys.ForKeyspace(keyspace, "elections"),
-            RespKeys.ForKeyspace(keyspace, "election-fencing")
+            RespKeys.ForKeyspace(keyspace, "election-fencing"),
         };
 
         var arguments = new RedisValue[]
         {
             "resign",
             roleId,
-            "",  // value (unused on resign)
+            "", // value (unused on resign)
             leadership.Owner.Value,
-            "",  // sessionId (unused on resign)
-            "0"  // ttl (unused on resign)
+            "", // sessionId (unused on resign)
+            "0", // ttl (unused on resign)
         };
 
         var reply = await Server
@@ -170,19 +177,20 @@ internal class RespElectionService(RespServer server) : IElectionService
         var keyspace = role.Keyspace;
         var roleId = RespKeys.Name(role);
 
-        var keys = new[] {
+        var keys = new[]
+        {
             RespKeys.ForKeyspace(keyspace, "elections"),
-            RespKeys.ForKeyspace(keyspace, "election-fencing")
+            RespKeys.ForKeyspace(keyspace, "election-fencing"),
         };
 
         var arguments = new RedisValue[]
         {
             "read-leader",
             roleId,
-            "",  // value (unused on read)
-            "",  // ownerToken (unused on read)
-            "",  // sessionId (unused on read)
-            "0"  // ttl (unused on read)
+            "", // value (unused on read)
+            "", // ownerToken (unused on read)
+            "", // sessionId (unused on read)
+            "0", // ttl (unused on read)
         };
 
         var reply = await Server
@@ -197,17 +205,16 @@ internal class RespElectionService(RespServer server) : IElectionService
         if (fields.Length < 2)
             return new ElectionView(role, null);
 
-        var term = int.Parse((string?)fields[1] ?? throw RespReplies.Unexpected(reply), System.Globalization.CultureInfo.InvariantCulture);
+        var term = int.Parse(
+            (string?)fields[1] ?? throw RespReplies.Unexpected(reply),
+            System.Globalization.CultureInfo.InvariantCulture
+        );
         var value = fields.Length > 2 ? (byte[]?)fields[2] : null;
 
         if (term == 0)
             return new ElectionView(role, null);
 
-        return new ElectionView(role, new Leader(
-            role,
-            new FencingToken(term),
-            value ?? []
-        ));
+        return new ElectionView(role, new Leader(role, new FencingToken(term), value ?? []));
     }
 
     /// <inheritdoc />

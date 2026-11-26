@@ -55,15 +55,7 @@ internal class RespMembershipService(RespServer server) : IMembershipService
         var metadata = string.Join('|', member.Metadata.Select(x => $"{x.Key}={x.Value}"));
 
         var keys = new[] { RespKeys.ForKeyspace(keyspace, "members") };
-        var arguments = new RedisValue[]
-        {
-            "join",
-            groupId,
-            nodeId,
-            sessionId,
-            address,
-            metadata,
-        };
+        var arguments = new RedisValue[] { "join", groupId, nodeId, sessionId, address, metadata };
 
         var reply = await Server.EvaluateAsync(
             RespScript.Membership,
@@ -97,15 +89,7 @@ internal class RespMembershipService(RespServer server) : IMembershipService
         var sessionId = session.Value;
 
         var keys = new[] { RespKeys.ForKeyspace(keyspace, "members") };
-        var arguments = new RedisValue[]
-        {
-            "leave",
-            groupId,
-            "",
-            sessionId,
-            "",
-            "",
-        };
+        var arguments = new RedisValue[] { "leave", groupId, "", sessionId, "", "" };
 
         var reply = await Server.EvaluateAsync(
             RespScript.Membership,
@@ -134,15 +118,7 @@ internal class RespMembershipService(RespServer server) : IMembershipService
         var groupId = RespKeys.Member(group);
 
         var keys = new[] { RespKeys.ForKeyspace(keyspace, "members") };
-        var arguments = new RedisValue[]
-        {
-            "list",
-            groupId,
-            "",
-            "",
-            "",
-            "",
-        };
+        var arguments = new RedisValue[] { "list", groupId, "", "", "", "" };
 
         var reply = await Server.EvaluateAsync(
             RespScript.Membership,
@@ -152,7 +128,7 @@ internal class RespMembershipService(RespServer server) : IMembershipService
         );
 
         var fields = ReadMembers(reply);
-        
+
         // First field is member count, then quadruplets of (nodeId, sessionId, address, metadata)
         if (fields.Length < 1)
         {
@@ -188,7 +164,8 @@ internal class RespMembershipService(RespServer server) : IMembershipService
                 var metadataBuilder = metadataDict.ToBuilder();
                 foreach (var pair in metadataStr.Split('|'))
                 {
-                    if (string.IsNullOrEmpty(pair)) continue;
+                    if (string.IsNullOrEmpty(pair))
+                        continue;
                     var eqPos = pair.IndexOf('=');
                     if (eqPos > 0)
                     {

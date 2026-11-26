@@ -30,7 +30,10 @@ internal class RespSemaphoreService(RespServer server) : ISemaphoreService
     {
         ArgumentNullException.ThrowIfNull(resource);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(capacity);
-        ArgumentOutOfRangeException.ThrowIfGreaterThan(capacity, CoordinationLimits.MaxSemaphoreCapacity);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(
+            capacity,
+            CoordinationLimits.MaxSemaphoreCapacity
+        );
         ArgumentNullException.ThrowIfNull(terms);
         RespCall.Check(options, cancellationToken);
 
@@ -38,13 +41,12 @@ internal class RespSemaphoreService(RespServer server) : ISemaphoreService
         var resourceId = RespKeys.Name(resource);
 
         var sessionId = terms.IsBoundToSession ? terms.Session.Value : "";
-        var ttlMs = terms.TimeToLive is not null
-            ? RespCall.ToMilliseconds(terms.TimeToLive)
-            : 0;
+        var ttlMs = terms.TimeToLive is not null ? RespCall.ToMilliseconds(terms.TimeToLive) : 0;
 
-        var keys = new[] {
+        var keys = new[]
+        {
             RespKeys.ForKeyspace(keyspace, "semaphores"),
-            RespKeys.ForKeyspace(keyspace, "semaphore-fencing")
+            RespKeys.ForKeyspace(keyspace, "semaphore-fencing"),
         };
 
         var arguments = new RedisValue[]
@@ -52,9 +54,9 @@ internal class RespSemaphoreService(RespServer server) : ISemaphoreService
             "tryAcquire",
             resourceId,
             capacity.ToString(System.Globalization.CultureInfo.InvariantCulture),
-            "",  // ownerToken (unused on acquire)
+            "", // ownerToken (unused on acquire)
             sessionId,
-            ttlMs.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            ttlMs.ToString(System.Globalization.CultureInfo.InvariantCulture),
         };
 
         var reply = await Server
@@ -65,18 +67,27 @@ internal class RespSemaphoreService(RespServer server) : ISemaphoreService
 
         return status switch
         {
-            0 when fields.Length >= 4 =>
-                SemaphoreAcquireResult.Acquired(new SemaphoreGrant(
+            0 when fields.Length >= 4 => SemaphoreAcquireResult.Acquired(
+                new SemaphoreGrant(
                     resource,
-                    int.Parse((string?)fields[0] ?? throw RespReplies.Unexpected(reply), System.Globalization.CultureInfo.InvariantCulture) - 1,  // Convert 1-based to 0-based
-                    new FencingToken(int.Parse((string?)fields[2] ?? throw RespReplies.Unexpected(reply), System.Globalization.CultureInfo.InvariantCulture)),
+                    int.Parse(
+                        (string?)fields[0] ?? throw RespReplies.Unexpected(reply),
+                        System.Globalization.CultureInfo.InvariantCulture
+                    ) - 1, // Convert 1-based to 0-based
+                    new FencingToken(
+                        int.Parse(
+                            (string?)fields[2] ?? throw RespReplies.Unexpected(reply),
+                            System.Globalization.CultureInfo.InvariantCulture
+                        )
+                    ),
                     new OwnerToken((string?)fields[1] ?? throw RespReplies.Unexpected(reply)),
                     terms
-                )),
+                )
+            ),
             1 => SemaphoreAcquireResult.Full,
             2 => SemaphoreAcquireResult.SessionEnded,
             3 => SemaphoreAcquireResult.CapacityConflict,
-            _ => throw RespReplies.Unexpected(reply)
+            _ => throw RespReplies.Unexpected(reply),
         };
     }
 
@@ -96,20 +107,21 @@ internal class RespSemaphoreService(RespServer server) : ISemaphoreService
         var resourceId = RespKeys.Name(grant.Resource);
         var ttlMs = RespCall.ToMilliseconds(timeToLive);
 
-        var keys = new[] {
+        var keys = new[]
+        {
             RespKeys.ForKeyspace(keyspace, "semaphores"),
-            RespKeys.ForKeyspace(keyspace, "semaphore-fencing")
+            RespKeys.ForKeyspace(keyspace, "semaphore-fencing"),
         };
 
         var arguments = new RedisValue[]
         {
             "renew",
             resourceId,
-            "1",  // unused capacity
+            "1", // unused capacity
             grant.Owner.Value,
-            "",  // sessionId (unused on renew)
+            "", // sessionId (unused on renew)
             ttlMs.ToString(System.Globalization.CultureInfo.InvariantCulture),
-            (grant.Slot + 1).ToString(System.Globalization.CultureInfo.InvariantCulture)  // Convert 0-based to 1-based slot
+            (grant.Slot + 1).ToString(System.Globalization.CultureInfo.InvariantCulture), // Convert 0-based to 1-based slot
         };
 
         var reply = await Server
@@ -134,20 +146,21 @@ internal class RespSemaphoreService(RespServer server) : ISemaphoreService
         var keyspace = grant.Resource.Keyspace;
         var resourceId = RespKeys.Name(grant.Resource);
 
-        var keys = new[] {
+        var keys = new[]
+        {
             RespKeys.ForKeyspace(keyspace, "semaphores"),
-            RespKeys.ForKeyspace(keyspace, "semaphore-fencing")
+            RespKeys.ForKeyspace(keyspace, "semaphore-fencing"),
         };
 
         var arguments = new RedisValue[]
         {
             "release",
             resourceId,
-            "1",  // unused capacity
+            "1", // unused capacity
             grant.Owner.Value,
-            "",  // sessionId (unused on release)
-            "0",  // ttl (unused on release)
-            (grant.Slot + 1).ToString(System.Globalization.CultureInfo.InvariantCulture)  // Convert 0-based to 1-based slot
+            "", // sessionId (unused on release)
+            "0", // ttl (unused on release)
+            (grant.Slot + 1).ToString(System.Globalization.CultureInfo.InvariantCulture), // Convert 0-based to 1-based slot
         };
 
         var reply = await Server
@@ -176,9 +189,10 @@ internal class RespSemaphoreService(RespServer server) : ISemaphoreService
         const int maxRetries = 300;
         const int delayMs = 100;
 
-        var keys = new[] {
+        var keys = new[]
+        {
             RespKeys.ForKeyspace(keyspace, "semaphores"),
-            RespKeys.ForKeyspace(keyspace, "semaphore-fencing")
+            RespKeys.ForKeyspace(keyspace, "semaphore-fencing"),
         };
 
         for (int i = 0; i < maxRetries; i++)
@@ -188,10 +202,10 @@ internal class RespSemaphoreService(RespServer server) : ISemaphoreService
             {
                 "check-capacity",
                 resourceId,
-                "1",  // placeholder capacity
-                "",  // ownerToken (unused on check)
-                "",  // sessionId (unused on check)
-                "0"  // ttl (unused on check)
+                "1", // placeholder capacity
+                "", // ownerToken (unused on check)
+                "", // sessionId (unused on check)
+                "0", // ttl (unused on check)
             };
 
             var reply = await Server

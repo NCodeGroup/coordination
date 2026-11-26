@@ -55,31 +55,20 @@ internal class RespSessionService(RespServer server) : ISessionService
         var sessionIdValue = GenerateSessionId(keyspace);
 
         var keys = new[] { RespKeys.ForKeyspace(keyspace, "sessions") };
-        var arguments = new RedisValue[]
-        {
-            "open",
-            sessionIdValue,
-            ttlMs,
-        };
+        var arguments = new RedisValue[] { "open", sessionIdValue, ttlMs };
 
         var reply = await Server
-            .EvaluateAsync(
-                RespScript.Session,
-                keys,
-                arguments,
-                cancellationToken
-            )
+            .EvaluateAsync(RespScript.Session, keys, arguments, cancellationToken)
             .ConfigureAwait(false);
 
         var (status, fields) = RespReplies.Script(reply);
 
         return status switch
         {
-            0 when fields.Length >= 1 =>
-                new SessionGrant(
-                    new SessionId(keyspace, (string?)fields[0] ?? throw RespReplies.Unexpected(reply)),
-                    timeToLive
-                ),
+            0 when fields.Length >= 1 => new SessionGrant(
+                new SessionId(keyspace, (string?)fields[0] ?? throw RespReplies.Unexpected(reply)),
+                timeToLive
+            ),
             _ => throw RespReplies.Unexpected(reply),
         };
     }
@@ -98,20 +87,10 @@ internal class RespSessionService(RespServer server) : ISessionService
         var ttlMs = 30_000L;
 
         var keys = new[] { RespKeys.ForKeyspace(session.Keyspace, "sessions") };
-        var arguments = new RedisValue[]
-        {
-            "keepAlive",
-            session.Value,
-            ttlMs,
-        };
+        var arguments = new RedisValue[] { "keepAlive", session.Value, ttlMs };
 
         var reply = await Server
-            .EvaluateAsync(
-                RespScript.Session,
-                keys,
-                arguments,
-                cancellationToken
-            )
+            .EvaluateAsync(RespScript.Session, keys, arguments, cancellationToken)
             .ConfigureAwait(false);
 
         var (status, _) = RespReplies.Script(reply);
@@ -135,19 +114,10 @@ internal class RespSessionService(RespServer server) : ISessionService
         RespCall.Check(options, cancellationToken);
 
         var keys = new[] { RespKeys.ForKeyspace(session.Keyspace, "sessions") };
-        var arguments = new RedisValue[]
-        {
-            "close",
-            session.Value,
-        };
+        var arguments = new RedisValue[] { "close", session.Value };
 
         var reply = await Server
-            .EvaluateAsync(
-                RespScript.Session,
-                keys,
-                arguments,
-                cancellationToken
-            )
+            .EvaluateAsync(RespScript.Session, keys, arguments, cancellationToken)
             .ConfigureAwait(false);
 
         var (status, _) = RespReplies.Script(reply);
@@ -176,19 +146,10 @@ internal class RespSessionService(RespServer server) : ISessionService
         while (retryCount < maxRetries)
         {
             var keys = new[] { RespKeys.ForKeyspace(session.Keyspace, "sessions") };
-            var arguments = new RedisValue[]
-            {
-                "check-liveness",
-                session.Value,
-            };
+            var arguments = new RedisValue[] { "check-liveness", session.Value };
 
             var reply = await Server
-                .EvaluateAsync(
-                    RespScript.Session,
-                    keys,
-                    arguments,
-                    cancellationToken
-                )
+                .EvaluateAsync(RespScript.Session, keys, arguments, cancellationToken)
                 .ConfigureAwait(false);
 
             var (status, _) = RespReplies.Script(reply);

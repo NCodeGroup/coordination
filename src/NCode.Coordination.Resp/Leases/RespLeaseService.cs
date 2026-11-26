@@ -35,22 +35,21 @@ internal class RespLeaseService(RespServer server) : ILeaseService
         var resourceId = RespKeys.Name(resource);
 
         var sessionId = terms.IsBoundToSession ? terms.Session.Value : "";
-        var ttlMs = terms.TimeToLive is not null
-            ? RespCall.ToMilliseconds(terms.TimeToLive)
-            : 0;
+        var ttlMs = terms.TimeToLive is not null ? RespCall.ToMilliseconds(terms.TimeToLive) : 0;
 
-        var keys = new[] {
+        var keys = new[]
+        {
             RespKeys.ForKeyspace(keyspace, "leases"),
-            RespKeys.ForKeyspace(keyspace, "lease-fencing")
+            RespKeys.ForKeyspace(keyspace, "lease-fencing"),
         };
 
         var arguments = new RedisValue[]
         {
             "tryAcquire",
             resourceId,
-            "",  // ownerToken (unused on acquire)
+            "", // ownerToken (unused on acquire)
             sessionId,
-            ttlMs.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            ttlMs.ToString(System.Globalization.CultureInfo.InvariantCulture),
         };
 
         var reply = await Server
@@ -61,16 +60,22 @@ internal class RespLeaseService(RespServer server) : ILeaseService
 
         return status switch
         {
-            0 when fields.Length >= 3 =>
-                LeaseAcquireResult.Acquired(new LeaseGrant(
+            0 when fields.Length >= 3 => LeaseAcquireResult.Acquired(
+                new LeaseGrant(
                     resource,
-                    new FencingToken(int.Parse((string?)fields[1] ?? throw RespReplies.Unexpected(reply), System.Globalization.CultureInfo.InvariantCulture)),
+                    new FencingToken(
+                        int.Parse(
+                            (string?)fields[1] ?? throw RespReplies.Unexpected(reply),
+                            System.Globalization.CultureInfo.InvariantCulture
+                        )
+                    ),
                     new OwnerToken((string?)fields[0] ?? throw RespReplies.Unexpected(reply)),
                     terms
-                )),
+                )
+            ),
             1 => LeaseAcquireResult.Held,
             2 => LeaseAcquireResult.SessionEnded,
-            _ => throw RespReplies.Unexpected(reply)
+            _ => throw RespReplies.Unexpected(reply),
         };
     }
 
@@ -90,9 +95,10 @@ internal class RespLeaseService(RespServer server) : ILeaseService
         var resourceId = RespKeys.Name(grant.Resource);
         var ttlMs = RespCall.ToMilliseconds(timeToLive);
 
-        var keys = new[] {
+        var keys = new[]
+        {
             RespKeys.ForKeyspace(keyspace, "leases"),
-            RespKeys.ForKeyspace(keyspace, "lease-fencing")
+            RespKeys.ForKeyspace(keyspace, "lease-fencing"),
         };
 
         var arguments = new RedisValue[]
@@ -100,8 +106,8 @@ internal class RespLeaseService(RespServer server) : ILeaseService
             "renew",
             resourceId,
             grant.Owner.Value,
-            "",  // sessionId (unused on renew)
-            ttlMs.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            "", // sessionId (unused on renew)
+            ttlMs.ToString(System.Globalization.CultureInfo.InvariantCulture),
         };
 
         var reply = await Server
@@ -126,9 +132,10 @@ internal class RespLeaseService(RespServer server) : ILeaseService
         var keyspace = grant.Resource.Keyspace;
         var resourceId = RespKeys.Name(grant.Resource);
 
-        var keys = new[] {
+        var keys = new[]
+        {
             RespKeys.ForKeyspace(keyspace, "leases"),
-            RespKeys.ForKeyspace(keyspace, "lease-fencing")
+            RespKeys.ForKeyspace(keyspace, "lease-fencing"),
         };
 
         var arguments = new RedisValue[]
@@ -136,8 +143,8 @@ internal class RespLeaseService(RespServer server) : ILeaseService
             "release",
             resourceId,
             grant.Owner.Value,
-            "",  // sessionId (unused on release)
-            "0"   // ttl (unused on release)
+            "", // sessionId (unused on release)
+            "0", // ttl (unused on release)
         };
 
         var reply = await Server
@@ -166,9 +173,10 @@ internal class RespLeaseService(RespServer server) : ILeaseService
         const int maxRetries = 300;
         const int delayMs = 100;
 
-        var keys = new[] {
+        var keys = new[]
+        {
             RespKeys.ForKeyspace(keyspace, "leases"),
-            RespKeys.ForKeyspace(keyspace, "lease-fencing")
+            RespKeys.ForKeyspace(keyspace, "lease-fencing"),
         };
 
         for (int i = 0; i < maxRetries; i++)
@@ -177,9 +185,9 @@ internal class RespLeaseService(RespServer server) : ILeaseService
             {
                 "check-held",
                 resourceId,
-                "",  // ownerToken (unused on check)
-                "",  // sessionId (unused on check)
-                "0"  // ttl (unused on check)
+                "", // ownerToken (unused on check)
+                "", // sessionId (unused on check)
+                "0", // ttl (unused on check)
             };
 
             var reply = await Server
@@ -189,7 +197,7 @@ internal class RespLeaseService(RespServer server) : ILeaseService
             var (status, _) = RespReplies.Script(reply);
 
             if (status == 1)
-                return;  // Not held; lease released
+                return; // Not held; lease released
 
             await Task.Delay(delayMs, cancellationToken).ConfigureAwait(false);
         }

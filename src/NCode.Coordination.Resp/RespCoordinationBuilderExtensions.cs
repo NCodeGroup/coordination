@@ -34,62 +34,58 @@ public static class RespCoordinationBuilderExtensions
         Action<RespProviderOptions> configure
     )
     {
-            ArgumentNullException.ThrowIfNull(builder);
-            ArgumentNullException.ThrowIfNull(configure);
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(configure);
 
-            var options = new RespProviderOptions();
-            configure(options);
+        var options = new RespProviderOptions();
+        configure(options);
 
-            var configuration = options.Configuration;
-            var factory = options.Connection;
-            var profile = options.Profile;
+        var configuration = options.Configuration;
+        var factory = options.Connection;
+        var profile = options.Profile;
 
-            async Task<IConnectionMultiplexer> StartConnectAsync(
-                CancellationToken cancellationToken
-            )
-            {
-                cancellationToken.ThrowIfCancellationRequested();
+        async Task<IConnectionMultiplexer> StartConnectAsync(CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
 
-                ArgumentException.ThrowIfNullOrWhiteSpace(configuration);
+            ArgumentException.ThrowIfNullOrWhiteSpace(configuration);
 
-                return await ConnectionMultiplexer
-                    .ConnectAsync(configuration)
-                    .ConfigureAwait(false);
-            }
-
-            Func<IServiceProvider, RespConnection> createConnection;
-            if (factory is not null && string.IsNullOrWhiteSpace(configuration))
-            {
-                createConnection = services => new RespConnection(
-                    _ =>
-                    {
-                        var multiplexer = factory(services);
-                        return ValueTask.FromResult(multiplexer);
-                    },
-                    owned: false
-                );
-            }
-            else if (factory is null && !string.IsNullOrWhiteSpace(configuration))
-            {
-                createConnection = _ => new RespConnection(
-                    ct => RespConnection.ConnectOwnedAsync(StartConnectAsync, ct),
-                    owned: true
-                );
-            }
-            else
-            {
-                throw new ArgumentException(
-                    "Set exactly one of RespProviderOptions.Configuration and RespProviderOptions.Connection.",
-                    nameof(configure)
-                );
-            }
-
-            ArgumentNullException.ThrowIfNull(profile);
-
-            return builder.AddProvider(services =>
-            {
-                var connection = createConnection(services);
-                return new RespProvider(connection, profile);
-            });
+            return await ConnectionMultiplexer.ConnectAsync(configuration).ConfigureAwait(false);
         }
+
+        Func<IServiceProvider, RespConnection> createConnection;
+        if (factory is not null && string.IsNullOrWhiteSpace(configuration))
+        {
+            createConnection = services => new RespConnection(
+                _ =>
+                {
+                    var multiplexer = factory(services);
+                    return ValueTask.FromResult(multiplexer);
+                },
+                owned: false
+            );
+        }
+        else if (factory is null && !string.IsNullOrWhiteSpace(configuration))
+        {
+            createConnection = _ => new RespConnection(
+                ct => RespConnection.ConnectOwnedAsync(StartConnectAsync, ct),
+                owned: true
+            );
+        }
+        else
+        {
+            throw new ArgumentException(
+                "Set exactly one of RespProviderOptions.Configuration and RespProviderOptions.Connection.",
+                nameof(configure)
+            );
+        }
+
+        ArgumentNullException.ThrowIfNull(profile);
+
+        return builder.AddProvider(services =>
+        {
+            var connection = createConnection(services);
+            return new RespProvider(connection, profile);
+        });
     }
+}

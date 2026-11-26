@@ -37,11 +37,12 @@ internal class RespClaimService(RespServer server) : IClaimService
         var claimName = RespKeys.Name(name);
         var windowSegment = window.Segment.ToString();
         var ttlMs = RespCall.ToMilliseconds(timeToLive);
-        var skewMs = 1000;  // Default 1-second skew allowance per ADR-1008
+        var skewMs = 1000; // Default 1-second skew allowance per ADR-1008
 
-        var keys = new[] {
+        var keys = new[]
+        {
             RespKeys.ForKeyspace(keyspace, "claims"),
-            RespKeys.ForKeyspace(keyspace, "claims-deadlines")
+            RespKeys.ForKeyspace(keyspace, "claims-deadlines"),
         };
 
         var arguments = new RedisValue[]
@@ -50,7 +51,7 @@ internal class RespClaimService(RespServer server) : IClaimService
             claimName,
             windowSegment,
             ttlMs.ToString(System.Globalization.CultureInfo.InvariantCulture),
-            skewMs.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            skewMs.ToString(System.Globalization.CultureInfo.InvariantCulture),
         };
 
         var reply = await Server
@@ -63,7 +64,7 @@ internal class RespClaimService(RespServer server) : IClaimService
         {
             0 => ClaimStatus.Claimed,
             1 => ClaimStatus.Taken,
-            _ => throw RespReplies.Unexpected(reply)
+            _ => throw RespReplies.Unexpected(reply),
         };
     }
 }
