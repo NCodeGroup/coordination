@@ -48,7 +48,7 @@ internal class CoordinationFixedWindowLimiter(
         var window = TimeWindow.Containing(now, Limit.Window);
         if (!window.TryCreateTimeToLive(now, SkewAllowance, out var timeToLive))
         {
-            throw new InvalidOperationException("The window has already ended.");
+            throw new InvalidOperationException(RecipeMessages.WindowEnded);
         }
 
         var counterKey = RecipeKeys.Child(Key, window.Segment, nameof(key));

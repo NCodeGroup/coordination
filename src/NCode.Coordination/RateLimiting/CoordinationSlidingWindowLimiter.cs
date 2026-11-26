@@ -57,7 +57,7 @@ internal class CoordinationSlidingWindowLimiter(
             )
         )
         {
-            throw new InvalidOperationException("The window has already ended.");
+            throw new InvalidOperationException(RecipeMessages.WindowEnded);
         }
 
         var previous = 0L;
