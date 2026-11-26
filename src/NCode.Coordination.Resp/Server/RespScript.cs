@@ -94,6 +94,26 @@ internal sealed class RespScript(string name, string text)
     public static RespScript RecordTransaction { get; } = LoadKeyspace("record-transaction");
 
     /// <summary>
+    /// Gets the session-open script: it opens a session with its time to live.
+    /// </summary>
+    public static RespScript SessionOpen { get; } = LoadKeyspace("session-open");
+
+    /// <summary>
+    /// Gets the session-keep-alive script: it renews a live session for its time to live.
+    /// </summary>
+    public static RespScript SessionKeepAlive { get; } = LoadKeyspace("session-keep-alive");
+
+    /// <summary>
+    /// Gets the session-close script: it ends a session and removes what is bound to it, up to a budget.
+    /// </summary>
+    public static RespScript SessionClose { get; } = LoadKeyspace("session-close");
+
+    /// <summary>
+    /// Gets the session-check script: it reports whether a session is live.
+    /// </summary>
+    public static RespScript SessionCheck { get; } = LoadKeyspace("session-check");
+
+    /// <summary>
     /// Gets the session script: it manages session creation, keep-alive, closing, and liveness checks.
     /// </summary>
     public static RespScript Session { get; } = Load("sessions");
