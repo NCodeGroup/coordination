@@ -20,8 +20,9 @@ internal sealed class RespCounterService(RespServer server) : ICounterService
     /// </summary>
     private const string Kind = "counter";
 
+    // ADR-1026 records why the largest count is 2^53 - 1.
     /// <summary>
-    /// The largest count a counter keeps: 2^53 − 1, the largest integer a Lua number holds exactly (ADR-1026).
+    /// The largest count a counter keeps: 2^53 − 1, the largest integer a Lua number holds exactly.
     /// </summary>
     private const long LargestCount = 9_007_199_254_740_991;
 
