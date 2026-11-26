@@ -13,7 +13,7 @@ namespace NCode.Coordination.Resp.Occurrences;
 /// </summary>
 /// <param name="server">The seam between the provider and its server.</param>
 /// <exception cref="ArgumentNullException">The server is null.</exception>
-internal sealed class RespOccurrenceService(RespServer server) : IOccurrenceService
+internal class RespOccurrenceService(RespServer server) : IOccurrenceService
 {
     /// <summary>
     /// The kind of server key that holds an occurrence.

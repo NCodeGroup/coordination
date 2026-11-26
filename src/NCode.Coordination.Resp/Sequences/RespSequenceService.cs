@@ -12,7 +12,7 @@ namespace NCode.Coordination.Resp.Sequences;
 /// </summary>
 /// <param name="server">The seam between the provider and its server.</param>
 /// <exception cref="ArgumentNullException">The server is null.</exception>
-internal sealed class RespSequenceService(RespServer server) : ISequenceService
+internal class RespSequenceService(RespServer server) : ISequenceService
 {
     /// <summary>
     /// The kind of server key that holds a sequence.

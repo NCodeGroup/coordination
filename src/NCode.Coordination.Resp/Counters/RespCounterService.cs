@@ -13,7 +13,7 @@ namespace NCode.Coordination.Resp.Counters;
 /// </summary>
 /// <param name="server">The seam between the provider and its server.</param>
 /// <exception cref="ArgumentNullException">The server is null.</exception>
-internal sealed class RespCounterService(RespServer server) : ICounterService
+internal class RespCounterService(RespServer server) : ICounterService
 {
     /// <summary>
     /// The kind of server key that holds a counter.

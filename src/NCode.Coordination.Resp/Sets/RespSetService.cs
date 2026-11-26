@@ -13,7 +13,7 @@ namespace NCode.Coordination.Resp.Sets;
 /// </summary>
 /// <param name="server">The seam between the provider and its server.</param>
 /// <exception cref="ArgumentNullException">The server is null.</exception>
-internal sealed class RespSetService(RespServer server) : ISetService
+internal class RespSetService(RespServer server) : ISetService
 {
     /// <summary>
     /// The kind of server key that holds a set.
