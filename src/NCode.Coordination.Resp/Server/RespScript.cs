@@ -154,6 +154,21 @@ internal sealed class RespScript(string name, string text)
     public static RespScript ElectionRead { get; } = LoadKeyspace("election-read");
 
     /// <summary>
+    /// Gets the member-join script: it joins a node to a group for a session.
+    /// </summary>
+    public static RespScript MemberJoin { get; } = LoadKeyspace("member-join");
+
+    /// <summary>
+    /// Gets the member-leave script: it removes a session's member from a group.
+    /// </summary>
+    public static RespScript MemberLeave { get; } = LoadKeyspace("member-leave");
+
+    /// <summary>
+    /// Gets the member-list script: it lists the members of a group whose session is live.
+    /// </summary>
+    public static RespScript MemberList { get; } = LoadKeyspace("member-list");
+
+    /// <summary>
     /// Gets the membership script: it manages group membership with join, leave, and listing operations.
     /// </summary>
     public static RespScript Membership { get; } = Load("membership");
