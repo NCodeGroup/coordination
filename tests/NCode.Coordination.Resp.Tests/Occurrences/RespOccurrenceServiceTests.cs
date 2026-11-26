@@ -37,7 +37,8 @@ public sealed class RespOccurrenceServiceTests : IDisposable
         var cancellationToken = TestContext.Current.CancellationToken;
         var (server, database) = CreateServer();
         var key = new Keyspace("prod").CreateKey("k");
-        var timeToLive = new TimeToLive(TimeSpan.FromSeconds(5));
+        var duration = TimeSpan.FromSeconds(5);
+        var timeToLive = new TimeToLive(duration);
         var reply = RedisResult.Create((RedisValue)"OK", ResultType.SimpleString);
         database
             .Setup(x => x.ExecuteAsync("SET", It.IsAny<object[]>()))
@@ -60,7 +61,8 @@ public sealed class RespOccurrenceServiceTests : IDisposable
         var cancellationToken = TestContext.Current.CancellationToken;
         var (server, database) = CreateServer();
         var key = new Keyspace("prod").CreateKey("k");
-        var timeToLive = new TimeToLive(TimeSpan.FromSeconds(5));
+        var duration = TimeSpan.FromSeconds(5);
+        var timeToLive = new TimeToLive(duration);
         var reply = RedisResult.Create(RedisValue.Null, ResultType.BulkString);
         database
             .Setup(x => x.ExecuteAsync("SET", It.IsAny<object[]>()))
@@ -83,7 +85,8 @@ public sealed class RespOccurrenceServiceTests : IDisposable
         var cancellationToken = TestContext.Current.CancellationToken;
         var (server, database) = CreateServer();
         var key = new Keyspace("prod").CreateKey("k");
-        var timeToLive = new TimeToLive(TimeSpan.FromSeconds(5));
+        var duration = TimeSpan.FromSeconds(5);
+        var timeToLive = new TimeToLive(duration);
         var reply = RedisResult.Create((RedisValue)"QUEUED", ResultType.SimpleString);
         database
             .Setup(x => x.ExecuteAsync("SET", It.IsAny<object[]>()))

@@ -55,7 +55,8 @@ public sealed class RespCallTests
     [Fact]
     public void ToMilliseconds_WholeMilliseconds_ReturnsThem()
     {
-        var timeToLive = new TimeToLive(TimeSpan.FromSeconds(2));
+        var duration = TimeSpan.FromSeconds(2);
+        var timeToLive = new TimeToLive(duration);
 
         var result = RespCall.ToMilliseconds(timeToLive);
 
@@ -65,7 +66,8 @@ public sealed class RespCallTests
     [Fact]
     public void ToMilliseconds_PartOfAMillisecond_RoundsUp()
     {
-        var timeToLive = new TimeToLive(TimeSpan.FromTicks(15_001));
+        var duration = TimeSpan.FromTicks(15_001);
+        var timeToLive = new TimeToLive(duration);
 
         var result = RespCall.ToMilliseconds(timeToLive);
 
@@ -75,7 +77,8 @@ public sealed class RespCallTests
     [Fact]
     public void ToMilliseconds_OneTick_RoundsUpToOne()
     {
-        var timeToLive = new TimeToLive(TimeSpan.FromTicks(1));
+        var duration = TimeSpan.FromTicks(1);
+        var timeToLive = new TimeToLive(duration);
 
         var result = RespCall.ToMilliseconds(timeToLive);
 
