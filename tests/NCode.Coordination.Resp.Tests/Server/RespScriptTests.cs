@@ -26,26 +26,26 @@ public sealed class RespScriptTests
 
     #endregion
 
-    #region LoadRecord Tests
+    #region LoadKeyspace Tests
 
     [Fact]
-    public void LoadRecord_Create_IsThePreludeALineFeedAndTheScript()
+    public void LoadKeyspace_Create_IsThePreludeALineFeedAndTheScript()
     {
-        var prelude = RespScript.Load("record-prelude");
+        var prelude = RespScript.Load("keyspace-prelude");
         var create = RespScript.Load("record-create");
         var expected = prelude.Text + "\n" + create.Text;
 
-        var script = RespScript.LoadRecord("record-create");
+        var script = RespScript.LoadKeyspace("record-create");
 
         Assert.Equal("record-create", script.Name);
         Assert.Equal(expected, script.Text);
     }
 
     [Fact]
-    public void LoadRecord_Missing_Throws()
+    public void LoadKeyspace_Missing_Throws()
     {
         var exception = Assert.Throws<InvalidOperationException>(() =>
-            RespScript.LoadRecord("missing")
+            RespScript.LoadKeyspace("missing")
         );
 
         Assert.Contains("NCode.Coordination.Resp.Scripts.missing.lua", exception.Message);
@@ -54,7 +54,7 @@ public sealed class RespScriptTests
     [Fact]
     public void RecordTransaction_Always_StartsWithThePrelude()
     {
-        var prelude = RespScript.Load("record-prelude").Text;
+        var prelude = RespScript.Load("keyspace-prelude").Text;
 
         Assert.StartsWith(prelude, RespScript.RecordTransaction.Text, StringComparison.Ordinal);
     }

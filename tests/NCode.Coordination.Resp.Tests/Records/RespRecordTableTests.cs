@@ -65,7 +65,20 @@ public sealed class RespRecordTableTests : IDisposable
         Assert.NotNull(keys);
         var names = keys.Select(key => key.ToString());
         Assert.Equal(
-            ["{prod}:revision", "{prod}:records", "{prod}:record-index", "{prod}:record-deadlines"],
+            [
+                "{prod}:revision",
+                "{prod}:records",
+                "{prod}:record-index",
+                "{prod}:record-deadlines",
+                "{prod}:sessions",
+                "{prod}:session-deadlines",
+                "{prod}:session-bindings",
+                "{prod}:grants",
+                "{prod}:grant-deadlines",
+                "{prod}:fencing",
+                "{prod}:members",
+                "{prod}:member-fields",
+            ],
             names
         );
         Assert.NotNull(values);
