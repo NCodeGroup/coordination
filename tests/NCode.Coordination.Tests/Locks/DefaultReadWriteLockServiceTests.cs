@@ -136,6 +136,31 @@ public sealed class DefaultReadWriteLockServiceTests
     }
 
     [Fact]
+    public async Task AcquireReadAsync_WhenTheProbeReleaseFails_DeletesTheRegistrationAndRetries()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var time = InProcessTesting.CreateTime();
+        await using var services = RecipeTesting.Build(time);
+        var leases = services.GetRequiredService<ILeaseService>();
+        var records = services.GetRequiredService<IRecordService>();
+        var watches = services.GetRequiredService<IRecordWatchService>();
+        var failingLeases = new FailingReleaseLeases(leases);
+        var failingLocks = new DefaultReadWriteLockService(failingLeases, records, watches);
+        var resource = CreateResource();
+        var request = new RecordPageRequest(10);
+        using var stop = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+
+        var task = failingLocks.AcquireReadAsync(resource, Terms, null, stop.Token).AsTask();
+        var page = await records.ListAsync(resource, request, null, cancellationToken);
+
+        Assert.False(task.IsCompleted);
+        Assert.Empty(page.Records);
+
+        await stop.CancelAsync();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => task);
+    }
+
+    [Fact]
     public async Task AcquireReadAsync_WhenTheRegistrationFails_ReleasesTheProbeAndThrows()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
