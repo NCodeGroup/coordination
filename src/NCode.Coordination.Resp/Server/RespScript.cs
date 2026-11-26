@@ -114,6 +114,26 @@ internal sealed class RespScript(string name, string text)
     public static RespScript SessionCheck { get; } = LoadKeyspace("session-check");
 
     /// <summary>
+    /// Gets the lease-acquire script: it grants a lease when no other holder has it.
+    /// </summary>
+    public static RespScript LeaseAcquire { get; } = LoadKeyspace("lease-acquire");
+
+    /// <summary>
+    /// Gets the grant-renew script: it renews a grant that has a time to live for its owner.
+    /// </summary>
+    public static RespScript GrantRenew { get; } = LoadKeyspace("grant-renew");
+
+    /// <summary>
+    /// Gets the grant-release script: it releases a grant for its owner.
+    /// </summary>
+    public static RespScript GrantRelease { get; } = LoadKeyspace("grant-release");
+
+    /// <summary>
+    /// Gets the grant-check script: it reports whether a grant is held.
+    /// </summary>
+    public static RespScript GrantCheck { get; } = LoadKeyspace("grant-check");
+
+    /// <summary>
     /// Gets the membership script: it manages group membership with join, leave, and listing operations.
     /// </summary>
     public static RespScript Membership { get; } = Load("membership");
