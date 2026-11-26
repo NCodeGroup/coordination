@@ -352,7 +352,7 @@ public sealed class DefaultReadWriteLockServiceTests
 
     private sealed class LosingProbeLeases(ILeaseService inner) : ILeaseService
     {
-        private int _releases;
+        private int Releases { get; set; }
 
         public LeaseGrant? FirstProbe { get; private set; }
 
@@ -378,7 +378,9 @@ public sealed class DefaultReadWriteLockServiceTests
         {
             var released = await inner.ReleaseAsync(grant, options, cancellationToken);
 
-            if (++_releases > 1)
+            Releases++;
+
+            if (Releases > 1)
             {
                 return released;
             }
@@ -403,10 +405,12 @@ public sealed class DefaultReadWriteLockServiceTests
             RecordLifetime lifetime,
             OperationOptions? options,
             CancellationToken cancellationToken
-        ) =>
-            ValueTask.FromException<RecordWriteResult>(
-                new InvalidOperationException("The record service failed.")
-            );
+        )
+        {
+            var failure = new InvalidOperationException("The record service failed.");
+
+            return ValueTask.FromException<RecordWriteResult>(failure);
+        }
 
         public ValueTask<StoredRecord?> ReadAsync(
             CoordinationKey key,

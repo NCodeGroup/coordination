@@ -77,8 +77,9 @@ public sealed class SingletonCandidateTests
         var candidate = new SingletonCandidate(session) { Value = source };
 
         source[0] = 9;
+        var copy = candidate.Value.ToArray();
 
-        Assert.Equal<byte>([1, 2, 3], candidate.Value.ToArray());
+        Assert.Equal<byte>([1, 2, 3], copy);
     }
 
     #endregion

@@ -10,8 +10,10 @@ public sealed class SingleFlightTermsTests
     [Fact]
     public void Constructor_WhenTheArgumentsAreValid_KeepsBothTimeToLives()
     {
-        var valueTimeToLive = new TimeToLive(TimeSpan.FromMinutes(1));
-        var fetchTimeToLive = new TimeToLive(TimeSpan.FromSeconds(5));
+        var valueLength = TimeSpan.FromMinutes(1);
+        var fetchLength = TimeSpan.FromSeconds(5);
+        var valueTimeToLive = new TimeToLive(valueLength);
+        var fetchTimeToLive = new TimeToLive(fetchLength);
 
         var terms = new SingleFlightTerms(valueTimeToLive, fetchTimeToLive);
 
@@ -22,7 +24,8 @@ public sealed class SingleFlightTermsTests
     [Fact]
     public void Constructor_WhenTheValueTimeToLiveIsNull_Throws()
     {
-        var fetchTimeToLive = new TimeToLive(TimeSpan.FromSeconds(5));
+        var fetchLength = TimeSpan.FromSeconds(5);
+        var fetchTimeToLive = new TimeToLive(fetchLength);
 
         var exception = Assert.Throws<ArgumentNullException>(() =>
             new SingleFlightTerms(null!, fetchTimeToLive)
@@ -34,7 +37,8 @@ public sealed class SingleFlightTermsTests
     [Fact]
     public void Constructor_WhenTheFetchTimeToLiveIsNull_Throws()
     {
-        var valueTimeToLive = new TimeToLive(TimeSpan.FromMinutes(1));
+        var valueLength = TimeSpan.FromMinutes(1);
+        var valueTimeToLive = new TimeToLive(valueLength);
 
         var exception = Assert.Throws<ArgumentNullException>(() =>
             new SingleFlightTerms(valueTimeToLive, null!)
