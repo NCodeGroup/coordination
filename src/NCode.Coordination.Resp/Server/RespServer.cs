@@ -59,7 +59,7 @@ internal sealed class RespServer(RespConnection connection)
     /// <returns>The result of the script.</returns>
     /// <exception cref="ArgumentNullException">The script, the keys or the arguments are null.</exception>
     /// <exception cref="CoordinationException">The call failed; the exception says whether it may have taken effect.</exception>
-    /// <exception cref="OperationCanceledException">The token was canceled.</exception>
+    /// <exception cref="OperationCanceledException">The token was canceled; a call already handed to the client may still take effect.</exception>
     public async ValueTask<RedisResult> EvaluateAsync(
         RespScript script,
         RedisKey[] keys,
@@ -76,6 +76,7 @@ internal sealed class RespServer(RespConnection connection)
         {
             var database = multiplexer.GetDatabase();
 
+            // The overload that takes the script's text goes through the client's script cache (ADR-1023 rule 2).
             return await database
                 .ScriptEvaluateAsync(script.Text, keys, arguments)
                 .WaitAsync(cancellationToken)
@@ -97,7 +98,7 @@ internal sealed class RespServer(RespConnection connection)
     /// <exception cref="ArgumentNullException">The command or the arguments are null.</exception>
     /// <exception cref="ArgumentException">The command is empty or white space.</exception>
     /// <exception cref="CoordinationException">The call failed; the exception says whether it may have taken effect.</exception>
-    /// <exception cref="OperationCanceledException">The token was canceled.</exception>
+    /// <exception cref="OperationCanceledException">The token was canceled; a call already handed to the client may still take effect.</exception>
     public async ValueTask<RedisResult> ExecuteAsync(
         string command,
         object[] arguments,
