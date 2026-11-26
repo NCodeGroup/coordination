@@ -80,24 +80,164 @@ public sealed partial class RespProviderTests(RespServers servers) : IDisposable
 
         Assert.Collection(
             primitives,
-            support => Assert.Equal(Primitives.Record, support.Primitive),
-            support => Assert.Equal(Primitives.Transaction, support.Primitive),
-            support => Assert.Equal(Primitives.Occurrence, support.Primitive),
-            support => Assert.Equal(Primitives.Set, support.Primitive),
-            support => Assert.Equal(Primitives.Counter, support.Primitive),
-            support => Assert.Equal(Primitives.Sequence, support.Primitive),
-            support => Assert.Equal(Primitives.Session, support.Primitive),
-            support => Assert.Equal(Primitives.Membership, support.Primitive),
-            support => Assert.Equal(Primitives.Lease, support.Primitive),
-            support => Assert.Equal(Primitives.Semaphore, support.Primitive),
-            support => Assert.Equal(Primitives.Election, support.Primitive),
-            support => Assert.Equal(Primitives.Claim, support.Primitive)
+            support =>
+            {
+                Assert.Equal(Primitives.Record, support.Primitive);
+                Assert.Equal<Guarantee>(
+                    [
+                        Guarantees.LinearizableUntilFailover,
+                        Guarantees.Volatile,
+                        Guarantees.ServerClock,
+                    ],
+                    support.Guarantees
+                );
+            },
+            support =>
+            {
+                Assert.Equal(Primitives.Transaction, support.Primitive);
+                Assert.Equal<Guarantee>(
+                    [
+                        Guarantees.LinearizableUntilFailover,
+                        Guarantees.Volatile,
+                        Guarantees.ServerClock,
+                        Guarantees.AtomicAcrossPartitions,
+                    ],
+                    support.Guarantees
+                );
+            },
+            support =>
+            {
+                Assert.Equal(Primitives.Occurrence, support.Primitive);
+                Assert.Equal<Guarantee>(
+                    [
+                        Guarantees.LinearizableUntilFailover,
+                        Guarantees.Volatile,
+                        Guarantees.ServerClock,
+                    ],
+                    support.Guarantees
+                );
+            },
+            support =>
+            {
+                Assert.Equal(Primitives.Set, support.Primitive);
+                Assert.Equal<Guarantee>(
+                    [
+                        Guarantees.LinearizableUntilFailover,
+                        Guarantees.Volatile,
+                        Guarantees.ServerClock,
+                    ],
+                    support.Guarantees
+                );
+            },
+            support =>
+            {
+                Assert.Equal(Primitives.Counter, support.Primitive);
+                Assert.Equal<Guarantee>(
+                    [
+                        Guarantees.LinearizableUntilFailover,
+                        Guarantees.Volatile,
+                        Guarantees.ServerClock,
+                        Guarantees.AtomicAcrossPartitions,
+                    ],
+                    support.Guarantees
+                );
+            },
+            support =>
+            {
+                Assert.Equal(Primitives.Sequence, support.Primitive);
+                Assert.Equal<Guarantee>(
+                    [Guarantees.LinearizableUntilFailover, Guarantees.Volatile],
+                    support.Guarantees
+                );
+            },
+            support =>
+            {
+                Assert.Equal(Primitives.Session, support.Primitive);
+                Assert.Equal<Guarantee>(
+                    [
+                        Guarantees.LinearizableUntilFailover,
+                        Guarantees.Volatile,
+                        Guarantees.ServerClock,
+                    ],
+                    support.Guarantees
+                );
+            },
+            support =>
+            {
+                Assert.Equal(Primitives.Membership, support.Primitive);
+                Assert.Equal<Guarantee>(
+                    [
+                        Guarantees.LinearizableUntilFailover,
+                        Guarantees.Volatile,
+                        Guarantees.ServerClock,
+                    ],
+                    support.Guarantees
+                );
+            },
+            support =>
+            {
+                Assert.Equal(Primitives.Lease, support.Primitive);
+                Assert.Equal<Guarantee>(
+                    [
+                        Guarantees.LinearizableUntilFailover,
+                        Guarantees.Volatile,
+                        Guarantees.ServerClock,
+                    ],
+                    support.Guarantees
+                );
+            },
+            support =>
+            {
+                Assert.Equal(Primitives.Semaphore, support.Primitive);
+                Assert.Equal<Guarantee>(
+                    [
+                        Guarantees.LinearizableUntilFailover,
+                        Guarantees.Volatile,
+                        Guarantees.ServerClock,
+                    ],
+                    support.Guarantees
+                );
+            },
+            support =>
+            {
+                Assert.Equal(Primitives.Election, support.Primitive);
+                Assert.Equal<Guarantee>(
+                    [
+                        Guarantees.LinearizableUntilFailover,
+                        Guarantees.Volatile,
+                        Guarantees.ServerClock,
+                    ],
+                    support.Guarantees
+                );
+            },
+            support =>
+            {
+                Assert.Equal(Primitives.Claim, support.Primitive);
+                Assert.Equal<Guarantee>(
+                    [
+                        Guarantees.LinearizableUntilFailover,
+                        Guarantees.Volatile,
+                        Guarantees.ServerClock,
+                    ],
+                    support.Guarantees
+                );
+            }
         );
     }
 
     #endregion
 
     #region GetPrimitiveService Tests
+
+    [Fact]
+    public async Task GetPrimitiveService_UnservedPrimitive_ReturnsNull()
+    {
+        await using var provider = CreateProvider();
+
+        var service = provider.GetPrimitiveService(typeof(INotificationService));
+
+        Assert.Null(service);
+    }
 
     [Theory]
     [InlineData(typeof(IRecordService))]
