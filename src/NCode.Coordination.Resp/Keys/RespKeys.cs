@@ -1,6 +1,7 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using System.Buffers;
 using System.Globalization;
 using System.Text;
 using StackExchange.Redis;
@@ -13,6 +14,11 @@ namespace NCode.Coordination.Resp.Keys;
 /// </summary>
 internal static class RespKeys
 {
+    /// <summary>
+    /// The largest UTF-8 buffer, in bytes, that <see cref="Escape"/> takes from the stack.
+    /// </summary>
+    private const int StackBufferLength = 1024;
+
     /// <summary>
     /// Returns the hash tag of a keyspace: its cluster and each segment joined by "/", in braces.
     /// </summary>
@@ -113,25 +119,44 @@ internal static class RespKeys
     {
         ArgumentNullException.ThrowIfNull(text);
 
-        var bytes = Encoding.UTF8.GetBytes(text);
-        var builder = new StringBuilder(bytes.Length);
+        var chars = text.AsSpan();
+        var maxLength = Encoding.UTF8.GetMaxByteCount(chars.Length);
+        byte[]? rented = null;
+        Span<byte> buffer =
+            maxLength <= StackBufferLength
+                ? stackalloc byte[StackBufferLength]
+                : (rented = ArrayPool<byte>.Shared.Rent(maxLength));
 
-        foreach (var value in bytes)
+        try
         {
-            var character = (char)value;
+            var length = Encoding.UTF8.GetBytes(chars, buffer);
+            var bytes = buffer[..length];
+            var builder = new StringBuilder(length);
 
-            if (IsUnreserved(character))
+            foreach (var value in bytes)
             {
-                builder.Append(character);
+                var character = (char)value;
+
+                if (IsUnreserved(character))
+                {
+                    builder.Append(character);
+                }
+                else
+                {
+                    var hex = value.ToString("X2", CultureInfo.InvariantCulture);
+                    builder.Append('%').Append(hex);
+                }
             }
-            else
+
+            return builder.ToString();
+        }
+        finally
+        {
+            if (rented is not null)
             {
-                var hex = value.ToString("X2", CultureInfo.InvariantCulture);
-                builder.Append('%').Append(hex);
+                ArrayPool<byte>.Shared.Return(rented);
             }
         }
-
-        return builder.ToString();
     }
 
     /// <summary>

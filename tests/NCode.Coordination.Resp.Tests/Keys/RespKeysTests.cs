@@ -116,4 +116,20 @@ public sealed class RespKeysTests
     }
 
     #endregion
+
+    #region Escape Tests
+
+    [Fact]
+    public void Escape_LongNonAsciiText_EncodesEveryByte()
+    {
+        const string character = "\u00e9";
+        var text = string.Concat(Enumerable.Repeat(character, 400));
+        var expected = string.Concat(Enumerable.Repeat("%C3%A9", 400));
+
+        var escaped = RespKeys.Escape(text);
+
+        Assert.Equal(expected, escaped);
+    }
+
+    #endregion
 }
