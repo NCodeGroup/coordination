@@ -55,7 +55,8 @@ public sealed class RespSetServiceTests : IDisposable
         var members = await new RespSetService(server).ListAsync(key, null, cancellationToken);
 
         var segment = Assert.Single(members);
-        Assert.Equal(KeySegment.FromString("a"), segment);
+        var expected = KeySegment.FromString("a");
+        Assert.Equal(expected, segment);
     }
 
     [Fact]
