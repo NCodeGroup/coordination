@@ -27,6 +27,12 @@ internal class RespCounterService(RespServer server) : ICounterService
     internal const long LargestCount = 9_007_199_254_740_991;
 
     /// <summary>
+    /// The script arguments each increment passes: its amount, its limit and its time to live, in the order the
+    /// counter script reads them.
+    /// </summary>
+    private const int ArgumentsPerIncrement = 3;
+
+    /// <summary>
     /// Gets the seam between the provider and its server.
     /// </summary>
     private RespServer Server { get; } = server ?? throw new ArgumentNullException(nameof(server));
@@ -142,14 +148,15 @@ internal class RespCounterService(RespServer server) : ICounterService
     )
     {
         var keys = new RedisKey[increments.Count];
-        var arguments = new RedisValue[increments.Count * 3];
+        var arguments = new RedisValue[increments.Count * ArgumentsPerIncrement];
         for (var index = 0; index < increments.Count; index++)
         {
             var increment = increments[index];
+            var offset = ArgumentsPerIncrement * index;
             keys[index] = RespKeys.ForKey(increment.Key, Kind);
-            arguments[3 * index] = increment.Amount;
-            arguments[3 * index + 1] = increment.Limit;
-            arguments[3 * index + 2] = RespCall.ToMilliseconds(increment.TimeToLive);
+            arguments[offset] = increment.Amount;
+            arguments[offset + 1] = increment.Limit;
+            arguments[offset + 2] = RespCall.ToMilliseconds(increment.TimeToLive);
         }
 
         var reply = await Server
@@ -179,10 +186,9 @@ internal class RespCounterService(RespServer server) : ICounterService
                     throw RespReplies.Unexpected(reply);
                 }
 
-                return new CounterBatchResult(counts)
-                {
-                    ExceededIndex = exceeded == 0 ? null : (int)exceeded - 1,
-                };
+                int? exceededIndex = exceeded == 0 ? null : (int)exceeded - 1;
+
+                return new CounterBatchResult(counts) { ExceededIndex = exceededIndex };
 
             default:
                 throw RespReplies.Unexpected(reply);
