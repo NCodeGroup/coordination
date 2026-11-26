@@ -10,10 +10,17 @@ public sealed class RespCallTests
     #region Check Tests
 
     [Fact]
-    public void Check_NoOptions_Returns()
+    public void Check_NullOptions_Returns()
     {
         RespCall.Check(null, CancellationToken.None);
-        RespCall.Check(new OperationOptions(), CancellationToken.None);
+    }
+
+    [Fact]
+    public void Check_EmptyOptions_Returns()
+    {
+        var options = new OperationOptions();
+
+        RespCall.Check(options, CancellationToken.None);
     }
 
     [Fact]
