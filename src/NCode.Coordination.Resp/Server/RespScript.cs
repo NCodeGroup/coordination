@@ -169,11 +169,6 @@ internal sealed class RespScript(string name, string text)
     public static RespScript MemberList { get; } = LoadKeyspace("member-list");
 
     /// <summary>
-    /// Gets the claim script: it manages claim acquisition and status checking operations.
-    /// </summary>
-    public static RespScript Claim { get; } = Load("claims");
-
-    /// <summary>
     /// Loads a script from the embedded resource <c>NCode.Coordination.Resp.Scripts.&lt;name&gt;.lua</c>.
     /// </summary>
     /// <param name="name">The name of the script, without its folder and extension.</param>

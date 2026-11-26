@@ -1,6 +1,7 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using System.Globalization;
 using NCode.Coordination.Resp.Keys;
 using NCode.Coordination.Resp.Server;
 using StackExchange.Redis;
@@ -8,18 +9,35 @@ using StackExchange.Redis;
 namespace NCode.Coordination.Resp.Claims;
 
 /// <summary>
-/// The claims of the RESP provider: each operation is one claim script that manages claims on a name and window.
+/// The claims of the RESP provider: each is one server key, named by the claim's name and window, that the server
+/// expires on its own clock.
 /// </summary>
 /// <param name="server">The seam between the provider and its server.</param>
 /// <exception cref="ArgumentNullException">The server is null.</exception>
 internal class RespClaimService(RespServer server) : IClaimService
 {
     /// <summary>
+    /// The kind of server key that holds a claim.
+    /// </summary>
+    private const string Kind = "claim";
+
+    /// <summary>
+    /// The status text with which the server accepts a <c>SET … NX</c> that wrote the key.
+    /// </summary>
+    private const string Accepted = "OK";
+
+    /// <summary>
     /// Gets the seam between the provider and its server.
     /// </summary>
     private RespServer Server { get; } = server ?? throw new ArgumentNullException(nameof(server));
 
     /// <inheritdoc />
+    /// <remarks>
+    /// The operation is one <c>SET … NX PX</c> command on the key of the name followed by the window's segment, with
+    /// the caller's time to live, which already carries its skew allowance. It fails closed: it answers claimed only
+    /// for the server's <c>OK</c>, a null reply means the window is taken, and any other reply throws.
+    /// </remarks>
+    /// <exception cref="ArgumentException">The name has no room for the window's segment.</exception>
     public async ValueTask<ClaimStatus> TryClaimAsync(
         CoordinationKey name,
         TimeWindow window,
@@ -31,40 +49,38 @@ internal class RespClaimService(RespServer server) : IClaimService
         ArgumentNullException.ThrowIfNull(name);
         ArgumentNullException.ThrowIfNull(window);
         ArgumentNullException.ThrowIfNull(timeToLive);
+
+        if (name.Segments.Length >= CoordinationKey.MaxSegments)
+        {
+            throw new ArgumentException(
+                $"A claim's name has at most {CoordinationKey.MaxSegments - 1} segments, so the window's segment fits after them.",
+                nameof(name)
+            );
+        }
+
         RespCall.Check(options, cancellationToken);
 
-        var keyspace = name.Keyspace;
-        var claimName = RespKeys.Name(name);
-        var windowSegment = window.Segment.ToString();
-        var ttlMs = RespCall.ToMilliseconds(timeToLive);
-        var skewMs = 1000; // Default 1-second skew allowance per ADR-1008
-
-        var keys = new[]
+        var key = new CoordinationKey(name.Keyspace, [.. name.Segments, window.Segment])
         {
-            RespKeys.ForKeyspace(keyspace, "claims"),
-            RespKeys.ForKeyspace(keyspace, "claims-deadlines"),
+            PartitionDepth = name.PartitionDepth,
         };
 
-        var arguments = new RedisValue[]
-        {
-            "tryClaim",
-            claimName,
-            windowSegment,
-            ttlMs.ToString(System.Globalization.CultureInfo.InvariantCulture),
-            skewMs.ToString(System.Globalization.CultureInfo.InvariantCulture),
-        };
-
+        var serverKey = RespKeys.ForKey(key, Kind);
+        var ms = RespCall.ToMilliseconds(timeToLive).ToString(CultureInfo.InvariantCulture);
         var reply = await Server
-            .EvaluateAsync(RespScript.Claim, keys, arguments, cancellationToken)
+            .ExecuteAsync(RespCommands.Set, [serverKey, "1", "NX", "PX", ms], cancellationToken)
             .ConfigureAwait(false);
 
-        var (status, _) = RespReplies.Script(reply);
-
-        return status switch
+        if (reply.IsNull)
         {
-            0 => ClaimStatus.Claimed,
-            1 => ClaimStatus.Taken,
-            _ => throw RespReplies.Unexpected(reply),
-        };
+            return ClaimStatus.Taken;
+        }
+
+        if (reply.Resp2Type == ResultType.SimpleString && (string?)reply == Accepted)
+        {
+            return ClaimStatus.Claimed;
+        }
+
+        throw RespReplies.Unexpected(reply);
     }
 }
