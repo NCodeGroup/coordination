@@ -234,5 +234,56 @@ public sealed class DefaultSingleFlightServiceTests
         Assert.Equal("key", exception.ParamName);
     }
 
+    [Fact]
+    public async Task GetOrFetchAsync_WhenTheReleaseFailsAfterTheValueIsStored_ReturnsTheValue()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var time = InProcessTesting.CreateTime();
+        await using var services = RecipeTesting.Build(time);
+        var records = services.GetRequiredService<IRecordService>();
+        var leases = services.GetRequiredService<ILeaseService>();
+        var failingLeases = new FailingReleaseLeases(leases);
+        var flights = new DefaultSingleFlightService(records, failingLeases);
+        var key = CreateKey();
+        var fetched = ValueTask.FromResult(Value);
+
+        var stored = await flights.GetOrFetchAsync(
+            key,
+            Terms,
+            _ => fetched,
+            null,
+            cancellationToken
+        );
+        var expected = Value.ToArray();
+        var storedBytes = stored.Value.ToArray();
+
+        Assert.Equal(expected, storedBytes);
+    }
+
+    [Fact]
+    public async Task GetOrFetchAsync_WhenTheFetchAndTheReleaseFail_ThrowsTheFetchFailure()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var time = InProcessTesting.CreateTime();
+        await using var services = RecipeTesting.Build(time);
+        var records = services.GetRequiredService<IRecordService>();
+        var leases = services.GetRequiredService<ILeaseService>();
+        var failingLeases = new FailingReleaseLeases(leases);
+        var flights = new DefaultSingleFlightService(records, failingLeases);
+        var key = CreateKey();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await flights.GetOrFetchAsync(
+                key,
+                Terms,
+                _ => throw new InvalidOperationException("The fetch failed."),
+                null,
+                cancellationToken
+            )
+        );
+
+        Assert.Equal("The fetch failed.", exception.Message);
+    }
+
     #endregion
 }

@@ -163,6 +163,27 @@ public sealed class DefaultReadWriteLockServiceTests
         Assert.NotNull(write);
     }
 
+    [Fact]
+    public async Task AcquireReadAsync_WhenTheRegistrationAndTheProbeReleaseFail_ThrowsTheRegistrationFailure()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var time = InProcessTesting.CreateTime();
+        await using var services = RecipeTesting.Build(time);
+        var leases = services.GetRequiredService<ILeaseService>();
+        var records = services.GetRequiredService<IRecordService>();
+        var watches = services.GetRequiredService<IRecordWatchService>();
+        var failingLeases = new FailingReleaseLeases(leases);
+        var failingRecords = new FailingRecords(records);
+        var failingLocks = new DefaultReadWriteLockService(failingLeases, failingRecords, watches);
+        var resource = CreateResource();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            failingLocks.AcquireReadAsync(resource, Terms, null, cancellationToken).AsTask()
+        );
+
+        Assert.Equal("The record service failed.", exception.Message);
+    }
+
     #endregion
 
     #region ReleaseReadAsync Tests
@@ -280,6 +301,29 @@ public sealed class DefaultReadWriteLockServiceTests
 
         Assert.True(released);
         Assert.NotNull(write);
+    }
+
+    [Fact]
+    public async Task AcquireWriteAsync_WhenTheWaitAndTheReleaseFail_ThrowsTheWaitFailure()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var time = InProcessTesting.CreateTime();
+        await using var services = RecipeTesting.Build(time);
+        var leases = services.GetRequiredService<ILeaseService>();
+        var records = services.GetRequiredService<IRecordService>();
+        var locks = CreateLocks(services);
+        var failingLeases = new FailingReleaseLeases(leases);
+        var ending = new EndingWatches();
+        var endingLocks = new DefaultReadWriteLockService(failingLeases, records, ending);
+        var resource = CreateResource();
+        var read = await locks.AcquireReadAsync(resource, Terms, null, cancellationToken);
+        Assert.NotNull(read);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            endingLocks.AcquireWriteAsync(resource, Terms, null, cancellationToken).AsTask()
+        );
+
+        Assert.Equal("The watch ended without a failure.", exception.Message);
     }
 
     [Fact]
