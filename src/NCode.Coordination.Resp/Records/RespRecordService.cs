@@ -184,7 +184,17 @@ internal class RespRecordService(RespRecordTable table) : IRecordService
         var timeToLive = RespRecordTable.TimeToLiveOf(lifetime);
         var member = RespKeys.Member(key);
         var name = RespKeys.Name(key);
-        RedisValue[] arguments = [member, name, value, timeToLive];
+        
+        RedisValue[] arguments;
+        if (lifetime.Session is not null)
+        {
+            arguments = [member, name, value, timeToLive, lifetime.Session.Value];
+        }
+        else
+        {
+            arguments = [member, name, value, timeToLive];
+        }
+        
         var reply = await Table
             .EvaluateAsync(RespScript.RecordCreate, key.Keyspace, arguments, cancellationToken)
             .ConfigureAwait(false);
@@ -242,7 +252,17 @@ internal class RespRecordService(RespRecordTable table) : IRecordService
         var timeToLive = RespRecordTable.TimeToLiveOf(lifetime);
         var member = RespKeys.Member(key);
         var name = RespKeys.Name(key);
-        RedisValue[] arguments = [member, name, expected.Value, value, timeToLive];
+        
+        RedisValue[] arguments;
+        if (lifetime.Session is not null)
+        {
+            arguments = [member, name, expected.Value, value, timeToLive, lifetime.Session.Value];
+        }
+        else
+        {
+            arguments = [member, name, expected.Value, value, timeToLive];
+        }
+        
         var reply = await Table
             .EvaluateAsync(RespScript.RecordSwap, key.Keyspace, arguments, cancellationToken)
             .ConfigureAwait(false);

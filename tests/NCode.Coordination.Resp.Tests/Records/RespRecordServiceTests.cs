@@ -445,26 +445,6 @@ public sealed class RespRecordServiceTests(RespServers servers) : IDisposable
             RespProfiles.Garnet
         );
 
-    [Fact]
-    public async Task CreateAsync_SessionLifetime_ThrowsUnsupported()
-    {
-        var cancellationToken = TestContext.Current.CancellationToken;
-        var keyspace = new Keyspace("prod");
-        var server = CreateUnreachableServer();
-        var service = CreateService(server);
-        var key = keyspace.CreateKey("a");
-        var value = "v"u8.ToArray();
-        var sessionId = new SessionId(keyspace, "s1");
-        var lifetime = RecordLifetime.ForSession(sessionId);
-
-        var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
-            await service.CreateAsync(key, value, lifetime, null, cancellationToken)
-        );
-
-        Assert.Equal(CoordinationErrorCodes.Unsupported, exception.Code);
-        Assert.False(exception.OutcomeUnknown);
-    }
-
     #endregion
 
     #region ReadAsync Tests

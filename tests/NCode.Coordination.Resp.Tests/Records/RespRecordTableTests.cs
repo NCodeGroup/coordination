@@ -129,18 +129,15 @@ public sealed class RespRecordTableTests : IDisposable
     }
 
     [Fact]
-    public void TimeToLiveOf_Session_ThrowsUnsupported()
+    public void TimeToLiveOf_Session_ReturnsNegativeOne()
     {
         var keyspace = new Keyspace("prod");
         var sessionId = new SessionId(keyspace, "s1");
         var lifetime = RecordLifetime.ForSession(sessionId);
 
-        var exception = Assert.Throws<CoordinationException>(() =>
-            RespRecordTable.TimeToLiveOf(lifetime)
-        );
+        var milliseconds = RespRecordTable.TimeToLiveOf(lifetime);
 
-        Assert.Equal(CoordinationErrorCodes.Unsupported, exception.Code);
-        Assert.False(exception.OutcomeUnknown);
+        Assert.Equal(-1, milliseconds);
     }
 
     #endregion

@@ -87,20 +87,15 @@ internal class RespRecordTable(RespServer server, RespProfile profile)
     /// Converts a record's lifetime to the time to live a record script takes.
     /// </summary>
     /// <param name="lifetime">The lifetime.</param>
-    /// <returns>The time to live in whole milliseconds, rounded up, or 0 for a persistent record.</returns>
+    /// <returns>The time to live in whole milliseconds, rounded up, 0 for persistent, or -1 for session-bound.</returns>
     /// <exception cref="ArgumentNullException">The lifetime is null.</exception>
-    /// <exception cref="CoordinationException">The lifetime is bound to a session, which the provider doesn't support.</exception>
     public static long TimeToLiveOf(RecordLifetime lifetime)
     {
         ArgumentNullException.ThrowIfNull(lifetime);
 
         if (lifetime.Session is not null)
         {
-            throw new CoordinationException(
-                CoordinationErrorCodes.Unsupported,
-                outcomeUnknown: false,
-                "The RESP provider binds no record to a session."
-            );
+            return -1;
         }
 
         return lifetime.TimeToLive is { } timeToLive ? RespCall.ToMilliseconds(timeToLive) : 0;
