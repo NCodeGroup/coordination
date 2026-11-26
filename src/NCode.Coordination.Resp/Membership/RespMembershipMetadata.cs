@@ -27,11 +27,14 @@ internal static class RespMembershipMetadata
     {
         ArgumentNullException.ThrowIfNull(metadata);
 
+        string[] names = [.. metadata.Keys];
+        Array.Sort(names, StringComparer.Ordinal);
+
         var builder = new StringBuilder();
-        foreach (var entry in metadata.OrderBy(entry => entry.Key, StringComparer.Ordinal))
+        foreach (var name in names)
         {
-            AppendText(builder, entry.Key);
-            AppendText(builder, entry.Value);
+            AppendText(builder, name);
+            AppendText(builder, metadata[name]);
         }
 
         return builder.ToString();
