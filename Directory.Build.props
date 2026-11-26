@@ -3,5 +3,8 @@
   <Import Project="$(MSBuildThisFileDirectory)build/ProjectTemplate.props" />
 
   <!-- This project's own settings. Anything set here overrides the template's. -->
-  <PropertyGroup></PropertyGroup>
+  <PropertyGroup>
+    <!-- dotnet test reads coverage.runsettings, so build/dod.ps1's Coverage stage measures this repository's assemblies only. -->
+    <RunSettingsFilePath>$(MSBuildThisFileDirectory)coverage.runsettings</RunSettingsFilePath>
+  </PropertyGroup>
 </Project>
