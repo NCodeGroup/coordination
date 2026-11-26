@@ -63,7 +63,7 @@ public sealed class RespFailuresTests
     }
 
     [Fact]
-    public void Translate_TimeoutWaitingInBacklog_IsUnavailableAndKnown()
+    public void Translate_TimeoutWaitingInBacklog_IsUnavailableAndUnknown()
     {
         var exception = new RedisTimeoutException(
             CommandFlags.None,
@@ -72,6 +72,93 @@ public sealed class RespFailuresTests
         );
 
         var result = RespFailures.Translate(exception, isScript: false);
+
+        Assert.Equal(CoordinationErrorCodes.Unavailable, result.Code);
+        Assert.True(result.OutcomeUnknown);
+    }
+
+    [Fact]
+    public void Translate_TimeoutWaitingToBeSent_IsUnavailableAndUnknown()
+    {
+        var exception = new RedisTimeoutException(
+            CommandFlags.None,
+            "x",
+            CommandStatus.WaitingToBeSent
+        );
+
+        var result = RespFailures.Translate(exception, isScript: false);
+
+        Assert.Equal(CoordinationErrorCodes.Unavailable, result.Code);
+        Assert.True(result.OutcomeUnknown);
+    }
+
+    [Fact]
+    public void Translate_ConnectionFailureWaitingInBacklog_IsUnavailableAndKnown()
+    {
+        var exception = new RedisConnectionException(
+            ConnectionFailureType.SocketFailure,
+            CommandFlags.None,
+            "x",
+            null,
+            CommandStatus.WaitingInBacklog
+        );
+
+        var result = RespFailures.Translate(exception, isScript: false);
+
+        Assert.Equal(CoordinationErrorCodes.Unavailable, result.Code);
+        Assert.False(result.OutcomeUnknown);
+    }
+
+    [Theory]
+    [InlineData("NOAUTH x", false)]
+    [InlineData("NOAUTH x", true)]
+    [InlineData("WRONGPASS x", false)]
+    [InlineData("WRONGPASS x", true)]
+    [InlineData("NOPERM x", false)]
+    public void Translate_AccessReply_IsAccessDeniedAndKnown(string message, bool isScript)
+    {
+        var exception = new RedisServerException(
+            RedisErrorKind.Unknown,
+            CommandFlags.None,
+            message
+        );
+
+        var result = RespFailures.Translate(exception, isScript);
+
+        Assert.Equal(CoordinationErrorCodes.AccessDenied, result.Code);
+        Assert.False(result.OutcomeUnknown);
+    }
+
+    [Theory]
+    [InlineData("BUSY x")]
+    [InlineData("CLUSTERDOWN x")]
+    [InlineData("MASTERDOWN x")]
+    [InlineData("TRYAGAIN x")]
+    [InlineData("READONLY x")]
+    [InlineData("CROSSSLOT x")]
+    [InlineData("NOSCRIPT x")]
+    [InlineData("MOVED 3999 127.0.0.1:6381")]
+    [InlineData("ASK 3999 127.0.0.1:6381")]
+    public void Translate_TransientReplyFromScript_IsUnavailableAndKnown(string message)
+    {
+        var exception = new RedisServerException(
+            RedisErrorKind.Unknown,
+            CommandFlags.None,
+            message
+        );
+
+        var result = RespFailures.Translate(exception, isScript: true);
+
+        Assert.Equal(CoordinationErrorCodes.Unavailable, result.Code);
+        Assert.False(result.OutcomeUnknown);
+    }
+
+    [Fact]
+    public void Translate_CommandException_IsUnavailableAndKnown()
+    {
+        var exception = new RedisCommandException("x");
+
+        var result = RespFailures.Translate(exception, isScript: true);
 
         Assert.Equal(CoordinationErrorCodes.Unavailable, result.Code);
         Assert.False(result.OutcomeUnknown);

@@ -50,6 +50,21 @@ internal static class RespFailures
     }
 
     /// <summary>
+    /// Returns whether a server error reply is one the seam classifies by its token: an access refusal or a temporary state of the server.
+    /// </summary>
+    /// <param name="exception">The server error reply.</param>
+    /// <returns>True when the token of the reply is one the seam classifies.</returns>
+    /// <exception cref="ArgumentNullException">The exception is null.</exception>
+    internal static bool IsKnownReply(RedisServerException exception)
+    {
+        ArgumentNullException.ThrowIfNull(exception);
+
+        var token = ErrorToken(exception.Message);
+
+        return ClassifyKnownToken(token) is not null;
+    }
+
+    /// <summary>
     /// Translates a failure of the client into a coordination failure.
     /// </summary>
     /// <param name="exception">The failure of the client or the server.</param>
@@ -81,8 +96,9 @@ internal static class RespFailures
                     ? (CoordinationErrorCodes.AccessDenied, false)
                     : (CoordinationErrorCodes.Unavailable, !NotSent(connection.CommandStatus));
 
-            case RedisTimeoutException timeout:
-                return (CoordinationErrorCodes.Unavailable, !NotSent(timeout.Commandstatus));
+            // A timed-out command may still be written after its caller stops waiting, whatever its status (ADR-1022 rule 4).
+            case RedisTimeoutException:
+                return (CoordinationErrorCodes.Unavailable, true);
 
             case RedisServerException server:
                 var token = ErrorToken(server.Message);
@@ -107,28 +123,31 @@ internal static class RespFailures
         bool isScript
     )
     {
-        switch (token)
+        return ClassifyKnownToken(token) ?? (CoordinationErrorCodes.Unavailable, isScript);
+    }
+
+    /// <summary>
+    /// Picks the code and the outcome of a server error reply whose token the seam knows.
+    /// </summary>
+    /// <param name="token">The token of the reply.</param>
+    /// <returns>The code and whether the call may have taken effect, or null when the token is not known.</returns>
+    private static (string Code, bool OutcomeUnknown)? ClassifyKnownToken(string token)
+    {
+        return token switch
         {
-            case "NOPERM":
-            case "NOAUTH":
-            case "WRONGPASS":
-                return (CoordinationErrorCodes.AccessDenied, false);
-
-            case "LOADING":
-            case "BUSY":
-            case "CLUSTERDOWN":
-            case "MASTERDOWN":
-            case "TRYAGAIN":
-            case "READONLY":
-            case "CROSSSLOT":
-            case "NOSCRIPT":
-            case "MOVED":
-            case "ASK":
-                return (CoordinationErrorCodes.Unavailable, false);
-
-            default:
-                return (CoordinationErrorCodes.Unavailable, isScript);
-        }
+            "NOPERM" or "NOAUTH" or "WRONGPASS" => (CoordinationErrorCodes.AccessDenied, false),
+            "LOADING"
+            or "BUSY"
+            or "CLUSTERDOWN"
+            or "MASTERDOWN"
+            or "TRYAGAIN"
+            or "READONLY"
+            or "CROSSSLOT"
+            or "NOSCRIPT"
+            or "MOVED"
+            or "ASK" => (CoordinationErrorCodes.Unavailable, false),
+            _ => null,
+        };
     }
 
     /// <summary>
