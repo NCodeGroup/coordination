@@ -11,7 +11,8 @@ namespace NCode.Coordination;
 /// <remarks>
 /// The window is a whole number of milliseconds above zero and at most 180 days, and it divides into segments of whole
 /// milliseconds. Segments align to the Unix epoch, so every node with the same window length and segment count agrees
-/// on where each segment starts and ends.
+/// on where each segment starts and ends. Each request reads the counter of every earlier segment in the window and
+/// increments the current one's, so it makes as many calls to the provider as the window has segments.
 /// </remarks>
 public sealed class SlidingWindowLimit
 {
