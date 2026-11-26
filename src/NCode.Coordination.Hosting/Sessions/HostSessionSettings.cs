@@ -166,8 +166,8 @@ internal sealed class HostSessionSettings
     private static SessionId Placeholder { get; } = new(new Keyspace("validation"), "validation");
 
     /// <summary>
-    /// Gets the longest keep-alive interval and retry delay, one day. A timer refuses a period of about 49 days, so
-    /// a smaller bound keeps every accepted value well inside it.
+    /// Gets the longest keep-alive interval, retry delay and longest retry delay, one day. A timer refuses a period of
+    /// about 49 days, so a smaller bound keeps every accepted value well inside it.
     /// </summary>
     public static TimeSpan MaxInterval { get; } = TimeSpan.FromDays(1);
 
