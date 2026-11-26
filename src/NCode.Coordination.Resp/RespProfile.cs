@@ -20,6 +20,10 @@ public sealed partial record RespProfile
     /// <summary>The longest profile name, in characters.</summary>
     private const int MaxNameLength = 128;
 
+    /// <summary>Matches a name: lowercase letters and digits, with a single '.' or '-' between them.</summary>
+    [GeneratedRegex(@"^[a-z0-9]+(?:[.-][a-z0-9]+)*\z", RegexOptions.CultureInvariant)]
+    private static partial Regex NamePattern();
+
     /// <summary>
     /// Creates a profile.
     /// </summary>
@@ -101,8 +105,4 @@ public sealed partial record RespProfile
     /// </summary>
     /// <returns>The name.</returns>
     public override string ToString() => Name;
-
-    /// <summary>Matches a name: lowercase letters and digits, with a single '.' or '-' between them.</summary>
-    [GeneratedRegex(@"^[a-z0-9]+(?:[.-][a-z0-9]+)*\z", RegexOptions.CultureInvariant)]
-    private static partial Regex NamePattern();
 }

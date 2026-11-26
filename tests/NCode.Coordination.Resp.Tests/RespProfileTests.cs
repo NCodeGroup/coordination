@@ -25,6 +25,56 @@ public sealed class RespProfileTests
     }
 
     [Fact]
+    public void Constructor_NameTooLong_Throws()
+    {
+        var name = new string('a', 129);
+        var version = new Version(7, 2, 0);
+
+        var exception = Assert.Throws<ArgumentException>(() =>
+            new RespProfile(name, "valkey", "valkey_version", version, shardedChannels: true)
+        );
+
+        Assert.Equal("name", exception.ParamName);
+        Assert.Contains("at most 128 characters, and this one has 129", exception.Message);
+    }
+
+    [Fact]
+    public void Constructor_NullName_Throws()
+    {
+        var version = new Version(7, 2, 0);
+
+        var exception = Assert.Throws<ArgumentNullException>(() =>
+            new RespProfile(null!, "valkey", "valkey_version", version, shardedChannels: true)
+        );
+
+        Assert.Equal("name", exception.ParamName);
+    }
+
+    [Fact]
+    public void Constructor_BlankServerName_Throws()
+    {
+        var version = new Version(7, 2, 0);
+
+        var exception = Assert.Throws<ArgumentException>(() =>
+            new RespProfile("valkey", " ", "valkey_version", version, shardedChannels: true)
+        );
+
+        Assert.Equal("serverName", exception.ParamName);
+    }
+
+    [Fact]
+    public void Constructor_BlankVersionField_Throws()
+    {
+        var version = new Version(7, 2, 0);
+
+        var exception = Assert.Throws<ArgumentException>(() =>
+            new RespProfile("valkey", "valkey", " ", version, shardedChannels: true)
+        );
+
+        Assert.Equal("versionField", exception.ParamName);
+    }
+
+    [Fact]
     public void Constructor_NullMinimumVersion_Throws()
     {
         var exception = Assert.Throws<ArgumentNullException>(() =>

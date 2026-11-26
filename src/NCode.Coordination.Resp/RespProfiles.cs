@@ -17,12 +17,13 @@ public static class RespProfiles
     public static RespProfile Valkey { get; } =
         new("valkey", "valkey", "valkey_version", new Version(7, 2, 0), shardedChannels: true);
 
+    // Garnet's settings for Lua: ADR-1023 rule 9.
     /// <summary>
     /// Gets the profile for Garnet 2.2.13 and later.
     /// </summary>
     /// <remarks>
     /// Garnet carries channel messages on plain channels. It must run with <c>--lua --lua-transaction-mode</c> so that
-    /// a script runs as one transaction (ADR-1023 rule 9).
+    /// a script runs as one transaction.
     /// </remarks>
     public static RespProfile Garnet { get; } =
         new("garnet", "garnet", "garnet_version", new Version(2, 2, 13), shardedChannels: false);
