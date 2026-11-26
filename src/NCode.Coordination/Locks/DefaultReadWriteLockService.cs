@@ -109,7 +109,7 @@ internal class DefaultReadWriteLockService(
 
             // Holding the probe while the registration is written keeps every writer out of that moment.
             var released = await Leases
-                .ReleaseAsync(probe.Grant, options, CancellationToken.None)
+                .ReleaseQuietlyAsync(probe.Grant, options, CancellationToken.None)
                 .ConfigureAwait(false);
 
             if (written.Status == RecordWriteStatus.SessionEnded)
@@ -124,7 +124,7 @@ internal class DefaultReadWriteLockService(
 
             if (!released)
             {
-                // The probe outlived its time to live, so a writer may have listed the readers without this one.
+                // A probe that was lost, or whose release failed, may have let a writer list the readers without this one.
                 await Records
                     .CompareAndDeleteAsync(
                         registration,

@@ -60,8 +60,9 @@ waits on releases and watches, never on a timer.**
    token.
 7. **Read-write locks.** A writer holds the lease `<resource>/writer`, then waits until no reader's record is under
    the resource. A reader holds that lease as a probe for at most 30 seconds while it writes its record
-   `<resource>/<probe's fencing token>`, bound to its session or time to live, and retries when the probe was lost
-   before its release. A read grant carries the probe's fencing token, which orders it among the write grants.
+   `<resource>/<probe's fencing token>`, bound to its session or time to live. When the probe was lost before its
+   release, or its release failed, the reader deletes its record and retries. A read grant carries the probe's fencing
+   token, which orders it among the write grants.
 8. **Barriers.** Each participant writes a record under the barrier's key, and a party counts once it is seen
    arriving, even when its record later ends. A barrier serves 1 to 1,000 parties, once per key.
 9. **Singletons.** A candidate leads the role with its session and runs the work with a token that is cancelled when
