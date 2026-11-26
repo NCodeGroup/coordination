@@ -9,24 +9,45 @@ namespace NCode.Coordination.Resp.Server;
 /// The seam between the provider and its server: every call to the server goes through it, and every failure of the
 /// client leaves it as a <see cref="CoordinationException"/>.
 /// </summary>
-internal sealed class RespServer
+/// <param name="connection">The connection of the provider to its server.</param>
+/// <exception cref="ArgumentNullException">The connection is null.</exception>
+internal sealed class RespServer(RespConnection connection)
 {
+    /// <summary>
+    /// Parses the text of an <c>INFO</c> reply.
+    /// </summary>
+    /// <param name="text">The text of the reply, with one <c>field:value</c> pair per line and <c>#</c> section headers.</param>
+    /// <returns>The <c>field:value</c> pairs of the text, by field name.</returns>
+    /// <exception cref="ArgumentNullException">The text is null.</exception>
+    public static IReadOnlyDictionary<string, string> ParseInfo(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+
+        var fields = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var line in text.Split(["\r\n", "\n"], StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (line.StartsWith('#'))
+            {
+                continue;
+            }
+
+            var separator = line.IndexOf(':');
+            if (separator < 0)
+            {
+                continue;
+            }
+
+            fields[line[..separator]] = line[(separator + 1)..];
+        }
+
+        return fields;
+    }
+
     /// <summary>
     /// Gets the connection of the provider to its server.
     /// </summary>
-    private RespConnection Connection { get; }
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="RespServer"/> class.
-    /// </summary>
-    /// <param name="connection">The connection of the provider to its server.</param>
-    /// <exception cref="ArgumentNullException">The connection is null.</exception>
-    public RespServer(RespConnection connection)
-    {
-        ArgumentNullException.ThrowIfNull(connection);
-
-        Connection = connection;
-    }
+    private RespConnection Connection { get; } =
+        connection ?? throw new ArgumentNullException(nameof(connection));
 
     /// <summary>
     /// Runs a script on the server.
@@ -100,35 +121,5 @@ internal sealed class RespServer
         {
             throw RespFailures.Translate(e, isScript: false);
         }
-    }
-
-    /// <summary>
-    /// Parses the text of an <c>INFO</c> reply.
-    /// </summary>
-    /// <param name="text">The text of the reply, with one <c>field:value</c> pair per line and <c>#</c> section headers.</param>
-    /// <returns>The <c>field:value</c> pairs of the text, by field name.</returns>
-    /// <exception cref="ArgumentNullException">The text is null.</exception>
-    public static IReadOnlyDictionary<string, string> ParseInfo(string text)
-    {
-        ArgumentNullException.ThrowIfNull(text);
-
-        var fields = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var line in text.Split(["\r\n", "\n"], StringSplitOptions.RemoveEmptyEntries))
-        {
-            if (line.StartsWith('#'))
-            {
-                continue;
-            }
-
-            var separator = line.IndexOf(':');
-            if (separator < 0)
-            {
-                continue;
-            }
-
-            fields[line[..separator]] = line[(separator + 1)..];
-        }
-
-        return fields;
     }
 }

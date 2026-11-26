@@ -8,7 +8,11 @@ namespace NCode.Coordination.Resp.Server;
 /// <summary>
 /// A Lua script that the provider sends to the server, loaded from the assembly's embedded resources.
 /// </summary>
-internal sealed class RespScript
+/// <param name="name">The name of the script.</param>
+/// <param name="text">The Lua source of the script.</param>
+/// <exception cref="ArgumentNullException">The name or the text is null.</exception>
+/// <exception cref="ArgumentException">The name or the text is empty or white space.</exception>
+internal sealed class RespScript(string name, string text)
 {
     /// <summary>The start of a script's manifest resource name.</summary>
     private const string ResourcePrefix = "NCode.Coordination.Resp.Scripts.";
@@ -17,36 +21,10 @@ internal sealed class RespScript
     private const string ResourceSuffix = ".lua";
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="RespScript"/> class.
-    /// </summary>
-    /// <param name="name">The name of the script.</param>
-    /// <param name="text">The Lua source of the script.</param>
-    /// <exception cref="ArgumentNullException">The name or the text is null.</exception>
-    /// <exception cref="ArgumentException">The name or the text is empty or white space.</exception>
-    public RespScript(string name, string text)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(name);
-        ArgumentException.ThrowIfNullOrWhiteSpace(text);
-
-        Name = name;
-        Text = text;
-    }
-
-    /// <summary>
     /// Gets the startup probe: it proves the server runs Lua and lets the user run scripts,
     /// and returns the server section of INFO.
     /// </summary>
     public static RespScript Probe { get; } = Load("probe");
-
-    /// <summary>
-    /// Gets the name of the script.
-    /// </summary>
-    public string Name { get; }
-
-    /// <summary>
-    /// Gets the Lua source of the script.
-    /// </summary>
-    public string Text { get; }
 
     /// <summary>
     /// Loads a script from the embedded resource <c>NCode.Coordination.Resp.Scripts.&lt;name&gt;.lua</c>.
@@ -70,4 +48,29 @@ internal sealed class RespScript
         var text = reader.ReadToEnd();
         return new RespScript(name, text);
     }
+
+    /// <summary>
+    /// Checks that a constructor argument is neither null, empty nor white space.
+    /// </summary>
+    /// <param name="value">The argument.</param>
+    /// <param name="paramName">The name of the argument.</param>
+    /// <returns>The argument.</returns>
+    /// <exception cref="ArgumentNullException">The argument is null.</exception>
+    /// <exception cref="ArgumentException">The argument is empty or white space.</exception>
+    private static string ValidateNotBlank(string value, string paramName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(value, paramName);
+
+        return value;
+    }
+
+    /// <summary>
+    /// Gets the name of the script.
+    /// </summary>
+    public string Name { get; } = ValidateNotBlank(name, nameof(name));
+
+    /// <summary>
+    /// Gets the Lua source of the script.
+    /// </summary>
+    public string Text { get; } = ValidateNotBlank(text, nameof(text));
 }
