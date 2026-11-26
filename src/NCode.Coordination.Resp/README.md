@@ -15,6 +15,10 @@ Set `Configuration`, a StackExchange.Redis configuration string, and the provide
 set `Connection` to a factory that returns the host's own `IConnectionMultiplexer`, which the provider uses and never
 disposes.
 
+A shared connection keeps its own settings. The provider runs on its default database, reads RESP2 and RESP3 alike,
+and works with any backlog policy, reporting a call that times out as possibly applied. Its command map must keep
+`EVAL` and `EVALSHA`, or the host's start fails.
+
 ## Profiles
 
 `Profile` names the server, `RespProfiles.Valkey` by default. When the host starts, the provider checks that the
