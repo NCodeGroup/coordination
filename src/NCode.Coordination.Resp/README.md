@@ -41,8 +41,8 @@ measured on the server's clock, in whole milliseconds rounded up.
   passed is absent at once, and the next script on its keyspace deletes it and announces the delete; a keyspace
   whose records all have a time to live leaves the server an hour after the last of them ends. A page of a listing
   examines at most its limit plus 64 entries of the index, so expired records not yet deleted can leave a page short, or
-  empty, with a continuation token; page on until a page has none. A record bound to a session is absent once the session ends, and a script on its
-  keyspace deletes it and announces the delete.
+  empty, with a continuation token; page on until a page has none. A record bound to a session is absent once the
+  session ends, and a script on its keyspace deletes it and announces the delete.
 - **Transactions**: up to 64 conditions and two branches of up to 64 writes, run as one script on one keyspace's
   records. A put that binds a record to a session that has ended ends the transaction as session ended, with nothing
   written.
@@ -54,12 +54,11 @@ measured on the server's clock, in whole milliseconds rounded up.
   largest integer a Lua number holds exactly; an increment past it fails as `limit-exceeded`.
 - **Sequences**: `INCR` and `INCRBY` on a key with no time to live, so a sequence never resets while the server keeps
   its data.
-
 - **Sessions**: a session stores its time to live, so every keep-alive renews it in full. A close or the session's
   expiry ends it at once with the memberships, leases, semaphore slots, leaderships and records bound to it, which
   are absent from then on; each script on the keyspace removes up to 64 of them. A session's id is 128 random bits.
-- **Membership**: a group is read at the keyspace's revision, which every join, leave and session end takes, and
-  each member's address and metadata come back as written.
+- **Membership**: a group is read at the keyspace's revision, which a join takes, and a leave or a session's end
+  takes when it removes a member or a record, and each member's address and metadata come back as written.
 - **Leases, semaphores and elections**: each grant carries a fencing token from a counter per resource that never
   expires and an owner token of 128 random bits, and is bound to a session or to a time to live. A semaphore has up
   to 1,024 slots, and a leader's value up to 65,536 bytes.
