@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>NCode.Coordination.Hosting</RootNamespace>
+    <Description>The hosting of NCode.Coordination: the host's session, opened once the composition's requirements pass, kept alive while the host runs and opened again when lost, the node's membership from configuration, the session closed as the host stops, and a health check that reports the host not ready without its session.</Description>
+    <PackageTags>coordination;distributed;cluster;hosting;sessions;membership;health-checks</PackageTags>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../NCode.Coordination.Abstractions/NCode.Coordination.Abstractions.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" />
+  </ItemGroup>
+</Project>
