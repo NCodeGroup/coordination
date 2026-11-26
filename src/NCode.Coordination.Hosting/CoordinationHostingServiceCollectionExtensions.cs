@@ -30,6 +30,7 @@ public static class CoordinationHostingServiceCollectionExtensions
             >()
         );
         services.TryAddSingleton(TimeProvider.System);
+        services.TryAddSingleton<IJitter, RandomJitter>();
         services.TryAddSingleton<DefaultHostSessionService>();
         services.TryAddSingleton<IHostSessionService>(x =>
             x.GetRequiredService<DefaultHostSessionService>()

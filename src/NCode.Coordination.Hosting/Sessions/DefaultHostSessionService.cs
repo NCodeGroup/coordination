@@ -16,6 +16,7 @@ namespace NCode.Coordination.Hosting.Sessions;
 /// <param name="membership">The operations that join the node to its group.</param>
 /// <param name="options">The options that name the node and tune the session.</param>
 /// <param name="time">The clock the session's renewals and deadline run on.</param>
+/// <param name="jitter">The source of the random part of each wait between attempts.</param>
 /// <param name="logger">The logger.</param>
 /// <remarks>
 /// The service is a lifecycle service rather than a background service because the session must close after every
@@ -27,6 +28,7 @@ internal class DefaultHostSessionService(
     IMembershipService membership,
     IOptions<CoordinationHostOptions> options,
     TimeProvider time,
+    IJitter jitter,
     ILogger<DefaultHostSessionService> logger
 ) : IHostSessionService, IHostedLifecycleService, IAsyncDisposable, IDisposable
 {
@@ -71,6 +73,11 @@ internal class DefaultHostSessionService(
     /// Gets the clock the session's renewals and deadline run on.
     /// </summary>
     private TimeProvider Time { get; } = time;
+
+    /// <summary>
+    /// Gets the source of the random part of each wait between attempts.
+    /// </summary>
+    private IJitter Jitter { get; } = jitter;
 
     /// <summary>
     /// Gets the logger.
@@ -126,6 +133,17 @@ internal class DefaultHostSessionService(
     /// Gets or sets the task of the session loop.
     /// </summary>
     private Task? Run { get; set; }
+
+    /// <summary>
+    /// Gets or sets the number of attempts in a row that failed to open and join a session. Only the session loop
+    /// reads and writes it.
+    /// </summary>
+    private int Failures { get; set; }
+
+    /// <summary>
+    /// Gets or sets the wait before the next attempt. Only the session loop reads and writes it.
+    /// </summary>
+    private TimeSpan RetryWait { get; set; }
 
     /// <inheritdoc />
     public HostSessionState State
@@ -350,7 +368,7 @@ internal class DefaultHostSessionService(
                     continue;
                 }
 
-                await Task.Delay(Settings.RetryDelay, Time, stopping).ConfigureAwait(false);
+                await Task.Delay(RetryWait, Time, stopping).ConfigureAwait(false);
             }
             catch (Exception) when (stopping.IsCancellationRequested)
             {
@@ -365,6 +383,22 @@ internal class DefaultHostSessionService(
                 return;
             }
         }
+    }
+
+    /// <summary>
+    /// Counts one more failed attempt and plans the wait before the next one.
+    /// </summary>
+    /// <returns>The wait, which doubles with each failure in a row up to the longest and is shortened at random.</returns>
+    private TimeSpan PlanRetry()
+    {
+        if (Failures != int.MaxValue)
+        {
+            Failures++;
+        }
+
+        var jitter = Jitter.Next();
+        RetryWait = Settings.GetRetryDelay(Failures, jitter);
+        return RetryWait;
     }
 
     /// <summary>
@@ -385,7 +419,8 @@ internal class DefaultHostSessionService(
         }
         catch (Exception exception) when (!stopping.IsCancellationRequested)
         {
-            Logger.SessionOpenFailed(exception, Settings.RetryDelay);
+            var wait = PlanRetry();
+            Logger.SessionOpenFailed(exception, wait);
             SetState(HostSessionState.Unreachable);
             return null;
         }
@@ -401,7 +436,8 @@ internal class DefaultHostSessionService(
         }
         catch (Exception exception) when (!stopping.IsCancellationRequested)
         {
-            Logger.SessionOpenFailed(exception, Settings.RetryDelay);
+            var wait = PlanRetry();
+            Logger.SessionOpenFailed(exception, wait);
             SetState(HostSessionState.Unreachable);
             await CloseQuietlyAsync(grant.Id, stopping).ConfigureAwait(false);
             return null;
@@ -409,7 +445,8 @@ internal class DefaultHostSessionService(
 
         if (status == MembershipJoinStatus.NodeIdTaken)
         {
-            Logger.NodeIdTaken(Settings.NodeId, Settings.RetryDelay);
+            var wait = PlanRetry();
+            Logger.NodeIdTaken(Settings.NodeId, wait);
             SetState(HostSessionState.Opening);
             await CloseQuietlyAsync(grant.Id, stopping).ConfigureAwait(false);
             return null;
@@ -418,6 +455,7 @@ internal class DefaultHostSessionService(
         if (status != MembershipJoinStatus.Joined)
         {
             // The session ended before it joined.
+            _ = PlanRetry();
             Logger.SessionLost();
             SetState(HostSessionState.Opening);
             return null;
@@ -438,6 +476,8 @@ internal class DefaultHostSessionService(
         var ended = new CancellationTokenSource(deadline.Remaining, Time);
         var session = new HostSession(id, member, ended.Token);
         TaskCompletionSource<HostSession> next;
+
+        Failures = 0;
 
         lock (Gate)
         {

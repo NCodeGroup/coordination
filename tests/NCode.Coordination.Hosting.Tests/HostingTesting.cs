@@ -56,17 +56,20 @@ internal static class HostingTesting
     /// <param name="time">The clock the service runs on.</param>
     /// <param name="sessions">The session operations the service calls.</param>
     /// <param name="membership">The membership operations the service calls.</param>
+    /// <param name="jitter">The source of the random part of each wait; a fixed zero when null.</param>
     /// <returns>The service.</returns>
     public static DefaultHostSessionService CreateService(
         TimeProvider time,
         ISessionService sessions,
-        IMembershipService membership
+        IMembershipService membership,
+        IJitter? jitter = null
     ) =>
         new(
             sessions,
             membership,
             Options.Create(CreateOptions()),
             time,
+            jitter ?? new FixedJitter(0),
             NullLogger<DefaultHostSessionService>.Instance
         );
 
