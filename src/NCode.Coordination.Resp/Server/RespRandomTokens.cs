@@ -10,7 +10,9 @@ namespace NCode.Coordination.Resp.Server;
 /// </summary>
 internal sealed class RespRandomTokens : IRespTokens
 {
-    /// <summary>The number of hexadecimal digits that carry 128 bits.</summary>
+    /// <summary>
+    /// The number of hexadecimal digits that carry 128 bits.
+    /// </summary>
     private const int HexDigits = 32;
 
     /// <inheritdoc />

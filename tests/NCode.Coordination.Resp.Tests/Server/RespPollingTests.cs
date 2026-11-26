@@ -31,7 +31,8 @@ public sealed class RespPollingTests
         using var source = CancellationTokenSource.CreateLinkedTokenSource(
             TestContext.Current.CancellationToken
         );
-        source.CancelAfter(TimeSpan.FromMilliseconds(50));
+        var delay = TimeSpan.FromMilliseconds(50);
+        source.CancelAfter(delay);
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
             await RespPolling.UntilAsync(_ => ValueTask.FromResult(false), source.Token)
