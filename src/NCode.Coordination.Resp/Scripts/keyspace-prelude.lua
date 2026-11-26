@@ -33,7 +33,14 @@
 -- KEYS[9] is missing or not after now. grant(field, owner, counter, session, timeToLive) takes the next fencing token
 -- of the counter in KEYS[10], writes the holder line, then binds the field to the session in KEYS[7], or, with no
 -- session, gives it a deadline in KEYS[9]; it returns the token. drop(field) removes a grant field, its binding or
--- deadline and, for a leadership 'e <name>', its value 'v <name>'.
+-- deadline and, for a leadership 'e <name>', its value 'v <name>'. dropMember(group, node) removes a group member's
+-- fields from KEYS[11] and KEYS[12], its binding and its session's node entry 'n <group> <session>'.
+-- endSession(session, budget) marks the session ended with the deadline 0, then removes up to budget of its bindings
+-- (a grant, a record, or a group member that still belongs to it); when it removed a record or a member it takes the
+-- next revision and publishes it. It deletes the session once no binding is left, and returns the budget that remains.
+-- The script then ends up to 16 sessions whose deadline has passed, within a budget of 64 bindings in all, before it
+-- drops the lapsed grants. A grant, member or record bound to an ended session reads as absent through holder, live
+-- and find even before it is removed.
 local revisionKey = KEYS[1]
 local records = KEYS[2]
 local index = KEYS[3]
@@ -220,6 +227,53 @@ local function drop(field)
   end
 end
 
+local function dropMember(group, node)
+  local entry = group .. ' ' .. node
+  local session = redis.call('HGET', memberFields, 's ' .. entry)
+  redis.call('HDEL', memberFields, 's ' .. entry, 'a ' .. entry, 'm ' .. entry)
+  redis.call('ZREM', members, entry)
+  if session then
+    redis.call('HDEL', memberFields, 'n ' .. group .. ' ' .. session)
+    redis.call('ZREM', bindings, session .. ' m ' .. entry)
+  end
+end
+
+local function endSession(session, budget)
+  redis.call('ZADD', sessionDeadlines, 0, session)
+  local bound = redis.call('ZRANGEBYLEX', bindings, '(' .. session .. ' ', '(' .. session .. '!', 'LIMIT', 0, budget)
+  local visible = false
+  for i = 1, #bound do
+    local entry = bound[i]
+    local kind = string.sub(entry, #session + 2, #session + 2)
+    local item = string.sub(entry, #session + 4)
+    if kind == 'g' then
+      local line = redis.call('HGET', grants, item)
+      if line and select(3, string.match(line, '^(%S+) (%S+) (%S+)$')) == session then
+        drop(item)
+      end
+    elseif kind == 'r' then
+      if redis.call('HGET', records, 's:' .. item) == session then
+        remove(item, redis.call('HGET', records, 'n:' .. item))
+        visible = true
+      end
+    elseif kind == 'm' then
+      if redis.call('HGET', memberFields, 's ' .. item) == session then
+        dropMember(string.match(item, '^(%S+) (.+)$'))
+        visible = true
+      end
+    end
+    redis.call('ZREM', bindings, entry)
+  end
+  if visible then
+    publish(advance())
+  end
+  if #bound < budget then
+    redis.call('HDEL', sessions, session)
+    redis.call('ZREM', sessionDeadlines, session)
+  end
+  return budget - #bound
+end
+
 local expired = redis.call('ZRANGEBYSCORE', deadlines, '-inf', now, 'LIMIT', 0, 64)
 if #expired > 0 then
   local revision = advance()
@@ -227,6 +281,14 @@ if #expired > 0 then
     remove(expired[i], redis.call('HGET', records, 'n:' .. expired[i]))
   end
   publish(revision)
+end
+
+local budget = 64
+local endedSessions = redis.call('ZRANGEBYSCORE', sessionDeadlines, '-inf', now, 'LIMIT', 0, 16)
+for i = 1, #endedSessions do
+  if budget > 0 then
+    budget = endSession(endedSessions[i], budget)
+  end
 end
 
 local expiredGrants = redis.call('ZRANGEBYSCORE', grantDeadlines, '-inf', now, 'LIMIT', 0, 64)
