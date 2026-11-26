@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using System.Buffers;
+using System.Buffers.Text;
 using System.Globalization;
+using System.Security.Cryptography;
 using System.Text;
 using StackExchange.Redis;
 
@@ -18,6 +20,11 @@ internal static class RespKeys
     /// The largest UTF-8 buffer, in bytes, that <see cref="Escape"/> takes from the stack.
     /// </summary>
     private const int StackBufferLength = 1024;
+
+    /// <summary>
+    /// The length of the unpadded Base64Url form of a SHA-256 digest.
+    /// </summary>
+    private const int DigestLength = 43;
 
     /// <summary>
     /// Gets the UTF-8 encoding that throws on bytes that are not well-formed UTF-8, which <see cref="Unescape"/> uses.
@@ -81,11 +88,167 @@ internal static class RespKeys
         ValidateKind(kind);
 
         var tag = KeyspaceTag(key.Keyspace);
-        var depth = key.PartitionDepth.ToString(CultureInfo.InvariantCulture);
-        var encoded = key.Segments.Select(EncodeSegment);
-        var segments = string.Join('/', encoded);
 
-        return tag + ":" + kind + ":" + depth + ":" + segments;
+        return tag + ":" + kind + ":" + Name(key);
+    }
+
+    /// <summary>
+    /// Returns the name of a key within its keyspace: the tail that <see cref="ForKey"/> writes.
+    /// </summary>
+    /// <param name="key">The key.</param>
+    /// <returns>The partition depth, a ":" and the encoded segments joined by "/".</returns>
+    /// <exception cref="ArgumentNullException">The key is null.</exception>
+    public static string Name(CoordinationKey key)
+    {
+        ArgumentNullException.ThrowIfNull(key);
+
+        var depth = key.PartitionDepth.ToString(CultureInfo.InvariantCulture);
+        var builder = new StringBuilder(depth).Append(':');
+
+        for (var index = 0; index < key.Segments.Length; index++)
+        {
+            if (index > 0)
+            {
+                builder.Append('/');
+            }
+
+            var encoded = EncodeSegment(key.Segments[index]);
+            builder.Append(encoded);
+        }
+
+        return builder.ToString();
+    }
+
+    /// <summary>
+    /// Decodes a name that <see cref="Name"/> wrote: the inverse of <see cref="Name"/>.
+    /// </summary>
+    /// <param name="keyspace">The keyspace the key belongs to.</param>
+    /// <param name="name">The name.</param>
+    /// <returns>The key.</returns>
+    /// <exception cref="ArgumentNullException">The keyspace or the name is null.</exception>
+    /// <exception cref="FormatException">The text is not a name that <see cref="Name"/> writes.</exception>
+    public static CoordinationKey DecodeName(Keyspace keyspace, string name)
+    {
+        ArgumentNullException.ThrowIfNull(keyspace);
+        ArgumentNullException.ThrowIfNull(name);
+
+        var span = name.AsSpan();
+        var colon = span.IndexOf(':');
+
+        if (colon < 1)
+        {
+            throw NotAName(name);
+        }
+
+        var depthText = span[..colon];
+
+        if (
+            !int.TryParse(depthText, NumberStyles.None, CultureInfo.InvariantCulture, out var depth)
+        )
+        {
+            throw NotAName(name);
+        }
+
+        // NumberStyles.None allows digits only, so a leading zero is the one way the text differs from the canonical
+        // form.
+        if (depthText.Length > 1 && depthText[0] == '0')
+        {
+            throw NotAName(name);
+        }
+
+        var rest = span[(colon + 1)..];
+        var count = rest.Count('/') + 1;
+        var segments = new List<KeySegment>(count);
+
+        foreach (var range in rest.Split('/'))
+        {
+            var part = rest[range].ToString();
+            var segment = DecodeSegment(part);
+            segments.Add(segment);
+        }
+
+        try
+        {
+            return new CoordinationKey(keyspace, segments) { PartitionDepth = depth };
+        }
+        catch (ArgumentException exception)
+        {
+            throw NotAName(name, exception);
+        }
+    }
+
+    /// <summary>
+    /// Returns the start of the members of every key under a prefix: for each segment, the digest of its encoding and
+    /// a "/".
+    /// </summary>
+    /// <param name="prefix">The prefix.</param>
+    /// <returns>
+    /// The unpadded Base64Url of the SHA-256 of the UTF-8 of each encoded segment, each followed by "/", without the
+    /// partition depth.
+    /// </returns>
+    /// <exception cref="ArgumentNullException">The prefix is null.</exception>
+    public static string MemberPrefix(CoordinationKey prefix)
+    {
+        ArgumentNullException.ThrowIfNull(prefix);
+
+        var capacity = prefix.Segments.Length * (DigestLength + 1);
+        var builder = new StringBuilder(capacity);
+        Span<char> digest = stackalloc char[DigestLength];
+
+        foreach (var segment in prefix.Segments)
+        {
+            var encoded = EncodeSegment(segment);
+            WriteDigest(encoded, digest);
+            builder.Append(digest).Append('/');
+        }
+
+        return builder.ToString();
+    }
+
+    /// <summary>
+    /// Writes the digest of an encoded segment: the unpadded Base64Url of the SHA-256 of its UTF-8.
+    /// </summary>
+    /// <param name="encoded">The encoded segment.</param>
+    /// <param name="destination">The span that receives the digest, <see cref="DigestLength"/> characters long.</param>
+    private static void WriteDigest(string encoded, Span<char> destination)
+    {
+        var chars = encoded.AsSpan();
+        var maxLength = Encoding.UTF8.GetMaxByteCount(chars.Length);
+        byte[]? rented = null;
+        Span<byte> buffer =
+            maxLength <= StackBufferLength
+                ? stackalloc byte[StackBufferLength]
+                : (rented = ArrayPool<byte>.Shared.Rent(maxLength));
+
+        try
+        {
+            var length = Encoding.UTF8.GetBytes(chars, buffer);
+            Span<byte> hash = stackalloc byte[SHA256.HashSizeInBytes];
+            SHA256.HashData(buffer[..length], hash);
+            _ = Base64Url.EncodeToChars(hash, destination);
+        }
+        finally
+        {
+            if (rented is not null)
+            {
+                ArrayPool<byte>.Shared.Return(rented);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Returns the member that stands for a key in a keyspace's index: at most 706 characters whatever the key's
+    /// segments.
+    /// </summary>
+    /// <param name="key">The key.</param>
+    /// <returns>The key's <see cref="MemberPrefix"/> and its partition depth.</returns>
+    /// <exception cref="ArgumentNullException">The key is null.</exception>
+    public static string Member(CoordinationKey key)
+    {
+        var prefix = MemberPrefix(key);
+        var depth = key.PartitionDepth.ToString(CultureInfo.InvariantCulture);
+
+        return prefix + depth;
     }
 
     /// <summary>
@@ -255,6 +418,15 @@ internal static class RespKeys
             >= 'A' and <= 'F' => character - 'A' + 10,
             _ => -1,
         };
+
+    /// <summary>
+    /// Creates the exception for text that is not an encoded key name.
+    /// </summary>
+    /// <param name="name">The text.</param>
+    /// <param name="innerException">The exception that showed the text is not one, if any.</param>
+    /// <returns>The exception.</returns>
+    private static FormatException NotAName(string name, Exception? innerException = null) =>
+        new($"'{name}' is not an encoded key name.", innerException);
 
     /// <summary>
     /// Creates the exception for text that is not an encoded key segment.

@@ -1,6 +1,10 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using System.Buffers.Text;
+using System.Security.Cryptography;
+using System.Text;
+
 namespace NCode.Coordination.Resp.Keys.Tests;
 
 public sealed class RespKeysTests
@@ -97,6 +101,134 @@ public sealed class RespKeysTests
         var expected = RespKeys.KeyspaceTag(keyspace);
         var tag = name[..(end + 1)];
         Assert.Equal(expected, tag);
+    }
+
+    #endregion
+
+    #region Name Tests
+
+    [Fact]
+    public void Name_Key_IsTheDepthAndTheEncodedSegments()
+    {
+        var key = new Keyspace("prod").CreateKey("cfg", 7) with { PartitionDepth = 1 };
+
+        var name = RespKeys.Name(key);
+
+        Assert.Equal("1:tcfg/n7", name);
+    }
+
+    #endregion
+
+    #region DecodeName Tests
+
+    [Fact]
+    public void DecodeName_Name_ReturnsTheKey()
+    {
+        var keyspace = new Keyspace("prod");
+        var id = Guid.NewGuid();
+        var uuid = KeySegment.FromGuid(id);
+        var key = keyspace.CreateKey("a{b}/c %\u00e9", -42, uuid) with { PartitionDepth = 2 };
+        var name = RespKeys.Name(key);
+
+        var decoded = RespKeys.DecodeName(keyspace, name);
+
+        Assert.Equal(key, decoded);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("ta")]
+    [InlineData(":ta")]
+    [InlineData("x:ta")]
+    [InlineData("01:ta")]
+    [InlineData("-1:ta")]
+    [InlineData("0:")]
+    [InlineData("0:ta/")]
+    [InlineData("2:ta")]
+    [InlineData("0:x1")]
+    public void DecodeName_Malformed_ThrowsFormatException(string name)
+    {
+        var keyspace = new Keyspace("prod");
+
+        Assert.Throws<FormatException>(() => RespKeys.DecodeName(keyspace, name));
+    }
+
+    #endregion
+
+    #region MemberPrefix Tests
+
+    [Fact]
+    public void MemberPrefix_Prefix_StartsTheMemberOfAKeyUnderIt()
+    {
+        var keyspace = new Keyspace("prod");
+        var prefix = keyspace.CreateKey("a");
+        var key = keyspace.CreateKey("a", "b") with { PartitionDepth = 1 };
+
+        var prefixText = RespKeys.MemberPrefix(prefix);
+        var member = RespKeys.Member(key);
+
+        Assert.StartsWith(prefixText, member, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void MemberPrefix_OtherSegment_DoesNotStartTheMember()
+    {
+        var keyspace = new Keyspace("prod");
+        var prefix = keyspace.CreateKey("a");
+        var key = keyspace.CreateKey("ab");
+
+        var prefixText = RespKeys.MemberPrefix(prefix);
+        var member = RespKeys.Member(key);
+        var starts = member.StartsWith(prefixText, StringComparison.Ordinal);
+
+        Assert.False(starts);
+    }
+
+    [Fact]
+    public void MemberPrefix_SegmentLongerThanTheStackBuffer_DigestsItsWholeEncoding()
+    {
+        var text = new string('\u00e9', 256);
+        var segment = KeySegment.FromString(text);
+        var prefix = new Keyspace("prod").CreateKey(segment);
+        var encoded = RespKeys.EncodeSegment(segment);
+        var bytes = Encoding.UTF8.GetBytes(encoded);
+        var hash = SHA256.HashData(bytes);
+        var digest = Base64Url.EncodeToString(hash);
+
+        var prefixText = RespKeys.MemberPrefix(prefix);
+
+        Assert.Equal(digest + "/", prefixText);
+    }
+
+    #endregion
+
+    #region Member Tests
+
+    [Fact]
+    public void Member_Key_IsTheDigestOfEachSegmentAndTheDepth()
+    {
+        var key = new Keyspace("prod").CreateKey("cfg", 7);
+
+        var member = RespKeys.Member(key);
+
+        // From sha256sum and base64 in valkey/valkey:9.2.0: the SHA-256 of "tcfg" and of "n7", in unpadded Base64Url.
+        Assert.Equal(
+            "VDlgg0fsjSWAj6iEqf_4sjULd91lsdHkOhNtG4yXTB8/b166Ixm9dYRxH8IcLrXUu4YzJ7t6Wux-qS7_2_kXzY8/0",
+            member
+        );
+    }
+
+    [Fact]
+    public void Member_LongestKey_FitsAContinuationToken()
+    {
+        var text = new string('\u00e9', 256);
+        var segment = KeySegment.FromString(text);
+        var segments = Enumerable.Repeat(segment, 16);
+        var key = new Keyspace("prod").CreateKey(segments) with { PartitionDepth = 16 };
+
+        var member = RespKeys.Member(key);
+
+        Assert.InRange(member.Length, 1, CoordinationLimits.MaxContinuationTokenLength);
     }
 
     #endregion

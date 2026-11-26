@@ -5,9 +5,11 @@ using System.Collections.Frozen;
 using System.Collections.Immutable;
 using NCode.Coordination.Resp.Counters;
 using NCode.Coordination.Resp.Occurrences;
+using NCode.Coordination.Resp.Records;
 using NCode.Coordination.Resp.Sequences;
 using NCode.Coordination.Resp.Server;
 using NCode.Coordination.Resp.Sets;
+using NCode.Coordination.Resp.Transactions;
 using StackExchange.Redis;
 
 namespace NCode.Coordination.Resp;
@@ -21,10 +23,24 @@ internal sealed class RespProvider : ICoordinationProvider, IAsyncDisposable, ID
     /// Gets the primitives that the provider serves, in the order of <see cref="Primitives.All"/>. The server keeps
     /// every one of them in memory and its clock measures every expiry. The provider can't see whether the server
     /// persists or replicates its writes, so it declares them volatile and linearizable only until a failover. A
-    /// counter's batch runs as one script on one slot, so it is atomic across partitions. A sequence has no expiry.
+    /// counter's batch runs as one script on one slot, so it is atomic across partitions, and a transaction, like a
+    /// counter's batch, runs as one script on one slot. A sequence has no expiry.
     /// </summary>
     private static ImmutableArray<PrimitiveSupport> SupportedPrimitives { get; } =
     [
+        PrimitiveSupport.Supported(
+            Primitives.Record,
+            Guarantees.LinearizableUntilFailover,
+            Guarantees.Volatile,
+            Guarantees.ServerClock
+        ),
+        PrimitiveSupport.Supported(
+            Primitives.Transaction,
+            Guarantees.LinearizableUntilFailover,
+            Guarantees.Volatile,
+            Guarantees.ServerClock,
+            Guarantees.AtomicAcrossPartitions
+        ),
         PrimitiveSupport.Supported(
             Primitives.Occurrence,
             Guarantees.LinearizableUntilFailover,
@@ -60,6 +76,50 @@ internal sealed class RespProvider : ICoordinationProvider, IAsyncDisposable, ID
         new(CoordinationErrorCodes.Unsupported, false, message);
 
     /// <summary>
+    /// Returns every command the provider sends to a server of a profile, which the startup probe checks that the
+    /// server's user may run: the scripting commands, the commands its operations send alone and the commands its
+    /// scripts call, with the publish command of the profile's channels.
+    /// </summary>
+    /// <param name="profile">The profile.</param>
+    /// <returns>The command names, in upper case.</returns>
+    /// <exception cref="ArgumentNullException">The profile is null.</exception>
+    internal static RedisValue[] ProbedCommands(RespProfile profile)
+    {
+        ArgumentNullException.ThrowIfNull(profile);
+
+        var publish = profile.ShardedChannels ? "SPUBLISH" : "PUBLISH";
+        return
+        [
+            "EVAL",
+            "EVALSHA",
+            "SCRIPT",
+            RespCommands.Delete,
+            RespCommands.Get,
+            "HDEL",
+            "HGET",
+            "HMGET",
+            "HSET",
+            RespCommands.Increment,
+            RespCommands.IncrementBy,
+            "PERSIST",
+            "PEXPIRE",
+            "PTTL",
+            publish,
+            RespCommands.Set,
+            "TIME",
+            "ZADD",
+            "ZCARD",
+            "ZCOUNT",
+            "ZRANGE",
+            "ZRANGEBYLEX",
+            "ZRANGEBYSCORE",
+            "ZREM",
+            "ZREMRANGEBYSCORE",
+            "ZSCORE",
+        ];
+    }
+
+    /// <summary>
     /// Creates the provider and the services that share its connection.
     /// </summary>
     /// <param name="connection">The holder of the provider's connection to its server. The provider disposes the holder, which disposes the multiplexer only when it owns it.</param>
@@ -80,8 +140,11 @@ internal sealed class RespProvider : ICoordinationProvider, IAsyncDisposable, ID
         {
             Profile = profile.Name,
         };
+        var records = new RespRecordTable(Server, profile);
         var services = new Dictionary<Type, object>
         {
+            [typeof(IRecordService)] = new RespRecordService(records),
+            [typeof(ITransactionService)] = new RespTransactionService(records),
             [typeof(IOccurrenceService)] = new RespOccurrenceService(Server),
             [typeof(ISetService)] = new RespSetService(Server),
             [typeof(ICounterService)] = new RespCounterService(Server),
@@ -176,6 +239,56 @@ internal sealed class RespProvider : ICoordinationProvider, IAsyncDisposable, ID
         {
             throw Unsupported(
                 $"The '{Profile.Name}' profile needs {Profile.VersionField} {Profile.MinimumVersion} or later, and the server reports '{value ?? "none"}'."
+            );
+        }
+
+        var commands = ProbedCommands(Profile);
+        RedisResult permissions;
+        try
+        {
+            permissions = await Server
+                .EvaluateAsync(RespScript.ProbeCommands, [], commands, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (CoordinationException e)
+            when (e.InnerException is RedisServerException inner
+                && !RespFailures.IsKnownReply(inner)
+            )
+        {
+            throw new CoordinationException(
+                CoordinationErrorCodes.Unsupported,
+                false,
+                $"The RESP server refused the provider's permission check: {inner.Message}.",
+                inner
+            );
+        }
+
+        var permissionsType = permissions.IsNull ? "null" : permissions.Resp2Type.ToString();
+        if (permissions.IsNull || permissions.Resp2Type is not ResultType.Array)
+        {
+            throw Unsupported(
+                $"The RESP server answered the permission check with a reply of type {permissionsType}, not a list."
+            );
+        }
+
+        var items = (RedisResult[]?)permissions ?? [];
+        var denied = new List<string>();
+        foreach (var item in items)
+        {
+            var command = (string?)item;
+            if (command is not null)
+            {
+                denied.Add(command);
+            }
+        }
+
+        if (denied.Count > 0)
+        {
+            var list = string.Join(", ", denied);
+            throw new CoordinationException(
+                CoordinationErrorCodes.AccessDenied,
+                false,
+                $"The RESP server's user may not run {list}, which the provider sends."
             );
         }
     }

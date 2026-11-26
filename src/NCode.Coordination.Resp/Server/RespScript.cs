@@ -21,10 +21,21 @@ internal sealed class RespScript(string name, string text)
     private const string ResourceSuffix = ".lua";
 
     /// <summary>
+    /// The name of the start that every record script shares.
+    /// </summary>
+    private const string RecordPrelude = "record-prelude";
+
+    /// <summary>
     /// Gets the startup probe: it proves the server runs Lua and lets the user run scripts,
     /// and returns the server section of INFO.
     /// </summary>
     public static RespScript Probe { get; } = Load("probe");
+
+    /// <summary>
+    /// Gets the startup probe's permission check: it returns the commands among its arguments
+    /// that the server's user may not run, without running any of them.
+    /// </summary>
+    public static RespScript ProbeCommands { get; } = Load("probe-commands");
 
     /// <summary>
     /// Gets the counter script: it applies the increments of a batch in order, and stops after the first
@@ -48,6 +59,41 @@ internal sealed class RespScript(string name, string text)
     public static RespScript SetList { get; } = Load("set-list");
 
     /// <summary>
+    /// Gets the record-create script: it creates a record when its key is absent.
+    /// </summary>
+    public static RespScript RecordCreate { get; } = LoadRecord("record-create");
+
+    /// <summary>
+    /// Gets the record-read script: it reads a live record.
+    /// </summary>
+    public static RespScript RecordRead { get; } = LoadRecord("record-read");
+
+    /// <summary>
+    /// Gets the record-swap script: it replaces a record's value when its revision matches.
+    /// </summary>
+    public static RespScript RecordSwap { get; } = LoadRecord("record-swap");
+
+    /// <summary>
+    /// Gets the record-delete script: it deletes a record when its revision matches.
+    /// </summary>
+    public static RespScript RecordDelete { get; } = LoadRecord("record-delete");
+
+    /// <summary>
+    /// Gets the record-take script: it reads a record and deletes it.
+    /// </summary>
+    public static RespScript RecordTake { get; } = LoadRecord("record-take");
+
+    /// <summary>
+    /// Gets the record-list script: it lists a page of the live records under a prefix.
+    /// </summary>
+    public static RespScript RecordList { get; } = LoadRecord("record-list");
+
+    /// <summary>
+    /// Gets the record-transaction script: it checks conditions and runs one of two branches of writes.
+    /// </summary>
+    public static RespScript RecordTransaction { get; } = LoadRecord("record-transaction");
+
+    /// <summary>
     /// Loads a script from the embedded resource <c>NCode.Coordination.Resp.Scripts.&lt;name&gt;.lua</c>.
     /// </summary>
     /// <param name="name">The name of the script, without its folder and extension.</param>
@@ -59,6 +105,37 @@ internal sealed class RespScript(string name, string text)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
 
+        var text = ReadResource(name);
+
+        return new RespScript(name, text);
+    }
+
+    /// <summary>
+    /// Loads a record script: the start that every record script shares, a line feed and the named script's text.
+    /// </summary>
+    /// <param name="name">The name of the script, without its folder and extension.</param>
+    /// <returns>The script.</returns>
+    /// <exception cref="ArgumentNullException">The name is null.</exception>
+    /// <exception cref="ArgumentException">The name is empty or white space.</exception>
+    /// <exception cref="InvalidOperationException">The assembly has no such resource.</exception>
+    public static RespScript LoadRecord(string name)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+
+        var prelude = ReadResource(RecordPrelude);
+        var body = ReadResource(name);
+
+        return new RespScript(name, prelude + "\n" + body);
+    }
+
+    /// <summary>
+    /// Reads the text of an embedded script resource.
+    /// </summary>
+    /// <param name="name">The name of the script, without its folder and extension.</param>
+    /// <returns>The text of the resource.</returns>
+    /// <exception cref="InvalidOperationException">The assembly has no such resource.</exception>
+    private static string ReadResource(string name)
+    {
         var resourceName = ResourcePrefix + name + ResourceSuffix;
         using var stream = typeof(RespScript).Assembly.GetManifestResourceStream(resourceName)
             ?? throw new InvalidOperationException(
@@ -66,8 +143,7 @@ internal sealed class RespScript(string name, string text)
             );
         using var reader = new StreamReader(stream, Encoding.UTF8);
 
-        var text = reader.ReadToEnd();
-        return new RespScript(name, text);
+        return reader.ReadToEnd();
     }
 
     /// <summary>

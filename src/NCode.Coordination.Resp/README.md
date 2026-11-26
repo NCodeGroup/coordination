@@ -22,8 +22,8 @@ and works with any backlog policy, reporting a call that times out as possibly a
 ## Profiles
 
 `Profile` names the server, `RespProfiles.Valkey` by default. When the host starts, the provider checks that the
-server is that vendor, at that profile's version or later, runs Lua scripts and lets its user run them, and fails the
-start otherwise.
+server is that vendor, at that profile's version or later, runs Lua scripts and lets its user run them and every
+command the provider sends, and fails the start otherwise.
 
 - **Valkey** 7.2 or later.
 - **Garnet** 2.2.13 or later, started with `--lua --lua-transaction-mode`: without them Garnet runs no scripts, or
@@ -31,9 +31,19 @@ start otherwise.
 
 ## Primitives
 
-The provider keeps occurrences, sets, counters and sequences. Each operation is one server command or one Lua script,
-and every time to live is measured on the server's clock, in whole milliseconds rounded up.
+The provider keeps records, transactions, occurrences, sets, counters and sequences. Each operation is one server
+command or one Lua script, and every time to live is measured on the server's clock, in whole milliseconds rounded
+up.
 
+- **Records**: a keyspace keeps its records in one hash, beside an index that lists them under a prefix and the
+  deadlines of those with a time to live. Every change is one script that takes the keyspace's next revision and
+  publishes it, with the keys it wrote or deleted, on the keyspace's watch channel. A record whose time to live has
+  passed is absent at once, and the next script on its keyspace deletes it and announces the delete; a keyspace
+  whose records all have a time to live leaves the server an hour after the last of them ends. A page of a listing
+  examines at most its limit plus 64 entries of the index, so expired records not yet deleted can leave a page short, or
+  empty, with a continuation token; page on until a page has none. Binding a record to a session fails as `unsupported`.
+- **Transactions**: up to 64 conditions and two branches of up to 64 writes, run as one script on one keyspace's
+  records.
 - **Occurrences**: `SET` with `NX` and a time to live. A call the server doesn't answer throws, so a replay guard
   refuses rather than accepts.
 - **Sets**: one sorted set per key, each member scored with its own deadline; at most 10,000 live members.
@@ -44,8 +54,8 @@ and every time to live is measured on the server's clock, in whole milliseconds 
   its data.
 
 The provider declares each of them linearizable until the server fails over, and volatile, since it can't tell
-whether the server persists or replicates its writes; counter batches are atomic across partitions, because a
-keyspace lives in one slot. It serves no other primitive.
+whether the server persists or replicates its writes; transactions and counter batches are atomic across
+partitions, because a keyspace lives in one slot. It serves no other primitive.
 
 ## Keyspaces
 

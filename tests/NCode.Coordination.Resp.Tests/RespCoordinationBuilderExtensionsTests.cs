@@ -3,6 +3,7 @@
 
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
+using NCode.Coordination.Resp.Server;
 using StackExchange.Redis;
 
 namespace NCode.Coordination.Tests;
@@ -85,17 +86,30 @@ public sealed class RespCoordinationBuilderExtensionsTests : IDisposable
             .Verifiable();
         var info = new RedisValue("# Server\r\nserver_name:valkey\r\nvalkey_version:9.2.0\r\n");
         var reply = RedisResult.Create(info);
+        RedisResult[] noDenied = [];
+        var permissions = RedisResult.Create(noDenied);
         var database = Mocks.Create<IDatabase>();
         database
             .Setup(x =>
                 x.ScriptEvaluateAsync(
-                    It.IsAny<string>(),
+                    It.Is<string>(s => s == RespScript.Probe.Text),
                     It.IsAny<RedisKey[]?>(),
                     It.IsAny<RedisValue[]?>(),
                     It.IsAny<CommandFlags>()
                 )
             )
             .ReturnsAsync(reply)
+            .Verifiable();
+        database
+            .Setup(x =>
+                x.ScriptEvaluateAsync(
+                    It.Is<string>(s => s == RespScript.ProbeCommands.Text),
+                    It.IsAny<RedisKey[]?>(),
+                    It.IsAny<RedisValue[]?>(),
+                    It.IsAny<CommandFlags>()
+                )
+            )
+            .ReturnsAsync(permissions)
             .Verifiable();
         var multiplexer = Mocks.Create<IConnectionMultiplexer>();
         multiplexer

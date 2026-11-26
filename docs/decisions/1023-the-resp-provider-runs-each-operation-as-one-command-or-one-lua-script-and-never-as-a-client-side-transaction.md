@@ -1,6 +1,6 @@
 # 1023. The RESP provider runs each operation as one command or one Lua script, and never as a client-side transaction
 
-- **Status:** Proposed (amended by 1025)
+- **Status:** Proposed (amended by 1025, 1027)
 - **Date:** 2026-11-25
 - **Deciders:** NCode Group
 
