@@ -58,13 +58,9 @@ public sealed class RespRecordTableTests : IDisposable
             .ReturnsAsync(reply)
             .Verifiable();
         var table = new RespRecordTable(server, RespProfiles.Garnet);
+        var keyspace = new Keyspace("prod");
 
-        await table.EvaluateAsync(
-            RespScript.RecordCreate,
-            new Keyspace("prod"),
-            ["m"],
-            cancellationToken
-        );
+        await table.EvaluateAsync(RespScript.RecordCreate, keyspace, ["m"], cancellationToken);
 
         Assert.NotNull(keys);
         var names = keys.Select(key => key.ToString());
@@ -100,13 +96,9 @@ public sealed class RespRecordTableTests : IDisposable
             .ReturnsAsync(reply)
             .Verifiable();
         var table = new RespRecordTable(server, RespProfiles.Valkey);
+        var keyspace = new Keyspace("prod");
 
-        await table.EvaluateAsync(
-            RespScript.RecordCreate,
-            new Keyspace("prod"),
-            ["m"],
-            cancellationToken
-        );
+        await table.EvaluateAsync(RespScript.RecordCreate, keyspace, ["m"], cancellationToken);
 
         Assert.NotNull(values);
         Assert.Equal("1", (string?)values[1]);
@@ -127,7 +119,9 @@ public sealed class RespRecordTableTests : IDisposable
     [Fact]
     public void TimeToLiveOf_PartOfAMillisecond_RoundsUp()
     {
-        var lifetime = RecordLifetime.ForTimeToLive(new TimeToLive(TimeSpan.FromTicks(15_001)));
+        var duration = TimeSpan.FromTicks(15_001);
+        var timeToLive = new TimeToLive(duration);
+        var lifetime = RecordLifetime.ForTimeToLive(timeToLive);
 
         var milliseconds = RespRecordTable.TimeToLiveOf(lifetime);
 
@@ -137,7 +131,9 @@ public sealed class RespRecordTableTests : IDisposable
     [Fact]
     public void TimeToLiveOf_Session_ThrowsUnsupported()
     {
-        var lifetime = RecordLifetime.ForSession(new SessionId(new Keyspace("prod"), "s1"));
+        var keyspace = new Keyspace("prod");
+        var sessionId = new SessionId(keyspace, "s1");
+        var lifetime = RecordLifetime.ForSession(sessionId);
 
         var exception = Assert.Throws<CoordinationException>(() =>
             RespRecordTable.TimeToLiveOf(lifetime)

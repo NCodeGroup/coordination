@@ -13,11 +13,9 @@ public sealed class RespTransactionServiceTests : IDisposable
 {
     private static RespServer CreateUnreachableServer()
     {
+        var failure = new InvalidOperationException("The test reaches no server.");
         var connection = new RespConnection(
-            _ =>
-                ValueTask.FromException<IConnectionMultiplexer>(
-                    new InvalidOperationException("The test reaches no server.")
-                ),
+            _ => ValueTask.FromException<IConnectionMultiplexer>(failure),
             owned: false
         );
 
@@ -118,6 +116,7 @@ public sealed class RespTransactionServiceTests : IDisposable
         var memberC = RespKeys.Member(c);
         var nameA = RespKeys.Name(a);
         var nameB = RespKeys.Name(b);
+        var expectedResultRevision = new Revision(9);
         string[] expected =
         [
             "{prod}:watch",
@@ -150,7 +149,7 @@ public sealed class RespTransactionServiceTests : IDisposable
         var result = await service.ExecuteAsync(transaction, null, cancellationToken);
 
         Assert.Equal(TransactionStatus.Failed, result.Status);
-        Assert.Equal(new Revision(9), result.Revision);
+        Assert.Equal(expectedResultRevision, result.Revision);
         Assert.NotNull(values);
         var actual = values.Select(item => item.ToString());
         Assert.Equal(expected, actual);

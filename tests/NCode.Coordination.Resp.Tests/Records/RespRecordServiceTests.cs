@@ -13,19 +13,21 @@ public sealed class RespRecordServiceTests(RespServers servers) : IDisposable
 {
     private static RespServer CreateUnreachableServer()
     {
+        var failure = new InvalidOperationException("The test reaches no server.");
         var connection = new RespConnection(
-            _ =>
-                ValueTask.FromException<IConnectionMultiplexer>(
-                    new InvalidOperationException("The test reaches no server.")
-                ),
+            _ => ValueTask.FromException<IConnectionMultiplexer>(failure),
             owned: false
         );
 
         return new RespServer(connection);
     }
 
-    private static RespRecordService CreateService(RespServer server) =>
-        new(new RespRecordTable(server, RespProfiles.Garnet));
+    private static RespRecordService CreateService(RespServer server)
+    {
+        var table = new RespRecordTable(server, RespProfiles.Garnet);
+
+        return new RespRecordService(table);
+    }
 
     private static async Task<ConnectionMultiplexer> ConnectAsync(
         string endpoint,
@@ -39,11 +41,19 @@ public sealed class RespRecordServiceTests(RespServers servers) : IDisposable
     {
         var connection = new RespConnection(_ => ValueTask.FromResult(multiplexer), owned: false);
 
-        return new RespRecordService(new RespRecordTable(new RespServer(connection), profile));
+        var server = new RespServer(connection);
+        var table = new RespRecordTable(server, profile);
+
+        return new RespRecordService(table);
     }
 
-    private static Keyspace CreateKeyspace() =>
-        new("resp-tests", KeySegment.FromGuid(Guid.NewGuid()));
+    private static Keyspace CreateKeyspace()
+    {
+        var id = Guid.NewGuid();
+        var segment = KeySegment.FromGuid(id);
+
+        return new Keyspace("resp-tests", segment);
+    }
 
     private static RedisChannel WatchChannel(Keyspace keyspace, RespProfile profile)
     {
@@ -173,10 +183,9 @@ public sealed class RespRecordServiceTests(RespServers servers) : IDisposable
         await using var multiplexer = await ConnectAsync(endpoint, cancellationToken);
         var service = CreateService(multiplexer, profile);
         var keyspace = CreateKeyspace();
-        var texts = Enumerable
-            .Range(0, 15)
-            .Select(_ => KeySegment.FromString(new string('\u00e9', 256)))
-            .ToList();
+        var text = new string('\u00e9', 256);
+        var segment = KeySegment.FromString(text);
+        var texts = Enumerable.Range(0, 15).Select(_ => segment).ToList();
         var keys = Enumerable
             .Range(0, 3)
             .Select(number =>
@@ -406,11 +415,14 @@ public sealed class RespRecordServiceTests(RespServers servers) : IDisposable
 
         var expectedKey = keyspace.CreateKey("a", "b");
         var expectedValue = "v"u8.ToArray();
-        Assert.Equal(new Revision(7), result.Revision);
+        var expectedRevision = new Revision(7);
+        var expectedRecordRevision = new Revision(5);
+        Assert.Equal(expectedRevision, result.Revision);
         var record = Assert.Single(result.Records);
         Assert.Equal(expectedKey, record.Key);
-        Assert.Equal(new Revision(5), record.Revision);
-        Assert.Equal(expectedValue, record.Value.ToArray());
+        Assert.Equal(expectedRecordRevision, record.Revision);
+        var actualValue = record.Value.ToArray();
+        Assert.Equal(expectedValue, actualValue);
         Assert.Equal("tok", result.ContinuationToken);
     }
 

@@ -20,7 +20,9 @@ internal sealed class RespScript(string name, string text)
     /// <summary>The end of a script's manifest resource name.</summary>
     private const string ResourceSuffix = ".lua";
 
-    /// <summary>The name of the start that every record script shares.</summary>
+    /// <summary>
+    /// The name of the start that every record script shares.
+    /// </summary>
     private const string RecordPrelude = "record-prelude";
 
     /// <summary>
