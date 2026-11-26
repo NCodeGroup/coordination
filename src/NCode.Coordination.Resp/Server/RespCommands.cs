@@ -32,4 +32,14 @@ internal static class RespCommands
     /// The command that writes the string value of a key, with options for its condition and expiry.
     /// </summary>
     public const string Set = "SET";
+
+    /// <summary>
+    /// The command that adds one or more members to a set.
+    /// </summary>
+    public const string SetAdd = "SADD";
+
+    /// <summary>
+    /// The command that returns all members of a set.
+    /// </summary>
+    public const string SetMembers = "SMEMBERS";
 }
