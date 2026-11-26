@@ -44,6 +44,16 @@
     <PackageVersion Include="System.Threading.RateLimiting" Version="11.0.0" />
   </ItemGroup>
 
+  <!-- The hosting (NCode.Coordination.Hosting): options bound from configuration, logging and health checks. -->
+  <ItemGroup>
+    <PackageVersion Include="Microsoft.Extensions.Diagnostics.HealthChecks" Version="11.0.0" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="11.0.0" />
+    <PackageVersion
+      Include="Microsoft.Extensions.Options.ConfigurationExtensions"
+      Version="11.0.0"
+    />
+  </ItemGroup>
+
   <!-- The composition's tests: the real container, metrics and host, the metric collector, the fake clock, and Moq. -->
   <ItemGroup>
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="11.0.0" />
