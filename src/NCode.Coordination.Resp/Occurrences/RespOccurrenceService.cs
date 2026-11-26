@@ -49,7 +49,7 @@ internal class RespOccurrenceService(RespServer server) : IOccurrenceService
         var serverKey = RespKeys.ForKey(key, Kind);
         var ms = RespCall.ToMilliseconds(timeToLive).ToString(CultureInfo.InvariantCulture);
         var reply = await Server
-            .ExecuteAsync("SET", [serverKey, "1", "NX", "PX", ms], cancellationToken)
+            .ExecuteAsync(RespCommands.Set, [serverKey, "1", "NX", "PX", ms], cancellationToken)
             .ConfigureAwait(false);
 
         if (reply.IsNull)

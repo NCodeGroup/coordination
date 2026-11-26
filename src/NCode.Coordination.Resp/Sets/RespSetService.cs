@@ -153,6 +153,8 @@ internal class RespSetService(RespServer server) : ISetService
         RespCall.Check(options, cancellationToken);
 
         var serverKey = RespKeys.ForKey(key, Kind);
-        await Server.ExecuteAsync("DEL", [serverKey], cancellationToken).ConfigureAwait(false);
+        await Server
+            .ExecuteAsync(RespCommands.Delete, [serverKey], cancellationToken)
+            .ConfigureAwait(false);
     }
 }

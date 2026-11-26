@@ -73,7 +73,7 @@ internal class RespCounterService(RespServer server) : ICounterService
 
         var serverKey = RespKeys.ForKey(key, Kind);
         var reply = await Server
-            .ExecuteAsync("GET", [serverKey], cancellationToken)
+            .ExecuteAsync(RespCommands.Get, [serverKey], cancellationToken)
             .ConfigureAwait(false);
 
         return reply.IsNull ? 0 : RespReplies.Integer(reply);
@@ -90,7 +90,9 @@ internal class RespCounterService(RespServer server) : ICounterService
         RespCall.Check(options, cancellationToken);
 
         var serverKey = RespKeys.ForKey(key, Kind);
-        await Server.ExecuteAsync("DEL", [serverKey], cancellationToken).ConfigureAwait(false);
+        await Server
+            .ExecuteAsync(RespCommands.Delete, [serverKey], cancellationToken)
+            .ConfigureAwait(false);
     }
 
     /// <inheritdoc />

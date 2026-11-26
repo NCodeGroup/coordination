@@ -39,7 +39,7 @@ internal class RespSequenceService(RespServer server) : ISequenceService
 
         var serverKey = RespKeys.ForKey(key, Kind);
         var reply = await Server
-            .ExecuteAsync("INCR", [serverKey], cancellationToken)
+            .ExecuteAsync(RespCommands.Increment, [serverKey], cancellationToken)
             .ConfigureAwait(false);
 
         return RespReplies.Integer(reply);
@@ -64,7 +64,7 @@ internal class RespSequenceService(RespServer server) : ISequenceService
         var serverKey = RespKeys.ForKey(key, Kind);
         var amount = count.ToString(CultureInfo.InvariantCulture);
         var reply = await Server
-            .ExecuteAsync("INCRBY", [serverKey, amount], cancellationToken)
+            .ExecuteAsync(RespCommands.IncrementBy, [serverKey, amount], cancellationToken)
             .ConfigureAwait(false);
 
         var last = RespReplies.Integer(reply);
