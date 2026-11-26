@@ -17,21 +17,23 @@ public static class RespCoordinationBuilderExtensions
     /// </summary>
     public const string ProviderName = "resp";
 
-    extension(ICoordinationBuilder builder)
+    /// <summary>
+    /// Adds the provider that keeps every primitive on a RESP server, Valkey or Garnet; the host binds it by
+    /// <see cref="ProviderName"/>. The provider connects on first use.
+    /// </summary>
+    /// <param name="builder">The builder to add to.</param>
+    /// <param name="configure">Sets exactly one of <see cref="RespProviderOptions.Configuration"/> and
+    /// <see cref="RespProviderOptions.Connection"/>, and optionally the profile.</param>
+    /// <returns>The builder, for chaining.</returns>
+    /// <exception cref="ArgumentNullException">The builder or <paramref name="configure"/> is null, or the
+    /// profile is null.</exception>
+    /// <exception cref="ArgumentException">Not exactly one of the configuration and the connection is
+    /// set.</exception>
+    public static ICoordinationBuilder AddRespProvider(
+        this ICoordinationBuilder builder,
+        Action<RespProviderOptions> configure
+    )
     {
-        /// <summary>
-        /// Adds the provider that keeps every primitive on a RESP server, Valkey or Garnet; the host binds it by
-        /// <see cref="ProviderName"/>. The provider connects on first use.
-        /// </summary>
-        /// <param name="configure">Sets exactly one of <see cref="RespProviderOptions.Configuration"/> and
-        /// <see cref="RespProviderOptions.Connection"/>, and optionally the profile.</param>
-        /// <returns>The builder, for chaining.</returns>
-        /// <exception cref="ArgumentNullException">The builder or <paramref name="configure"/> is null, or the
-        /// profile is null.</exception>
-        /// <exception cref="ArgumentException">Not exactly one of the configuration and the connection is
-        /// set.</exception>
-        public ICoordinationBuilder AddRespProvider(Action<RespProviderOptions> configure)
-        {
             ArgumentNullException.ThrowIfNull(builder);
             ArgumentNullException.ThrowIfNull(configure);
 
@@ -91,4 +93,3 @@ public static class RespCoordinationBuilderExtensions
             });
         }
     }
-}
