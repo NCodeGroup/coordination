@@ -20,15 +20,22 @@ public sealed class HostSessionSettingsTests
         var settings = result.Settings;
         Assert.Empty(result.Failures);
         Assert.NotNull(settings);
-        Assert.Equal(new Keyspace("hosting", "cell-1"), settings.Keyspace);
-        Assert.Equal(settings.Keyspace.CreateKey("members"), settings.Group);
+        var expectedKeyspace = new Keyspace("hosting", "cell-1");
+        var expectedGroup = settings.Keyspace.CreateKey("members");
+        var expectedTimeToLive = TimeSpan.FromSeconds(30);
+        var expectedKeepAliveInterval = TimeSpan.FromSeconds(10);
+        var expectedDriftAllowance = TimeSpan.FromSeconds(2);
+        var expectedRetryDelay = TimeSpan.FromSeconds(2);
+        var expectedMaxRetryDelay = TimeSpan.FromSeconds(30);
+        Assert.Equal(expectedKeyspace, settings.Keyspace);
+        Assert.Equal(expectedGroup, settings.Group);
         Assert.Equal("node-1", settings.NodeId);
         Assert.Equal("10.0.0.1:5000", settings.Address);
-        Assert.Equal(TimeSpan.FromSeconds(30), settings.TimeToLive.Duration);
-        Assert.Equal(TimeSpan.FromSeconds(10), settings.KeepAliveInterval);
-        Assert.Equal(TimeSpan.FromSeconds(2), settings.DriftAllowance);
-        Assert.Equal(TimeSpan.FromSeconds(2), settings.RetryDelay);
-        Assert.Equal(TimeSpan.FromSeconds(30), settings.MaxRetryDelay);
+        Assert.Equal(expectedTimeToLive, settings.TimeToLive.Duration);
+        Assert.Equal(expectedKeepAliveInterval, settings.KeepAliveInterval);
+        Assert.Equal(expectedDriftAllowance, settings.DriftAllowance);
+        Assert.Equal(expectedRetryDelay, settings.RetryDelay);
+        Assert.Equal(expectedMaxRetryDelay, settings.MaxRetryDelay);
         Assert.Equal("eu-1", settings.Metadata["zone"]);
     }
 
@@ -159,7 +166,8 @@ public sealed class HostSessionSettingsTests
 
         var delay = settings.GetRetryDelay(failures, 0);
 
-        Assert.Equal(TimeSpan.FromSeconds(expectedSeconds), delay);
+        var expectedDelay = TimeSpan.FromSeconds(expectedSeconds);
+        Assert.Equal(expectedDelay, delay);
     }
 
     [Theory]
@@ -178,7 +186,8 @@ public sealed class HostSessionSettingsTests
 
         var delay = settings.GetRetryDelay(failures, jitter);
 
-        Assert.Equal(TimeSpan.FromMilliseconds(expectedMilliseconds), delay);
+        var expectedDelay = TimeSpan.FromMilliseconds(expectedMilliseconds);
+        Assert.Equal(expectedDelay, delay);
     }
 
     [Fact]

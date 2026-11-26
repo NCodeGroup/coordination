@@ -30,10 +30,13 @@ public sealed class CoordinationHostOptionsValidatorTests
 
         var result = Validator.Validate(name: null, options);
 
+        var resultFailures = result.Failures;
         Assert.True(result.Failed);
-        Assert.Equal(2, result.Failures.Count());
-        Assert.StartsWith("NodeId: ", result.Failures.First());
-        Assert.StartsWith("Address: ", result.Failures.Last());
+        Assert.NotNull(resultFailures);
+        var failures = resultFailures.ToList();
+        Assert.Equal(2, failures.Count);
+        Assert.StartsWith("NodeId: ", failures[0]);
+        Assert.StartsWith("Address: ", failures[1]);
     }
 
     #endregion

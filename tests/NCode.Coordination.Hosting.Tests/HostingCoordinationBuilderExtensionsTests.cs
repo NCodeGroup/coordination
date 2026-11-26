@@ -77,11 +77,13 @@ public sealed class HostingCoordinationBuilderExtensionsTests : IDisposable
             host.StartAsync(cancellationToken)
         );
 
-        Assert.Equal(2, exception.Failures.Length);
-        Assert.All(exception.Failures, failure =>
-            Assert.Contains("for the keyspace 'hosting'", failure)
+        Assert.Equal<string>(
+            [
+                "The feature 'host-session' requires the primitive 'session' for the keyspace 'hosting', and no provider is bound to it.",
+                "The feature 'host-session' requires the primitive 'membership' for the keyspace 'hosting', and no provider is bound to it.",
+            ],
+            exception.Failures
         );
-        Assert.DoesNotContain(exception.Failures, failure => failure.Contains("by default"));
     }
 
     [Fact]

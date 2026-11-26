@@ -95,11 +95,12 @@ public sealed class CoordinationHostingServiceCollectionExtensionsTests
         });
         await using var provider = services.BuildServiceProvider();
 
-        var hosted = Assert.Single(
-            provider.GetServices<IHostedService>().OfType<DefaultHostSessionService>()
-        );
+        var hostedServices = provider.GetServices<IHostedService>();
+        var sessionServices = hostedServices.OfType<DefaultHostSessionService>();
+        var hosted = Assert.Single(sessionServices);
+        var sessions = provider.GetRequiredService<IHostSessionService>();
 
-        Assert.Same(hosted, provider.GetRequiredService<IHostSessionService>());
+        Assert.Same(hosted, sessions);
     }
 
     [Fact]
@@ -119,7 +120,9 @@ public sealed class CoordinationHostingServiceCollectionExtensionsTests
             host.StartAsync(cancellationToken)
         );
 
-        Assert.Contains("Clustr", exception.Message);
+        var optionsType = typeof(CoordinationHostOptions).FullName;
+        var expected = $"were not found on the instance of {optionsType}: 'Clustr'";
+        Assert.EndsWith(expected, exception.Message, StringComparison.Ordinal);
     }
 
     [Fact]
