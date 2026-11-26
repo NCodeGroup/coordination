@@ -8,6 +8,7 @@
   <Folder Name="/tests/">
     <Project Path="tests/NCode.Coordination.Abstractions.Tests/NCode.Coordination.Abstractions.Tests.csproj" />
     <Project Path="tests/NCode.Coordination.Tests/NCode.Coordination.Tests.csproj" />
+    <Project Path="tests/NCode.Coordination.Hosting.Tests/NCode.Coordination.Hosting.Tests.csproj" />
     <Project Path="tests/NCode.Coordination.Testing.Tests/NCode.Coordination.Testing.Tests.csproj" />
   </Folder>
 </Solution>
