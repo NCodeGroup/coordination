@@ -104,6 +104,26 @@ internal sealed class RespScript(string name, string text)
     public static RespScript Membership { get; } = Load("membership");
 
     /// <summary>
+    /// Gets the lease script: it manages lease acquisition, renewal, and release operations.
+    /// </summary>
+    public static RespScript Lease { get; } = Load("leases");
+
+    /// <summary>
+    /// Gets the semaphore script: it manages semaphore slot acquisition, renewal, and release operations.
+    /// </summary>
+    public static RespScript Semaphore { get; } = Load("semaphores");
+
+    /// <summary>
+    /// Gets the election script: it manages election leadership acquisition, resignation, and reading operations.
+    /// </summary>
+    public static RespScript Election { get; } = Load("elections");
+
+    /// <summary>
+    /// Gets the claim script: it manages claim acquisition and status checking operations.
+    /// </summary>
+    public static RespScript Claim { get; } = Load("claims");
+
+    /// <summary>
     /// Loads a script from the embedded resource <c>NCode.Coordination.Resp.Scripts.&lt;name&gt;.lua</c>.
     /// </summary>
     /// <param name="name">The name of the script, without its folder and extension.</param>
