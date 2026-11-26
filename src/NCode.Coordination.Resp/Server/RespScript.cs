@@ -134,6 +134,16 @@ internal sealed class RespScript(string name, string text)
     public static RespScript GrantCheck { get; } = LoadKeyspace("grant-check");
 
     /// <summary>
+    /// Gets the semaphore-acquire script: it grants a semaphore slot when one is free.
+    /// </summary>
+    public static RespScript SemaphoreAcquire { get; } = LoadKeyspace("semaphore-acquire");
+
+    /// <summary>
+    /// Gets the semaphore-check script: it reports whether every slot of a semaphore is held.
+    /// </summary>
+    public static RespScript SemaphoreCheck { get; } = LoadKeyspace("semaphore-check");
+
+    /// <summary>
     /// Gets the membership script: it manages group membership with join, leave, and listing operations.
     /// </summary>
     public static RespScript Membership { get; } = Load("membership");
