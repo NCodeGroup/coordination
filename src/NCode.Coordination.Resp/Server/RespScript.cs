@@ -27,6 +27,12 @@ internal sealed class RespScript(string name, string text)
     public static RespScript Probe { get; } = Load("probe");
 
     /// <summary>
+    /// Gets the counter script: it applies the increments of a batch in order, and stops after the first
+    /// whose count exceeds its limit.
+    /// </summary>
+    public static RespScript CounterIncrement { get; } = Load("counter-increment");
+
+    /// <summary>
     /// Loads a script from the embedded resource <c>NCode.Coordination.Resp.Scripts.&lt;name&gt;.lua</c>.
     /// </summary>
     /// <param name="name">The name of the script, without its folder and extension.</param>
