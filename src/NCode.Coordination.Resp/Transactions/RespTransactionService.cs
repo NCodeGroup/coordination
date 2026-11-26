@@ -65,7 +65,6 @@ internal class RespTransactionService(RespRecordTable table) : ITransactionServi
     /// </summary>
     /// <param name="arguments">The arguments to add to.</param>
     /// <param name="writes">The writes of the branch.</param>
-    /// <exception cref="CoordinationException">A write binds its record to a session, which the provider doesn't support.</exception>
     private static void AddBranch(List<RedisValue> arguments, ImmutableArray<RecordWrite> writes)
     {
         arguments.Add(writes.Length);
@@ -84,12 +83,14 @@ internal class RespTransactionService(RespRecordTable table) : ITransactionServi
                 arguments.Add(name);
                 arguments.Add(write.Value);
                 arguments.Add(timeToLive);
+                arguments.Add(RespRecordTable.SessionOf(lifetime));
             }
             else
             {
                 arguments.Add("d");
                 arguments.Add(member);
                 arguments.Add(name);
+                arguments.Add("");
                 arguments.Add("");
                 arguments.Add("");
             }
@@ -116,6 +117,7 @@ internal class RespTransactionService(RespRecordTable table) : ITransactionServi
         {
             0 => new TransactionResult(TransactionStatus.Succeeded, resultRevision),
             1 => new TransactionResult(TransactionStatus.Failed, resultRevision),
+            2 => new TransactionResult(TransactionStatus.SessionEnded, resultRevision),
             _ => throw RespReplies.Unexpected(reply),
         };
     }
