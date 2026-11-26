@@ -569,8 +569,8 @@ public sealed partial class RespProviderTests(RespServers servers) : IDisposable
     public void ProbedCommands_Always_CoverEveryCommandTheProviderSends()
     {
         var assembly = typeof(RespProvider).Assembly;
-        var prefix = "NCode.Coordination.Resp.Scripts.";
-        var excluded = "NCode.Coordination.Resp.Scripts.probe";
+        const string prefix = "NCode.Coordination.Resp.Scripts.";
+        const string excluded = "NCode.Coordination.Resp.Scripts.probe";
         var sent = new HashSet<string>(StringComparer.Ordinal);
         foreach (var resource in assembly.GetManifestResourceNames())
         {
