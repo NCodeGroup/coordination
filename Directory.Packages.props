@@ -54,6 +54,16 @@
     />
   </ItemGroup>
 
+  <!-- The RESP provider (NCode.Coordination.Resp): StackExchange.Redis, its only client (ADR-1022). -->
+  <ItemGroup>
+    <PackageVersion Include="StackExchange.Redis" Version="3.4.35" />
+  </ItemGroup>
+
+  <!-- The RESP provider's tests: Testcontainers, which starts the Valkey and Garnet servers they run against. -->
+  <ItemGroup>
+    <PackageVersion Include="Testcontainers" Version="4.17.0" />
+  </ItemGroup>
+
   <!-- The composition's tests: the real container, metrics and host, the metric collector, the fake clock, and Moq. -->
   <ItemGroup>
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="11.0.0" />

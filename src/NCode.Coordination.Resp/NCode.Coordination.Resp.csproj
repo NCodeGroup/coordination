@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>NCode.Coordination.Resp</RootNamespace>
+    <Description>The RESP provider of NCode.Coordination: coordination over Valkey or Garnet through StackExchange.Redis, with a vendor profile that the startup probe checks against the server.</Description>
+    <PackageTags>coordination;distributed;cluster;resp;valkey;garnet</PackageTags>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../NCode.Coordination.Abstractions/NCode.Coordination.Abstractions.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="StackExchange.Redis" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Scripts/*.lua" />
+  </ItemGroup>
+</Project>

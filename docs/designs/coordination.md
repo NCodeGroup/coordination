@@ -1,6 +1,6 @@
 # Design: NCode.Coordination
 
-- **Status:** In progress (phase 2 of 7)
+- **Status:** In progress (phase 3 of 7)
 - **Date:** 2026-11-24
 - **Issue:** [#4](https://github.com/NCodeGroup/coordination/issues/4)
 - **Authors:** NCode Group
@@ -19,8 +19,9 @@ duration on a declared clock ([D9](#d9-expiry-clock)), the shapes of the primiti
 providers and checks requirements when the host starts ([D16](#d16-composition)), the conformance kit's contract
 suites ([D17](#d17-conformance-kit)), the holder's local deadline ([D18](#d18-holder-deadline)), the history checker
 that verifies concurrent runs of every primitive ([D19](#d19-history-checker)), the recipes built on the primitives'
-contracts ([D20](#d20-recipes)), and the hosting that ties a node's session to its host's lifetime
-([D21](#d21-hosting)).
+contracts ([D20](#d20-recipes)), the hosting that ties a node's session to its host's lifetime ([D21](#d21-hosting)),
+and the RESP provider's client, atomic scripts, cluster slots and numbered notifications ([D22](#d22-resp-client) to
+[D25](#d25-resp-notifications)).
 
 ## Goals and Non-Goals
 
@@ -161,7 +162,7 @@ plug in through a configurator of their own, an in-process provider, and one tes
 | `NCode.Coordination.Abstractions` | The primitives' contracts, keys, guarantees and requirements                   |
 | `NCode.Coordination`              | Composition, requirement checking, recipes, telemetry, the in-process provider  |
 | `NCode.Coordination.Hosting`      | The session bound to the host's lifetime, graceful leave, health checks        |
-| `NCode.Coordination.Resp`         | The RESP provider, with Valkey, Redis and Garnet profiles                       |
+| `NCode.Coordination.Resp`         | The RESP provider, with Valkey and Garnet profiles                              |
 | `NCode.Coordination.PostgreSql`   | The PostgreSQL provider                                                        |
 | `NCode.Coordination.Etcd`         | The etcd v3 provider                                                           |
 | `NCode.Coordination.Consul`       | The Consul provider                                                            |
@@ -316,6 +317,30 @@ The host opens one session once its composition's requirements pass, joins its c
 on its own clock and opens another when it is lost, and closes it once every hosted service has stopped; features take
 the session from `IHostSessionService`, and a health check reports the host not ready while it holds none.
 [ADR-1021](../decisions/1021-a-host-holds-one-session-for-its-lifetime-joins-its-membership-with-it-and-closes-it-as-it-stops.md)
+
+### D22. RESP client
+
+The RESP provider speaks through StackExchange.Redis, the client Microsoft's own packages for the protocol use,
+behind one internal seam, and can share the host's connection.
+[ADR-1022](../decisions/1022-the-resp-provider-speaks-through-stackexchange-redis-and-can-share-the-hosts-connection.md)
+
+### D23. RESP atomicity
+
+Each operation is one command or one Lua script that receives all its keys and checks before it writes; the provider
+uses no client-side transaction, no functions and no vendor-specific conditional command.
+[ADR-1023](../decisions/1023-the-resp-provider-runs-each-operation-as-one-command-or-one-lua-script-and-never-as-a-client-side-transaction.md)
+
+### D24. RESP slots
+
+Every key carries its keyspace as its cluster hash tag, so a keyspace, its revision counter and its indexes share one
+slot, and any operation within a keyspace is atomic.
+[ADR-1024](../decisions/1024-the-resp-provider-keeps-each-keyspace-in-one-cluster-slot-with-its-revision-beside-it.md)
+
+### D25. RESP notifications
+
+The script that makes a change numbers and publishes it, subscribers resync on a gap, a reconnect or a failed
+periodic check, and state a watch can see expires through scripts.
+[ADR-1025](../decisions/1025-resp-notifications-and-watches-are-numbered-in-the-writing-script-published-over-pubsub-and-resync-on-any-doubt.md)
 
 ## Open Questions
 

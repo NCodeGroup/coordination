@@ -51,6 +51,9 @@ jobs:
       # The Definition of Done builds, tests and, for a library, packs, as build/dod.ps1 says.
       - name: Definition of Done
         if: hashFiles('**/*.csproj', '**/*.sln', '**/*.slnx') != ''
+        # The RESP provider's tests start Valkey and Garnet in Docker, which the runner has.
+        env:
+          NCODE_COORDINATION_RESP_SERVERS: docker
         run: ./build/dod.ps1
       # A TRX file per test project, kept after a failure too, to see which test failed.
       - name: Upload test results
