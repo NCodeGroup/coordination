@@ -24,7 +24,7 @@ internal class RespCounterService(RespServer server) : ICounterService
     /// <summary>
     /// The largest count a counter keeps: 2^53 − 1, the largest integer a Lua number holds exactly.
     /// </summary>
-    private const long LargestCount = 9_007_199_254_740_991;
+    internal const long LargestCount = 9_007_199_254_740_991;
 
     /// <summary>
     /// Gets the seam between the provider and its server.
