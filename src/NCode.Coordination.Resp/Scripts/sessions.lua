@@ -47,17 +47,18 @@ local function openSession()
     return {2, 'invalid_ttl'}
   end
   
-  -- Generate a simple sessionId
-  local counter = redis.call('INCR', 'session-counter')
-  local id = 's-' .. tostring(math.floor(now / 1000)) .. '-' .. tostring(counter)
+  -- Use the passed sessionId (from ARGV[2])
+  if not sessionId or sessionId == '' then
+    return {2, 'invalid_session_id'}
+  end
   
   local deadline = now + timeToLive
   
   -- Store session data
-  redis.call('HSET', sessionsHash, id, deadline)
-  redis.call('ZADD', deadlinesKey, deadline, id)
+  redis.call('HSET', sessionsHash, sessionId, deadline)
+  redis.call('ZADD', deadlinesKey, deadline, sessionId)
   
-  return {0, id}
+  return {0, sessionId}
 end
 
 -- Keep session alive
@@ -76,9 +77,105 @@ end
 
 -- Close a session
 local function closeSession()
-  -- Delete the session (whether it exists or not, this is idempotent)
+  -- Parse out the keyspace from KEYS[1]: "{keyspace}:sessions"
+  local colonIdx = string.find(sessionsHash, ':', 1, true)
+  local keyspacePart = string.sub(sessionsHash, 1, colonIdx - 1)
+  
+  -- Delete the session itself
   redis.call('HDEL', sessionsHash, sessionId)
   redis.call('ZREM', deadlinesKey, sessionId)
+  
+  -- Clean up all bound leases
+  local leasesPattern = keyspacePart .. ':leases:*'
+  local cursor = 0
+  repeat
+    local scanResult = redis.call('SCAN', cursor, 'MATCH', leasesPattern, 'COUNT', 100)
+    cursor = tonumber(scanResult[1])
+    local leaseKeys = scanResult[2]
+    
+    for i = 1, #leaseKeys do
+      local leaseKey = leaseKeys[i]
+      local leaseData = redis.call('HGET', leaseKey, 'owner')
+      if leaseData and leaseData == sessionId then
+        redis.call('DEL', leaseKey)
+      end
+    end
+  until cursor == 0
+  
+  -- Clean up all memberships bound to this sessionId
+  local membersKey = keyspacePart .. ':members'
+  local members = redis.call('HGETALL', membersKey)
+  for i = 1, #members, 2 do
+    local nodeId = members[i]
+    local memberData = members[i + 1]
+    
+    -- Parse data: sessionId:address:metadata
+    local colonPos = string.find(memberData, ':')
+    if colonPos then
+      local sid = string.sub(memberData, 1, colonPos - 1)
+      if sid == sessionId then
+        redis.call('HDEL', membersKey, nodeId)
+      end
+    end
+  end
+  
+  -- Clean up all election slots with this sessionId
+  local electionsPattern = keyspacePart .. ':elections:*'
+  cursor = 0
+  repeat
+    local scanResult = redis.call('SCAN', cursor, 'MATCH', electionsPattern, 'COUNT', 100)
+    cursor = tonumber(scanResult[1])
+    local electionKeys = scanResult[2]
+    
+    for i = 1, #electionKeys do
+      local electionKey = electionKeys[i]
+      local leaderData = redis.call('HGET', electionKey, 'leader')
+      if leaderData then
+        -- Parse leader data: ownerVal|term|sessionId
+        local colonPos1 = string.find(leaderData, '|')
+        if colonPos1 then
+          local colonPos2 = string.find(leaderData, '|', colonPos1 + 1)
+          if colonPos2 then
+            local leaderSessionId = string.sub(leaderData, colonPos2 + 1)
+            if leaderSessionId == sessionId then
+              redis.call('DEL', electionKey)
+            end
+          end
+        end
+      end
+    end
+  until cursor == 0
+  
+  -- Clean up all semaphore slots with this sessionId
+  local semaphoresPattern = keyspacePart .. ':semaphores:*'
+  cursor = 0
+  repeat
+    local scanResult = redis.call('SCAN', cursor, 'MATCH', semaphoresPattern, 'COUNT', 100)
+    cursor = tonumber(scanResult[1])
+    local semaphoreKeys = scanResult[2]
+    
+    for i = 1, #semaphoreKeys do
+      local semaphoreKey = semaphoreKeys[i]
+      local slots = redis.call('HGETALL', semaphoreKey)
+      
+      for j = 1, #slots, 2 do
+        local field = slots[j]
+        local value = slots[j + 1]
+        
+        -- Process slot fields (slot-N format)
+        if string.match(field, '^slot%-') then
+          -- Parse slot data: ownerVal|term|ttl|deadline
+          local colonPos = string.find(value, '|')
+          if colonPos then
+            local ownerVal = string.sub(value, 1, colonPos - 1)
+            if ownerVal == sessionId then
+              redis.call('HDEL', semaphoreKey, field)
+            end
+          end
+        end
+      end
+    end
+  until cursor == 0
   
   return {0}
 end
