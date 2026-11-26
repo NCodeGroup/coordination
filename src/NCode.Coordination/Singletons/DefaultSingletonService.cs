@@ -1,6 +1,8 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using NCode.Coordination.Recipes;
+
 namespace NCode.Coordination.Singletons;
 
 /// <summary>
@@ -50,7 +52,7 @@ internal class DefaultSingletonService(IElectionService elections) : ISingletonS
             var leadership = result.Leadership;
 
             using var lost = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            var monitor = MonitorAsync(role, leadership, lost, options);
+            var monitor = MonitorAsync(role, leadership, lost, options).AsTask();
 
             try
             {
@@ -66,18 +68,21 @@ internal class DefaultSingletonService(IElectionService elections) : ISingletonS
                     continue;
                 }
 
-                await ResignQuietlyAsync(leadership, options).ConfigureAwait(false);
-                throw new InvalidOperationException("The watch ended without a failure.");
+                await ResignQuietlyAsync(leadership, options, CancellationToken.None)
+                    .ConfigureAwait(false);
+                throw new InvalidOperationException(RecipeMessages.WatchEnded);
             }
             catch
             {
                 _ = await StopAsync(lost, monitor).ConfigureAwait(false);
-                await ResignQuietlyAsync(leadership, options).ConfigureAwait(false);
+                await ResignQuietlyAsync(leadership, options, CancellationToken.None)
+                    .ConfigureAwait(false);
                 throw;
             }
 
             _ = await StopAsync(lost, monitor).ConfigureAwait(false);
-            await ResignQuietlyAsync(leadership, options).ConfigureAwait(false);
+            await ResignQuietlyAsync(leadership, options, CancellationToken.None)
+                .ConfigureAwait(false);
             return true;
         }
     }
@@ -105,7 +110,7 @@ internal class DefaultSingletonService(IElectionService elections) : ISingletonS
             }
         }
 
-        throw new InvalidOperationException("The watch ended without a failure.");
+        throw new InvalidOperationException(RecipeMessages.WatchEnded);
     }
 
     /// <summary>
@@ -116,7 +121,7 @@ internal class DefaultSingletonService(IElectionService elections) : ISingletonS
     /// <param name="lost">The source to cancel when the leadership ends, whose token also stops the watch.</param>
     /// <param name="options">Options for the watch, or null for none.</param>
     /// <returns>True when the watch ended without a failure, which the contracts never do; otherwise false.</returns>
-    private async Task<bool> MonitorAsync(
+    private async ValueTask<bool> MonitorAsync(
         CoordinationKey role,
         Leadership leadership,
         CancellationTokenSource lost,
@@ -170,16 +175,20 @@ internal class DefaultSingletonService(IElectionService elections) : ISingletonS
     /// </summary>
     /// <param name="leadership">The leadership to give up.</param>
     /// <param name="options">Options for the call, or null for none.</param>
+    /// <param name="cancellationToken">
+    /// The token that cancels the call; the run passes none, so a cancelled run still gives up its leadership.
+    /// </param>
     /// <returns>True when the leadership was given up; false when it was not, or the provider failed.</returns>
     private async ValueTask<bool> ResignQuietlyAsync(
         Leadership leadership,
-        OperationOptions? options
+        OperationOptions? options,
+        CancellationToken cancellationToken
     )
     {
         try
         {
             return await Elections
-                .ResignAsync(leadership, options, CancellationToken.None)
+                .ResignAsync(leadership, options, cancellationToken)
                 .ConfigureAwait(false);
         }
         catch (CoordinationException)
