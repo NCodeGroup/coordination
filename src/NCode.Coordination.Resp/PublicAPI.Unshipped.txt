@@ -1,6 +1,8 @@
 #nullable enable
 const NCode.Coordination.RespCoordinationBuilderExtensions.ProviderName = "resp" -> string!
 NCode.Coordination.RespCoordinationBuilderExtensions
+NCode.Coordination.RespCoordinationBuilderExtensions.extension(NCode.Coordination.ICoordinationBuilder!)
+NCode.Coordination.RespCoordinationBuilderExtensions.extension(NCode.Coordination.ICoordinationBuilder!).AddRespProvider(System.Action<NCode.Coordination.RespProviderOptions!>! configure) -> NCode.Coordination.ICoordinationBuilder!
 NCode.Coordination.RespProfile
 NCode.Coordination.RespProfile.<Clone>$() -> NCode.Coordination.RespProfile!
 NCode.Coordination.RespProfile.Equals(NCode.Coordination.RespProfile? other) -> bool
