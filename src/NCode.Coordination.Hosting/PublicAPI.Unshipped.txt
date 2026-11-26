@@ -1,5 +1,11 @@
 #nullable enable
+const NCode.Coordination.CoordinationHealthChecksBuilderExtensions.DefaultName = "coordination" -> string!
+const NCode.Coordination.CoordinationHealthChecksBuilderExtensions.ReadyTag = "ready" -> string!
 const NCode.Coordination.CoordinationHostOptions.SectionName = "Coordination:Host" -> string!
+NCode.Coordination.CoordinationHealthChecksBuilderExtensions
+NCode.Coordination.CoordinationHealthChecksBuilderExtensions.extension(Microsoft.Extensions.DependencyInjection.IHealthChecksBuilder!)
+NCode.Coordination.CoordinationHealthChecksBuilderExtensions.extension(Microsoft.Extensions.DependencyInjection.IHealthChecksBuilder!).AddCoordinationCheck() -> Microsoft.Extensions.DependencyInjection.IHealthChecksBuilder!
+NCode.Coordination.CoordinationHealthChecksBuilderExtensions.extension(Microsoft.Extensions.DependencyInjection.IHealthChecksBuilder!).AddCoordinationCheck(string! name, params System.Collections.Generic.IEnumerable<string!>! tags) -> Microsoft.Extensions.DependencyInjection.IHealthChecksBuilder!
 NCode.Coordination.CoordinationHostOptions
 NCode.Coordination.CoordinationHostOptions.Address.get -> string!
 NCode.Coordination.CoordinationHostOptions.Address.set -> void
@@ -35,3 +41,5 @@ NCode.Coordination.IHostSessionService
 NCode.Coordination.IHostSessionService.Current.get -> NCode.Coordination.HostSession?
 NCode.Coordination.IHostSessionService.State.get -> NCode.Coordination.HostSessionState
 NCode.Coordination.IHostSessionService.WaitForSessionAsync(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.HostSession!>
+static NCode.Coordination.CoordinationHealthChecksBuilderExtensions.AddCoordinationCheck(this Microsoft.Extensions.DependencyInjection.IHealthChecksBuilder! builder, string! name, params System.Collections.Generic.IEnumerable<string!>! tags) -> Microsoft.Extensions.DependencyInjection.IHealthChecksBuilder!
+static NCode.Coordination.CoordinationHealthChecksBuilderExtensions.AddCoordinationCheck(this Microsoft.Extensions.DependencyInjection.IHealthChecksBuilder! builder) -> Microsoft.Extensions.DependencyInjection.IHealthChecksBuilder!
