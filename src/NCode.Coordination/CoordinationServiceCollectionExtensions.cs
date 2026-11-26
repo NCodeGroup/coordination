@@ -4,8 +4,15 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
+using NCode.Coordination.Barriers;
+using NCode.Coordination.Caching;
 using NCode.Coordination.Composition;
+using NCode.Coordination.Locks;
+using NCode.Coordination.Partitions;
+using NCode.Coordination.RateLimiting;
 using NCode.Coordination.Routing;
+using NCode.Coordination.SingleFlight;
+using NCode.Coordination.Singletons;
 using NCode.Coordination.Telemetry;
 
 namespace NCode.Coordination;
@@ -36,7 +43,8 @@ public static class CoordinationServiceCollectionExtensions
     extension(IServiceCollection services)
     {
         /// <summary>
-        /// Adds the coordination composition, configured by the callback; calling it again adds to the same composition.
+        /// Adds the coordination composition and its recipes, configured by the callback; calling it again adds to
+        /// the same composition.
         /// </summary>
         /// <param name="configure">Registers providers, bindings, requirements and guarantees on the builder.</param>
         /// <returns>The services, for chaining.</returns>
@@ -80,6 +88,19 @@ public static class CoordinationServiceCollectionExtensions
             services.TryAddSingleton<ICounterService, DefaultCounterService>();
             services.TryAddSingleton<ISequenceService, DefaultSequenceService>();
             services.TryAddSingleton<INotificationService, DefaultNotificationService>();
+
+            // Each recipe calls the routed primitive services.
+            services.TryAddSingleton<ILockService, DefaultLockService>();
+            services.TryAddSingleton<IReadWriteLockService, DefaultReadWriteLockService>();
+            services.TryAddSingleton<IBarrierService, DefaultBarrierService>();
+            services.TryAddSingleton<ISingletonService, DefaultSingletonService>();
+            services.TryAddSingleton<
+                IPartitionOwnershipService,
+                DefaultPartitionOwnershipService
+            >();
+            services.TryAddSingleton<ISingleFlightService, DefaultSingleFlightService>();
+            services.TryAddSingleton<IRateLimiterFactory, DefaultRateLimiterFactory>();
+            services.TryAddSingleton<ICacheInvalidationService, DefaultCacheInvalidationService>();
             return services;
         }
     }

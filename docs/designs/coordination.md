@@ -17,8 +17,9 @@ conformance kit ([D7](#d7-conformance)), the first stable release's scope ([D8](
 duration on a declared clock ([D9](#d9-expiry-clock)), the shapes of the primitives' contracts
 ([D10](#d10-contract-values) to [D15](#d15-counting-sequences-and-notifications)), the composition that binds
 providers and checks requirements when the host starts ([D16](#d16-composition)), the conformance kit's contract
-suites ([D17](#d17-conformance-kit)), the holder's local deadline ([D18](#d18-holder-deadline)), and the history checker
-that verifies concurrent runs of every primitive ([D19](#d19-history-checker)).
+suites ([D17](#d17-conformance-kit)), the holder's local deadline ([D18](#d18-holder-deadline)), the history checker
+that verifies concurrent runs of every primitive ([D19](#d19-history-checker)), and the recipes built on the primitives'
+contracts ([D20](#d20-recipes)).
 
 ## Goals and Non-Goals
 
@@ -165,8 +166,8 @@ plug in through a configurator of their own, an in-process provider, and one tes
 | `NCode.Coordination.Consul`       | The Consul provider                                                            |
 | `NCode.Coordination.Testing`      | The conformance kit, fault injection and the history checker                   |
 
-The core depends on the `Microsoft.Extensions` abstractions only. A provider depends on its protocol's client library,
-consumed as a permissively licensed package through its public API.
+The core depends on the `Microsoft.Extensions` abstractions and the .NET runtime's `System.Threading.RateLimiting` only.
+A provider depends on its protocol's client library, consumed as a permissively licensed package through its public API.
 
 ## Security Analysis
 
@@ -299,6 +300,13 @@ possibly applied, and checks notifications and record watches against their decl
 cut to its shortest failing prefix. A paused-holder run and dropped-connection runs add the faults a provider's declared
 guarantees must survive.
 [ADR-1019](../decisions/1019-concurrent-runs-record-histories-and-a-checker-searches-each-keys-history-for-a-linearization.md)
+
+### D20. Recipes
+
+Each recipe is an interface whose implementation calls only the primitives' services, declares the primitives and
+guarantees it relies on so a host requires them with `RequireRecipe`, and waits on releases and watches, never on a
+timer. The rate limiters are `System.Threading.RateLimiting` limiters.
+[ADR-1020](../decisions/1020-recipes-use-only-the-primitives-contracts-declare-the-guarantees-they-rely-on-and-wait-on-releases-and-watches.md)
 
 ## Open Questions
 

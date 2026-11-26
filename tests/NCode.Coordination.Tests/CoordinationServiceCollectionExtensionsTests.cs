@@ -4,7 +4,14 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Moq;
+using NCode.Coordination.Barriers;
+using NCode.Coordination.Caching;
 using NCode.Coordination.Composition;
+using NCode.Coordination.Locks;
+using NCode.Coordination.Partitions;
+using NCode.Coordination.RateLimiting;
+using NCode.Coordination.SingleFlight;
+using NCode.Coordination.Singletons;
 
 namespace NCode.Coordination.Tests;
 
@@ -115,6 +122,58 @@ public sealed class CoordinationServiceCollectionExtensionsTests : IDisposable
             Assert.Equal(ServiceLifetime.Singleton, descriptor.Lifetime);
             Assert.Equal("NCode.Coordination.Routing", descriptor.ImplementationType?.Namespace);
         }
+    }
+
+    [Fact]
+    public async Task AddCoordination_WhenCalled_RegistersEveryRecipe()
+    {
+        var services = new ServiceCollection();
+        services.AddMetrics();
+        services.AddCoordination(_ => { });
+        await using var serviceProvider = services.BuildServiceProvider();
+
+        var lockService = serviceProvider.GetRequiredService<ILockService>();
+        var readWriteLockService = serviceProvider.GetRequiredService<IReadWriteLockService>();
+        var barrierService = serviceProvider.GetRequiredService<IBarrierService>();
+        var singletonService = serviceProvider.GetRequiredService<ISingletonService>();
+        var partitionOwnershipService =
+            serviceProvider.GetRequiredService<IPartitionOwnershipService>();
+        var singleFlightService = serviceProvider.GetRequiredService<ISingleFlightService>();
+        var rateLimiterFactory = serviceProvider.GetRequiredService<IRateLimiterFactory>();
+        var cacheInvalidationService =
+            serviceProvider.GetRequiredService<ICacheInvalidationService>();
+
+        Assert.IsType<DefaultLockService>(lockService);
+        Assert.IsType<DefaultReadWriteLockService>(readWriteLockService);
+        Assert.IsType<DefaultBarrierService>(barrierService);
+        Assert.IsType<DefaultSingletonService>(singletonService);
+        Assert.IsType<DefaultPartitionOwnershipService>(partitionOwnershipService);
+        Assert.IsType<DefaultSingleFlightService>(singleFlightService);
+        Assert.IsType<DefaultRateLimiterFactory>(rateLimiterFactory);
+        Assert.IsType<DefaultCacheInvalidationService>(cacheInvalidationService);
+    }
+
+    [Theory]
+    [InlineData(typeof(ILockService), typeof(DefaultLockService))]
+    [InlineData(typeof(IReadWriteLockService), typeof(DefaultReadWriteLockService))]
+    [InlineData(typeof(IBarrierService), typeof(DefaultBarrierService))]
+    [InlineData(typeof(ISingletonService), typeof(DefaultSingletonService))]
+    [InlineData(typeof(IPartitionOwnershipService), typeof(DefaultPartitionOwnershipService))]
+    [InlineData(typeof(ISingleFlightService), typeof(DefaultSingleFlightService))]
+    [InlineData(typeof(IRateLimiterFactory), typeof(DefaultRateLimiterFactory))]
+    [InlineData(typeof(ICacheInvalidationService), typeof(DefaultCacheInvalidationService))]
+    public void AddCoordination_WhenCalled_RegistersTheRecipeAsASingleton(
+        Type serviceType,
+        Type implementationType
+    )
+    {
+        var services = new ServiceCollection();
+
+        services.AddCoordination(_ => { });
+
+        var descriptor = Assert.Single(services, x => x.ServiceType == serviceType);
+        Assert.Equal(ServiceLifetime.Singleton, descriptor.Lifetime);
+        Assert.Equal(implementationType, descriptor.ImplementationType);
     }
 
     [Fact]

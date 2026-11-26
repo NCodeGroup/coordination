@@ -2,15 +2,111 @@
 const NCode.Coordination.CoordinationTelemetry.ActivitySourceName = "NCode.Coordination" -> string!
 const NCode.Coordination.CoordinationTelemetry.MeterName = "NCode.Coordination" -> string!
 const NCode.Coordination.InProcessCoordinationBuilderExtensions.ProviderName = "in-process" -> string!
+const NCode.Coordination.PartitionAssignment.MaxPartitions = 4096 -> int
+const NCode.Coordination.SlidingWindowLimit.MaxSegmentsPerWindow = 16 -> int
+NCode.Coordination.BarrierTerms
+NCode.Coordination.BarrierTerms.BarrierTerms(int parties, NCode.Coordination.RecordLifetime! lifetime) -> void
+NCode.Coordination.BarrierTerms.Lifetime.get -> NCode.Coordination.RecordLifetime!
+NCode.Coordination.BarrierTerms.Parties.get -> int
 NCode.Coordination.CoordinationCompositionException
 NCode.Coordination.CoordinationCompositionException.CoordinationCompositionException(System.Collections.Generic.IEnumerable<string!>! failures) -> void
 NCode.Coordination.CoordinationCompositionException.Failures.get -> System.Collections.Immutable.ImmutableArray<string!>
+NCode.Coordination.CoordinationRecipes
 NCode.Coordination.CoordinationServiceCollectionExtensions
 NCode.Coordination.CoordinationServiceCollectionExtensions.extension(Microsoft.Extensions.DependencyInjection.IServiceCollection!)
 NCode.Coordination.CoordinationServiceCollectionExtensions.extension(Microsoft.Extensions.DependencyInjection.IServiceCollection!).AddCoordination(System.Action<NCode.Coordination.ICoordinationBuilder!>! configure) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
 NCode.Coordination.CoordinationTelemetry
+NCode.Coordination.FixedWindowLimit
+NCode.Coordination.FixedWindowLimit.FixedWindowLimit(int permitLimit, System.TimeSpan window) -> void
+NCode.Coordination.FixedWindowLimit.PermitLimit.get -> int
+NCode.Coordination.FixedWindowLimit.Window.get -> System.TimeSpan
+NCode.Coordination.IBarrierService
+NCode.Coordination.IBarrierService.ArriveAndWaitAsync(NCode.Coordination.CoordinationKey! barrier, NCode.Coordination.KeySegment! participant, NCode.Coordination.BarrierTerms! terms, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<bool>
+NCode.Coordination.ICacheInvalidationHandler
+NCode.Coordination.ICacheInvalidationHandler.ClearAsync(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
+NCode.Coordination.ICacheInvalidationHandler.InvalidateAsync(System.ReadOnlyMemory<byte> entry, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
+NCode.Coordination.ICacheInvalidationService
+NCode.Coordination.ICacheInvalidationService.InvalidateAsync(NCode.Coordination.CoordinationKey! topic, System.ReadOnlyMemory<byte> entry, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
+NCode.Coordination.ICacheInvalidationService.RunAsync(NCode.Coordination.CoordinationKey! topic, NCode.Coordination.ICacheInvalidationHandler! handler, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
+NCode.Coordination.ILockService
+NCode.Coordination.ILockService.AcquireAsync(NCode.Coordination.CoordinationKey! resource, NCode.Coordination.LeaseTerms! terms, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.LeaseGrant?>
 NCode.Coordination.InProcessCoordinationBuilderExtensions
 NCode.Coordination.InProcessCoordinationBuilderExtensions.extension(NCode.Coordination.ICoordinationBuilder!)
 NCode.Coordination.InProcessCoordinationBuilderExtensions.extension(NCode.Coordination.ICoordinationBuilder!).AddInProcessProvider() -> NCode.Coordination.ICoordinationBuilder!
+NCode.Coordination.IPartitionOwnershipService
+NCode.Coordination.IPartitionOwnershipService.ReadAsync(NCode.Coordination.CoordinationKey! group, int partitionCount, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.PartitionAssignment!>
+NCode.Coordination.IPartitionOwnershipService.WatchAsync(NCode.Coordination.CoordinationKey! group, int partitionCount, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Collections.Generic.IAsyncEnumerable<NCode.Coordination.PartitionAssignment!>!
+NCode.Coordination.IRateLimiterFactory
+NCode.Coordination.IRateLimiterFactory.CreateFixedWindowLimiter(NCode.Coordination.CoordinationKey! key, NCode.Coordination.FixedWindowLimit! limit) -> System.Threading.RateLimiting.RateLimiter!
+NCode.Coordination.IRateLimiterFactory.CreateSlidingWindowLimiter(NCode.Coordination.CoordinationKey! key, NCode.Coordination.SlidingWindowLimit! limit) -> System.Threading.RateLimiting.RateLimiter!
+NCode.Coordination.IRateLimiterFactory.CreateTokenBucketLimiter(NCode.Coordination.CoordinationKey! key, NCode.Coordination.TokenBucketLimit! limit) -> System.Threading.RateLimiting.RateLimiter!
+NCode.Coordination.IReadWriteLockService
+NCode.Coordination.IReadWriteLockService.AcquireReadAsync(NCode.Coordination.CoordinationKey! resource, NCode.Coordination.LeaseTerms! terms, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.ReadLockGrant?>
+NCode.Coordination.IReadWriteLockService.AcquireWriteAsync(NCode.Coordination.CoordinationKey! resource, NCode.Coordination.LeaseTerms! terms, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.LeaseGrant?>
+NCode.Coordination.IReadWriteLockService.ReleaseReadAsync(NCode.Coordination.ReadLockGrant! grant, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<bool>
+NCode.Coordination.IReadWriteLockService.ReleaseWriteAsync(NCode.Coordination.LeaseGrant! grant, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<bool>
+NCode.Coordination.ISingleFlightService
+NCode.Coordination.ISingleFlightService.GetOrFetchAsync(NCode.Coordination.CoordinationKey! key, NCode.Coordination.SingleFlightTerms! terms, System.Func<System.Threading.CancellationToken, System.Threading.Tasks.ValueTask<System.ReadOnlyMemory<byte>>>! fetch, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.StoredRecord!>
+NCode.Coordination.ISingletonService
+NCode.Coordination.ISingletonService.RunAsync(NCode.Coordination.CoordinationKey! role, NCode.Coordination.SingletonCandidate! candidate, System.Func<NCode.Coordination.Leadership!, System.Threading.CancellationToken, System.Threading.Tasks.ValueTask>! work, NCode.Coordination.OperationOptions? options, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<bool>
+NCode.Coordination.PartitionAssignment
+NCode.Coordination.PartitionAssignment.GetOwner(int partition) -> NCode.Coordination.Member?
+NCode.Coordination.PartitionAssignment.GetPartitions(string! nodeId) -> System.Collections.Immutable.ImmutableArray<int>
+NCode.Coordination.PartitionAssignment.Group.get -> NCode.Coordination.CoordinationKey!
+NCode.Coordination.PartitionAssignment.PartitionCount.get -> int
+NCode.Coordination.PartitionAssignment.Revision.get -> NCode.Coordination.Revision!
+NCode.Coordination.ReadLockGrant
+NCode.Coordination.ReadLockGrant.FencingToken.get -> NCode.Coordination.FencingToken!
+NCode.Coordination.ReadLockGrant.ReadLockGrant(NCode.Coordination.CoordinationKey! resource, NCode.Coordination.CoordinationKey! registration, NCode.Coordination.Revision! revision, NCode.Coordination.FencingToken! fencingToken) -> void
+NCode.Coordination.ReadLockGrant.Registration.get -> NCode.Coordination.CoordinationKey!
+NCode.Coordination.ReadLockGrant.Resource.get -> NCode.Coordination.CoordinationKey!
+NCode.Coordination.ReadLockGrant.Revision.get -> NCode.Coordination.Revision!
+NCode.Coordination.Recipe
+NCode.Coordination.Recipe.Name.get -> string!
+NCode.Coordination.Recipe.Needs.get -> System.Collections.Immutable.ImmutableArray<NCode.Coordination.RecipeNeed!>
+NCode.Coordination.Recipe.Recipe(string! name, params System.Collections.Generic.IEnumerable<NCode.Coordination.RecipeNeed!>! needs) -> void
+NCode.Coordination.RecipeCoordinationBuilderExtensions
+NCode.Coordination.RecipeCoordinationBuilderExtensions.extension(NCode.Coordination.ICoordinationBuilder!)
+NCode.Coordination.RecipeCoordinationBuilderExtensions.extension(NCode.Coordination.ICoordinationBuilder!).RequireRecipe(NCode.Coordination.Recipe! recipe, string! feature, NCode.Coordination.Keyspace! keyspace) -> NCode.Coordination.ICoordinationBuilder!
+NCode.Coordination.RecipeCoordinationBuilderExtensions.extension(NCode.Coordination.ICoordinationBuilder!).RequireRecipe(NCode.Coordination.Recipe! recipe, string! feature) -> NCode.Coordination.ICoordinationBuilder!
+NCode.Coordination.RecipeNeed
+NCode.Coordination.RecipeNeed.Guarantees.get -> System.Collections.Immutable.ImmutableArray<NCode.Coordination.Guarantee!>
+NCode.Coordination.RecipeNeed.Primitive.get -> NCode.Coordination.Primitive!
+NCode.Coordination.RecipeNeed.RecipeNeed(NCode.Coordination.Primitive! primitive, params System.Collections.Generic.IEnumerable<NCode.Coordination.Guarantee!>! guarantees) -> void
+NCode.Coordination.SingleFlightTerms
+NCode.Coordination.SingleFlightTerms.FetchTimeToLive.get -> NCode.Coordination.TimeToLive!
+NCode.Coordination.SingleFlightTerms.SingleFlightTerms(NCode.Coordination.TimeToLive! valueTimeToLive, NCode.Coordination.TimeToLive! fetchTimeToLive) -> void
+NCode.Coordination.SingleFlightTerms.ValueTimeToLive.get -> NCode.Coordination.TimeToLive!
+NCode.Coordination.SingletonCandidate
+NCode.Coordination.SingletonCandidate.Session.get -> NCode.Coordination.SessionId!
+NCode.Coordination.SingletonCandidate.SingletonCandidate(NCode.Coordination.SessionId! session) -> void
+NCode.Coordination.SingletonCandidate.Value.get -> System.ReadOnlyMemory<byte>
+NCode.Coordination.SingletonCandidate.Value.init -> void
+NCode.Coordination.SlidingWindowLimit
+NCode.Coordination.SlidingWindowLimit.PermitLimit.get -> int
+NCode.Coordination.SlidingWindowLimit.SegmentLength.get -> System.TimeSpan
+NCode.Coordination.SlidingWindowLimit.SegmentsPerWindow.get -> int
+NCode.Coordination.SlidingWindowLimit.SlidingWindowLimit(int permitLimit, System.TimeSpan window, int segmentsPerWindow) -> void
+NCode.Coordination.SlidingWindowLimit.Window.get -> System.TimeSpan
+NCode.Coordination.TokenBucketLimit
+NCode.Coordination.TokenBucketLimit.ReplenishmentPeriod.get -> System.TimeSpan
+NCode.Coordination.TokenBucketLimit.TokenBucketLimit(int tokenLimit, int tokensPerPeriod, System.TimeSpan replenishmentPeriod) -> void
+NCode.Coordination.TokenBucketLimit.TokenLimit.get -> int
+NCode.Coordination.TokenBucketLimit.TokensPerPeriod.get -> int
+override NCode.Coordination.Recipe.ToString() -> string!
+static NCode.Coordination.CoordinationRecipes.All.get -> System.Collections.Immutable.ImmutableArray<NCode.Coordination.Recipe!>
+static NCode.Coordination.CoordinationRecipes.Barrier.get -> NCode.Coordination.Recipe!
+static NCode.Coordination.CoordinationRecipes.CacheInvalidation.get -> NCode.Coordination.Recipe!
+static NCode.Coordination.CoordinationRecipes.FixedWindowRateLimiter.get -> NCode.Coordination.Recipe!
+static NCode.Coordination.CoordinationRecipes.Lock.get -> NCode.Coordination.Recipe!
+static NCode.Coordination.CoordinationRecipes.PartitionOwnership.get -> NCode.Coordination.Recipe!
+static NCode.Coordination.CoordinationRecipes.ReadWriteLock.get -> NCode.Coordination.Recipe!
+static NCode.Coordination.CoordinationRecipes.SingleFlight.get -> NCode.Coordination.Recipe!
+static NCode.Coordination.CoordinationRecipes.Singleton.get -> NCode.Coordination.Recipe!
+static NCode.Coordination.CoordinationRecipes.SlidingWindowRateLimiter.get -> NCode.Coordination.Recipe!
+static NCode.Coordination.CoordinationRecipes.TokenBucketRateLimiter.get -> NCode.Coordination.Recipe!
 static NCode.Coordination.CoordinationServiceCollectionExtensions.AddCoordination(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, System.Action<NCode.Coordination.ICoordinationBuilder!>! configure) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
 static NCode.Coordination.InProcessCoordinationBuilderExtensions.AddInProcessProvider(this NCode.Coordination.ICoordinationBuilder! builder) -> NCode.Coordination.ICoordinationBuilder!
+static NCode.Coordination.PartitionAssignment.Assign(NCode.Coordination.MembershipView! view, int partitionCount) -> NCode.Coordination.PartitionAssignment!
+static NCode.Coordination.RecipeCoordinationBuilderExtensions.RequireRecipe(this NCode.Coordination.ICoordinationBuilder! builder, NCode.Coordination.Recipe! recipe, string! feature, NCode.Coordination.Keyspace! keyspace) -> NCode.Coordination.ICoordinationBuilder!
+static NCode.Coordination.RecipeCoordinationBuilderExtensions.RequireRecipe(this NCode.Coordination.ICoordinationBuilder! builder, NCode.Coordination.Recipe! recipe, string! feature) -> NCode.Coordination.ICoordinationBuilder!

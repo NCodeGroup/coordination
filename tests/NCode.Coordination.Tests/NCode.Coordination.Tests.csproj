@@ -16,6 +16,9 @@
     <PackageReference Include="xunit.v3.mtp-off" />
   </ItemGroup>
   <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="../../src/NCode.Coordination/NCode.Coordination.csproj" />
     <ProjectReference Include="../../src/NCode.Coordination.Testing/NCode.Coordination.Testing.csproj" />
   </ItemGroup>
