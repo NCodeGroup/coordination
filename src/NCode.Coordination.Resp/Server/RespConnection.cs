@@ -9,17 +9,69 @@ namespace NCode.Coordination.Resp.Server;
 /// Holds the connection of the provider to its server. It connects on first use and retries after a failed connect.
 /// It disposes the connection only when it owns it.
 /// </summary>
-internal sealed class RespConnection : IAsyncDisposable, IDisposable
+/// <param name="connect">Opens the connection.</param>
+/// <param name="owned">True when this instance disposes the connection, false when the host owns it.</param>
+/// <exception cref="ArgumentNullException">The factory is null.</exception>
+internal sealed class RespConnection(
+    Func<CancellationToken, ValueTask<IConnectionMultiplexer>> connect,
+    bool owned
+) : IAsyncDisposable, IDisposable
 {
+    // The connect is a Task, not a ValueTask: after a canceled wait, DisposeWhenConnectedAsync awaits it a second time.
+    /// <summary>
+    /// Starts a connect that this instance owns and waits for it, honoring the token. When the token cancels the
+    /// wait, the connect still runs; the multiplexer it later returns is disposed so that it does not leak.
+    /// </summary>
+    /// <param name="start">Starts the connect, given the token so it can refuse to start once the token is canceled.</param>
+    /// <param name="cancellationToken">A token that cancels the wait for the connect.</param>
+    /// <returns>The multiplexer.</returns>
+    /// <exception cref="OperationCanceledException">The token canceled the wait.</exception>
+    internal static async ValueTask<IConnectionMultiplexer> ConnectOwnedAsync(
+        Func<CancellationToken, Task<IConnectionMultiplexer>> start,
+        CancellationToken cancellationToken
+    )
+    {
+        ArgumentNullException.ThrowIfNull(start);
+
+        var connecting = start(cancellationToken);
+        try
+        {
+            return await connecting.WaitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            _ = DisposeWhenConnectedAsync(connecting);
+            throw;
+        }
+    }
+
+    // A Task, not a ValueTask: its caller discards it unawaited (CA2012). It takes no token, because the cleanup must finish.
+    /// <summary>
+    /// Waits for a connect that nobody awaits any longer and disposes the multiplexer when it succeeds.
+    /// </summary>
+    /// <param name="connecting">The connect.</param>
+    /// <returns>A task that completes once the multiplexer is disposed or the connect has failed.</returns>
+    private static async Task DisposeWhenConnectedAsync(Task<IConnectionMultiplexer> connecting)
+    {
+        await ((Task)connecting).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
+
+        if (connecting.IsCompletedSuccessfully)
+        {
+            var multiplexer = await connecting.ConfigureAwait(false);
+            await multiplexer.DisposeAsync().ConfigureAwait(false);
+        }
+    }
+
     /// <summary>
     /// Gets the factory that opens the connection.
     /// </summary>
-    private Func<CancellationToken, Task<IConnectionMultiplexer>> Connect { get; }
+    private Func<CancellationToken, ValueTask<IConnectionMultiplexer>> Connect { get; } =
+        connect ?? throw new ArgumentNullException(nameof(connect));
 
     /// <summary>
     /// Gets a value indicating whether this instance disposes the connection.
     /// </summary>
-    private bool Owned { get; }
+    private bool Owned { get; } = owned;
 
     // The gate is never disposed: an in-flight GetAsync still releases it, and a SemaphoreSlim whose AvailableWaitHandle is never read holds nothing to free.
     /// <summary>
@@ -36,20 +88,6 @@ internal sealed class RespConnection : IAsyncDisposable, IDisposable
     /// Gets or sets a value indicating whether this instance is disposed.
     /// </summary>
     private bool Disposed { get; set; }
-
-    /// <summary>
-    /// Initializes a new instance of the <see cref="RespConnection"/> class.
-    /// </summary>
-    /// <param name="connect">Opens the connection.</param>
-    /// <param name="owned">True when this instance disposes the connection, false when the host owns it.</param>
-    /// <exception cref="ArgumentNullException">The factory is null.</exception>
-    public RespConnection(Func<CancellationToken, Task<IConnectionMultiplexer>> connect, bool owned)
-    {
-        ArgumentNullException.ThrowIfNull(connect);
-
-        Connect = connect;
-        Owned = owned;
-    }
 
     /// <summary>
     /// Returns the connection, opening it on the first call.
@@ -110,49 +148,6 @@ internal sealed class RespConnection : IAsyncDisposable, IDisposable
         finally
         {
             Gate.Release();
-        }
-    }
-
-    /// <summary>
-    /// Starts a connect that this instance owns and waits for it, honoring the token. When the token cancels the
-    /// wait, the connect still runs; the multiplexer it later returns is disposed so that it does not leak.
-    /// </summary>
-    /// <param name="start">Starts the connect.</param>
-    /// <param name="cancellationToken">A token that cancels the wait for the connect.</param>
-    /// <returns>The multiplexer.</returns>
-    /// <exception cref="OperationCanceledException">The token canceled the wait.</exception>
-    internal static async Task<IConnectionMultiplexer> ConnectOwnedAsync(
-        Func<Task<IConnectionMultiplexer>> start,
-        CancellationToken cancellationToken
-    )
-    {
-        ArgumentNullException.ThrowIfNull(start);
-
-        var connecting = start();
-        try
-        {
-            return await connecting.WaitAsync(cancellationToken).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException)
-        {
-            _ = DisposeWhenConnectedAsync(connecting);
-            throw;
-        }
-    }
-
-    /// <summary>
-    /// Waits for a connect that nobody awaits any longer and disposes the multiplexer when it succeeds.
-    /// </summary>
-    /// <param name="connecting">The connect.</param>
-    /// <returns>A task that completes once the multiplexer is disposed or the connect has failed.</returns>
-    private static async Task DisposeWhenConnectedAsync(Task<IConnectionMultiplexer> connecting)
-    {
-        await ((Task)connecting).ConfigureAwait(ConfigureAwaitOptions.SuppressThrowing);
-
-        if (connecting.IsCompletedSuccessfully)
-        {
-            var multiplexer = await connecting.ConfigureAwait(false);
-            await multiplexer.DisposeAsync().ConfigureAwait(false);
         }
     }
 

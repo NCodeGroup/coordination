@@ -42,8 +42,12 @@ public static class RespCoordinationBuilderExtensions
             var factory = options.Connection;
             var profile = options.Profile;
 
-            async Task<IConnectionMultiplexer> StartConnect()
+            async Task<IConnectionMultiplexer> StartConnectAsync(
+                CancellationToken cancellationToken
+            )
             {
+                cancellationToken.ThrowIfCancellationRequested();
+
                 ArgumentException.ThrowIfNullOrWhiteSpace(configuration);
 
                 return await ConnectionMultiplexer
@@ -58,7 +62,7 @@ public static class RespCoordinationBuilderExtensions
                     _ =>
                     {
                         var multiplexer = factory(services);
-                        return Task.FromResult(multiplexer);
+                        return ValueTask.FromResult(multiplexer);
                     },
                     owned: false
                 );
@@ -66,7 +70,7 @@ public static class RespCoordinationBuilderExtensions
             else if (factory is null && !string.IsNullOrWhiteSpace(configuration))
             {
                 createConnection = _ => new RespConnection(
-                    ct => RespConnection.ConnectOwnedAsync(StartConnect, ct),
+                    ct => RespConnection.ConnectOwnedAsync(StartConnectAsync, ct),
                     owned: true
                 );
             }
