@@ -130,6 +130,7 @@ internal sealed class RespProvider : ICoordinationProvider, IAsyncDisposable, ID
             "EVALSHA",
             "SCRIPT",
             RespCommands.Delete,
+            "EXISTS",
             RespCommands.Get,
             "HDEL",
             "HGET",
