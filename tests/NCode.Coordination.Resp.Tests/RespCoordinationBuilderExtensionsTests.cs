@@ -3,8 +3,9 @@
 
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
+using StackExchange.Redis;
 
-namespace NCode.Coordination.Resp.Tests;
+namespace NCode.Coordination.Tests;
 
 public sealed class RespCoordinationBuilderExtensionsTests : IDisposable
 {
@@ -69,6 +70,55 @@ public sealed class RespCoordinationBuilderExtensionsTests : IDisposable
         var provider = factory(services);
         await using var disposable = Assert.IsAssignableFrom<IAsyncDisposable>(provider);
         Assert.Equal("garnet", provider.Declaration.Profile);
+    }
+
+    [Fact]
+    public async Task AddRespProvider_Connection_UsesHostMultiplexerAndLeavesIt()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var builder = Mocks.Create<ICoordinationBuilder>();
+        Func<IServiceProvider, ICoordinationProvider>? factory = null;
+        builder
+            .Setup(x => x.AddProvider(It.IsAny<Func<IServiceProvider, ICoordinationProvider>>()))
+            .Callback<Func<IServiceProvider, ICoordinationProvider>>(f => factory = f)
+            .Returns(builder.Object)
+            .Verifiable();
+        var info = new RedisValue("# Server\r\nserver_name:valkey\r\nvalkey_version:9.2.0\r\n");
+        var reply = RedisResult.Create(info);
+        var database = Mocks.Create<IDatabase>();
+        database
+            .Setup(x =>
+                x.ScriptEvaluateAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<RedisKey[]?>(),
+                    It.IsAny<RedisValue[]?>(),
+                    It.IsAny<CommandFlags>()
+                )
+            )
+            .ReturnsAsync(reply)
+            .Verifiable();
+        var multiplexer = Mocks.Create<IConnectionMultiplexer>();
+        multiplexer
+            .Setup(x => x.GetDatabase(It.IsAny<int>(), It.IsAny<object?>()))
+            .Returns(database.Object)
+            .Verifiable();
+        await using var services = new ServiceCollection().BuildServiceProvider();
+        IServiceProvider? received = null;
+
+        builder.Object.AddRespProvider(options =>
+            options.Connection = s =>
+            {
+                received = s;
+                return multiplexer.Object;
+            }
+        );
+
+        Assert.NotNull(factory);
+        var provider = factory(services);
+        var disposable = Assert.IsAssignableFrom<IAsyncDisposable>(provider);
+        await provider.ProbeAsync(cancellationToken);
+        await disposable.DisposeAsync();
+        Assert.Same(services, received);
     }
 
     #endregion
