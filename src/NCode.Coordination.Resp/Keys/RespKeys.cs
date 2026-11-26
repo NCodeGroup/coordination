@@ -22,6 +22,11 @@ internal static class RespKeys
     private const int StackBufferLength = 1024;
 
     /// <summary>
+    /// The length of the unpadded Base64Url form of a SHA-256 digest.
+    /// </summary>
+    private const int DigestLength = 43;
+
+    /// <summary>
     /// Gets the UTF-8 encoding that throws on bytes that are not well-formed UTF-8, which <see cref="Unescape"/> uses.
     /// </summary>
     private static UTF8Encoding StrictUtf8 { get; } =
@@ -167,18 +172,49 @@ internal static class RespKeys
     {
         ArgumentNullException.ThrowIfNull(prefix);
 
-        var builder = new StringBuilder();
+        var capacity = prefix.Segments.Length * (DigestLength + 1);
+        var builder = new StringBuilder(capacity);
+        Span<char> digest = stackalloc char[DigestLength];
 
         foreach (var segment in prefix.Segments)
         {
             var encoded = EncodeSegment(segment);
-            var bytes = Encoding.UTF8.GetBytes(encoded);
-            var hash = SHA256.HashData(bytes);
-            var digest = Base64Url.EncodeToString(hash);
+            WriteDigest(encoded, digest);
             builder.Append(digest).Append('/');
         }
 
         return builder.ToString();
+    }
+
+    /// <summary>
+    /// Writes the digest of an encoded segment: the unpadded Base64Url of the SHA-256 of its UTF-8.
+    /// </summary>
+    /// <param name="encoded">The encoded segment.</param>
+    /// <param name="destination">The span that receives the digest, <see cref="DigestLength"/> characters long.</param>
+    private static void WriteDigest(string encoded, Span<char> destination)
+    {
+        var chars = encoded.AsSpan();
+        var maxLength = Encoding.UTF8.GetMaxByteCount(chars.Length);
+        byte[]? rented = null;
+        Span<byte> buffer =
+            maxLength <= StackBufferLength
+                ? stackalloc byte[StackBufferLength]
+                : (rented = ArrayPool<byte>.Shared.Rent(maxLength));
+
+        try
+        {
+            var length = Encoding.UTF8.GetBytes(chars, buffer);
+            Span<byte> hash = stackalloc byte[SHA256.HashSizeInBytes];
+            SHA256.HashData(buffer[..length], hash);
+            _ = Base64Url.EncodeToChars(hash, destination);
+        }
+        finally
+        {
+            if (rented is not null)
+            {
+                ArrayPool<byte>.Shared.Return(rented);
+            }
+        }
     }
 
     /// <summary>

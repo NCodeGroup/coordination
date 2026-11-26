@@ -1,6 +1,10 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using System.Buffers.Text;
+using System.Security.Cryptography;
+using System.Text;
+
 namespace NCode.Coordination.Resp.Keys.Tests;
 
 public sealed class RespKeysTests
@@ -178,6 +182,22 @@ public sealed class RespKeysTests
         var starts = member.StartsWith(prefixText, StringComparison.Ordinal);
 
         Assert.False(starts);
+    }
+
+    [Fact]
+    public void MemberPrefix_SegmentLongerThanTheStackBuffer_DigestsItsWholeEncoding()
+    {
+        var text = new string('\u00e9', 256);
+        var segment = KeySegment.FromString(text);
+        var prefix = new Keyspace("prod").CreateKey(segment);
+        var encoded = RespKeys.EncodeSegment(segment);
+        var bytes = Encoding.UTF8.GetBytes(encoded);
+        var hash = SHA256.HashData(bytes);
+        var digest = Base64Url.EncodeToString(hash);
+
+        var prefixText = RespKeys.MemberPrefix(prefix);
+
+        Assert.Equal(digest + "/", prefixText);
     }
 
     #endregion
