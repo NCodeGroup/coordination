@@ -25,19 +25,11 @@ public sealed class RespServerTests : IDisposable
     }
 
     [Fact]
-    public async Task InfoAsync_ServerSection_ParsesFields()
+    public void ParseInfo_ServerSection_ParsesFields()
     {
-        var cancellationToken = TestContext.Current.CancellationToken;
-        var (server, database) = CreateServer();
-        var reply = RedisResult.Create(
-            new RedisValue("# Server\r\nserver_name:valkey\r\nvalkey_version:9.2.0\r\n")
+        var fields = RespServer.ParseInfo(
+            "# Server\r\nserver_name:valkey\r\nvalkey_version:9.2.0\r\n"
         );
-        database
-            .Setup(x => x.ExecuteAsync("INFO", It.IsAny<object[]>()))
-            .Returns(Task.FromResult(reply))
-            .Verifiable();
-
-        var fields = await server.InfoAsync("server", cancellationToken);
 
         Assert.Equal(2, fields.Count);
         Assert.Equal("valkey", fields["server_name"]);

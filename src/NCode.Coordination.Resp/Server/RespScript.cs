@@ -30,7 +30,8 @@ internal sealed class RespScript
     }
 
     /// <summary>
-    /// Gets the startup probe: it proves the server runs Lua and lets the user call TIME.
+    /// Gets the startup probe: it proves the server runs Lua and lets the user run scripts,
+    /// and returns the server section of INFO.
     /// </summary>
     public static RespScript Probe { get; } = Load("probe");
 

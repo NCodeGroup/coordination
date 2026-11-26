@@ -6,12 +6,12 @@ namespace NCode.Coordination.Resp.Server.Tests;
 public sealed class RespScriptTests
 {
     [Fact]
-    public void Load_Probe_ReturnsTimeCall()
+    public void Load_Probe_ReadsServerInfo()
     {
         var script = RespScript.Load("probe");
 
         Assert.Equal("probe", script.Name);
-        Assert.Contains("redis.call('TIME')", script.Text);
+        Assert.Contains("redis.call('INFO', 'server')", script.Text);
     }
 
     [Fact]

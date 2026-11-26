@@ -59,7 +59,14 @@ public sealed class RespProviderTests : IDisposable
             new RedisValue("# Server\r\nserver_name:garnet\r\ngarnet_version:2.2.13\r\n")
         );
         database
-            .Setup(x => x.ExecuteAsync("INFO", It.IsAny<object[]>()))
+            .Setup(x =>
+                x.ScriptEvaluateAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<RedisKey[]?>(),
+                    It.IsAny<RedisValue[]?>(),
+                    It.IsAny<CommandFlags>()
+                )
+            )
             .Returns(Task.FromResult(reply))
             .Verifiable();
 
@@ -82,7 +89,14 @@ public sealed class RespProviderTests : IDisposable
             new RedisValue("# Server\r\nserver_name:valkey\r\nvalkey_version:7.0.0\r\n")
         );
         database
-            .Setup(x => x.ExecuteAsync("INFO", It.IsAny<object[]>()))
+            .Setup(x =>
+                x.ScriptEvaluateAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<RedisKey[]?>(),
+                    It.IsAny<RedisValue[]?>(),
+                    It.IsAny<CommandFlags>()
+                )
+            )
             .Returns(Task.FromResult(reply))
             .Verifiable();
 

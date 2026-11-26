@@ -62,28 +62,6 @@ internal sealed class RespProvider : ICoordinationProvider, IAsyncDisposable, ID
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        var info = await Server.InfoAsync("server", cancellationToken).ConfigureAwait(false);
-
-        info.TryGetValue("server_name", out var name);
-        if (!string.Equals(name, Profile.ServerName, StringComparison.Ordinal))
-        {
-            throw Unsupported(
-                $"The RESP server is '{name ?? "unknown"}', but the provider uses the '{Profile.Name}' profile."
-            );
-        }
-
-        info.TryGetValue(Profile.VersionField, out var value);
-        if (
-            value is null
-            || !Version.TryParse(value, out var version)
-            || version < Profile.MinimumVersion
-        )
-        {
-            throw Unsupported(
-                $"The '{Profile.Name}' profile needs {Profile.VersionField} {Profile.MinimumVersion} or later, and the server reports '{value ?? "none"}'."
-            );
-        }
-
         RedisResult reply;
         try
         {
@@ -108,20 +86,42 @@ internal sealed class RespProvider : ICoordinationProvider, IAsyncDisposable, ID
             );
         }
 
-        RedisValue[]? parts;
+        string? text;
         try
         {
-            parts = (RedisValue[]?)reply;
+            text = (string?)reply;
         }
         catch (InvalidCastException)
         {
-            parts = null;
+            text = null;
         }
 
-        if (parts is null || parts.Length != 2)
+        if (text is null)
         {
             throw Unsupported(
                 "The RESP server answered the probe script with an unexpected reply."
+            );
+        }
+
+        var info = RespServer.ParseInfo(text);
+
+        info.TryGetValue("server_name", out var name);
+        if (!string.Equals(name, Profile.ServerName, StringComparison.Ordinal))
+        {
+            throw Unsupported(
+                $"The RESP server is '{name ?? "unknown"}', but the provider uses the '{Profile.Name}' profile."
+            );
+        }
+
+        info.TryGetValue(Profile.VersionField, out var value);
+        if (
+            value is null
+            || !Version.TryParse(value, out var version)
+            || version < Profile.MinimumVersion
+        )
+        {
+            throw Unsupported(
+                $"The '{Profile.Name}' profile needs {Profile.VersionField} {Profile.MinimumVersion} or later, and the server reports '{value ?? "none"}'."
             );
         }
     }

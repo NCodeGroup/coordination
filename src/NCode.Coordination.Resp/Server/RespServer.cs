@@ -103,24 +103,14 @@ internal sealed class RespServer
     }
 
     /// <summary>
-    /// Reads a section of the <c>INFO</c> reply of the server.
+    /// Parses the text of an <c>INFO</c> reply.
     /// </summary>
-    /// <param name="section">The name of the section, such as <c>server</c>.</param>
-    /// <param name="cancellationToken">A token that cancels the wait for the reply.</param>
-    /// <returns>The <c>field:value</c> pairs of the section, by field name.</returns>
-    /// <exception cref="ArgumentNullException">The section is null.</exception>
-    /// <exception cref="ArgumentException">The section is empty or white space.</exception>
-    /// <exception cref="CoordinationException">The call failed; the exception says whether it may have taken effect.</exception>
-    /// <exception cref="OperationCanceledException">The token was canceled.</exception>
-    public async ValueTask<IReadOnlyDictionary<string, string>> InfoAsync(
-        string section,
-        CancellationToken cancellationToken
-    )
+    /// <param name="text">The text of the reply, with one <c>field:value</c> pair per line and <c>#</c> section headers.</param>
+    /// <returns>The <c>field:value</c> pairs of the text, by field name.</returns>
+    /// <exception cref="ArgumentNullException">The text is null.</exception>
+    public static IReadOnlyDictionary<string, string> ParseInfo(string text)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(section);
-
-        var result = await ExecuteAsync("INFO", [section], cancellationToken).ConfigureAwait(false);
-        var text = result.ToString() ?? string.Empty;
+        ArgumentNullException.ThrowIfNull(text);
 
         var fields = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var line in text.Split(["\r\n", "\n"], StringSplitOptions.RemoveEmptyEntries))
