@@ -43,21 +43,24 @@ every other hosted service has stopped.**
 2. **Options.** `CoordinationHostOptions` is bound from the section `Coordination:Host`, with unknown keys an error, or
    set in code. It names the cluster and the keyspace segments under it, the membership group (`members` by default),
    the node id, the address, the node's metadata, the session's time to live (30 seconds), the keep-alive interval
-   (10 seconds), the drift allowance (2 seconds) and the retry delay (2 seconds).
+   (10 seconds), the drift allowance (2 seconds), the retry delay (2 seconds) and the longest retry delay (30 seconds).
 3. **One rule set.** The options are validated by the contracts' own constructors, so they obey exactly the rules the
    contracts enforce, and each invalid property adds one failure that names it. The keep-alive interval is more than
    zero, at most one day, and shorter than the time to live less the drift allowance; the retry delay is more than zero
-   and at most one day. The same rules run when the options are validated on start, which fails the host's start with
-   every failure, and when the session service is created.
+   and at most one day, and the longest retry delay is at least the retry delay and at most one day. The same rules run
+   when the options are validated on start, which fails the host's start with every failure, and when the session
+   service is created.
 4. **Opening.** The session service is a hosted lifecycle service. Its start opens the session on the starting thread
    until its first wait that does not complete at once, and never blocks the host's start: a host answers liveness
    probes while it is not ready, and a node restarted within its old session's time to live finds its node id taken
    until that session expires. The holder's deadline begins before the open request.
 5. **Joining.** The host joins the group with a member made of the node id, the address and the metadata, and
    publishes the session only once it has joined, so the member of every published session is in the group. A failed
-   open or join is logged and retried after the retry delay, and the session just opened is closed quietly. When the
-   node id is taken by another live session, the host logs it, closes the session and tries again after the retry
-   delay; when the session ended before it joined, the host opens another at once.
+   open or join is logged and tried again after a wait, and the session just opened is closed quietly. When the node id
+   is taken by another live session, the host logs it, closes the session and tries again after a wait, as it does when
+   the session ended before it joined. The first wait is the retry delay, each further failure in a row doubles it up to
+   the longest retry delay, and each wait is shortened at random by up to half, so a cluster's nodes, which lose their
+   provider together, spread their attempts instead of retrying in step. A session that joins starts the waits over.
 6. **Renewing.** The host renews the session every keep-alive interval, which starts when the session's open begins,
    and each renewal begins a holder's deadline. A renewal that fails to reach the provider is logged and leaves the
    session held; the next interval tries again.
@@ -98,8 +101,10 @@ every other hosted service has stopped.**
   deadline suffice, without a second operation for every session.
 - **A health check that calls the provider.** Rejected: the renewals already call it every interval, and a second probe
   adds load without telling more.
-- **Backing off with jitter between attempts.** Rejected for now: a cluster's nodes are few, and a fixed retry delay is
-  simple to explain; it is listed as a follow-up.
+- **A fixed retry delay.** Rejected: after a provider outage every node of a cluster would try again in step, and the
+  recovering server would take each wave of attempts at once.
+- **A wait anywhere from zero up to the doubled delay.** Rejected: a node could try again at once after a failure;
+  keeping half of each wait fixed bounds how soon it tries again.
 - **Retrying a faulted loop.** Rejected: an exception no guarded call expects is a defect, and a loop that retried it
   would also have to end the session it holds.
 
