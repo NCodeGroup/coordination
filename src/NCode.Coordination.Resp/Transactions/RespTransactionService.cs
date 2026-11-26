@@ -18,6 +18,49 @@ namespace NCode.Coordination.Resp.Transactions;
 internal class RespTransactionService(RespRecordTable table) : ITransactionService
 {
     /// <summary>
+    /// Adds the condition count and the conditions of a transaction to the arguments of the transaction script.
+    /// </summary>
+    /// <param name="arguments">The arguments to add to.</param>
+    /// <param name="transaction">The transaction whose conditions to add.</param>
+    /// <exception cref="ArgumentException">A condition has a kind that is not known.</exception>
+    private static void AddConditions(List<RedisValue> arguments, RecordTransaction transaction)
+    {
+        arguments.Add(transaction.Conditions.Length);
+
+        foreach (var condition in transaction.Conditions)
+        {
+            var member = RespKeys.Member(condition.Key);
+
+            switch (condition.Kind)
+            {
+                case RecordConditionKind.Absent:
+                    arguments.Add("a");
+                    arguments.Add(member);
+                    arguments.Add("");
+                    break;
+
+                case RecordConditionKind.RevisionEquals when condition.Revision is { } revision:
+                    arguments.Add("r");
+                    arguments.Add(member);
+                    arguments.Add(revision.Value);
+                    break;
+
+                case RecordConditionKind.ValueEquals:
+                    arguments.Add("v");
+                    arguments.Add(member);
+                    arguments.Add(condition.Value);
+                    break;
+
+                default:
+                    throw new ArgumentException(
+                        $"The condition kind '{condition.Kind}' is not known.",
+                        nameof(transaction)
+                    );
+            }
+        }
+    }
+
+    /// <summary>
     /// Adds a branch's writes to the arguments of the transaction script.
     /// </summary>
     /// <param name="arguments">The arguments to add to.</param>
@@ -54,6 +97,30 @@ internal class RespTransactionService(RespRecordTable table) : ITransactionServi
     }
 
     /// <summary>
+    /// Reads the result of a transaction from the reply of the transaction script.
+    /// </summary>
+    /// <param name="reply">The reply of the transaction script.</param>
+    /// <returns>The status and the revision of the transaction.</returns>
+    /// <exception cref="CoordinationException">The reply is not what the script returns.</exception>
+    private static TransactionResult ReadResult(RedisResult reply)
+    {
+        var (status, fields) = RespReplies.Script(reply);
+        if (fields.Length != 1)
+        {
+            throw RespReplies.Unexpected(reply);
+        }
+
+        var resultRevision = RespRecordTable.ReadRevision(fields[0], reply);
+
+        return status switch
+        {
+            0 => new TransactionResult(TransactionStatus.Succeeded, resultRevision),
+            1 => new TransactionResult(TransactionStatus.Failed, resultRevision),
+            _ => throw RespReplies.Unexpected(reply),
+        };
+    }
+
+    /// <summary>
     /// Gets the record table that runs the record scripts.
     /// </summary>
     private RespRecordTable Table { get; } =
@@ -69,40 +136,9 @@ internal class RespTransactionService(RespRecordTable table) : ITransactionServi
         ArgumentNullException.ThrowIfNull(transaction);
         RespCall.Check(options, cancellationToken);
 
-        List<RedisValue> arguments = [transaction.Conditions.Length];
+        List<RedisValue> arguments = [];
 
-        foreach (var condition in transaction.Conditions)
-        {
-            var member = RespKeys.Member(condition.Key);
-
-            switch (condition.Kind)
-            {
-                case RecordConditionKind.Absent:
-                    arguments.Add("a");
-                    arguments.Add(member);
-                    arguments.Add("");
-                    break;
-
-                case RecordConditionKind.RevisionEquals when condition.Revision is { } revision:
-                    arguments.Add("r");
-                    arguments.Add(member);
-                    arguments.Add(revision.Value);
-                    break;
-
-                case RecordConditionKind.ValueEquals:
-                    arguments.Add("v");
-                    arguments.Add(member);
-                    arguments.Add(condition.Value);
-                    break;
-
-                default:
-                    throw new ArgumentException(
-                        $"The condition kind '{condition.Kind}' is not known.",
-                        nameof(transaction)
-                    );
-            }
-        }
-
+        AddConditions(arguments, transaction);
         AddBranch(arguments, transaction.OnSuccess);
         AddBranch(arguments, transaction.OnFailure);
 
@@ -115,19 +151,6 @@ internal class RespTransactionService(RespRecordTable table) : ITransactionServi
             )
             .ConfigureAwait(false);
 
-        var (status, fields) = RespReplies.Script(reply);
-        if (fields.Length != 1)
-        {
-            throw RespReplies.Unexpected(reply);
-        }
-
-        var resultRevision = RespRecordTable.ReadRevision(fields[0], reply);
-
-        return status switch
-        {
-            0 => new TransactionResult(TransactionStatus.Succeeded, resultRevision),
-            1 => new TransactionResult(TransactionStatus.Failed, resultRevision),
-            _ => throw RespReplies.Unexpected(reply),
-        };
+        return ReadResult(reply);
     }
 }
