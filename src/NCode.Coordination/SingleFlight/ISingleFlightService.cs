@@ -7,7 +7,8 @@ namespace NCode.Coordination;
 /// Lets one caller fetch a value while every other caller for the same key waits for it, built on records and leases.
 /// </summary>
 /// <remarks>
-/// The keys under the key belong to the service. Failures and cancellation throw as the primitives do.
+/// The keys under the key belong to the service, so the key has at most 15 segments. Failures and cancellation throw
+/// as the primitives do.
 /// </remarks>
 public interface ISingleFlightService
 {

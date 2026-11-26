@@ -9,8 +9,8 @@ namespace NCode.Coordination;
 /// <remarks>
 /// Waits have no fairness, so constant readers can starve a writer. A read grant's fencing token orders it among the
 /// write grants: it is greater than every earlier write grant's and less than every later one's. There is no upgrade
-/// from a read lock to a write lock and no reentrancy. The keys under the resource belong to the lock. Failures and
-/// cancellation throw as the lease and record operations do.
+/// from a read lock to a write lock and no reentrancy. The keys under the resource belong to the lock, so the
+/// resource's key has at most 15 segments. Failures and cancellation throw as the lease and record operations do.
 /// </remarks>
 public interface IReadWriteLockService
 {

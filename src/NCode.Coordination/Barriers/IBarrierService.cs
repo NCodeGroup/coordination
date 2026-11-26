@@ -8,7 +8,8 @@ namespace NCode.Coordination;
 /// </summary>
 /// <remarks>
 /// A party counts once it is seen arriving, even when its record later ends. A key is used for one barrier once. The
-/// keys under the barrier belong to it. Failures and cancellation throw as the record operations do.
+/// keys under the barrier belong to it, and the barrier's key has at most 15 segments, since each arrival is a record
+/// under it. Failures and cancellation throw as the record operations do.
 /// </remarks>
 public interface IBarrierService
 {
