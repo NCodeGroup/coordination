@@ -7,6 +7,10 @@ NCode.Coordination.CoordinationHealthChecksBuilderExtensions
 NCode.Coordination.CoordinationHealthChecksBuilderExtensions.extension(Microsoft.Extensions.DependencyInjection.IHealthChecksBuilder!)
 NCode.Coordination.CoordinationHealthChecksBuilderExtensions.extension(Microsoft.Extensions.DependencyInjection.IHealthChecksBuilder!).AddCoordinationCheck() -> Microsoft.Extensions.DependencyInjection.IHealthChecksBuilder!
 NCode.Coordination.CoordinationHealthChecksBuilderExtensions.extension(Microsoft.Extensions.DependencyInjection.IHealthChecksBuilder!).AddCoordinationCheck(string! name, params System.Collections.Generic.IEnumerable<string!>! tags) -> Microsoft.Extensions.DependencyInjection.IHealthChecksBuilder!
+NCode.Coordination.CoordinationHostingServiceCollectionExtensions
+NCode.Coordination.CoordinationHostingServiceCollectionExtensions.extension(Microsoft.Extensions.DependencyInjection.IServiceCollection!)
+NCode.Coordination.CoordinationHostingServiceCollectionExtensions.extension(Microsoft.Extensions.DependencyInjection.IServiceCollection!).AddCoordinationHosting(Microsoft.Extensions.Configuration.IConfiguration! configuration) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+NCode.Coordination.CoordinationHostingServiceCollectionExtensions.extension(Microsoft.Extensions.DependencyInjection.IServiceCollection!).AddCoordinationHosting(System.Action<NCode.Coordination.CoordinationHostOptions!>! configure) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
 NCode.Coordination.CoordinationHostOptions
 NCode.Coordination.CoordinationHostOptions.Address.get -> string!
 NCode.Coordination.CoordinationHostOptions.Address.set -> void
@@ -48,5 +52,7 @@ NCode.Coordination.IHostSessionService.State.get -> NCode.Coordination.HostSessi
 NCode.Coordination.IHostSessionService.WaitForSessionAsync(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<NCode.Coordination.HostSession!>
 static NCode.Coordination.CoordinationHealthChecksBuilderExtensions.AddCoordinationCheck(this Microsoft.Extensions.DependencyInjection.IHealthChecksBuilder! builder, string! name, params System.Collections.Generic.IEnumerable<string!>! tags) -> Microsoft.Extensions.DependencyInjection.IHealthChecksBuilder!
 static NCode.Coordination.CoordinationHealthChecksBuilderExtensions.AddCoordinationCheck(this Microsoft.Extensions.DependencyInjection.IHealthChecksBuilder! builder) -> Microsoft.Extensions.DependencyInjection.IHealthChecksBuilder!
+static NCode.Coordination.CoordinationHostingServiceCollectionExtensions.AddCoordinationHosting(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, Microsoft.Extensions.Configuration.IConfiguration! configuration) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static NCode.Coordination.CoordinationHostingServiceCollectionExtensions.AddCoordinationHosting(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, System.Action<NCode.Coordination.CoordinationHostOptions!>! configure) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
 static NCode.Coordination.HostingCoordinationBuilderExtensions.RequireHostSession(this NCode.Coordination.ICoordinationBuilder! builder, NCode.Coordination.Keyspace! keyspace) -> NCode.Coordination.ICoordinationBuilder!
 static NCode.Coordination.HostingCoordinationBuilderExtensions.RequireHostSession(this NCode.Coordination.ICoordinationBuilder! builder) -> NCode.Coordination.ICoordinationBuilder!
