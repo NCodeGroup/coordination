@@ -9,7 +9,13 @@ namespace NCode.Coordination.Resp;
 /// <summary>
 /// The provider that keeps every primitive on a RESP server, Valkey or Garnet, through StackExchange.Redis.
 /// </summary>
-internal sealed class RespProvider : ICoordinationProvider, IAsyncDisposable, IDisposable
+/// <param name="connection">The holder of the provider's connection to its server. The provider disposes the holder, which disposes the multiplexer only when it owns it.</param>
+/// <param name="profile">The vendor profile that the server must match.</param>
+/// <exception cref="ArgumentNullException">The connection or the profile is null.</exception>
+internal sealed class RespProvider(RespConnection connection, RespProfile profile)
+    : ICoordinationProvider,
+        IAsyncDisposable,
+        IDisposable
 {
     /// <summary>
     /// Creates the exception of a probe that found the server unsupported.
@@ -20,42 +26,25 @@ internal sealed class RespProvider : ICoordinationProvider, IAsyncDisposable, ID
         new(CoordinationErrorCodes.Unsupported, false, message);
 
     /// <summary>
-    /// Creates the provider.
-    /// </summary>
-    /// <param name="connection">The connection of the provider to its server, which the provider disposes.</param>
-    /// <param name="profile">The vendor profile that the server must match.</param>
-    /// <exception cref="ArgumentNullException">The connection or the profile is null.</exception>
-    public RespProvider(RespConnection connection, RespProfile profile)
-    {
-        ArgumentNullException.ThrowIfNull(connection);
-        ArgumentNullException.ThrowIfNull(profile);
-
-        Connection = connection;
-        Server = new RespServer(connection);
-        Profile = profile;
-        Declaration = new ProviderDeclaration(RespCoordinationBuilderExtensions.ProviderName)
-        {
-            Profile = profile.Name,
-        };
-    }
-
-    /// <summary>
     /// Gets the connection of the provider to its server.
     /// </summary>
-    private RespConnection Connection { get; }
+    private RespConnection Connection { get; } =
+        connection ?? throw new ArgumentNullException(nameof(connection));
 
     /// <summary>
     /// Gets the seam between the provider and its server.
     /// </summary>
-    private RespServer Server { get; }
+    private RespServer Server { get; } = new(connection);
 
     /// <summary>
     /// Gets the vendor profile that the server must match.
     /// </summary>
-    private RespProfile Profile { get; }
+    private RespProfile Profile { get; } =
+        profile ?? throw new ArgumentNullException(nameof(profile));
 
     /// <inheritdoc />
-    public ProviderDeclaration Declaration { get; }
+    public ProviderDeclaration Declaration { get; } =
+        new(RespCoordinationBuilderExtensions.ProviderName) { Profile = profile.Name };
 
     /// <inheritdoc />
     public object? GetPrimitiveService(Type serviceType)
@@ -90,20 +79,14 @@ internal sealed class RespProvider : ICoordinationProvider, IAsyncDisposable, ID
             );
         }
 
-        string? text;
-        try
-        {
-            text = (string?)reply;
-        }
-        catch (InvalidCastException)
-        {
-            text = null;
-        }
-
+        var type = reply.IsNull ? "null" : reply.Resp2Type.ToString();
+        var text = reply.Resp2Type is ResultType.BulkString or ResultType.SimpleString
+            ? (string?)reply
+            : null;
         if (text is null)
         {
             throw Unsupported(
-                "The RESP server answered the probe script with an unexpected reply."
+                $"The RESP server answered the probe script with a reply of type {type}, not text."
             );
         }
 
