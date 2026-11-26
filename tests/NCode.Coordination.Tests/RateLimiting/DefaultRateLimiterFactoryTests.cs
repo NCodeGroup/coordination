@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Time.Testing;
 using NCode.Coordination.InProcess.Tests;
@@ -55,6 +57,50 @@ public sealed class DefaultRateLimiterFactoryTests
         Assert.True(second.IsAcquired);
         Assert.False(third.IsAcquired);
         Assert.True(bob.IsAcquired);
+    }
+
+    [Fact]
+    public async Task CreateFixedWindowLimiter_WhenTheMiddlewareUsesIt_AdmitsThenRejects()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var time = InProcessTesting.CreateTime();
+        await using var services = RecipeTesting.Build(time);
+        var factory = CreateFactory(services, time);
+        var window = TimeSpan.FromMinutes(1);
+        var limit = new FixedWindowLimit(1, window);
+        var key = RecipeTesting.Keyspace.CreateKey("middleware");
+        using var globalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(_ =>
+            RateLimitPartition.Get("all", _ => factory.CreateFixedWindowLimiter(key, limit))
+        );
+
+        var webCollection = new ServiceCollection();
+        webCollection.AddLogging();
+        webCollection.AddMetrics();
+        webCollection.AddRateLimiter(options =>
+        {
+            options.GlobalLimiter = globalLimiter;
+            options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+        });
+        await using var webServices = webCollection.BuildServiceProvider();
+
+        var builder = new ApplicationBuilder(webServices);
+        builder.UseRateLimiter();
+        builder.Run(context =>
+        {
+            context.Response.StatusCode = StatusCodes.Status200OK;
+            return Task.CompletedTask;
+        });
+        var pipeline = builder.Build();
+
+        var firstContext = new DefaultHttpContext { RequestServices = webServices };
+        firstContext.RequestAborted = cancellationToken;
+        await pipeline(firstContext);
+        var secondContext = new DefaultHttpContext { RequestServices = webServices };
+        secondContext.RequestAborted = cancellationToken;
+        await pipeline(secondContext);
+
+        Assert.Equal(StatusCodes.Status200OK, firstContext.Response.StatusCode);
+        Assert.Equal(StatusCodes.Status429TooManyRequests, secondContext.Response.StatusCode);
     }
 
     #endregion
