@@ -5,6 +5,8 @@ namespace NCode.Coordination.Resp.Server.Tests;
 
 public sealed class RespScriptTests
 {
+    #region Load Tests
+
     [Fact]
     public void Load_Probe_ReadsServerInfo()
     {
@@ -21,4 +23,6 @@ public sealed class RespScriptTests
 
         Assert.Contains("NCode.Coordination.Resp.Scripts.missing.lua", exception.Message);
     }
+
+    #endregion
 }

@@ -61,11 +61,10 @@ public sealed class RespServers : IAsyncLifetime
         GarnetContainer = garnet;
         GarnetWithoutLuaContainer = garnetWithoutLua;
 
-        await Task.WhenAll(
-            valkey.StartAsync(CancellationToken.None),
-            garnet.StartAsync(CancellationToken.None),
-            garnetWithoutLua.StartAsync(CancellationToken.None)
-        );
+        var startValkey = valkey.StartAsync(CancellationToken.None);
+        var startGarnet = garnet.StartAsync(CancellationToken.None);
+        var startGarnetWithoutLua = garnetWithoutLua.StartAsync(CancellationToken.None);
+        await Task.WhenAll(startValkey, startGarnet, startGarnetWithoutLua);
 
         Valkey = GetEndpoint(valkey);
         Garnet = GetEndpoint(garnet);
@@ -93,9 +92,10 @@ public sealed class RespServers : IAsyncLifetime
 
     private static IContainer CreateContainer(string image, params string[] command)
     {
+        var waitStrategy = Wait.ForUnixContainer().UntilMessageIsLogged(ReadyMessage);
         var builder = new ContainerBuilder(image)
             .WithPortBinding(Port, true)
-            .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged(ReadyMessage));
+            .WithWaitStrategy(waitStrategy);
 
         if (command.Length > 0)
         {

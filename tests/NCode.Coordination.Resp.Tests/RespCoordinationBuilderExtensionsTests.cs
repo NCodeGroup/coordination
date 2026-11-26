@@ -12,6 +12,8 @@ public sealed class RespCoordinationBuilderExtensionsTests : IDisposable
 
     public void Dispose() => Mocks.Verify();
 
+    #region AddRespProvider Tests
+
     [Fact]
     public void AddRespProvider_NeitherSet_Throws()
     {
@@ -68,4 +70,6 @@ public sealed class RespCoordinationBuilderExtensionsTests : IDisposable
         await using var disposable = Assert.IsAssignableFrom<IAsyncDisposable>(provider);
         Assert.Equal("garnet", provider.Declaration.Profile);
     }
+
+    #endregion
 }
