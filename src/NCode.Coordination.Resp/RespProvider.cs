@@ -97,6 +97,7 @@ internal sealed class RespProvider : ICoordinationProvider, IAsyncDisposable, ID
             RespCommands.Get,
             "HDEL",
             "HGET",
+            "HGETALL",
             "HMGET",
             "HSET",
             RespCommands.Increment,
