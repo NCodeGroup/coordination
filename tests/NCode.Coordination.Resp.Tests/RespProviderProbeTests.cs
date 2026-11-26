@@ -18,6 +18,8 @@ public sealed class RespProviderProbeTests(RespServers servers)
             profile
         );
 
+    #region ProbeAsync Tests
+
     [RespServerFact]
     public async Task ProbeAsync_ValkeyWithValkeyProfile_Succeeds()
     {
@@ -52,6 +54,10 @@ public sealed class RespProviderProbeTests(RespServers servers)
 
         Assert.Equal(CoordinationErrorCodes.Unsupported, exception.Code);
         Assert.False(exception.OutcomeUnknown);
+        Assert.Equal(
+            "The RESP server is 'valkey', but the provider uses the 'garnet' profile.",
+            exception.Message
+        );
     }
 
     [RespServerFact]
@@ -66,6 +72,11 @@ public sealed class RespProviderProbeTests(RespServers servers)
 
         Assert.Equal(CoordinationErrorCodes.Unsupported, exception.Code);
         Assert.False(exception.OutcomeUnknown);
+        Assert.StartsWith(
+            "The RESP server refused the provider's probe script:",
+            exception.Message,
+            StringComparison.Ordinal
+        );
     }
 
     [RespServerFact]
@@ -99,4 +110,6 @@ public sealed class RespProviderProbeTests(RespServers servers)
         Assert.Equal(CoordinationErrorCodes.AccessDenied, exception.Code);
         Assert.False(exception.OutcomeUnknown);
     }
+
+    #endregion
 }
