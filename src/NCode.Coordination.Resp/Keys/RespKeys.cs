@@ -142,7 +142,15 @@ internal static class RespKeys
                     throw NotEncoded(encoded);
                 }
 
-                return KeySegment.FromString(text);
+                var segment = KeySegment.FromString(text);
+                var canonical = EncodeSegment(segment);
+
+                if (!string.Equals(canonical, encoded, StringComparison.Ordinal))
+                {
+                    throw NotEncoded(encoded);
+                }
+
+                return segment;
 
             case 'n':
                 if (

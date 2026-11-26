@@ -190,6 +190,8 @@ public sealed class RespKeysTests
     [InlineData("t%41%")]
     [InlineData("ta b")]
     [InlineData("t%FF")]
+    [InlineData("t%41")]
+    [InlineData("ta%2Fb%41")]
     [InlineData("n")]
     [InlineData("n12a")]
     [InlineData("n+5")]
