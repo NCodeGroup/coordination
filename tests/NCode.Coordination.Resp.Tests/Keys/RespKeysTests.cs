@@ -101,6 +101,115 @@ public sealed class RespKeysTests
 
     #endregion
 
+    #region Name Tests
+
+    [Fact]
+    public void Name_Key_IsTheDepthAndTheEncodedSegments()
+    {
+        var key = new Keyspace("prod").CreateKey("cfg", 7) with { PartitionDepth = 1 };
+
+        var name = RespKeys.Name(key);
+
+        Assert.Equal("1:tcfg/n7", name);
+    }
+
+    #endregion
+
+    #region DecodeName Tests
+
+    [Fact]
+    public void DecodeName_Name_ReturnsTheKey()
+    {
+        var keyspace = new Keyspace("prod");
+        var uuid = KeySegment.FromGuid(Guid.NewGuid());
+        var key = keyspace.CreateKey("a{b}/c %\u00e9", -42, uuid) with { PartitionDepth = 2 };
+        var name = RespKeys.Name(key);
+
+        var decoded = RespKeys.DecodeName(keyspace, name);
+
+        Assert.Equal(key, decoded);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("ta")]
+    [InlineData(":ta")]
+    [InlineData("x:ta")]
+    [InlineData("01:ta")]
+    [InlineData("-1:ta")]
+    [InlineData("0:")]
+    [InlineData("0:ta/")]
+    [InlineData("2:ta")]
+    [InlineData("0:x1")]
+    public void DecodeName_Malformed_ThrowsFormatException(string name)
+    {
+        var keyspace = new Keyspace("prod");
+
+        Assert.Throws<FormatException>(() => RespKeys.DecodeName(keyspace, name));
+    }
+
+    #endregion
+
+    #region MemberPrefix Tests
+
+    [Fact]
+    public void MemberPrefix_Prefix_StartsTheMemberOfAKeyUnderIt()
+    {
+        var keyspace = new Keyspace("prod");
+        var prefix = keyspace.CreateKey("a");
+        var key = keyspace.CreateKey("a", "b") with { PartitionDepth = 1 };
+
+        var prefixText = RespKeys.MemberPrefix(prefix);
+        var member = RespKeys.Member(key);
+
+        Assert.StartsWith(prefixText, member, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void MemberPrefix_OtherSegment_DoesNotStartTheMember()
+    {
+        var keyspace = new Keyspace("prod");
+        var prefix = keyspace.CreateKey("a");
+        var key = keyspace.CreateKey("ab");
+
+        var prefixText = RespKeys.MemberPrefix(prefix);
+        var member = RespKeys.Member(key);
+
+        Assert.False(member.StartsWith(prefixText, StringComparison.Ordinal));
+    }
+
+    #endregion
+
+    #region Member Tests
+
+    [Fact]
+    public void Member_Key_IsTheDigestOfEachSegmentAndTheDepth()
+    {
+        var key = new Keyspace("prod").CreateKey("cfg", 7);
+
+        var member = RespKeys.Member(key);
+
+        // From sha256sum and base64 in valkey/valkey:9.2.0: the SHA-256 of "tcfg" and of "n7", in unpadded Base64Url.
+        Assert.Equal(
+            "VDlgg0fsjSWAj6iEqf_4sjULd91lsdHkOhNtG4yXTB8/b166Ixm9dYRxH8IcLrXUu4YzJ7t6Wux-qS7_2_kXzY8/0",
+            member
+        );
+    }
+
+    [Fact]
+    public void Member_LongestKey_FitsAContinuationToken()
+    {
+        var text = new string('\u00e9', 256);
+        var segments = Enumerable.Repeat(KeySegment.FromString(text), 16);
+        var key = new Keyspace("prod").CreateKey(segments) with { PartitionDepth = 16 };
+
+        var member = RespKeys.Member(key);
+
+        Assert.InRange(member.Length, 1, CoordinationLimits.MaxContinuationTokenLength);
+    }
+
+    #endregion
+
     #region ForKeyspace Tests
 
     [Fact]

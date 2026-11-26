@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using System.Buffers;
+using System.Buffers.Text;
 using System.Globalization;
+using System.Security.Cryptography;
 using System.Text;
 using StackExchange.Redis;
 
@@ -81,11 +83,115 @@ internal static class RespKeys
         ValidateKind(kind);
 
         var tag = KeyspaceTag(key.Keyspace);
+
+        return tag + ":" + kind + ":" + Name(key);
+    }
+
+    /// <summary>
+    /// Returns the name of a key within its keyspace: the tail that <see cref="ForKey"/> writes.
+    /// </summary>
+    /// <param name="key">The key.</param>
+    /// <returns>The partition depth, a ":" and the encoded segments joined by "/".</returns>
+    /// <exception cref="ArgumentNullException">The key is null.</exception>
+    public static string Name(CoordinationKey key)
+    {
+        ArgumentNullException.ThrowIfNull(key);
+
         var depth = key.PartitionDepth.ToString(CultureInfo.InvariantCulture);
         var encoded = key.Segments.Select(EncodeSegment);
         var segments = string.Join('/', encoded);
 
-        return tag + ":" + kind + ":" + depth + ":" + segments;
+        return depth + ":" + segments;
+    }
+
+    /// <summary>
+    /// Decodes a name that <see cref="Name"/> wrote: the inverse of <see cref="Name"/>.
+    /// </summary>
+    /// <param name="keyspace">The keyspace the key belongs to.</param>
+    /// <param name="name">The name.</param>
+    /// <returns>The key.</returns>
+    /// <exception cref="ArgumentNullException">The keyspace or the name is null.</exception>
+    /// <exception cref="FormatException">The text is not a name that <see cref="Name"/> writes.</exception>
+    public static CoordinationKey DecodeName(Keyspace keyspace, string name)
+    {
+        ArgumentNullException.ThrowIfNull(keyspace);
+        ArgumentNullException.ThrowIfNull(name);
+
+        var colon = name.IndexOf(':', StringComparison.Ordinal);
+
+        if (colon < 1)
+        {
+            throw NotAName(name);
+        }
+
+        var depthText = name[..colon];
+
+        if (
+            !int.TryParse(depthText, NumberStyles.None, CultureInfo.InvariantCulture, out var depth)
+        )
+        {
+            throw NotAName(name);
+        }
+
+        var canonical = depth.ToString(CultureInfo.InvariantCulture);
+
+        if (!string.Equals(canonical, depthText, StringComparison.Ordinal))
+        {
+            throw NotAName(name);
+        }
+
+        var parts = name[(colon + 1)..].Split('/');
+        var segments = parts.Select(DecodeSegment).ToList();
+
+        try
+        {
+            return new CoordinationKey(keyspace, segments) { PartitionDepth = depth };
+        }
+        catch (ArgumentException exception)
+        {
+            throw NotAName(name, exception);
+        }
+    }
+
+    /// <summary>
+    /// Returns the start of the members of every key under a prefix: for each segment, the digest of its encoding and
+    /// a "/".
+    /// </summary>
+    /// <param name="prefix">The prefix.</param>
+    /// <returns>
+    /// The unpadded Base64Url of the SHA-256 of the UTF-8 of each encoded segment, each followed by "/", without the
+    /// partition depth.
+    /// </returns>
+    /// <exception cref="ArgumentNullException">The prefix is null.</exception>
+    public static string MemberPrefix(CoordinationKey prefix)
+    {
+        ArgumentNullException.ThrowIfNull(prefix);
+
+        var builder = new StringBuilder();
+
+        foreach (var segment in prefix.Segments)
+        {
+            var bytes = Encoding.UTF8.GetBytes(EncodeSegment(segment));
+            var digest = Base64Url.EncodeToString(SHA256.HashData(bytes));
+            builder.Append(digest).Append('/');
+        }
+
+        return builder.ToString();
+    }
+
+    /// <summary>
+    /// Returns the member that stands for a key in a keyspace's index: at most 706 characters whatever the key's
+    /// segments.
+    /// </summary>
+    /// <param name="key">The key.</param>
+    /// <returns>The key's <see cref="MemberPrefix"/> and its partition depth.</returns>
+    /// <exception cref="ArgumentNullException">The key is null.</exception>
+    public static string Member(CoordinationKey key)
+    {
+        var prefix = MemberPrefix(key);
+        var depth = key.PartitionDepth.ToString(CultureInfo.InvariantCulture);
+
+        return prefix + depth;
     }
 
     /// <summary>
@@ -255,6 +361,15 @@ internal static class RespKeys
             >= 'A' and <= 'F' => character - 'A' + 10,
             _ => -1,
         };
+
+    /// <summary>
+    /// Creates the exception for text that is not an encoded key name.
+    /// </summary>
+    /// <param name="name">The text.</param>
+    /// <param name="innerException">The exception that showed the text is not one, if any.</param>
+    /// <returns>The exception.</returns>
+    private static FormatException NotAName(string name, Exception? innerException = null) =>
+        new($"'{name}' is not an encoded key name.", innerException);
 
     /// <summary>
     /// Creates the exception for text that is not an encoded key segment.
