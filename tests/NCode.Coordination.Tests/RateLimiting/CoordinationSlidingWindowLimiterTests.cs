@@ -116,5 +116,70 @@ public sealed class CoordinationSlidingWindowLimiterTests
         Assert.Equal(10, acquired);
     }
 
+    [Fact]
+    public async Task AcquireAsync_WhenTheWindowHasSeveralSegments_ReadsTheEarlierSegmentsTogether()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var time = InProcessTesting.CreateTime();
+        await using var services = RecipeTesting.Build(time);
+        var length = TimeSpan.FromSeconds(4);
+        var limit = new SlidingWindowLimit(4, length, 4);
+        var counters = services.GetRequiredService<ICounterService>();
+        var gated = new GatedCounters(counters, 3);
+        var key = CreateKey();
+        using var limiter = new CoordinationSlidingWindowLimiter(gated, time, key, limit);
+
+        using var lease = await limiter.AcquireAsync(1, cancellationToken);
+
+        Assert.True(lease.IsAcquired);
+    }
+
     #endregion
+
+    private sealed class GatedCounters(ICounterService inner, int expectedReads) : ICounterService
+    {
+        private int _started;
+
+        private static TimeSpan ReadTimeout { get; } = TimeSpan.FromSeconds(15);
+
+        private TaskCompletionSource Gate { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public ValueTask<long> IncrementAsync(
+            CoordinationKey key,
+            long amount,
+            TimeToLive timeToLive,
+            OperationOptions? options,
+            CancellationToken cancellationToken
+        ) => inner.IncrementAsync(key, amount, timeToLive, options, cancellationToken);
+
+        public async ValueTask<long> ReadAsync(
+            CoordinationKey key,
+            OperationOptions? options,
+            CancellationToken cancellationToken
+        )
+        {
+            var started = Interlocked.Increment(ref _started);
+            if (started == expectedReads)
+            {
+                Gate.TrySetResult();
+            }
+
+            await Gate.Task.WaitAsync(ReadTimeout, cancellationToken);
+
+            return await inner.ReadAsync(key, options, cancellationToken);
+        }
+
+        public ValueTask ResetAsync(
+            CoordinationKey key,
+            OperationOptions? options,
+            CancellationToken cancellationToken
+        ) => inner.ResetAsync(key, options, cancellationToken);
+
+        public ValueTask<CounterBatchResult> IncrementBatchAsync(
+            IReadOnlyList<CounterIncrement> increments,
+            OperationOptions? options,
+            CancellationToken cancellationToken
+        ) => inner.IncrementBatchAsync(increments, options, cancellationToken);
+    }
 }

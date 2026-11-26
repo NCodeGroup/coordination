@@ -60,7 +60,7 @@ internal class CoordinationSlidingWindowLimiter(
             throw new InvalidOperationException(RecipeMessages.WindowEnded);
         }
 
-        var previous = 0L;
+        var reads = new List<Task<long>>(Limit.SegmentsPerWindow - 1);
         for (var offset = 1; offset < Limit.SegmentsPerWindow; offset++)
         {
             var start = current.Start - (offset * Limit.SegmentLength);
@@ -71,9 +71,15 @@ internal class CoordinationSlidingWindowLimiter(
 
             var segment = new TimeWindow(start, Limit.SegmentLength);
             var segmentKey = RecipeKeys.Child(Key, segment.Segment, nameof(key));
-            previous += await Counters
-                .ReadAsync(segmentKey, null, cancellationToken)
-                .ConfigureAwait(false);
+            var read = Counters.ReadAsync(segmentKey, null, cancellationToken).AsTask();
+            reads.Add(read);
+        }
+
+        var counts = await Task.WhenAll(reads).ConfigureAwait(false);
+        var previous = 0L;
+        foreach (var segmentCount in counts)
+        {
+            previous += segmentCount;
         }
 
         var counterKey = RecipeKeys.Child(Key, current.Segment, nameof(key));
