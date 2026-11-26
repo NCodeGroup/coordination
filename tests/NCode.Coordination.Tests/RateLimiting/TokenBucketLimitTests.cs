@@ -18,6 +18,16 @@ public sealed class TokenBucketLimitTests
         Assert.Equal(period, limit.ReplenishmentPeriod);
     }
 
+    [Fact]
+    public void Constructor_WhenTheTokensPerPeriodEqualTheTokenLimit_KeepsThem()
+    {
+        var period = TimeSpan.FromSeconds(1);
+        var limit = new TokenBucketLimit(4, 4, period);
+
+        Assert.Equal(4, limit.TokenLimit);
+        Assert.Equal(4, limit.TokensPerPeriod);
+    }
+
     [Theory]
     [InlineData(0)]
     [InlineData(5)]

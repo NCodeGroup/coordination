@@ -20,6 +20,17 @@ public sealed class SlidingWindowLimitTests
         Assert.Equal(segmentLength, limit.SegmentLength);
     }
 
+    [Fact]
+    public void Constructor_WhenTheSegmentCountIsTheMostAllowed_KeepsIt()
+    {
+        var window = TimeSpan.FromSeconds(16);
+        var segmentLength = TimeSpan.FromSeconds(1);
+        var limit = new SlidingWindowLimit(10, window, SlidingWindowLimit.MaxSegmentsPerWindow);
+
+        Assert.Equal(SlidingWindowLimit.MaxSegmentsPerWindow, limit.SegmentsPerWindow);
+        Assert.Equal(segmentLength, limit.SegmentLength);
+    }
+
     [Theory]
     [InlineData(0)]
     [InlineData(SlidingWindowLimit.MaxSegmentsPerWindow + 1)]

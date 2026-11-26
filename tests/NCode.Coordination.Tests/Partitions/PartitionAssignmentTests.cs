@@ -122,6 +122,19 @@ public sealed class PartitionAssignmentTests
         Assert.Equal(8, assignment.PartitionCount);
     }
 
+    [Fact]
+    public void Assign_WhenThePartitionCountIsTheMostAllowed_AssignsTheLastPartition()
+    {
+        const int last = PartitionAssignment.MaxPartitions - 1;
+        var view = CreateView("node-a");
+        var assignment = PartitionAssignment.Assign(view, PartitionAssignment.MaxPartitions);
+
+        var owner = assignment.GetOwner(last);
+
+        Assert.Equal(PartitionAssignment.MaxPartitions, assignment.PartitionCount);
+        Assert.Equal("node-a", owner?.NodeId);
+    }
+
     [Theory]
     [InlineData(0)]
     [InlineData(PartitionAssignment.MaxPartitions + 1)]
