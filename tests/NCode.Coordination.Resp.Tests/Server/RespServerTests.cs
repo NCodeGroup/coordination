@@ -18,11 +18,14 @@ public sealed class RespServerTests : IDisposable
         var multiplexer = Mocks.Create<IConnectionMultiplexer>();
         multiplexer
             .Setup(x => x.GetDatabase(It.IsAny<int>(), It.IsAny<object?>()))
-            .Returns(database.Object);
+            .Returns(database.Object)
+            .Verifiable();
         var connection = new RespConnection(_ => Task.FromResult(multiplexer.Object), owned: false);
 
         return (new RespServer(connection), database);
     }
+
+    #region ParseInfo Tests
 
     [Fact]
     public void ParseInfo_ServerSection_ParsesFields()
@@ -35,6 +38,10 @@ public sealed class RespServerTests : IDisposable
         Assert.Equal("valkey", fields["server_name"]);
         Assert.Equal("9.2.0", fields["valkey_version"]);
     }
+
+    #endregion
+
+    #region EvaluateAsync Tests
 
     [Fact]
     public async Task EvaluateAsync_ServerRefusesWithNoperm_ThrowsAccessDenied()
@@ -98,6 +105,10 @@ public sealed class RespServerTests : IDisposable
         Assert.Same(failure, exception.InnerException);
     }
 
+    #endregion
+
+    #region ExecuteAsync Tests
+
     [Fact]
     public async Task ExecuteAsync_ServerError_ThrowsOutcomeKnown()
     {
@@ -121,4 +132,6 @@ public sealed class RespServerTests : IDisposable
         Assert.False(exception.OutcomeUnknown);
         Assert.Same(failure, exception.InnerException);
     }
+
+    #endregion
 }
