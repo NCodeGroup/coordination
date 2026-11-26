@@ -1,6 +1,8 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using System.Collections.Frozen;
+using System.Collections.Immutable;
 using NCode.Coordination.Resp.Counters;
 using NCode.Coordination.Resp.Occurrences;
 using NCode.Coordination.Resp.Sequences;
@@ -21,7 +23,7 @@ internal sealed class RespProvider : ICoordinationProvider, IAsyncDisposable, ID
     /// persists or replicates its writes, so it declares them volatile and linearizable only until a failover. A
     /// counter's batch runs as one script on one slot, so it is atomic across partitions. A sequence has no expiry.
     /// </summary>
-    private static PrimitiveSupport[] SupportedPrimitives { get; } =
+    private static ImmutableArray<PrimitiveSupport> SupportedPrimitives { get; } =
     [
         PrimitiveSupport.Supported(
             Primitives.Occurrence,
@@ -78,13 +80,14 @@ internal sealed class RespProvider : ICoordinationProvider, IAsyncDisposable, ID
         {
             Profile = profile.Name,
         };
-        Services = new Dictionary<Type, object>
+        var services = new Dictionary<Type, object>
         {
             [typeof(IOccurrenceService)] = new RespOccurrenceService(Server),
             [typeof(ISetService)] = new RespSetService(Server),
             [typeof(ICounterService)] = new RespCounterService(Server),
             [typeof(ISequenceService)] = new RespSequenceService(Server),
         };
+        Services = services.ToFrozenDictionary();
     }
 
     /// <summary>
@@ -105,7 +108,7 @@ internal sealed class RespProvider : ICoordinationProvider, IAsyncDisposable, ID
     /// <summary>
     /// Gets the primitive services by the interface that each implements.
     /// </summary>
-    private Dictionary<Type, object> Services { get; }
+    private FrozenDictionary<Type, object> Services { get; }
 
     /// <inheritdoc />
     public ProviderDeclaration Declaration { get; }
