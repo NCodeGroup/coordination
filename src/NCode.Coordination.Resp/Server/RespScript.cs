@@ -144,6 +144,16 @@ internal sealed class RespScript(string name, string text)
     public static RespScript SemaphoreCheck { get; } = LoadKeyspace("semaphore-check");
 
     /// <summary>
+    /// Gets the election-lead script: it grants a role's leadership when no other holder has it.
+    /// </summary>
+    public static RespScript ElectionLead { get; } = LoadKeyspace("election-lead");
+
+    /// <summary>
+    /// Gets the election-read script: it reads a role's leader.
+    /// </summary>
+    public static RespScript ElectionRead { get; } = LoadKeyspace("election-read");
+
+    /// <summary>
     /// Gets the membership script: it manages group membership with join, leave, and listing operations.
     /// </summary>
     public static RespScript Membership { get; } = Load("membership");
