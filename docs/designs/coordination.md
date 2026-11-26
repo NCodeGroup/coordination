@@ -20,8 +20,8 @@ providers and checks requirements when the host starts ([D16](#d16-composition))
 suites ([D17](#d17-conformance-kit)), the holder's local deadline ([D18](#d18-holder-deadline)), the history checker
 that verifies concurrent runs of every primitive ([D19](#d19-history-checker)), the recipes built on the primitives'
 contracts ([D20](#d20-recipes)), the hosting that ties a node's session to its host's lifetime ([D21](#d21-hosting)),
-and the RESP provider's client, atomic scripts, cluster slots and numbered notifications ([D22](#d22-resp-client) to
-[D25](#d25-resp-notifications)).
+and the RESP provider's client, atomic scripts, cluster slots, numbered notifications and largest count
+([D22](#d22-resp-client) to [D26](#d26-resp-counts)).
 
 ## Goals and Non-Goals
 
@@ -341,6 +341,12 @@ slot, and any operation within a keyspace is atomic.
 The script that makes a change numbers and publishes it, subscribers resync on a gap, a reconnect or a failed
 periodic check, and state a watch can see expires through scripts.
 [ADR-1025](../decisions/1025-resp-notifications-and-watches-are-numbered-in-the-writing-script-published-over-pubsub-and-resync-on-any-doubt.md)
+
+### D26. RESP counts
+
+A RESP counter keeps counts up to 2^53 − 1, the largest integer a Lua number holds exactly, so its script checks
+every count before it writes; an increment past it fails as `limit-exceeded` and applies nothing.
+[ADR-1026](../decisions/1026-resp-counters-keep-counts-up-to-the-largest-integer-a-lua-number-holds-exactly.md)
 
 ## Open Questions
 

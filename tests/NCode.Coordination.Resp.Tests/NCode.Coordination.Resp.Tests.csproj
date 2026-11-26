@@ -15,6 +15,7 @@
   <ItemGroup>
     <ProjectReference Include="../../src/NCode.Coordination/NCode.Coordination.csproj" />
     <ProjectReference Include="../../src/NCode.Coordination.Resp/NCode.Coordination.Resp.csproj" />
+    <ProjectReference Include="../../src/NCode.Coordination.Testing/NCode.Coordination.Testing.csproj" />
   </ItemGroup>
   <ItemGroup>
     <Using Include="Xunit" />

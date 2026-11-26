@@ -27,6 +27,27 @@ internal sealed class RespScript(string name, string text)
     public static RespScript Probe { get; } = Load("probe");
 
     /// <summary>
+    /// Gets the counter script: it applies the increments of a batch in order, and stops after the first
+    /// whose count exceeds its limit.
+    /// </summary>
+    public static RespScript CounterIncrement { get; } = Load("counter-increment");
+
+    /// <summary>
+    /// Gets the set-add script: it adds a member with its deadline, and refuses before writing when the set is full.
+    /// </summary>
+    public static RespScript SetAdd { get; } = Load("set-add");
+
+    /// <summary>
+    /// Gets the set-remove script: it removes a member, and reports whether the member was live.
+    /// </summary>
+    public static RespScript SetRemove { get; } = Load("set-remove");
+
+    /// <summary>
+    /// Gets the set-list script: it lists the members whose deadline is after the server's current time.
+    /// </summary>
+    public static RespScript SetList { get; } = Load("set-list");
+
+    /// <summary>
     /// Loads a script from the embedded resource <c>NCode.Coordination.Resp.Scripts.&lt;name&gt;.lua</c>.
     /// </summary>
     /// <param name="name">The name of the script, without its folder and extension.</param>

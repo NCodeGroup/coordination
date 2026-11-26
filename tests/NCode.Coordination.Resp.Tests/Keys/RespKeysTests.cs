@@ -134,4 +134,75 @@ public sealed class RespKeysTests
     }
 
     #endregion
+
+    #region DecodeSegment Tests
+
+    [Fact]
+    public void DecodeSegment_EncodedText_ReturnsTheText()
+    {
+        var segment = KeySegment.FromString("a{b}/c %\u00e9");
+        var encoded = RespKeys.EncodeSegment(segment);
+
+        var decoded = RespKeys.DecodeSegment(encoded);
+
+        Assert.Equal(segment, decoded);
+    }
+
+    [Fact]
+    public void DecodeSegment_EncodedNumber_ReturnsTheNumber()
+    {
+        var segment = KeySegment.FromInt64(-42);
+        var encoded = RespKeys.EncodeSegment(segment);
+
+        var decoded = RespKeys.DecodeSegment(encoded);
+
+        Assert.Equal(segment, decoded);
+    }
+
+    [Fact]
+    public void DecodeSegment_EncodedUuid_ReturnsTheUuid()
+    {
+        var uuid = Guid.Parse("00112233-4455-6677-8899-aabbccddeeff");
+        var segment = KeySegment.FromGuid(uuid);
+        var encoded = RespKeys.EncodeSegment(segment);
+
+        var decoded = RespKeys.DecodeSegment(encoded);
+
+        Assert.Equal(segment, decoded);
+    }
+
+    [Fact]
+    public void DecodeSegment_EscapedBraces_ReturnsTheText()
+    {
+        const string encoded = "ta%7Bb%7D%2Fc";
+        var expected = KeySegment.FromString("a{b}/c");
+
+        var decoded = RespKeys.DecodeSegment(encoded);
+
+        Assert.Equal(expected, decoded);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("x1")]
+    [InlineData("t")]
+    [InlineData("t%4")]
+    [InlineData("t%g1")]
+    [InlineData("t%41%")]
+    [InlineData("ta b")]
+    [InlineData("t%FF")]
+    [InlineData("t%41")]
+    [InlineData("ta%2Fb%41")]
+    [InlineData("n")]
+    [InlineData("n12a")]
+    [InlineData("n+5")]
+    [InlineData("n007")]
+    [InlineData("u123")]
+    [InlineData("u0123456789ABCDEF0123456789ABCDEF")]
+    public void DecodeSegment_Malformed_ThrowsFormatException(string encoded)
+    {
+        Assert.Throws<FormatException>(() => RespKeys.DecodeSegment(encoded));
+    }
+
+    #endregion
 }

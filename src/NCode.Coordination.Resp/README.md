@@ -29,6 +29,24 @@ start otherwise.
 - **Garnet** 2.2.13 or later, started with `--lua --lua-transaction-mode`: without them Garnet runs no scripts, or
   runs them without locking their keys, and nothing at startup can tell the second case.
 
+## Primitives
+
+The provider keeps occurrences, sets, counters and sequences. Each operation is one server command or one Lua script,
+and every time to live is measured on the server's clock, in whole milliseconds rounded up.
+
+- **Occurrences**: `SET` with `NX` and a time to live. A call the server doesn't answer throws, so a replay guard
+  refuses rather than accepts.
+- **Sets**: one sorted set per key, each member scored with its own deadline; at most 10,000 live members.
+- **Counters**: the increment that creates a counter sets its time to live, and a batch of up to 16 increments runs
+  as one script that stops after the first over its limit. A count is at most 9,007,199,254,740,991 (2^53 − 1), the
+  largest integer a Lua number holds exactly; an increment past it fails as `limit-exceeded`.
+- **Sequences**: `INCR` and `INCRBY` on a key with no time to live, so a sequence never resets while the server keeps
+  its data.
+
+The provider declares each of them linearizable until the server fails over, and volatile, since it can't tell
+whether the server persists or replicates its writes; counter batches are atomic across partitions, because a
+keyspace lives in one slot. It serves no other primitive.
+
 ## Keyspaces
 
 Every key carries its keyspace as its cluster hash tag, so a keyspace and everything in it live in one slot. A

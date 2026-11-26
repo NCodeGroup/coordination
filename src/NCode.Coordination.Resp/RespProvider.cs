@@ -1,7 +1,13 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using System.Collections.Frozen;
+using System.Collections.Immutable;
+using NCode.Coordination.Resp.Counters;
+using NCode.Coordination.Resp.Occurrences;
+using NCode.Coordination.Resp.Sequences;
 using NCode.Coordination.Resp.Server;
+using NCode.Coordination.Resp.Sets;
 using StackExchange.Redis;
 
 namespace NCode.Coordination.Resp;
@@ -9,14 +15,42 @@ namespace NCode.Coordination.Resp;
 /// <summary>
 /// The provider that keeps every primitive on a RESP server, Valkey or Garnet, through StackExchange.Redis.
 /// </summary>
-/// <param name="connection">The holder of the provider's connection to its server. The provider disposes the holder, which disposes the multiplexer only when it owns it.</param>
-/// <param name="profile">The vendor profile that the server must match.</param>
-/// <exception cref="ArgumentNullException">The connection or the profile is null.</exception>
-internal sealed class RespProvider(RespConnection connection, RespProfile profile)
-    : ICoordinationProvider,
-        IAsyncDisposable,
-        IDisposable
+internal sealed class RespProvider : ICoordinationProvider, IAsyncDisposable, IDisposable
 {
+    /// <summary>
+    /// Gets the primitives that the provider serves, in the order of <see cref="Primitives.All"/>. The server keeps
+    /// every one of them in memory and its clock measures every expiry. The provider can't see whether the server
+    /// persists or replicates its writes, so it declares them volatile and linearizable only until a failover. A
+    /// counter's batch runs as one script on one slot, so it is atomic across partitions. A sequence has no expiry.
+    /// </summary>
+    private static ImmutableArray<PrimitiveSupport> SupportedPrimitives { get; } =
+    [
+        PrimitiveSupport.Supported(
+            Primitives.Occurrence,
+            Guarantees.LinearizableUntilFailover,
+            Guarantees.Volatile,
+            Guarantees.ServerClock
+        ),
+        PrimitiveSupport.Supported(
+            Primitives.Set,
+            Guarantees.LinearizableUntilFailover,
+            Guarantees.Volatile,
+            Guarantees.ServerClock
+        ),
+        PrimitiveSupport.Supported(
+            Primitives.Counter,
+            Guarantees.LinearizableUntilFailover,
+            Guarantees.Volatile,
+            Guarantees.ServerClock,
+            Guarantees.AtomicAcrossPartitions
+        ),
+        PrimitiveSupport.Supported(
+            Primitives.Sequence,
+            Guarantees.LinearizableUntilFailover,
+            Guarantees.Volatile
+        ),
+    ];
+
     /// <summary>
     /// Creates the exception of a probe that found the server unsupported.
     /// </summary>
@@ -26,32 +60,65 @@ internal sealed class RespProvider(RespConnection connection, RespProfile profil
         new(CoordinationErrorCodes.Unsupported, false, message);
 
     /// <summary>
+    /// Creates the provider and the services that share its connection.
+    /// </summary>
+    /// <param name="connection">The holder of the provider's connection to its server. The provider disposes the holder, which disposes the multiplexer only when it owns it.</param>
+    /// <param name="profile">The vendor profile that the server must match.</param>
+    /// <exception cref="ArgumentNullException">The connection or the profile is null.</exception>
+    public RespProvider(RespConnection connection, RespProfile profile)
+    {
+        ArgumentNullException.ThrowIfNull(connection);
+        ArgumentNullException.ThrowIfNull(profile);
+
+        Connection = connection;
+        Profile = profile;
+        Server = new RespServer(connection);
+        Declaration = new ProviderDeclaration(
+            RespCoordinationBuilderExtensions.ProviderName,
+            SupportedPrimitives
+        )
+        {
+            Profile = profile.Name,
+        };
+        var services = new Dictionary<Type, object>
+        {
+            [typeof(IOccurrenceService)] = new RespOccurrenceService(Server),
+            [typeof(ISetService)] = new RespSetService(Server),
+            [typeof(ICounterService)] = new RespCounterService(Server),
+            [typeof(ISequenceService)] = new RespSequenceService(Server),
+        };
+        Services = services.ToFrozenDictionary();
+    }
+
+    /// <summary>
     /// Gets the connection of the provider to its server.
     /// </summary>
-    private RespConnection Connection { get; } =
-        connection ?? throw new ArgumentNullException(nameof(connection));
+    private RespConnection Connection { get; }
 
     /// <summary>
     /// Gets the seam between the provider and its server.
     /// </summary>
-    private RespServer Server { get; } = new(connection);
+    private RespServer Server { get; }
 
     /// <summary>
     /// Gets the vendor profile that the server must match.
     /// </summary>
-    private RespProfile Profile { get; } =
-        profile ?? throw new ArgumentNullException(nameof(profile));
+    private RespProfile Profile { get; }
+
+    /// <summary>
+    /// Gets the primitive services by the interface that each implements.
+    /// </summary>
+    private FrozenDictionary<Type, object> Services { get; }
 
     /// <inheritdoc />
-    public ProviderDeclaration Declaration { get; } =
-        new(RespCoordinationBuilderExtensions.ProviderName) { Profile = profile.Name };
+    public ProviderDeclaration Declaration { get; }
 
     /// <inheritdoc />
     public object? GetPrimitiveService(Type serviceType)
     {
         ArgumentNullException.ThrowIfNull(serviceType);
 
-        return null;
+        return Services.GetValueOrDefault(serviceType);
     }
 
     /// <inheritdoc />

@@ -64,7 +64,63 @@ public sealed class RespProviderTests(RespServers servers) : IDisposable
 
         Assert.Equal("resp", declaration.Provider);
         Assert.Equal("valkey", declaration.Profile);
-        Assert.Empty(declaration.Primitives);
+    }
+
+    [Fact]
+    public async Task Declaration_Always_DeclaresOccurrencesSetsCountersAndSequences()
+    {
+        await using var provider = CreateProvider();
+
+        var primitives = provider.Declaration.Primitives;
+
+        Assert.Collection(
+            primitives,
+            support =>
+            {
+                Assert.Equal(Primitives.Occurrence, support.Primitive);
+                Assert.Equal<Guarantee>(
+                    [
+                        Guarantees.LinearizableUntilFailover,
+                        Guarantees.Volatile,
+                        Guarantees.ServerClock,
+                    ],
+                    support.Guarantees
+                );
+            },
+            support =>
+            {
+                Assert.Equal(Primitives.Set, support.Primitive);
+                Assert.Equal<Guarantee>(
+                    [
+                        Guarantees.LinearizableUntilFailover,
+                        Guarantees.Volatile,
+                        Guarantees.ServerClock,
+                    ],
+                    support.Guarantees
+                );
+            },
+            support =>
+            {
+                Assert.Equal(Primitives.Counter, support.Primitive);
+                Assert.Equal<Guarantee>(
+                    [
+                        Guarantees.LinearizableUntilFailover,
+                        Guarantees.Volatile,
+                        Guarantees.ServerClock,
+                        Guarantees.AtomicAcrossPartitions,
+                    ],
+                    support.Guarantees
+                );
+            },
+            support =>
+            {
+                Assert.Equal(Primitives.Sequence, support.Primitive);
+                Assert.Equal<Guarantee>(
+                    [Guarantees.LinearizableUntilFailover, Guarantees.Volatile],
+                    support.Guarantees
+                );
+            }
+        );
     }
 
     #endregion
@@ -72,13 +128,28 @@ public sealed class RespProviderTests(RespServers servers) : IDisposable
     #region GetPrimitiveService Tests
 
     [Fact]
-    public async Task GetPrimitiveService_AnyType_ReturnsNull()
+    public async Task GetPrimitiveService_UnservedPrimitive_ReturnsNull()
     {
         await using var provider = CreateProvider();
 
         var service = provider.GetPrimitiveService(typeof(ILeaseService));
 
         Assert.Null(service);
+    }
+
+    [Theory]
+    [InlineData(typeof(IOccurrenceService))]
+    [InlineData(typeof(ISetService))]
+    [InlineData(typeof(ICounterService))]
+    [InlineData(typeof(ISequenceService))]
+    public async Task GetPrimitiveService_ServedPrimitive_ReturnsItsService(Type serviceType)
+    {
+        await using var provider = CreateProvider();
+
+        var service = provider.GetPrimitiveService(serviceType);
+
+        Assert.NotNull(service);
+        Assert.IsAssignableFrom(serviceType, service);
     }
 
     #endregion
