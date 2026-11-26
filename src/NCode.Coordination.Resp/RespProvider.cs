@@ -143,6 +143,7 @@ internal sealed class RespProvider : ICoordinationProvider, IAsyncDisposable, ID
             "PEXPIRE",
             "PTTL",
             publish,
+            "SCAN",
             RespCommands.Set,
             "TIME",
             "ZADD",
