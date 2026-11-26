@@ -24,13 +24,13 @@ local metadata = ARGV[6]
 local time = redis.call('TIME')
 local now = tonumber(time[1]) * 1000 + math.floor(tonumber(time[2]) / 1000)
 
--- Keys for this group
-local groupKey = keyspacePart .. ':members:' .. groupId
-
 -- Extract keyspace from KEYS[1] which is "{keyspace}:members"
 local colonIdx = string.find(KEYS[1], ':', 1, true)
 local keyspacePart = string.sub(KEYS[1], 1, colonIdx - 1)
 local sessionsKey = keyspacePart .. ':sessions'
+
+-- Keys for this group
+local groupKey = keyspacePart .. ':members:' .. groupId
 
 -- Check if a session is alive
 local function isSessionLive(id)
