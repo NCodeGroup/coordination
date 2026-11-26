@@ -123,8 +123,10 @@ public sealed class RespKeysTests
     public void Escape_LongNonAsciiText_EncodesEveryByte()
     {
         const string character = "\u00e9";
-        var text = string.Concat(Enumerable.Repeat(character, 400));
-        var expected = string.Concat(Enumerable.Repeat("%C3%A9", 400));
+        var characters = Enumerable.Repeat(character, 400);
+        var text = string.Concat(characters);
+        var encodedCharacters = Enumerable.Repeat("%C3%A9", 400);
+        var expected = string.Concat(encodedCharacters);
 
         var escaped = RespKeys.Escape(text);
 
