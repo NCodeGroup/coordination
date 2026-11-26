@@ -2,22 +2,43 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using NCode.Coordination.Resp.Keys;
+using NCode.Coordination.Resp.Records;
 using NCode.Coordination.Resp.Server;
 using StackExchange.Redis;
 
 namespace NCode.Coordination.Resp.Leases;
 
 /// <summary>
-/// The leases of the RESP provider: each operation is one lease script that runs over the resource's lease key.
+/// The leases of the RESP provider: each lease is a grant in the keyspace's <c>grants</c> hash, a grant bound to a
+/// session lives as its session does and a grant with a time to live has a deadline in <c>grant-deadlines</c>. One
+/// keyspace script serves each operation, every grant has its own owner token, and a wait for a release polls until
+/// the lease is free or the caller cancels.
 /// </summary>
-/// <param name="server">The seam between the provider and its server.</param>
-/// <exception cref="ArgumentNullException">The server is null.</exception>
-internal class RespLeaseService(RespServer server) : ILeaseService
+/// <param name="table">The table that runs the keyspace scripts.</param>
+/// <param name="tokens">The source of owner tokens.</param>
+/// <exception cref="ArgumentNullException">The table or the tokens are null.</exception>
+internal class RespLeaseService(RespRecordTable table, IRespTokens tokens) : ILeaseService
 {
     /// <summary>
-    /// Gets the seam between the provider and its server.
+    /// The text an owner token starts with.
     /// </summary>
-    private RespServer Server { get; } = server ?? throw new ArgumentNullException(nameof(server));
+    private const string OwnerPrefix = "o-";
+
+    /// <summary>
+    /// The text a lease's grant field starts with.
+    /// </summary>
+    private const string FieldPrefix = "l ";
+
+    /// <summary>
+    /// Gets the table that runs the keyspace scripts.
+    /// </summary>
+    private RespRecordTable Table { get; } =
+        table ?? throw new ArgumentNullException(nameof(table));
+
+    /// <summary>
+    /// Gets the source of owner tokens.
+    /// </summary>
+    private IRespTokens Tokens { get; } = tokens ?? throw new ArgumentNullException(nameof(tokens));
 
     /// <inheritdoc />
     public async ValueTask<LeaseAcquireResult> TryAcquireAsync(
@@ -31,50 +52,31 @@ internal class RespLeaseService(RespServer server) : ILeaseService
         ArgumentNullException.ThrowIfNull(terms);
         RespCall.Check(options, cancellationToken);
 
-        var keyspace = resource.Keyspace;
-        var resourceId = RespKeys.Name(resource);
-
-        var sessionId = terms.IsBoundToSession ? terms.Session.Value : "";
-        var ttlMs = terms.TimeToLive is not null ? RespCall.ToMilliseconds(terms.TimeToLive) : 0;
-
-        var keys = new[]
-        {
-            RespKeys.ForKeyspace(keyspace, "leases"),
-            RespKeys.ForKeyspace(keyspace, "lease-fencing"),
-        };
-
-        var arguments = new RedisValue[]
-        {
-            "tryAcquire",
-            resourceId,
-            "", // ownerToken (unused on acquire)
-            sessionId,
-            ttlMs.ToString(System.Globalization.CultureInfo.InvariantCulture),
-        };
-
-        var reply = await Server
-            .EvaluateAsync(RespScript.Lease, keys, arguments, cancellationToken)
+        RedisValue[] arguments =
+        [
+            RespKeys.Name(resource),
+            Tokens.Next(OwnerPrefix),
+            terms.IsBoundToSession ? terms.Session.Value : "",
+            terms.IsBoundToSession ? 0 : RespCall.ToMilliseconds(terms.TimeToLive),
+        ];
+        var reply = await Table
+            .EvaluateAsync(RespScript.LeaseAcquire, resource.Keyspace, arguments, cancellationToken)
             .ConfigureAwait(false);
 
         var (status, fields) = RespReplies.Script(reply);
 
         return status switch
         {
-            0 when fields.Length >= 3 => LeaseAcquireResult.Acquired(
+            0 when fields.Length == 2 => LeaseAcquireResult.Acquired(
                 new LeaseGrant(
                     resource,
-                    new FencingToken(
-                        int.Parse(
-                            (string?)fields[1] ?? throw RespReplies.Unexpected(reply),
-                            System.Globalization.CultureInfo.InvariantCulture
-                        )
-                    ),
+                    new FencingToken(RespReplies.Integer(fields[1])),
                     new OwnerToken((string?)fields[0] ?? throw RespReplies.Unexpected(reply)),
                     terms
                 )
             ),
-            1 => LeaseAcquireResult.Held,
-            2 => LeaseAcquireResult.SessionEnded,
+            1 when fields.Length == 0 => LeaseAcquireResult.Held,
+            2 when fields.Length == 0 => LeaseAcquireResult.SessionEnded,
             _ => throw RespReplies.Unexpected(reply),
         };
     }
@@ -91,32 +93,37 @@ internal class RespLeaseService(RespServer server) : ILeaseService
         ArgumentNullException.ThrowIfNull(timeToLive);
         RespCall.Check(options, cancellationToken);
 
-        var keyspace = grant.Resource.Keyspace;
-        var resourceId = RespKeys.Name(grant.Resource);
-        var ttlMs = RespCall.ToMilliseconds(timeToLive);
-
-        var keys = new[]
+        if (grant.Terms.IsBoundToSession)
         {
-            RespKeys.ForKeyspace(keyspace, "leases"),
-            RespKeys.ForKeyspace(keyspace, "lease-fencing"),
-        };
+            throw new ArgumentException(
+                "A grant bound to a session lives as its session does, so it is never renewed.",
+                nameof(grant)
+            );
+        }
 
-        var arguments = new RedisValue[]
-        {
-            "renew",
-            resourceId,
+        RedisValue[] arguments =
+        [
+            FieldPrefix + RespKeys.Name(grant.Resource),
             grant.Owner.Value,
-            "", // sessionId (unused on renew)
-            ttlMs.ToString(System.Globalization.CultureInfo.InvariantCulture),
-        };
-
-        var reply = await Server
-            .EvaluateAsync(RespScript.Lease, keys, arguments, cancellationToken)
+            RespCall.ToMilliseconds(timeToLive),
+        ];
+        var reply = await Table
+            .EvaluateAsync(
+                RespScript.GrantRenew,
+                grant.Resource.Keyspace,
+                arguments,
+                cancellationToken
+            )
             .ConfigureAwait(false);
 
         var (status, _) = RespReplies.Script(reply);
 
-        return status == 0;
+        return status switch
+        {
+            0 => true,
+            1 => false,
+            _ => throw RespReplies.Unexpected(reply),
+        };
     }
 
     /// <inheritdoc />
@@ -129,31 +136,24 @@ internal class RespLeaseService(RespServer server) : ILeaseService
         ArgumentNullException.ThrowIfNull(grant);
         RespCall.Check(options, cancellationToken);
 
-        var keyspace = grant.Resource.Keyspace;
-        var resourceId = RespKeys.Name(grant.Resource);
-
-        var keys = new[]
-        {
-            RespKeys.ForKeyspace(keyspace, "leases"),
-            RespKeys.ForKeyspace(keyspace, "lease-fencing"),
-        };
-
-        var arguments = new RedisValue[]
-        {
-            "release",
-            resourceId,
-            grant.Owner.Value,
-            "", // sessionId (unused on release)
-            "0", // ttl (unused on release)
-        };
-
-        var reply = await Server
-            .EvaluateAsync(RespScript.Lease, keys, arguments, cancellationToken)
+        RedisValue[] arguments = [FieldPrefix + RespKeys.Name(grant.Resource), grant.Owner.Value];
+        var reply = await Table
+            .EvaluateAsync(
+                RespScript.GrantRelease,
+                grant.Resource.Keyspace,
+                arguments,
+                cancellationToken
+            )
             .ConfigureAwait(false);
 
         var (status, _) = RespReplies.Script(reply);
 
-        return status == 0;
+        return status switch
+        {
+            0 => true,
+            1 => false,
+            _ => throw RespReplies.Unexpected(reply),
+        };
     }
 
     /// <inheritdoc />
@@ -166,40 +166,35 @@ internal class RespLeaseService(RespServer server) : ILeaseService
         ArgumentNullException.ThrowIfNull(resource);
         RespCall.Check(options, cancellationToken);
 
-        var keyspace = resource.Keyspace;
-        var resourceId = RespKeys.Name(resource);
+        await RespPolling
+            .UntilAsync(token => IsFreeAsync(resource, token), cancellationToken)
+            .ConfigureAwait(false);
+    }
 
-        // Poll for lease release with exponential backoff (100ms, up to 300 times = 30 seconds max)
-        const int maxRetries = 300;
-        const int delayMs = 100;
+    /// <summary>
+    /// Asks the server whether a lease is free.
+    /// </summary>
+    /// <param name="resource">The resource that the lease guards.</param>
+    /// <param name="cancellationToken">The token that cancels the wait for the server.</param>
+    /// <returns><see langword="true"/> when no holder has the lease.</returns>
+    /// <exception cref="CoordinationException">The call failed or the reply was not one the script sends.</exception>
+    private async ValueTask<bool> IsFreeAsync(
+        CoordinationKey resource,
+        CancellationToken cancellationToken
+    )
+    {
+        RedisValue[] arguments = [FieldPrefix + RespKeys.Name(resource)];
+        var reply = await Table
+            .EvaluateAsync(RespScript.GrantCheck, resource.Keyspace, arguments, cancellationToken)
+            .ConfigureAwait(false);
 
-        var keys = new[]
+        var (status, _) = RespReplies.Script(reply);
+
+        return status switch
         {
-            RespKeys.ForKeyspace(keyspace, "leases"),
-            RespKeys.ForKeyspace(keyspace, "lease-fencing"),
+            0 => false,
+            1 => true,
+            _ => throw RespReplies.Unexpected(reply),
         };
-
-        for (int i = 0; i < maxRetries; i++)
-        {
-            var arguments = new RedisValue[]
-            {
-                "check-held",
-                resourceId,
-                "", // ownerToken (unused on check)
-                "", // sessionId (unused on check)
-                "0", // ttl (unused on check)
-            };
-
-            var reply = await Server
-                .EvaluateAsync(RespScript.Lease, keys, arguments, cancellationToken)
-                .ConfigureAwait(false);
-
-            var (status, _) = RespReplies.Script(reply);
-
-            if (status == 1)
-                return; // Not held; lease released
-
-            await Task.Delay(delayMs, cancellationToken).ConfigureAwait(false);
-        }
     }
 }
