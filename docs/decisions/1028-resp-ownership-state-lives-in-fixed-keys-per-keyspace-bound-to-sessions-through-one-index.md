@@ -81,7 +81,8 @@ sessions and grants.**
 8. **Waits and watches.** A wait for a session's end, a lease release or a semaphore release, and a watch of an
    election or of membership, poll the server every 100 ms until the condition holds or the caller cancels. They never
    return as though the condition held. A watch yields the current view first, then each view whose term (election) or
-   revision (membership) differs.
+   revision (membership) differs. A membership watch reads only the keyspace's revision on each poll and lists the
+   group again only once the revision has moved, so an idle group costs one small script per poll whatever its size.
 
 ## Options considered
 

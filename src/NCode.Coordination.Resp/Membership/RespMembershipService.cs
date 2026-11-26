@@ -12,7 +12,8 @@ namespace NCode.Coordination.Resp.Membership;
 /// <summary>
 /// The membership groups of the RESP provider: each member is an entry in the keyspace's <c>members</c> and
 /// <c>member-fields</c> keys bound to its session, so it is absent once its session ends. One keyspace script serves
-/// each operation, and a watch polls the server until the caller cancels.
+/// each operation, and a watch polls the keyspace's revision until the caller cancels, and lists the group again only
+/// once the revision has moved.
 /// </summary>
 /// <param name="table">The table that runs the keyspace scripts.</param>
 /// <exception cref="ArgumentNullException">The table is null.</exception>
@@ -41,13 +42,15 @@ internal class RespMembershipService(RespRecordTable table) : IMembershipService
         ArgumentNullException.ThrowIfNull(member);
         RespCall.Check(options, cancellationToken);
 
+        var name = RespKeys.Member(group);
+        var metadata = RespMembershipMetadata.Encode(member.Metadata);
         RedisValue[] arguments =
         [
-            RespKeys.Member(group),
+            name,
             member.NodeId,
             member.Session.Value,
             member.Address,
-            RespMembershipMetadata.Encode(member.Metadata),
+            metadata,
         ];
         var reply = await Table
             .EvaluateAsync(RespScript.MemberJoin, group.Keyspace, arguments, cancellationToken)
@@ -76,7 +79,8 @@ internal class RespMembershipService(RespRecordTable table) : IMembershipService
         ArgumentNullException.ThrowIfNull(session);
         RespCall.Check(options, cancellationToken);
 
-        RedisValue[] arguments = [RespKeys.Member(group), session.Value];
+        var name = RespKeys.Member(group);
+        RedisValue[] arguments = [name, session.Value];
         var reply = await Table
             .EvaluateAsync(RespScript.MemberLeave, group.Keyspace, arguments, cancellationToken)
             .ConfigureAwait(false);
@@ -98,7 +102,8 @@ internal class RespMembershipService(RespRecordTable table) : IMembershipService
         ArgumentNullException.ThrowIfNull(group);
         RespCall.Check(options, cancellationToken);
 
-        RedisValue[] arguments = [RespKeys.Member(group)];
+        var name = RespKeys.Member(group);
+        RedisValue[] arguments = [name];
         var reply = await Table
             .EvaluateAsync(RespScript.MemberList, group.Keyspace, arguments, cancellationToken)
             .ConfigureAwait(false);
@@ -153,6 +158,13 @@ internal class RespMembershipService(RespRecordTable table) : IMembershipService
         {
             await Task.Delay(RespPolling.Interval, cancellationToken).ConfigureAwait(false);
 
+            var revision = await ReadRevisionAsync(group.Keyspace, cancellationToken)
+                .ConfigureAwait(false);
+            if (revision.Value <= last.Revision.Value)
+            {
+                continue;
+            }
+
             var view = await ReadAsync(group, options, cancellationToken).ConfigureAwait(false);
             if (view.Revision.Value > last.Revision.Value)
             {
@@ -160,5 +172,30 @@ internal class RespMembershipService(RespRecordTable table) : IMembershipService
                 yield return view;
             }
         }
+    }
+
+    /// <summary>
+    /// Reads the revision of a keyspace, which a membership change takes.
+    /// </summary>
+    /// <param name="keyspace">The keyspace to read.</param>
+    /// <param name="cancellationToken">The token that cancels the read.</param>
+    /// <returns>The keyspace's current revision.</returns>
+    /// <exception cref="CoordinationException">The server's reply is not a revision.</exception>
+    private async ValueTask<Revision> ReadRevisionAsync(
+        Keyspace keyspace,
+        CancellationToken cancellationToken
+    )
+    {
+        var reply = await Table
+            .EvaluateAsync(RespScript.KeyspaceRevision, keyspace, [], cancellationToken)
+            .ConfigureAwait(false);
+
+        var (status, fields) = RespReplies.Script(reply);
+        if (status != 0 || fields.Length != 1)
+        {
+            throw RespReplies.Unexpected(reply);
+        }
+
+        return RespRecordTable.ReadRevision(fields[0], reply);
     }
 }

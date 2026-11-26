@@ -65,7 +65,8 @@ measured on the server's clock, in whole milliseconds rounded up.
 - **Claims**: `SET` with `NX` and the time to live the caller gives, on the claim's name followed by its window's
   segment, so the skew allowance is the caller's, from `TimeWindow.TryCreateTimeToLive`.
 - **Waits and watches**: waiting for a session's end or a release, and watching a role or a group, read the server
-  every 100 milliseconds until the condition holds or the caller cancels.
+  every 100 milliseconds until the condition holds or the caller cancels. A group's watch reads only the keyspace's
+  revision on each poll, and lists the group again only once the revision has moved.
 
 The provider declares each of them linearizable until the server fails over, and volatile, since it can't tell
 whether the server persists or replicates its writes; transactions and counter batches are atomic across
