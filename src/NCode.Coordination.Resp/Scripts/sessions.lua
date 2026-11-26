@@ -177,6 +177,23 @@ local function closeSession()
     end
   until cursor == 0
   
+  -- Clean up session-bound records
+  local sessionRecordsKey = keyspacePart .. ':session-records:' .. sessionId
+  local boundRecords = redis.call('SMEMBERS', sessionRecordsKey)
+  for i = 1, #boundRecords do
+    local member = boundRecords[i]
+    -- Delete the record from the records table
+    -- (record-prelude sets up keys: KEYS[2] is records, KEYS[3] is index, KEYS[4] is deadlines)
+    -- We need to get the records table key
+    local recordsTableKey = keyspacePart .. ':records'
+    local indexKey = keyspacePart .. ':index'
+    local deadlinesKey = keyspacePart .. ':deadlines'
+    redis.call('HDEL', recordsTableKey, 'r:' .. member, 'n:' .. member, 'v:' .. member)
+    redis.call('ZREM', indexKey, member)
+    redis.call('ZREM', deadlinesKey, member)
+  end
+  redis.call('DEL', sessionRecordsKey)
+  
   return {0}
 end
 

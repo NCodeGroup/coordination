@@ -25,7 +25,7 @@ local time = redis.call('TIME')
 local now = tonumber(time[1]) * 1000 + math.floor(tonumber(time[2]) / 1000)
 
 -- Keys for this group
-local groupKey = 'group:' .. groupId .. ':members'
+local groupKey = keyspacePart .. ':members:' .. groupId
 
 -- Extract keyspace from KEYS[1] which is "{keyspace}:members"
 local colonIdx = string.find(KEYS[1], ':', 1, true)

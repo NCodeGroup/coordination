@@ -9,8 +9,7 @@
 -- ARGV[2]: name
 -- ARGV[3]: window (start:end, e.g. "1000:2000")
 -- ARGV[4]: ttl in milliseconds
--- ARGV[5]: currentTime (server time in ms, unused; server TIME is used)
--- ARGV[6]: skew in milliseconds
+-- ARGV[5]: skew in milliseconds
 --
 -- Returns: {status} 
 -- Status codes: 0 = claimed, 1 = taken
@@ -19,7 +18,7 @@ local operation = ARGV[1]
 local name = ARGV[2]
 local window = ARGV[3]
 local ttl = tonumber(ARGV[4])
-local skew = tonumber(ARGV[6])
+local skew = tonumber(ARGV[5])
 
 local claimsKey = KEYS[1]
 local deadlineIndexKey = KEYS[2]

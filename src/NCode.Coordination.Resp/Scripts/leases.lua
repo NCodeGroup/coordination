@@ -72,8 +72,12 @@ if operation == "tryAcquire" then
     local deadline = currentTime + ttl
     
     local ownerVal = sessionId ~= "" and sessionId or ("ttl-" .. tostring(currentTime))
-    redis.call('HSET', leaseKey, 'owner', ownerVal, 'term', newTerm, 'ttl', ttl, 'deadline', deadline)
-    redis.call('PEXPIRE', leaseKey, ttl)
+    if ttl > 0 then
+        redis.call('HSET', leaseKey, 'owner', ownerVal, 'term', newTerm, 'ttl', ttl, 'deadline', deadline)
+        redis.call('PEXPIRE', leaseKey, ttl)
+    else
+        redis.call('HSET', leaseKey, 'owner', ownerVal, 'term', newTerm, 'ttl', ttl)
+    end
     
     return {0, ownerVal, newTerm, ttl}
 
@@ -90,9 +94,13 @@ elseif operation == "renew" then
     end
     
     -- Renew: extend TTL
-    local deadline = currentTime + ttl
-    redis.call('HSET', leaseKey, 'ttl', ttl, 'deadline', deadline)
-    redis.call('PEXPIRE', leaseKey, ttl)
+    if ttl > 0 then
+        local deadline = currentTime + ttl
+        redis.call('HSET', leaseKey, 'ttl', ttl, 'deadline', deadline)
+        redis.call('PEXPIRE', leaseKey, ttl)
+    else
+        redis.call('HSET', leaseKey, 'ttl', ttl)
+    end
     
     local term = redis.call('HGET', leaseKey, 'term')
     return {0, existing, term, ttl}

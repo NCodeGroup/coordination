@@ -67,7 +67,7 @@ internal class RespSemaphoreService(RespServer server) : ISemaphoreService
 
         return status switch
         {
-            0 when fields.Length >= 4 => SemaphoreAcquireResult.Acquired(
+            0 when fields.Length >= 3 => SemaphoreAcquireResult.Acquired(
                 new SemaphoreGrant(
                     resource,
                     int.Parse(

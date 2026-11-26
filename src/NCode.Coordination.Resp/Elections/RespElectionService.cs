@@ -69,13 +69,13 @@ internal class RespElectionService(RespServer server) : IElectionService
                         role,
                         new FencingToken(
                             int.Parse(
-                                (string?)fields[2] ?? throw RespReplies.Unexpected(reply),
+                                (string?)fields[1] ?? throw RespReplies.Unexpected(reply),
                                 System.Globalization.CultureInfo.InvariantCulture
                             )
                         ),
                         value
                     ),
-                    new OwnerToken((string?)fields[1] ?? throw RespReplies.Unexpected(reply)),
+                    new OwnerToken((string?)fields[0] ?? throw RespReplies.Unexpected(reply)),
                     terms
                 )
             ),
@@ -206,10 +206,10 @@ internal class RespElectionService(RespServer server) : IElectionService
             return new ElectionView(role, null);
 
         var term = int.Parse(
-            (string?)fields[1] ?? throw RespReplies.Unexpected(reply),
+            (string?)fields[0] ?? throw RespReplies.Unexpected(reply),
             System.Globalization.CultureInfo.InvariantCulture
         );
-        var value = fields.Length > 2 ? (byte[]?)fields[2] : null;
+        var value = fields.Length > 1 ? (byte[]?)fields[1] : null;
 
         if (term == 0)
             return new ElectionView(role, null);
