@@ -11,8 +11,6 @@ namespace NCode.Coordination.Resp;
 /// </summary>
 internal sealed class RespProvider : ICoordinationProvider, IAsyncDisposable, IDisposable
 {
-    private const string ProviderName = "resp";
-
     /// <summary>
     /// Creates the provider.
     /// </summary>
@@ -27,7 +25,10 @@ internal sealed class RespProvider : ICoordinationProvider, IAsyncDisposable, ID
         Connection = connection;
         Server = new RespServer(connection);
         Profile = profile;
-        Declaration = new ProviderDeclaration(ProviderName) { Profile = profile.Name };
+        Declaration = new ProviderDeclaration(RespCoordinationBuilderExtensions.ProviderName)
+        {
+            Profile = profile.Name,
+        };
     }
 
     /// <summary>

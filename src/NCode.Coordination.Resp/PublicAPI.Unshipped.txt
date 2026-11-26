@@ -1,4 +1,8 @@
 #nullable enable
+const NCode.Coordination.RespCoordinationBuilderExtensions.ProviderName = "resp" -> string!
+NCode.Coordination.RespCoordinationBuilderExtensions
+NCode.Coordination.RespCoordinationBuilderExtensions.extension(NCode.Coordination.ICoordinationBuilder!)
+NCode.Coordination.RespCoordinationBuilderExtensions.extension(NCode.Coordination.ICoordinationBuilder!).AddRespProvider(System.Action<NCode.Coordination.RespProviderOptions!>! configure) -> NCode.Coordination.ICoordinationBuilder!
 NCode.Coordination.RespProfile
 NCode.Coordination.RespProfile.<Clone>$() -> NCode.Coordination.RespProfile!
 NCode.Coordination.RespProfile.Equals(NCode.Coordination.RespProfile? other) -> bool
@@ -9,9 +13,18 @@ NCode.Coordination.RespProfile.ServerName.get -> string!
 NCode.Coordination.RespProfile.ShardedChannels.get -> bool
 NCode.Coordination.RespProfile.VersionField.get -> string!
 NCode.Coordination.RespProfiles
+NCode.Coordination.RespProviderOptions
+NCode.Coordination.RespProviderOptions.Configuration.get -> string?
+NCode.Coordination.RespProviderOptions.Configuration.set -> void
+NCode.Coordination.RespProviderOptions.Connection.get -> System.Func<System.IServiceProvider!, StackExchange.Redis.IConnectionMultiplexer!>?
+NCode.Coordination.RespProviderOptions.Connection.set -> void
+NCode.Coordination.RespProviderOptions.Profile.get -> NCode.Coordination.RespProfile!
+NCode.Coordination.RespProviderOptions.Profile.set -> void
+NCode.Coordination.RespProviderOptions.RespProviderOptions() -> void
 override NCode.Coordination.RespProfile.Equals(object? obj) -> bool
 override NCode.Coordination.RespProfile.GetHashCode() -> int
 override NCode.Coordination.RespProfile.ToString() -> string!
+static NCode.Coordination.RespCoordinationBuilderExtensions.AddRespProvider(this NCode.Coordination.ICoordinationBuilder! builder, System.Action<NCode.Coordination.RespProviderOptions!>! configure) -> NCode.Coordination.ICoordinationBuilder!
 static NCode.Coordination.RespProfile.operator !=(NCode.Coordination.RespProfile? left, NCode.Coordination.RespProfile? right) -> bool
 static NCode.Coordination.RespProfile.operator ==(NCode.Coordination.RespProfile? left, NCode.Coordination.RespProfile? right) -> bool
 static NCode.Coordination.RespProfiles.Garnet.get -> NCode.Coordination.RespProfile!
