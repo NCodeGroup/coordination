@@ -126,7 +126,8 @@ internal sealed class RespSetService(RespServer server) : ISetService
                 throw RespReplies.Unexpected(reply);
             }
 
-            members.Add(RespKeys.DecodeSegment(text));
+            var member = RespKeys.DecodeSegment(text);
+            members.Add(member);
         }
 
         return members.MoveToImmutable();

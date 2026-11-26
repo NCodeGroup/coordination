@@ -160,12 +160,14 @@ internal static class RespKeys
                         CultureInfo.InvariantCulture,
                         out var number
                     )
-                    || !string.Equals(
-                        number.ToString(CultureInfo.InvariantCulture),
-                        rest,
-                        StringComparison.Ordinal
-                    )
                 )
+                {
+                    throw NotEncoded(encoded);
+                }
+
+                var numberText = number.ToString(CultureInfo.InvariantCulture);
+
+                if (!string.Equals(numberText, rest, StringComparison.Ordinal))
                 {
                     throw NotEncoded(encoded);
                 }
@@ -173,14 +175,14 @@ internal static class RespKeys
                 return KeySegment.FromInt64(number);
 
             case 'u':
-                if (
-                    !Guid.TryParseExact(rest, "N", out var uuid)
-                    || !string.Equals(
-                        uuid.ToString("N", CultureInfo.InvariantCulture),
-                        rest,
-                        StringComparison.Ordinal
-                    )
-                )
+                if (!Guid.TryParseExact(rest, "N", out var uuid))
+                {
+                    throw NotEncoded(encoded);
+                }
+
+                var uuidText = uuid.ToString("N", CultureInfo.InvariantCulture);
+
+                if (!string.Equals(uuidText, rest, StringComparison.Ordinal))
                 {
                     throw NotEncoded(encoded);
                 }
@@ -232,7 +234,8 @@ internal static class RespKeys
 
         try
         {
-            return StrictUtf8.GetString(bytes.ToArray());
+            var array = bytes.ToArray();
+            return StrictUtf8.GetString(array);
         }
         catch (DecoderFallbackException exception)
         {
