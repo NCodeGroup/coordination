@@ -487,6 +487,76 @@ public sealed class RespRecordServiceTests(RespServers servers) : IDisposable
 
     #endregion
 
+    #region CompareAndSwapAsync Tests
+
+    [Fact]
+    public async Task CompareAndSwapAsync_ValueLongerThanTheLimit_ThrowsArgumentException()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var keyspace = new Keyspace("prod");
+        var server = CreateUnreachableServer();
+        var service = CreateService(server);
+        var key = keyspace.CreateKey("a");
+        var expected = new Revision(1);
+        var value = new byte[CoordinationLimits.MaxValueLength + 1];
+        var lifetime = RecordLifetime.Persistent;
+
+        var exception = await Assert.ThrowsAsync<ArgumentException>(async () =>
+            await service.CompareAndSwapAsync(
+                key,
+                expected,
+                value,
+                lifetime,
+                null,
+                cancellationToken
+            )
+        );
+
+        Assert.Equal("value", exception.ParamName);
+    }
+
+    [Fact]
+    public async Task CompareAndSwapAsync_ValueOfTheLimit_WritesIt()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var (server, database) = CreateServer();
+        var keyspace = new Keyspace("prod");
+        var status = RedisResult.Create((RedisValue)0, ResultType.Integer);
+        var revision = RedisResult.Create((RedisValue)"8");
+        var reply = RedisResult.Create([status, revision]);
+        database
+            .Setup(x =>
+                x.ScriptEvaluateAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<RedisKey[]?>(),
+                    It.IsAny<RedisValue[]?>(),
+                    CommandFlags.None
+                )
+            )
+            .ReturnsAsync(reply)
+            .Verifiable();
+        var service = CreateService(server);
+        var key = keyspace.CreateKey("a");
+        var expected = new Revision(1);
+        var value = new byte[CoordinationLimits.MaxValueLength];
+        var lifetime = RecordLifetime.Persistent;
+
+        var result = await service.CompareAndSwapAsync(
+            key,
+            expected,
+            value,
+            lifetime,
+            null,
+            cancellationToken
+        );
+
+        var expectedRevision = new Revision(8);
+        Assert.True(result.IsWritten);
+        Assert.Equal(expectedRevision, result.Revision);
+    }
+
+    #endregion
+
     #region ListAsync Tests
 
     [RespServerFact]
@@ -525,9 +595,70 @@ public sealed class RespRecordServiceTests(RespServers servers) : IDisposable
         var token = RespKeys.Member(other);
         var page = new RecordPageRequest(10) { ContinuationToken = token };
 
-        await Assert.ThrowsAsync<ArgumentException>(async () =>
+        var exception = await Assert.ThrowsAsync<ArgumentException>(async () =>
             await service.ListAsync(prefix, page, null, cancellationToken)
         );
+
+        Assert.Equal("page", exception.ParamName);
+    }
+
+    [Fact]
+    public async Task ListAsync_TokenEqualToThePrefixMember_ThrowsArgumentException()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var keyspace = new Keyspace("prod");
+        var server = CreateUnreachableServer();
+        var service = CreateService(server);
+        var prefix = keyspace.CreateKey("a");
+        var token = RespKeys.MemberPrefix(prefix);
+        var page = new RecordPageRequest(10) { ContinuationToken = token };
+
+        var exception = await Assert.ThrowsAsync<ArgumentException>(async () =>
+            await service.ListAsync(prefix, page, null, cancellationToken)
+        );
+
+        Assert.Equal("page", exception.ParamName);
+    }
+
+    [Fact]
+    public async Task ListAsync_TokenUnderThePrefix_StartsThePageAfterTheToken()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var (server, database) = CreateServer();
+        var keyspace = new Keyspace("prod");
+        var status = RedisResult.Create((RedisValue)0, ResultType.Integer);
+        var revision = RedisResult.Create((RedisValue)"7");
+        var empty = RedisResult.Create((RedisValue)"");
+        var reply = RedisResult.Create([status, revision, empty]);
+        RedisValue[]? values = null;
+        database
+            .Setup(x =>
+                x.ScriptEvaluateAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<RedisKey[]?>(),
+                    It.IsAny<RedisValue[]?>(),
+                    CommandFlags.None
+                )
+            )
+            .Callback<string, RedisKey[]?, RedisValue[]?, CommandFlags>(
+                (_, _, v, _) =>
+                {
+                    values = v;
+                }
+            )
+            .ReturnsAsync(reply)
+            .Verifiable();
+        var service = CreateService(server);
+        var prefix = keyspace.CreateKey("a");
+        var under = keyspace.CreateKey("a", "b");
+        var token = RespKeys.Member(under);
+        var page = new RecordPageRequest(10) { ContinuationToken = token };
+
+        var result = await service.ListAsync(prefix, page, null, cancellationToken);
+
+        Assert.Empty(result.Records);
+        Assert.NotNull(values);
+        Assert.Equal("(" + token, (string?)values[3]);
     }
 
     [Fact]
