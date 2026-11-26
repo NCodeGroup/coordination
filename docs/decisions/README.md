@@ -89,3 +89,4 @@ records are indexed in [project-template/](project-template/README.md).
 | [1021](1021-a-host-holds-one-session-for-its-lifetime-joins-its-membership-with-it-and-closes-it-as-it-stops.md) | A host holds one session for its lifetime, joins its membership with it, and closes it as it stops | Proposed |
 | [1022](1022-the-resp-provider-speaks-through-stackexchange-redis-and-can-share-the-hosts-connection.md) | The RESP provider speaks through StackExchange.Redis, and can share the host's connection | Proposed |
 | [1023](1023-the-resp-provider-runs-each-operation-as-one-command-or-one-lua-script-and-never-as-a-client-side-transaction.md) | The RESP provider runs each operation as one command or one Lua script, and never as a client-side transaction | Proposed |
+| [1024](1024-the-resp-provider-keeps-each-keyspace-in-one-cluster-slot-with-its-revision-beside-it.md) | The RESP provider keeps each keyspace in one cluster slot, with its revision beside it | Proposed |
