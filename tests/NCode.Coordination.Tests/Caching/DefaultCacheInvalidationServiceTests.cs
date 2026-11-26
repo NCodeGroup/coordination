@@ -26,14 +26,12 @@ public sealed class DefaultCacheInvalidationServiceTests
         var topic = CreateTopic();
         var handler = new RecordingHandler();
         using var stop = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        Func<bool> hasCleared = () => handler.Entries.Contains("clear");
-        Func<bool> hasInvalidated = () => handler.Entries.Contains("invalidate:0102");
 
         var task = cache.RunAsync(topic, handler, null, stop.Token).AsTask();
 
-        await RecipeTesting.WaitUntilAsync(hasCleared, cancellationToken);
+        await handler.Cleared.Task.WaitAsync(cancellationToken);
         await cache.InvalidateAsync(topic, (byte[])[1, 2], null, cancellationToken);
-        await RecipeTesting.WaitUntilAsync(hasInvalidated, cancellationToken);
+        await handler.Invalidated.Task.WaitAsync(cancellationToken);
         await stop.CancelAsync();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => task);
         var entries = handler.Entries.ToArray();
@@ -52,11 +50,10 @@ public sealed class DefaultCacheInvalidationServiceTests
         var topic = CreateTopic();
         var handler = new RecordingHandler();
         using var stop = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        Func<bool> hasCleared = () => handler.Entries.Contains("clear");
 
         var task = cache.RunAsync(topic, handler, null, stop.Token).AsTask();
 
-        await RecipeTesting.WaitUntilAsync(hasCleared, cancellationToken);
+        await handler.Cleared.Task.WaitAsync(cancellationToken);
         await stop.CancelAsync();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => task);
         var lastEntry = handler.Entries.Last();
@@ -105,6 +102,12 @@ public sealed class DefaultCacheInvalidationServiceTests
     {
         public ConcurrentQueue<string> Entries { get; } = new();
 
+        public TaskCompletionSource Cleared { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TaskCompletionSource Invalidated { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
         public ValueTask InvalidateAsync(
             ReadOnlyMemory<byte> entry,
             CancellationToken cancellationToken
@@ -112,12 +115,14 @@ public sealed class DefaultCacheInvalidationServiceTests
         {
             var hex = Convert.ToHexString(entry.Span);
             Entries.Enqueue($"invalidate:{hex}");
+            Invalidated.TrySetResult();
             return ValueTask.CompletedTask;
         }
 
         public ValueTask ClearAsync(CancellationToken cancellationToken)
         {
             Entries.Enqueue("clear");
+            Cleared.TrySetResult();
             return ValueTask.CompletedTask;
         }
     }

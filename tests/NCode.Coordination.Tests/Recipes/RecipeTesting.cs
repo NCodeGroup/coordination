@@ -1,7 +1,6 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
-using System.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Time.Testing;
 
@@ -82,28 +81,5 @@ internal static class RecipeTesting
         gate.SetResult();
 
         return await Task.WhenAll(tasks);
-    }
-
-    /// <summary>
-    /// Waits until the condition holds, and fails the test when it does not within 15 seconds.
-    /// </summary>
-    /// <param name="condition">The condition to poll.</param>
-    /// <param name="cancellationToken">The token that cancels the wait.</param>
-    /// <returns>A task that completes when the condition holds.</returns>
-    public static async Task WaitUntilAsync(
-        Func<bool> condition,
-        CancellationToken cancellationToken
-    )
-    {
-        var stopwatch = Stopwatch.StartNew();
-        while (!condition())
-        {
-            if (stopwatch.Elapsed > TimeSpan.FromSeconds(15))
-            {
-                Assert.Fail("The condition was not met within 15 seconds.");
-            }
-
-            await Task.Delay(10, cancellationToken);
-        }
     }
 }

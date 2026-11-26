@@ -29,11 +29,13 @@ public sealed class DefaultSingletonServiceTests
         var firstCandidate = new SingletonCandidate(first);
         var secondCandidate = new SingletonCandidate(second);
         var events = new ConcurrentQueue<string>();
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
         async ValueTask Work(Leadership leadership, CancellationToken token)
         {
             events.Enqueue("start");
+            started.TrySetResult();
             await release.Task.WaitAsync(token);
             events.Enqueue("end");
         }
@@ -45,7 +47,7 @@ public sealed class DefaultSingletonServiceTests
             .RunAsync(role, secondCandidate, Work, null, cancellationToken)
             .AsTask();
 
-        await RecipeTesting.WaitUntilAsync(() => !events.IsEmpty, cancellationToken);
+        await started.Task.WaitAsync(cancellationToken);
         release.SetResult();
         var results = await Task.WhenAll(firstTask, secondTask);
         var recorded = events.ToArray();
@@ -66,7 +68,9 @@ public sealed class DefaultSingletonServiceTests
         var session = await RecipeTesting.OpenSessionAsync(services, cancellationToken);
         var candidate = new SingletonCandidate(session);
         var calls = new int[1];
-        Leadership? firstLeadership = null;
+        var firstLeadership = new TaskCompletionSource<Leadership>(
+            TaskCreationOptions.RunContinuationsAsynchronously
+        );
         var firstToken = CancellationToken.None;
 
         async ValueTask Work(Leadership leadership, CancellationToken token)
@@ -77,16 +81,13 @@ public sealed class DefaultSingletonServiceTests
             }
 
             firstToken = token;
-            Volatile.Write(ref firstLeadership, leadership);
+            firstLeadership.SetResult(leadership);
             await Task.Delay(Timeout.InfiniteTimeSpan, token);
         }
 
         var task = singletons.RunAsync(role, candidate, Work, null, cancellationToken).AsTask();
 
-        Func<bool> hasLeadership = () => Volatile.Read(ref firstLeadership) is not null;
-        await RecipeTesting.WaitUntilAsync(hasLeadership, cancellationToken);
-        var observed = Volatile.Read(ref firstLeadership);
-        var leadership = Assert.IsType<Leadership>(observed);
+        var leadership = await firstLeadership.Task.WaitAsync(cancellationToken);
         var resigned = await elections.ResignAsync(leadership, null, cancellationToken);
         var completed = await task;
         var totalCalls = Volatile.Read(ref calls[0]);
