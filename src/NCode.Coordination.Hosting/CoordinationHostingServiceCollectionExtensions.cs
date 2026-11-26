@@ -23,23 +23,21 @@ public static class CoordinationHostingServiceCollectionExtensions
     private static IServiceCollection AddHostingServices(IServiceCollection services)
     {
         services.AddOptions<CoordinationHostOptions>().ValidateOnStart();
-        services.TryAddEnumerable(
-            ServiceDescriptor.Singleton<
-                IValidateOptions<CoordinationHostOptions>,
-                CoordinationHostOptionsValidator
-            >()
-        );
+        var validator = ServiceDescriptor.Singleton<
+            IValidateOptions<CoordinationHostOptions>,
+            CoordinationHostOptionsValidator
+        >();
+        services.TryAddEnumerable(validator);
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton<IJitter, RandomJitter>();
         services.TryAddSingleton<DefaultHostSessionService>();
         services.TryAddSingleton<IHostSessionService>(x =>
             x.GetRequiredService<DefaultHostSessionService>()
         );
-        services.TryAddEnumerable(
-            ServiceDescriptor.Singleton<IHostedService, DefaultHostSessionService>(x =>
-                x.GetRequiredService<DefaultHostSessionService>()
-            )
+        var hostedService = ServiceDescriptor.Singleton<IHostedService, DefaultHostSessionService>(
+            x => x.GetRequiredService<DefaultHostSessionService>()
         );
+        services.TryAddEnumerable(hostedService);
 
         return services;
     }

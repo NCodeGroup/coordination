@@ -59,14 +59,18 @@ public static class CoordinationHealthChecksBuilderExtensions
             ArgumentNullException.ThrowIfNull(tags);
             ArgumentException.ThrowIfNullOrWhiteSpace(name);
 
-            return builder.Add(
-                new HealthCheckRegistration(
-                    name,
-                    x => new CoordinationHealthCheck(x.GetRequiredService<IHostSessionService>()),
-                    null,
-                    tags
-                )
+            var registration = new HealthCheckRegistration(
+                name,
+                x =>
+                {
+                    var hostSession = x.GetRequiredService<IHostSessionService>();
+                    return new CoordinationHealthCheck(hostSession);
+                },
+                null,
+                tags
             );
+
+            return builder.Add(registration);
         }
     }
 }
