@@ -34,11 +34,10 @@ internal sealed class HostSessionSettings
         if (keyspace is not null)
         {
             keyspace = Check(failures, nameof(CoordinationHostOptions.KeyspaceSegments), () =>
-                new Keyspace(
-                    options.Cluster,
-                    options.KeyspaceSegments.Select(KeySegment.FromString)
-                )
-            );
+            {
+                var segments = options.KeyspaceSegments.Select(KeySegment.FromString);
+                return new Keyspace(options.Cluster, segments);
+            });
         }
 
         var group = Check(failures, nameof(CoordinationHostOptions.Group), () =>

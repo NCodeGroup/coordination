@@ -171,7 +171,8 @@ internal class DefaultHostSessionService(
             next = Next.Task;
         }
 
-        return new ValueTask<HostSession>(next.WaitAsync(cancellationToken));
+        var wait = next.WaitAsync(cancellationToken);
+        return new ValueTask<HostSession>(wait);
     }
 
     /// <inheritdoc />

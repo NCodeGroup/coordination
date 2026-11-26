@@ -594,10 +594,9 @@ public sealed class DefaultHostSessionServiceTests : IDisposable
         );
         await service.StartAsync(cancellationToken);
 
-        await Task.WhenAll(
-            service.StoppedAsync(cancellationToken),
-            service.StoppedAsync(cancellationToken)
-        );
+        var first = service.StoppedAsync(cancellationToken);
+        var second = service.StoppedAsync(cancellationToken);
+        await Task.WhenAll(first, second);
 
         Assert.Equal(HostSessionState.Stopped, service.State);
         sessions.Verify(
