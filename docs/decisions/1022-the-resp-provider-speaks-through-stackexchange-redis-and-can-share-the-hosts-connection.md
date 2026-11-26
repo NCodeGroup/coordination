@@ -81,8 +81,10 @@ either gives the provider connection settings, and the provider owns its connect
 4. **Failures.** The seam turns the client's exceptions into `CoordinationException`s:
    - `OutcomeUnknown` is false only when the client reports that the command was never written, such as a connection
      failure while it waited to be sent.
-   - A timeout, a dropped connection after the command was written, and a cancellation leave the outcome unknown, and
-     so does a command still queued in the backlog when its caller stops waiting.
+   - A timeout and a dropped connection after the command was written leave the outcome unknown, and so does a command
+     still queued in the backlog when its caller stops waiting.
+   - A cancellation of the caller's token throws `OperationCanceledException`, as ADR-1011 rule 4 says of every
+     operation, and leaves the outcome of a command already handed to the client unknown.
    - A server error reply maps to a code by its error prefix, such as `NOPERM` to `access-denied`, never by its message
      text.
    - A test against a real server with injected faults proves each mapping.
