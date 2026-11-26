@@ -24,6 +24,9 @@ public sealed class DefaultHostSessionServiceTests : IDisposable
             new TimeToLive(TimeSpan.FromSeconds(30))
         );
 
+    private static CoordinationException CreateUnavailable() =>
+        new(CoordinationErrorCodes.Unavailable, true, "The provider is unavailable.");
+
     private static DefaultHostSessionService CreateHostService(
         IServiceProvider services,
         FakeTimeProvider time
@@ -301,6 +304,154 @@ public sealed class DefaultHostSessionServiceTests : IDisposable
         Assert.Equal(second.Id, member.Session);
     }
 
+    [Fact]
+    public async Task StartAsync_WhenOpeningFails_ReportsUnreachableAndRetries()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var time = HostingTesting.CreateTime();
+        var grant = CreateGrant("s1");
+        var sessions = Mocks.Create<ISessionService>();
+        var membership = Mocks.Create<IMembershipService>();
+        sessions
+            .SetupSequence(x =>
+                x.OpenAsync(
+                    It.IsAny<Keyspace>(),
+                    It.IsAny<TimeToLive>(),
+                    It.IsAny<OperationOptions?>(),
+                    It.IsAny<CancellationToken>()
+                )
+            )
+            .ThrowsAsync(CreateUnavailable())
+            .ReturnsAsync(grant);
+        membership
+            .Setup(x =>
+                x.JoinAsync(
+                    It.IsAny<CoordinationKey>(),
+                    It.IsAny<Member>(),
+                    It.IsAny<OperationOptions?>(),
+                    It.IsAny<CancellationToken>()
+                )
+            )
+            .ReturnsAsync(MembershipJoinStatus.Joined)
+            .Verifiable();
+        await using var service = HostingTesting.CreateService(
+            time,
+            sessions.Object,
+            membership.Object
+        );
+
+        await service.StartAsync(cancellationToken);
+
+        Assert.Equal(HostSessionState.Unreachable, service.State);
+        Assert.Null(service.Current);
+
+        time.Advance(TimeSpan.FromSeconds(2));
+
+        var session = await service.WaitForSessionAsync(cancellationToken);
+        Assert.Equal(grant.Id, session.Id);
+        Assert.Equal(HostSessionState.Active, service.State);
+        sessions.Verify(
+            x =>
+                x.OpenAsync(
+                    It.IsAny<Keyspace>(),
+                    It.IsAny<TimeToLive>(),
+                    It.IsAny<OperationOptions?>(),
+                    It.IsAny<CancellationToken>()
+                ),
+            Times.Exactly(2)
+        );
+    }
+
+    [Fact]
+    public async Task StartAsync_WhenJoiningFails_ClosesTheSessionAndReportsUnreachable()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var time = HostingTesting.CreateTime();
+        var grant = CreateGrant("s1");
+        var sessions = Mocks.Create<ISessionService>();
+        var membership = Mocks.Create<IMembershipService>();
+        sessions
+            .Setup(x =>
+                x.OpenAsync(
+                    It.IsAny<Keyspace>(),
+                    It.IsAny<TimeToLive>(),
+                    It.IsAny<OperationOptions?>(),
+                    It.IsAny<CancellationToken>()
+                )
+            )
+            .ReturnsAsync(grant)
+            .Verifiable();
+        sessions
+            .Setup(x =>
+                x.CloseAsync(grant.Id, It.IsAny<OperationOptions?>(), It.IsAny<CancellationToken>())
+            )
+            .Returns(ValueTask.CompletedTask)
+            .Verifiable();
+        membership
+            .Setup(x =>
+                x.JoinAsync(
+                    It.IsAny<CoordinationKey>(),
+                    It.IsAny<Member>(),
+                    It.IsAny<OperationOptions?>(),
+                    It.IsAny<CancellationToken>()
+                )
+            )
+            .ThrowsAsync(CreateUnavailable())
+            .Verifiable();
+        await using var service = HostingTesting.CreateService(
+            time,
+            sessions.Object,
+            membership.Object
+        );
+
+        await service.StartAsync(cancellationToken);
+
+        Assert.Equal(HostSessionState.Unreachable, service.State);
+        Assert.Null(service.Current);
+    }
+
+    [Fact]
+    public async Task StartAsync_WhenTheSessionEndsBeforeItJoins_KeepsOpening()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var time = HostingTesting.CreateTime();
+        var grant = CreateGrant("s1");
+        var sessions = Mocks.Create<ISessionService>();
+        var membership = Mocks.Create<IMembershipService>();
+        sessions
+            .Setup(x =>
+                x.OpenAsync(
+                    It.IsAny<Keyspace>(),
+                    It.IsAny<TimeToLive>(),
+                    It.IsAny<OperationOptions?>(),
+                    It.IsAny<CancellationToken>()
+                )
+            )
+            .ReturnsAsync(grant)
+            .Verifiable();
+        membership
+            .Setup(x =>
+                x.JoinAsync(
+                    It.IsAny<CoordinationKey>(),
+                    It.IsAny<Member>(),
+                    It.IsAny<OperationOptions?>(),
+                    It.IsAny<CancellationToken>()
+                )
+            )
+            .ReturnsAsync(MembershipJoinStatus.SessionEnded)
+            .Verifiable();
+        await using var service = HostingTesting.CreateService(
+            time,
+            sessions.Object,
+            membership.Object
+        );
+
+        await service.StartAsync(cancellationToken);
+
+        Assert.Equal(HostSessionState.Opening, service.State);
+        Assert.Null(service.Current);
+    }
+
     #endregion
 
     #region WaitForSessionAsync Tests
@@ -398,6 +549,177 @@ public sealed class DefaultHostSessionServiceTests : IDisposable
         Assert.True(session.Ended.IsCancellationRequested);
         Assert.Equal(HostSessionState.Stopped, service.State);
         Assert.Empty(view.Members);
+    }
+
+    [Fact]
+    public async Task StoppedAsync_WhenCalledTwice_ClosesTheSessionOnce()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var time = HostingTesting.CreateTime();
+        var grant = CreateGrant("s1");
+        var sessions = Mocks.Create<ISessionService>();
+        var membership = Mocks.Create<IMembershipService>();
+        sessions
+            .Setup(x =>
+                x.OpenAsync(
+                    It.IsAny<Keyspace>(),
+                    It.IsAny<TimeToLive>(),
+                    It.IsAny<OperationOptions?>(),
+                    It.IsAny<CancellationToken>()
+                )
+            )
+            .ReturnsAsync(grant)
+            .Verifiable();
+        sessions
+            .Setup(x =>
+                x.CloseAsync(grant.Id, It.IsAny<OperationOptions?>(), It.IsAny<CancellationToken>())
+            )
+            .Returns(ValueTask.CompletedTask)
+            .Verifiable();
+        membership
+            .Setup(x =>
+                x.JoinAsync(
+                    It.IsAny<CoordinationKey>(),
+                    It.IsAny<Member>(),
+                    It.IsAny<OperationOptions?>(),
+                    It.IsAny<CancellationToken>()
+                )
+            )
+            .ReturnsAsync(MembershipJoinStatus.Joined)
+            .Verifiable();
+        await using var service = HostingTesting.CreateService(
+            time,
+            sessions.Object,
+            membership.Object
+        );
+        await service.StartAsync(cancellationToken);
+
+        await Task.WhenAll(
+            service.StoppedAsync(cancellationToken),
+            service.StoppedAsync(cancellationToken)
+        );
+
+        Assert.Equal(HostSessionState.Stopped, service.State);
+        sessions.Verify(
+            x =>
+                x.CloseAsync(
+                    grant.Id,
+                    It.IsAny<OperationOptions?>(),
+                    It.IsAny<CancellationToken>()
+                ),
+            Times.Once()
+        );
+    }
+
+    [Fact]
+    public async Task StoppedAsync_WhenTheShutdownTimeoutPasses_Returns()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var time = HostingTesting.CreateTime();
+        var grant = CreateGrant("s1");
+        var closing = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var sessions = Mocks.Create<ISessionService>();
+        var membership = Mocks.Create<IMembershipService>();
+        sessions
+            .Setup(x =>
+                x.OpenAsync(
+                    It.IsAny<Keyspace>(),
+                    It.IsAny<TimeToLive>(),
+                    It.IsAny<OperationOptions?>(),
+                    It.IsAny<CancellationToken>()
+                )
+            )
+            .ReturnsAsync(grant)
+            .Verifiable();
+        sessions
+            .Setup(x =>
+                x.CloseAsync(grant.Id, It.IsAny<OperationOptions?>(), It.IsAny<CancellationToken>())
+            )
+            .Returns(
+                (SessionId _, OperationOptions? _, CancellationToken token) =>
+                {
+                    closing.TrySetResult();
+                    return new ValueTask(Task.Delay(Timeout.InfiniteTimeSpan, token));
+                }
+            )
+            .Verifiable();
+        membership
+            .Setup(x =>
+                x.JoinAsync(
+                    It.IsAny<CoordinationKey>(),
+                    It.IsAny<Member>(),
+                    It.IsAny<OperationOptions?>(),
+                    It.IsAny<CancellationToken>()
+                )
+            )
+            .ReturnsAsync(MembershipJoinStatus.Joined)
+            .Verifiable();
+        await using var service = HostingTesting.CreateService(
+            time,
+            sessions.Object,
+            membership.Object
+        );
+        using var shutdown = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        await service.StartAsync(cancellationToken);
+
+        var stop = service.StoppedAsync(shutdown.Token);
+        await closing.Task.WaitAsync(cancellationToken);
+
+        Assert.False(stop.IsCompleted);
+
+        await shutdown.CancelAsync();
+        await stop;
+
+        Assert.Equal(HostSessionState.Stopped, service.State);
+    }
+
+    [Fact]
+    public async Task StoppedAsync_WhenClosingFails_Returns()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var time = HostingTesting.CreateTime();
+        var grant = CreateGrant("s1");
+        var sessions = Mocks.Create<ISessionService>();
+        var membership = Mocks.Create<IMembershipService>();
+        sessions
+            .Setup(x =>
+                x.OpenAsync(
+                    It.IsAny<Keyspace>(),
+                    It.IsAny<TimeToLive>(),
+                    It.IsAny<OperationOptions?>(),
+                    It.IsAny<CancellationToken>()
+                )
+            )
+            .ReturnsAsync(grant)
+            .Verifiable();
+        sessions
+            .Setup(x =>
+                x.CloseAsync(grant.Id, It.IsAny<OperationOptions?>(), It.IsAny<CancellationToken>())
+            )
+            .ThrowsAsync(CreateUnavailable())
+            .Verifiable();
+        membership
+            .Setup(x =>
+                x.JoinAsync(
+                    It.IsAny<CoordinationKey>(),
+                    It.IsAny<Member>(),
+                    It.IsAny<OperationOptions?>(),
+                    It.IsAny<CancellationToken>()
+                )
+            )
+            .ReturnsAsync(MembershipJoinStatus.Joined)
+            .Verifiable();
+        await using var service = HostingTesting.CreateService(
+            time,
+            sessions.Object,
+            membership.Object
+        );
+        await service.StartAsync(cancellationToken);
+
+        await service.StoppedAsync(cancellationToken);
+
+        Assert.Equal(HostSessionState.Stopped, service.State);
+        Assert.Null(service.Current);
     }
 
     #endregion
