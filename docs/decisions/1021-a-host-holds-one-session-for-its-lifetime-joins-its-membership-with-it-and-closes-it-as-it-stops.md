@@ -82,6 +82,9 @@ every other hosted service has stopped.**
     status. Liveness checks no dependency.
 12. **Logging.** The hosting's event ids are 2000 to 2999, leaving 1000 to 1999 to `NCode.Coordination`. No message
     carries a keyspace, a key or a segment, since they can name a tenant; the node id is the operator's.
+13. **A faulted loop.** An exception that no call the loop guards expects is a defect, so the loop logs it as an error,
+    the state becomes `Unreachable` and the loop ends. The host opens no further session until it restarts, the health
+    check reports it not ready, and the stop still ends the token of the session it holds and closes it.
 
 ## Options considered
 
@@ -97,6 +100,8 @@ every other hosted service has stopped.**
   adds load without telling more.
 - **Backing off with jitter between attempts.** Rejected for now: a cluster's nodes are few, and a fixed retry delay is
   simple to explain; it is listed as a follow-up.
+- **Retrying a faulted loop.** Rejected: an exception no guarded call expects is a defect, and a loop that retried it
+  would also have to end the session it holds.
 
 ## Consequences
 
