@@ -356,6 +356,13 @@ internal class DefaultHostSessionService(
                 // The stop closes the session that is held.
                 return;
             }
+            catch (Exception exception)
+            {
+                // The loop ends, and the stop still ends and closes the session that is held.
+                Logger.SessionLoopFailed(exception);
+                SetState(HostSessionState.Unreachable);
+                return;
+            }
         }
     }
 

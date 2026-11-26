@@ -57,4 +57,9 @@ internal static class EventIds
     /// A callback registered on the end of the host's coordination session failed.
     /// </summary>
     public const int EndedCallbackFailed = Base + 9;
+
+    /// <summary>
+    /// The host's coordination session loop failed and ended.
+    /// </summary>
+    public const int SessionLoopFailed = Base + 10;
 }

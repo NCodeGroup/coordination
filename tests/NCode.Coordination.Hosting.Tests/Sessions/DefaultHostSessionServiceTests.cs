@@ -722,6 +722,27 @@ public sealed class DefaultHostSessionServiceTests : IDisposable
         Assert.Null(service.Current);
     }
 
+    [Fact]
+    public async Task StoppedAsync_WhenTheSessionLoopFaulted_StillStops()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var time = new ThrowingTimerTimeProvider(HostingTesting.Start);
+        var sessions = Mocks.Create<ISessionService>();
+        var membership = Mocks.Create<IMembershipService>();
+        await using var service = HostingTesting.CreateService(
+            time,
+            sessions.Object,
+            membership.Object
+        );
+        await service.StartAsync(cancellationToken);
+        Assert.Equal(HostSessionState.Unreachable, service.State);
+        Assert.Null(service.Current);
+
+        await service.StoppedAsync(cancellationToken);
+
+        Assert.Equal(HostSessionState.Stopped, service.State);
+    }
+
     #endregion
 
     #region DisposeAsync Tests
@@ -763,4 +784,14 @@ public sealed class DefaultHostSessionServiceTests : IDisposable
     }
 
     #endregion
+
+    private sealed class ThrowingTimerTimeProvider(DateTimeOffset start) : FakeTimeProvider(start)
+    {
+        public override ITimer CreateTimer(
+            TimerCallback callback,
+            object? state,
+            TimeSpan dueTime,
+            TimeSpan period
+        ) => throw new InvalidOperationException("The clock is broken.");
+    }
 }

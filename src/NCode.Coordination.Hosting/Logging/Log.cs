@@ -121,4 +121,16 @@ internal static partial class Log
         Message = "A callback registered on the end of the host's coordination session failed."
     )]
     public static partial void EndedCallbackFailed(this ILogger logger, Exception exception);
+
+    /// <summary>
+    /// Logs that the host's coordination session loop failed, so the host opens no further session until it restarts.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="exception">The failure.</param>
+    [LoggerMessage(
+        EventId = EventIds.SessionLoopFailed,
+        Level = LogLevel.Error,
+        Message = "The host's coordination session loop failed, so the host opens no further coordination session until it restarts."
+    )]
+    public static partial void SessionLoopFailed(this ILogger logger, Exception exception);
 }
