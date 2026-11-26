@@ -77,10 +77,9 @@ internal static class RespMembershipMetadata
     /// <param name="value">The text to append.</param>
     private static void AppendText(StringBuilder builder, string value)
     {
-        builder
-            .Append(value.Length.ToString(CultureInfo.InvariantCulture))
-            .Append(':')
-            .Append(value);
+        var length = value.Length.ToString(CultureInfo.InvariantCulture);
+
+        builder.Append(length).Append(':').Append(value);
     }
 
     /// <summary>

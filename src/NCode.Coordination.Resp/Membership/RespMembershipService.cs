@@ -129,7 +129,8 @@ internal class RespMembershipService(RespRecordTable table) : IMembershipService
             }
 
             var id = new SessionId(group.Keyspace, session);
-            members.Add(new Member(id, node, address) { Metadata = metadata });
+            var member = new Member(id, node, address) { Metadata = metadata };
+            members.Add(member);
         }
 
         return new MembershipView(group, revision, members);

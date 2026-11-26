@@ -77,13 +77,14 @@ internal class RespTransactionService(RespRecordTable table) : ITransactionServi
             if (write.Lifetime is { } lifetime)
             {
                 var timeToLive = RespRecordTable.TimeToLiveOf(lifetime);
+                var session = RespRecordTable.SessionOf(lifetime);
 
                 arguments.Add("p");
                 arguments.Add(member);
                 arguments.Add(name);
                 arguments.Add(write.Value);
                 arguments.Add(timeToLive);
-                arguments.Add(RespRecordTable.SessionOf(lifetime));
+                arguments.Add(session);
             }
             else
             {

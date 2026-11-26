@@ -166,7 +166,7 @@ internal class RespSessionService(RespRecordTable table, IRespTokens tokens) : I
     /// </summary>
     /// <param name="session">The session.</param>
     /// <param name="cancellationToken">The token that cancels the wait for the server.</param>
-    /// <returns><see langword="true"/> when the session is no longer live.</returns>
+    /// <returns><see langword="true"/> when the session is not live.</returns>
     /// <exception cref="CoordinationException">The call failed or the reply was not one the script sends.</exception>
     private async ValueTask<bool> HasEndedAsync(
         SessionId session,
