@@ -60,12 +60,22 @@ if operation == "tryAcquire" then
         return {2}  -- session-ended
     end
     
-    -- Try to find an empty slot (1 to capacity)
+    -- Idempotent check: scan existing slots to see if same session already holds one
     for slotN = 1, capacity do
         local slotField = "slot-" .. tostring(slotN)
         local existing = redis.call('HGET', semaphoreKey, slotField)
-        if not existing then
-            -- Idempotent check: if same session already holds this slot, return existing grant
+        if existing then
+            -- Parse slot data: ownerVal|term|ttl|deadline
+            local colonPos = string.find(existing, '|')
+            if colonPos then
+                local ownerVal = string.sub(existing, 1, colonPos - 1)
+                if ownerVal == sessionId then
+                    -- Same session already holds this slot, return existing grant
+                    local colonPos2 = string.find(existing, '|', colonPos + 1)
+                    local term = string.sub(existing, colonPos + 1, colonPos2 - 1)
+                    return {0, slotN, ownerVal, term}
+                end
+            end
         end
     end
     
