@@ -200,7 +200,8 @@ public sealed class RespKeysTests
     public void Member_LongestKey_FitsAContinuationToken()
     {
         var text = new string('\u00e9', 256);
-        var segments = Enumerable.Repeat(KeySegment.FromString(text), 16);
+        var segment = KeySegment.FromString(text);
+        var segments = Enumerable.Repeat(segment, 16);
         var key = new Keyspace("prod").CreateKey(segments) with { PartitionDepth = 16 };
 
         var member = RespKeys.Member(key);

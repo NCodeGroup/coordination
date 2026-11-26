@@ -11,26 +11,6 @@ namespace NCode.Coordination.Resp.Records.Tests;
 
 public sealed class RespRecordServiceTests(RespServers servers) : IDisposable
 {
-    private MockRepository Mocks { get; } = new(MockBehavior.Strict);
-
-    public void Dispose() => Mocks.Verify();
-
-    private (RespServer Server, Mock<IDatabase> Database) CreateServer()
-    {
-        var database = Mocks.Create<IDatabase>();
-        var multiplexer = Mocks.Create<IConnectionMultiplexer>();
-        multiplexer
-            .Setup(x => x.GetDatabase(It.IsAny<int>(), It.IsAny<object?>()))
-            .Returns(database.Object)
-            .Verifiable();
-        var connection = new RespConnection(
-            _ => ValueTask.FromResult(multiplexer.Object),
-            owned: false
-        );
-
-        return (new RespServer(connection), database);
-    }
-
     private static RespServer CreateUnreachableServer()
     {
         var connection = new RespConnection(
@@ -77,18 +57,24 @@ public sealed class RespRecordServiceTests(RespServers servers) : IDisposable
         CancellationToken cancellationToken
     )
     {
+        var timeout = TimeSpan.FromSeconds(15);
         var message = await queue
             .ReadAsync(cancellationToken)
             .AsTask()
-            .WaitAsync(TimeSpan.FromSeconds(15), cancellationToken);
+            .WaitAsync(timeout, cancellationToken);
         var text = (string?)message.Message;
         Assert.NotNull(text);
 
         return text;
     }
 
-    private static RecordLifetime ForMilliseconds(int milliseconds) =>
-        RecordLifetime.ForTimeToLive(new TimeToLive(TimeSpan.FromMilliseconds(milliseconds)));
+    private static RecordLifetime ForMilliseconds(int milliseconds)
+    {
+        var duration = TimeSpan.FromMilliseconds(milliseconds);
+        var timeToLive = new TimeToLive(duration);
+
+        return RecordLifetime.ForTimeToLive(timeToLive);
+    }
 
     private static async Task AssertCreatePublishesTheWriteAsync(
         string endpoint,
@@ -100,13 +86,13 @@ public sealed class RespRecordServiceTests(RespServers servers) : IDisposable
         var service = CreateService(multiplexer, profile);
         var keyspace = CreateKeyspace();
         var key = keyspace.CreateKey("cfg", 7);
-        var queue = await multiplexer
-            .GetSubscriber()
-            .SubscribeAsync(WatchChannel(keyspace, profile));
+        var value = "v"u8.ToArray();
+        var channel = WatchChannel(keyspace, profile);
+        var queue = await multiplexer.GetSubscriber().SubscribeAsync(channel);
 
         var result = await service.CreateAsync(
             key,
-            "v"u8.ToArray(),
+            value,
             RecordLifetime.Persistent,
             null,
             cancellationToken
@@ -114,8 +100,9 @@ public sealed class RespRecordServiceTests(RespServers servers) : IDisposable
         var message = await ReadMessageAsync(queue, cancellationToken);
         await queue.UnsubscribeAsync();
 
+        var name = RespKeys.Name(key);
         Assert.True(result.IsWritten);
-        Assert.Equal($"{result.Revision.Value}\nw{RespKeys.Name(key)}", message);
+        Assert.Equal($"{result.Revision.Value}\nw{name}", message);
     }
 
     private static async Task AssertReadDeletesAnExpiredRecordAsync(
@@ -128,27 +115,24 @@ public sealed class RespRecordServiceTests(RespServers servers) : IDisposable
         var service = CreateService(multiplexer, profile);
         var keyspace = CreateKeyspace();
         var a = keyspace.CreateKey("a");
-        var created = await service.CreateAsync(
-            a,
-            "v"u8.ToArray(),
-            ForMilliseconds(200),
-            null,
-            cancellationToken
-        );
+        var b = keyspace.CreateKey("b");
+        var value = "v"u8.ToArray();
+        var lifetime = ForMilliseconds(200);
+        var created = await service.CreateAsync(a, value, lifetime, null, cancellationToken);
         Assert.True(created.IsWritten);
-        var queue = await multiplexer
-            .GetSubscriber()
-            .SubscribeAsync(WatchChannel(keyspace, profile));
+        var channel = WatchChannel(keyspace, profile);
+        var queue = await multiplexer.GetSubscriber().SubscribeAsync(channel);
 
         await Task.Delay(400, cancellationToken);
-        var read = await service.ReadAsync(keyspace.CreateKey("b"), null, cancellationToken);
+        var read = await service.ReadAsync(b, null, cancellationToken);
         var message = await ReadMessageAsync(queue, cancellationToken);
         await queue.UnsubscribeAsync();
         var recordsKey = RespRecordTable.Keys(keyspace)[1];
         var exists = await multiplexer.GetDatabase().KeyExistsAsync(recordsKey);
 
+        var name = RespKeys.Name(a);
         Assert.Null(read);
-        Assert.Equal($"{created.Revision.Value + 1}\nd{RespKeys.Name(a)}", message);
+        Assert.Equal($"{created.Revision.Value + 1}\nd{name}", message);
         Assert.False(exists);
     }
 
@@ -163,26 +147,20 @@ public sealed class RespRecordServiceTests(RespServers servers) : IDisposable
         var keyspace = CreateKeyspace();
         var database = multiplexer.GetDatabase();
         var recordsKey = RespRecordTable.Keys(keyspace)[1];
+        var a = keyspace.CreateKey("a");
+        var b = keyspace.CreateKey("b");
+        var value = "v"u8.ToArray();
+        var deadline = ForMilliseconds(30_000);
 
-        await service.CreateAsync(
-            keyspace.CreateKey("a"),
-            "v"u8.ToArray(),
-            ForMilliseconds(30_000),
-            null,
-            cancellationToken
-        );
+        await service.CreateAsync(a, value, deadline, null, cancellationToken);
         var withDeadline = await database.KeyTimeToLiveAsync(recordsKey);
-        await service.CreateAsync(
-            keyspace.CreateKey("b"),
-            "v"u8.ToArray(),
-            RecordLifetime.Persistent,
-            null,
-            cancellationToken
-        );
+        await service.CreateAsync(b, value, RecordLifetime.Persistent, null, cancellationToken);
         var withPersistent = await database.KeyTimeToLiveAsync(recordsKey);
 
+        var minimum = TimeSpan.FromMinutes(60);
+        var maximum = TimeSpan.FromMinutes(61);
         Assert.NotNull(withDeadline);
-        Assert.InRange(withDeadline.Value, TimeSpan.FromMinutes(60), TimeSpan.FromMinutes(61));
+        Assert.InRange(withDeadline.Value, minimum, maximum);
         Assert.Null(withPersistent);
     }
 
@@ -201,13 +179,19 @@ public sealed class RespRecordServiceTests(RespServers servers) : IDisposable
             .ToList();
         var keys = Enumerable
             .Range(0, 3)
-            .Select(number => keyspace.CreateKey([.. texts, KeySegment.FromInt64(number)]))
+            .Select(number =>
+            {
+                var last = KeySegment.FromInt64(number);
+
+                return keyspace.CreateKey([.. texts, last]);
+            })
             .ToList();
+        var value = "v"u8.ToArray();
         foreach (var key in keys)
         {
             var result = await service.CreateAsync(
                 key,
-                "v"u8.ToArray(),
+                value,
                 RecordLifetime.Persistent,
                 null,
                 cancellationToken
@@ -221,20 +205,18 @@ public sealed class RespRecordServiceTests(RespServers servers) : IDisposable
         var pages = 0;
         do
         {
-            var page = await service.ListAsync(
-                prefix,
-                new RecordPageRequest(1) { ContinuationToken = token },
-                null,
-                cancellationToken
-            );
-            seen.AddRange(page.Records.Select(record => record.Key));
+            var request = new RecordPageRequest(1) { ContinuationToken = token };
+            var page = await service.ListAsync(prefix, request, null, cancellationToken);
+            var pageKeys = page.Records.Select(record => record.Key);
+            seen.AddRange(pageKeys);
             token = page.ContinuationToken;
             pages++;
         } while (token is not null && pages < 10);
 
+        var distinctCount = seen.Distinct().Count();
         Assert.Null(token);
         Assert.Equal(3, seen.Count);
-        Assert.Equal(keys.Count, seen.Distinct().Count());
+        Assert.Equal(keys.Count, distinctCount);
         Assert.All(keys, key => Assert.Contains(key, seen));
     }
 
@@ -247,20 +229,16 @@ public sealed class RespRecordServiceTests(RespServers servers) : IDisposable
         await using var multiplexer = await ConnectAsync(endpoint, cancellationToken);
         var service = CreateService(multiplexer, profile);
         var keyspace = CreateKeyspace();
+        var value = "v"u8.ToArray();
+        var lifetime = ForMilliseconds(300);
         for (var index = 0; index < 65; index++)
         {
-            var result = await service.CreateAsync(
-                keyspace.CreateKey("e", index),
-                "v"u8.ToArray(),
-                ForMilliseconds(300),
-                null,
-                cancellationToken
-            );
+            var key = keyspace.CreateKey("e", index);
+            var result = await service.CreateAsync(key, value, lifetime, null, cancellationToken);
             Assert.True(result.IsWritten);
         }
-        var queue = await multiplexer
-            .GetSubscriber()
-            .SubscribeAsync(WatchChannel(keyspace, profile));
+        var channel = WatchChannel(keyspace, profile);
+        var queue = await multiplexer.GetSubscriber().SubscribeAsync(channel);
 
         await Task.Delay(500, cancellationToken);
         var other = keyspace.CreateKey("other");
@@ -270,8 +248,30 @@ public sealed class RespRecordServiceTests(RespServers servers) : IDisposable
         var second = await ReadMessageAsync(queue, cancellationToken);
         await queue.UnsubscribeAsync();
 
-        Assert.Equal(65, first.Split('\n').Length);
-        Assert.Equal(2, second.Split('\n').Length);
+        var firstLines = first.Split('\n');
+        var secondLines = second.Split('\n');
+        Assert.Equal(65, firstLines.Length);
+        Assert.Equal(2, secondLines.Length);
+    }
+
+    private MockRepository Mocks { get; } = new(MockBehavior.Strict);
+
+    public void Dispose() => Mocks.Verify();
+
+    private (RespServer Server, Mock<IDatabase> Database) CreateServer()
+    {
+        var database = Mocks.Create<IDatabase>();
+        var multiplexer = Mocks.Create<IConnectionMultiplexer>();
+        multiplexer
+            .Setup(x => x.GetDatabase(It.IsAny<int>(), It.IsAny<object?>()))
+            .Returns(database.Object)
+            .Verifiable();
+        var connection = new RespConnection(
+            _ => ValueTask.FromResult(multiplexer.Object),
+            owned: false
+        );
+
+        return (new RespServer(connection), database);
     }
 
     #region CreateAsync Tests
@@ -303,17 +303,15 @@ public sealed class RespRecordServiceTests(RespServers servers) : IDisposable
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var keyspace = new Keyspace("prod");
-        var service = CreateService(CreateUnreachableServer());
-        var lifetime = RecordLifetime.ForSession(new SessionId(keyspace, "s1"));
+        var server = CreateUnreachableServer();
+        var service = CreateService(server);
+        var key = keyspace.CreateKey("a");
+        var value = "v"u8.ToArray();
+        var sessionId = new SessionId(keyspace, "s1");
+        var lifetime = RecordLifetime.ForSession(sessionId);
 
         var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
-            await service.CreateAsync(
-                keyspace.CreateKey("a"),
-                "v"u8.ToArray(),
-                lifetime,
-                null,
-                cancellationToken
-            )
+            await service.CreateAsync(key, value, lifetime, null, cancellationToken)
         );
 
         Assert.Equal(CoordinationErrorCodes.Unsupported, exception.Code);
@@ -357,14 +355,15 @@ public sealed class RespRecordServiceTests(RespServers servers) : IDisposable
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var keyspace = new Keyspace("prod");
-        var service = CreateService(CreateUnreachableServer());
-        var page = new RecordPageRequest(10)
-        {
-            ContinuationToken = RespKeys.Member(keyspace.CreateKey("b")),
-        };
+        var server = CreateUnreachableServer();
+        var service = CreateService(server);
+        var prefix = keyspace.CreateKey("a");
+        var other = keyspace.CreateKey("b");
+        var token = RespKeys.Member(other);
+        var page = new RecordPageRequest(10) { ContinuationToken = token };
 
         await Assert.ThrowsAsync<ArgumentException>(async () =>
-            await service.ListAsync(keyspace.CreateKey("a"), page, null, cancellationToken)
+            await service.ListAsync(prefix, page, null, cancellationToken)
         );
     }
 
@@ -374,13 +373,19 @@ public sealed class RespRecordServiceTests(RespServers servers) : IDisposable
         var cancellationToken = TestContext.Current.CancellationToken;
         var (server, database) = CreateServer();
         var keyspace = new Keyspace("prod");
+        var status = RedisResult.Create((RedisValue)0, ResultType.Integer);
+        var revision = RedisResult.Create((RedisValue)"7");
+        var token = RedisResult.Create((RedisValue)"tok");
+        var name = RedisResult.Create((RedisValue)"0:ta/tb");
+        var recordRevision = RedisResult.Create((RedisValue)"5");
+        var recordValue = RedisResult.Create((RedisValue)"v");
         var reply = RedisResult.Create([
-            RedisResult.Create((RedisValue)0, ResultType.Integer),
-            RedisResult.Create((RedisValue)"7"),
-            RedisResult.Create((RedisValue)"tok"),
-            RedisResult.Create((RedisValue)"0:ta/tb"),
-            RedisResult.Create((RedisValue)"5"),
-            RedisResult.Create((RedisValue)"v"),
+            status,
+            revision,
+            token,
+            name,
+            recordRevision,
+            recordValue,
         ]);
         database
             .Setup(x =>
@@ -394,19 +399,18 @@ public sealed class RespRecordServiceTests(RespServers servers) : IDisposable
             .ReturnsAsync(reply)
             .Verifiable();
         var service = CreateService(server);
+        var prefix = keyspace.CreateKey("a");
+        var request = new RecordPageRequest(10);
 
-        var result = await service.ListAsync(
-            keyspace.CreateKey("a"),
-            new RecordPageRequest(10),
-            null,
-            cancellationToken
-        );
+        var result = await service.ListAsync(prefix, request, null, cancellationToken);
 
+        var expectedKey = keyspace.CreateKey("a", "b");
+        var expectedValue = "v"u8.ToArray();
         Assert.Equal(new Revision(7), result.Revision);
         var record = Assert.Single(result.Records);
-        Assert.Equal(keyspace.CreateKey("a", "b"), record.Key);
+        Assert.Equal(expectedKey, record.Key);
         Assert.Equal(new Revision(5), record.Revision);
-        Assert.Equal("v"u8.ToArray(), record.Value.ToArray());
+        Assert.Equal(expectedValue, record.Value.ToArray());
         Assert.Equal("tok", result.ContinuationToken);
     }
 
@@ -416,13 +420,19 @@ public sealed class RespRecordServiceTests(RespServers servers) : IDisposable
         var cancellationToken = TestContext.Current.CancellationToken;
         var (server, database) = CreateServer();
         var keyspace = new Keyspace("prod");
+        var status = RedisResult.Create((RedisValue)0, ResultType.Integer);
+        var revision = RedisResult.Create((RedisValue)"7");
+        var token = RedisResult.Create((RedisValue)"tok");
+        var name = RedisResult.Create((RedisValue)"x:ta");
+        var recordRevision = RedisResult.Create((RedisValue)"5");
+        var recordValue = RedisResult.Create((RedisValue)"v");
         var reply = RedisResult.Create([
-            RedisResult.Create((RedisValue)0, ResultType.Integer),
-            RedisResult.Create((RedisValue)"7"),
-            RedisResult.Create((RedisValue)"tok"),
-            RedisResult.Create((RedisValue)"x:ta"),
-            RedisResult.Create((RedisValue)"5"),
-            RedisResult.Create((RedisValue)"v"),
+            status,
+            revision,
+            token,
+            name,
+            recordRevision,
+            recordValue,
         ]);
         database
             .Setup(x =>
@@ -436,14 +446,11 @@ public sealed class RespRecordServiceTests(RespServers servers) : IDisposable
             .ReturnsAsync(reply)
             .Verifiable();
         var service = CreateService(server);
+        var prefix = keyspace.CreateKey("a");
+        var request = new RecordPageRequest(10);
 
         var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
-            await service.ListAsync(
-                keyspace.CreateKey("a"),
-                new RecordPageRequest(10),
-                null,
-                cancellationToken
-            )
+            await service.ListAsync(prefix, request, null, cancellationToken)
         );
 
         Assert.Equal(CoordinationErrorCodes.Unavailable, exception.Code);

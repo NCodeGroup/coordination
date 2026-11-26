@@ -11,6 +11,19 @@ namespace NCode.Coordination.Resp.Transactions.Tests;
 
 public sealed class RespTransactionServiceTests : IDisposable
 {
+    private static RespServer CreateUnreachableServer()
+    {
+        var connection = new RespConnection(
+            _ =>
+                ValueTask.FromException<IConnectionMultiplexer>(
+                    new InvalidOperationException("The test reaches no server.")
+                ),
+            owned: false
+        );
+
+        return new RespServer(connection);
+    }
+
     private MockRepository Mocks { get; } = new(MockBehavior.Strict);
 
     public void Dispose() => Mocks.Verify();
@@ -31,19 +44,6 @@ public sealed class RespTransactionServiceTests : IDisposable
         return (new RespServer(connection), database);
     }
 
-    private static RespServer CreateUnreachableServer()
-    {
-        var connection = new RespConnection(
-            _ =>
-                ValueTask.FromException<IConnectionMultiplexer>(
-                    new InvalidOperationException("The test reaches no server.")
-                ),
-            owned: false
-        );
-
-        return new RespServer(connection);
-    }
-
     #region ExecuteAsync Tests
 
     [Fact]
@@ -51,21 +51,17 @@ public sealed class RespTransactionServiceTests : IDisposable
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var keyspace = new Keyspace("prod");
-        var service = new RespTransactionService(
-            new RespRecordTable(CreateUnreachableServer(), RespProfiles.Garnet)
-        );
+        var server = CreateUnreachableServer();
+        var table = new RespRecordTable(server, RespProfiles.Garnet);
+        var service = new RespTransactionService(table);
         var key = keyspace.CreateKey("k");
-        var transaction = new RecordTransaction([], [RecordWrite.Delete(key)])
-        {
-            OnFailure =
-            [
-                RecordWrite.Put(
-                    key.Keyspace.CreateKey("other"),
-                    "v"u8.ToArray(),
-                    RecordLifetime.ForSession(new SessionId(keyspace, "s1"))
-                ),
-            ],
-        };
+        var other = keyspace.CreateKey("other");
+        var value = "v"u8.ToArray();
+        var sessionId = new SessionId(keyspace, "s1");
+        var lifetime = RecordLifetime.ForSession(sessionId);
+        var put = RecordWrite.Put(other, value, lifetime);
+        var delete = RecordWrite.Delete(key);
+        var transaction = new RecordTransaction([], [delete]) { OnFailure = [put] };
 
         var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
             await service.ExecuteAsync(transaction, null, cancellationToken)
@@ -85,10 +81,9 @@ public sealed class RespTransactionServiceTests : IDisposable
         var b = keyspace.CreateKey("b");
         var c = keyspace.CreateKey("c");
         RedisValue[]? values = null;
-        var reply = RedisResult.Create([
-            RedisResult.Create((RedisValue)1, ResultType.Integer),
-            RedisResult.Create((RedisValue)"9"),
-        ]);
+        var status = RedisResult.Create((RedisValue)1, ResultType.Integer);
+        var revisionField = RedisResult.Create((RedisValue)"9");
+        var reply = RedisResult.Create([status, revisionField]);
         database
             .Setup(x =>
                 x.ScriptEvaluateAsync(
@@ -101,60 +96,64 @@ public sealed class RespTransactionServiceTests : IDisposable
             .Callback<string, RedisKey[]?, RedisValue[]?, CommandFlags>((_, _, v, _) => values = v)
             .ReturnsAsync(reply)
             .Verifiable();
-        var service = new RespTransactionService(new RespRecordTable(server, RespProfiles.Valkey));
-        var transaction = new RecordTransaction(
-            [
-                RecordCondition.Absent(a),
-                RecordCondition.RevisionEquals(b, new Revision(5)),
-                RecordCondition.ValueEquals(c, "x"u8.ToArray()),
-            ],
-            [
-                RecordWrite.Put(
-                    a,
-                    "one"u8.ToArray(),
-                    RecordLifetime.ForTimeToLive(new TimeToLive(TimeSpan.FromSeconds(2)))
-                ),
-            ]
-        )
+        var table = new RespRecordTable(server, RespProfiles.Valkey);
+        var service = new RespTransactionService(table);
+        var expectedRevision = new Revision(5);
+        var expectedValue = "x"u8.ToArray();
+        var absent = RecordCondition.Absent(a);
+        var revisionEquals = RecordCondition.RevisionEquals(b, expectedRevision);
+        var valueEquals = RecordCondition.ValueEquals(c, expectedValue);
+        var value = "one"u8.ToArray();
+        var duration = TimeSpan.FromSeconds(2);
+        var timeToLive = new TimeToLive(duration);
+        var lifetime = RecordLifetime.ForTimeToLive(timeToLive);
+        var put = RecordWrite.Put(a, value, lifetime);
+        var delete = RecordWrite.Delete(b);
+        var transaction = new RecordTransaction([absent, revisionEquals, valueEquals], [put])
         {
-            OnFailure = [RecordWrite.Delete(b)],
+            OnFailure = [delete],
         };
+        var memberA = RespKeys.Member(a);
+        var memberB = RespKeys.Member(b);
+        var memberC = RespKeys.Member(c);
+        var nameA = RespKeys.Name(a);
+        var nameB = RespKeys.Name(b);
+        string[] expected =
+        [
+            "{prod}:watch",
+            "1",
+            "3600000",
+            "3",
+            "a",
+            memberA,
+            "",
+            "r",
+            memberB,
+            "5",
+            "v",
+            memberC,
+            "x",
+            "1",
+            "p",
+            memberA,
+            nameA,
+            "one",
+            "2000",
+            "1",
+            "d",
+            memberB,
+            nameB,
+            "",
+            "",
+        ];
 
         var result = await service.ExecuteAsync(transaction, null, cancellationToken);
 
         Assert.Equal(TransactionStatus.Failed, result.Status);
         Assert.Equal(new Revision(9), result.Revision);
         Assert.NotNull(values);
-        Assert.Equal(
-            [
-                "{prod}:watch",
-                "1",
-                "3600000",
-                "3",
-                "a",
-                RespKeys.Member(a),
-                "",
-                "r",
-                RespKeys.Member(b),
-                "5",
-                "v",
-                RespKeys.Member(c),
-                "x",
-                "1",
-                "p",
-                RespKeys.Member(a),
-                RespKeys.Name(a),
-                "one",
-                "2000",
-                "1",
-                "d",
-                RespKeys.Member(b),
-                RespKeys.Name(b),
-                "",
-                "",
-            ],
-            values.Select(value => value.ToString())
-        );
+        var actual = values.Select(item => item.ToString());
+        Assert.Equal(expected, actual);
     }
 
     #endregion

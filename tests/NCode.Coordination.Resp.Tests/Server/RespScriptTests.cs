@@ -31,13 +31,14 @@ public sealed class RespScriptTests
     [Fact]
     public void LoadRecord_Create_IsThePreludeALineFeedAndTheScript()
     {
+        var prelude = RespScript.Load("record-prelude");
+        var create = RespScript.Load("record-create");
+        var expected = prelude.Text + "\n" + create.Text;
+
         var script = RespScript.LoadRecord("record-create");
 
         Assert.Equal("record-create", script.Name);
-        Assert.Equal(
-            RespScript.Load("record-prelude").Text + "\n" + RespScript.Load("record-create").Text,
-            script.Text
-        );
+        Assert.Equal(expected, script.Text);
     }
 
     [Fact]
