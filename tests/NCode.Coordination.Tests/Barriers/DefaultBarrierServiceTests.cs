@@ -52,9 +52,12 @@ public sealed class DefaultBarrierServiceTests
             cancellationToken
         );
 
+        var firstPassed = await first;
+        var secondPassed = await second;
+
         Assert.True(third);
-        Assert.True(await first);
-        Assert.True(await second);
+        Assert.True(firstPassed);
+        Assert.True(secondPassed);
     }
 
     [Fact]
@@ -109,9 +112,12 @@ public sealed class DefaultBarrierServiceTests
             cancellationToken
         );
 
+        var firstPassed = await first;
+        var againPassed = await again;
+
         Assert.True(other);
-        Assert.True(await first);
-        Assert.True(await again);
+        Assert.True(firstPassed);
+        Assert.True(againPassed);
     }
 
     [Fact]
@@ -210,33 +216,6 @@ public sealed class DefaultBarrierServiceTests
     }
 
     #endregion
-
-    private sealed class EndingWatches : IRecordWatchService
-    {
-        public async IAsyncEnumerable<RecordChange> WatchKeyAsync(
-            CoordinationKey key,
-            Revision? after,
-            OperationOptions? options,
-            [EnumeratorCancellation] CancellationToken cancellationToken
-        )
-        {
-            await Task.Yield();
-
-            yield break;
-        }
-
-        public async IAsyncEnumerable<RecordChange> WatchPrefixAsync(
-            CoordinationKey prefix,
-            Revision? after,
-            OperationOptions? options,
-            [EnumeratorCancellation] CancellationToken cancellationToken
-        )
-        {
-            await Task.Yield();
-
-            yield break;
-        }
-    }
 
     private sealed class ResyncingWatches(IRecordService records, CoordinationKey arrival)
         : IRecordWatchService

@@ -1,7 +1,6 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
-using System.Runtime.CompilerServices;
 using Microsoft.Extensions.DependencyInjection;
 using NCode.Coordination.InProcess.Tests;
 using NCode.Coordination.Recipes.Tests;
@@ -490,32 +489,5 @@ public sealed class DefaultReadWriteLockServiceTests
             OperationOptions? options,
             CancellationToken cancellationToken
         ) => inner.ListAsync(prefix, page, options, cancellationToken);
-    }
-
-    private sealed class EndingWatches : IRecordWatchService
-    {
-        public async IAsyncEnumerable<RecordChange> WatchKeyAsync(
-            CoordinationKey key,
-            Revision? after,
-            OperationOptions? options,
-            [EnumeratorCancellation] CancellationToken cancellationToken
-        )
-        {
-            await Task.Yield();
-
-            yield break;
-        }
-
-        public async IAsyncEnumerable<RecordChange> WatchPrefixAsync(
-            CoordinationKey prefix,
-            Revision? after,
-            OperationOptions? options,
-            [EnumeratorCancellation] CancellationToken cancellationToken
-        )
-        {
-            await Task.Yield();
-
-            yield break;
-        }
     }
 }
