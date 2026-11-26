@@ -13,7 +13,11 @@ public sealed class RespServerScriptTests(RespServers servers)
 
     private static RespConnection CreateConnection(string endpoint) =>
         new(
-            async ct => await ConnectionMultiplexer.ConnectAsync(endpoint).WaitAsync(ct),
+            async ct =>
+            {
+                var connecting = ConnectionMultiplexer.ConnectAsync(endpoint);
+                return await connecting.WaitAsync(ct);
+            },
             owned: true
         );
 

@@ -9,14 +9,18 @@ namespace NCode.Coordination.Resp.Tests;
 
 public sealed class RespProviderProbeTests(RespServers servers)
 {
-    private static RespProvider CreateProvider(string endpoint, RespProfile profile) =>
-        new(
-            new RespConnection(
-                async ct => await ConnectionMultiplexer.ConnectAsync(endpoint).WaitAsync(ct),
-                owned: true
-            ),
-            profile
+    private static RespProvider CreateProvider(string endpoint, RespProfile profile)
+    {
+        var connection = new RespConnection(
+            async ct =>
+            {
+                var connecting = ConnectionMultiplexer.ConnectAsync(endpoint);
+                return await connecting.WaitAsync(ct);
+            },
+            owned: true
         );
+        return new RespProvider(connection, profile);
+    }
 
     #region ProbeAsync Tests
 
