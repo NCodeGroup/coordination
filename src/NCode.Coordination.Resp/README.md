@@ -31,9 +31,9 @@ command the provider sends, and fails the start otherwise.
 
 ## Primitives
 
-The provider keeps records, transactions, occurrences, sets, counters, sequences, sessions, membership, leases, semaphores, elections, and claims. Each operation is one server command or one Lua script, and every time to live is measured on the server's clock, in whole milliseconds rounded up.
-
-### Foundational primitives
+The provider keeps records, transactions, occurrences, sets, counters, sequences, sessions, membership, leases,
+semaphores, elections and claims. Each operation is one server command or one Lua script, and every time to live is
+measured on the server's clock, in whole milliseconds rounded up.
 
 - **Records**: a keyspace keeps its records in one hash, beside an index that lists them under a prefix and the
   deadlines of those with a time to live. Every change is one script that takes the keyspace's next revision and
@@ -41,9 +41,11 @@ The provider keeps records, transactions, occurrences, sets, counters, sequences
   passed is absent at once, and the next script on its keyspace deletes it and announces the delete; a keyspace
   whose records all have a time to live leaves the server an hour after the last of them ends. A page of a listing
   examines at most its limit plus 64 entries of the index, so expired records not yet deleted can leave a page short, or
-  empty, with a continuation token; page on until a page has none. Binding a record to a session fails as `unsupported`.
+  empty, with a continuation token; page on until a page has none. A record bound to a session is absent once the session ends, and a script on its
+  keyspace deletes it and announces the delete.
 - **Transactions**: up to 64 conditions and two branches of up to 64 writes, run as one script on one keyspace's
-  records.
+  records. A put that binds a record to a session that has ended ends the transaction as session ended, with nothing
+  written.
 - **Occurrences**: `SET` with `NX` and a time to live. A call the server doesn't answer throws, so a replay guard
   refuses rather than accepts.
 - **Sets**: one sorted set per key, each member scored with its own deadline; at most 10,000 live members.
@@ -53,37 +55,22 @@ The provider keeps records, transactions, occurrences, sets, counters, sequences
 - **Sequences**: `INCR` and `INCRBY` on a key with no time to live, so a sequence never resets while the server keeps
   its data.
 
-### Ownership primitives
-
-- **Sessions**: a node's liveness, with TTL and keep-alive operations. Ending a session ends all membership, leases, 
-  semaphore slots, elections and session-bound records atomically. Each grant has an owner token (the session ID) and 
-  an optional fencing token.
-- **Membership**: group members with optional metadata, joined to a session. Members are listed at a revision, watched 
-  for joins and leaves. Joining the same group with the same session replaces the entry idempotently.
-- **Leases**: exclusive ownership of a resource for a TTL or session lifetime, with owner and fencing tokens. Each 
-  grant increments the fencing token. Leases are released explicitly or when their session ends.
-- **Semaphores**: up to 1,024 slots on a resource, each acquirable independently by a TTL or session. Slots are 
-  released when their session ends or when explicitly released.
-- **Elections**: a leader chosen per role for a TTL or session, with a term (fencing token) and optional value. 
-  Leading again with the same session returns the existing leadership idempotently.
-- **Claims**: time-windowed claims with no tokens, no release, and no holder info. Each name:window pair can be 
-  claimed once per window, with TTL to window end plus a configured skew allowance.
+- **Sessions**: a session stores its time to live, so every keep-alive renews it in full. A close or the session's
+  expiry ends it at once with the memberships, leases, semaphore slots, leaderships and records bound to it, which
+  are absent from then on; each script on the keyspace removes up to 64 of them. A session's id is 128 random bits.
+- **Membership**: a group is read at the keyspace's revision, which every join, leave and session end takes, and
+  each member's address and metadata come back as written.
+- **Leases, semaphores and elections**: each grant carries a fencing token from a counter per resource that never
+  expires and an owner token of 128 random bits, and is bound to a session or to a time to live. A semaphore has up
+  to 1,024 slots, and a leader's value up to 65,536 bytes.
+- **Claims**: `SET` with `NX` and the time to live the caller gives, on the claim's name followed by its window's
+  segment, so the skew allowance is the caller's, from `TimeWindow.TryCreateTimeToLive`.
+- **Waits and watches**: waiting for a session's end or a release, and watching a role or a group, read the server
+  every 100 milliseconds until the condition holds or the caller cancels.
 
 The provider declares each of them linearizable until the server fails over, and volatile, since it can't tell
-whether the server persists or replicates its writes; transactions, counter batches, and writes within session-bound 
-leases are atomic across partitions, because a keyspace lives in one slot. It serves all primitives.
-
-## Session-bound lifetime
-
-Records, leases, semaphore slots, memberships and elections can be bound to a session. When the session ends, all 
-its bound entities are deleted atomically in a single script execution on the keyspace. Session-bound entities use 
-a session ID as the owner token and check session liveness before operations.
-
-## Fencing and owner tokens
-
-Ownership primitives (sessions, leases, semaphores, elections, claims) return owner and fencing tokens. Owner tokens 
-distinguish grants and are opaque per implementation; fencing tokens strictly increase within each resource and 
-protect against stale requests. Fencing tokens are assigned by the provider and returned on each grant.
+whether the server persists or replicates its writes; transactions and counter batches are atomic across
+partitions, because a keyspace lives in one slot. It serves no other primitive.
 
 ## Keyspaces
 
