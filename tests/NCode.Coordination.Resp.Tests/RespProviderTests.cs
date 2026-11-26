@@ -526,6 +526,198 @@ public sealed partial class RespProviderTests(RespServers servers) : IDisposable
         Assert.Equal(expected, values);
     }
 
+    [Fact]
+    public async Task ProbeAsync_PermissionCheckRefused_ThrowsUnsupported()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var database = Mocks.Create<IDatabase>();
+        await using var provider = CreateProvider(database);
+        var info = new RedisValue("# Server\r\nserver_name:valkey\r\nvalkey_version:9.2.0\r\n");
+        var infoReply = RedisResult.Create(info);
+        var failure = new RedisServerException(
+            RedisErrorKind.Unknown,
+            CommandFlags.None,
+            "ERR user_script:1: Script attempted to access nonexistent global variable 'acl_check_cmd'"
+        );
+        var probeText = RespScript.Probe.Text;
+        var probeCommandsText = RespScript.ProbeCommands.Text;
+        database
+            .Setup(x =>
+                x.ScriptEvaluateAsync(
+                    It.Is<string>(s => s == probeText),
+                    It.IsAny<RedisKey[]?>(),
+                    It.IsAny<RedisValue[]?>(),
+                    It.IsAny<CommandFlags>()
+                )
+            )
+            .ReturnsAsync(infoReply)
+            .Verifiable();
+        database
+            .Setup(x =>
+                x.ScriptEvaluateAsync(
+                    It.Is<string>(s => s == probeCommandsText),
+                    It.IsAny<RedisKey[]?>(),
+                    It.IsAny<RedisValue[]?>(),
+                    It.IsAny<CommandFlags>()
+                )
+            )
+            .ThrowsAsync(failure)
+            .Verifiable();
+
+        var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
+            await provider.ProbeAsync(cancellationToken)
+        );
+
+        Assert.Equal(CoordinationErrorCodes.Unsupported, exception.Code);
+        Assert.False(exception.OutcomeUnknown);
+        Assert.Same(failure, exception.InnerException);
+        Assert.StartsWith(
+            "The RESP server refused the provider's permission check:",
+            exception.Message,
+            StringComparison.Ordinal
+        );
+    }
+
+    [Fact]
+    public async Task ProbeAsync_PermissionCheckLoading_ThrowsUnavailable()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var database = Mocks.Create<IDatabase>();
+        await using var provider = CreateProvider(database);
+        var info = new RedisValue("# Server\r\nserver_name:valkey\r\nvalkey_version:9.2.0\r\n");
+        var infoReply = RedisResult.Create(info);
+        var failure = new RedisServerException(
+            RedisErrorKind.Unknown,
+            CommandFlags.None,
+            "LOADING the server is loading the dataset in memory"
+        );
+        var probeText = RespScript.Probe.Text;
+        var probeCommandsText = RespScript.ProbeCommands.Text;
+        database
+            .Setup(x =>
+                x.ScriptEvaluateAsync(
+                    It.Is<string>(s => s == probeText),
+                    It.IsAny<RedisKey[]?>(),
+                    It.IsAny<RedisValue[]?>(),
+                    It.IsAny<CommandFlags>()
+                )
+            )
+            .ReturnsAsync(infoReply)
+            .Verifiable();
+        database
+            .Setup(x =>
+                x.ScriptEvaluateAsync(
+                    It.Is<string>(s => s == probeCommandsText),
+                    It.IsAny<RedisKey[]?>(),
+                    It.IsAny<RedisValue[]?>(),
+                    It.IsAny<CommandFlags>()
+                )
+            )
+            .ThrowsAsync(failure)
+            .Verifiable();
+
+        var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
+            await provider.ProbeAsync(cancellationToken)
+        );
+
+        Assert.Equal(CoordinationErrorCodes.Unavailable, exception.Code);
+        Assert.False(exception.OutcomeUnknown);
+        Assert.Same(failure, exception.InnerException);
+    }
+
+    [Fact]
+    public async Task ProbeAsync_IntegerPermissionReply_ThrowsUnsupportedNamingItsType()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var database = Mocks.Create<IDatabase>();
+        await using var provider = CreateProvider(database);
+        var info = new RedisValue("# Server\r\nserver_name:valkey\r\nvalkey_version:9.2.0\r\n");
+        var infoReply = RedisResult.Create(info);
+        RedisValue value = 42;
+        var permissionReply = RedisResult.Create(value, ResultType.Integer);
+        var probeText = RespScript.Probe.Text;
+        var probeCommandsText = RespScript.ProbeCommands.Text;
+        database
+            .Setup(x =>
+                x.ScriptEvaluateAsync(
+                    It.Is<string>(s => s == probeText),
+                    It.IsAny<RedisKey[]?>(),
+                    It.IsAny<RedisValue[]?>(),
+                    It.IsAny<CommandFlags>()
+                )
+            )
+            .ReturnsAsync(infoReply)
+            .Verifiable();
+        database
+            .Setup(x =>
+                x.ScriptEvaluateAsync(
+                    It.Is<string>(s => s == probeCommandsText),
+                    It.IsAny<RedisKey[]?>(),
+                    It.IsAny<RedisValue[]?>(),
+                    It.IsAny<CommandFlags>()
+                )
+            )
+            .ReturnsAsync(permissionReply)
+            .Verifiable();
+
+        var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
+            await provider.ProbeAsync(cancellationToken)
+        );
+
+        Assert.Equal(CoordinationErrorCodes.Unsupported, exception.Code);
+        Assert.False(exception.OutcomeUnknown);
+        Assert.Equal(
+            "The RESP server answered the permission check with a reply of type Integer, not a list.",
+            exception.Message
+        );
+    }
+
+    [Fact]
+    public async Task ProbeAsync_NullPermissionReply_ThrowsUnsupportedNamingNull()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var database = Mocks.Create<IDatabase>();
+        await using var provider = CreateProvider(database);
+        var info = new RedisValue("# Server\r\nserver_name:valkey\r\nvalkey_version:9.2.0\r\n");
+        var infoReply = RedisResult.Create(info);
+        var permissionReply = RedisResult.Create(RedisValue.Null);
+        var probeText = RespScript.Probe.Text;
+        var probeCommandsText = RespScript.ProbeCommands.Text;
+        database
+            .Setup(x =>
+                x.ScriptEvaluateAsync(
+                    It.Is<string>(s => s == probeText),
+                    It.IsAny<RedisKey[]?>(),
+                    It.IsAny<RedisValue[]?>(),
+                    It.IsAny<CommandFlags>()
+                )
+            )
+            .ReturnsAsync(infoReply)
+            .Verifiable();
+        database
+            .Setup(x =>
+                x.ScriptEvaluateAsync(
+                    It.Is<string>(s => s == probeCommandsText),
+                    It.IsAny<RedisKey[]?>(),
+                    It.IsAny<RedisValue[]?>(),
+                    It.IsAny<CommandFlags>()
+                )
+            )
+            .ReturnsAsync(permissionReply)
+            .Verifiable();
+
+        var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
+            await provider.ProbeAsync(cancellationToken)
+        );
+
+        Assert.Equal(CoordinationErrorCodes.Unsupported, exception.Code);
+        Assert.False(exception.OutcomeUnknown);
+        Assert.Equal(
+            "The RESP server answered the permission check with a reply of type null, not a list.",
+            exception.Message
+        );
+    }
+
     [RespServerFact]
     public async Task ProbeAsync_UserWithoutHset_ThrowsAccessDeniedNamingIt()
     {
