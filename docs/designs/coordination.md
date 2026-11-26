@@ -20,8 +20,8 @@ providers and checks requirements when the host starts ([D16](#d16-composition))
 suites ([D17](#d17-conformance-kit)), the holder's local deadline ([D18](#d18-holder-deadline)), the history checker
 that verifies concurrent runs of every primitive ([D19](#d19-history-checker)), the recipes built on the primitives'
 contracts ([D20](#d20-recipes)), the hosting that ties a node's session to its host's lifetime ([D21](#d21-hosting)),
-and the RESP provider's client, atomic scripts, cluster slots, numbered notifications and largest count
-([D22](#d22-resp-client) to [D26](#d26-resp-counts)).
+and the RESP provider's client, atomic scripts, cluster slots, numbered notifications, largest count and record table
+([D22](#d22-resp-client) to [D27](#d27-resp-records)).
 
 ## Goals and Non-Goals
 
@@ -347,6 +347,13 @@ periodic check, and state a watch can see expires through scripts.
 A RESP counter keeps counts up to 2^53 − 1, the largest integer a Lua number holds exactly, so its script checks
 every count before it writes; an increment past it fails as `limit-exceeded` and applies nothing.
 [ADR-1026](../decisions/1026-resp-counters-keep-counts-up-to-the-largest-integer-a-lua-number-holds-exactly.md)
+
+### D27. RESP records
+
+A keyspace's records live in one hash, an index and a set of deadlines beside its revision, so every record script
+receives every key it touches; the index holds a digest of each key segment, so a prefix lists as one range with a
+short continuation token; and every change, a take and an expiry included, is a script that numbers and publishes it.
+[ADR-1027](../decisions/1027-resp-records-live-in-one-table-per-keyspace-indexed-by-digests-of-their-segments.md)
 
 ## Open Questions
 
