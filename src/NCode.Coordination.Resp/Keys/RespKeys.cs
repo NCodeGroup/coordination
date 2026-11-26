@@ -171,8 +171,10 @@ internal static class RespKeys
 
         foreach (var segment in prefix.Segments)
         {
-            var bytes = Encoding.UTF8.GetBytes(EncodeSegment(segment));
-            var digest = Base64Url.EncodeToString(SHA256.HashData(bytes));
+            var encoded = EncodeSegment(segment);
+            var bytes = Encoding.UTF8.GetBytes(encoded);
+            var hash = SHA256.HashData(bytes);
+            var digest = Base64Url.EncodeToString(hash);
             builder.Append(digest).Append('/');
         }
 

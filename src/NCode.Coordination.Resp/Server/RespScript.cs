@@ -112,7 +112,10 @@ internal sealed class RespScript(string name, string text)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
 
-        return new RespScript(name, ReadResource(RecordPrelude) + "\n" + ReadResource(name));
+        var prelude = ReadResource(RecordPrelude);
+        var body = ReadResource(name);
+
+        return new RespScript(name, prelude + "\n" + body);
     }
 
     /// <summary>

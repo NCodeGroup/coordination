@@ -45,11 +45,9 @@ internal class RespRecordService(RespRecordTable table) : IRecordService
         switch (status)
         {
             case 0 when fields.Length == 2:
-                return new StoredRecord(
-                    key,
-                    RespRecordTable.ReadValue(fields[1], reply),
-                    RespRecordTable.ReadRevision(fields[0], reply)
-                );
+                var revision = RespRecordTable.ReadRevision(fields[0], reply);
+                var value = RespRecordTable.ReadValue(fields[1], reply);
+                return new StoredRecord(key, value, revision);
 
             case 1 when fields.Length == 0:
                 return null;
@@ -80,20 +78,19 @@ internal class RespRecordService(RespRecordTable table) : IRecordService
         RespCall.Check(options, cancellationToken);
 
         var timeToLive = RespRecordTable.TimeToLiveOf(lifetime);
+        var member = RespKeys.Member(key);
+        var name = RespKeys.Name(key);
+        RedisValue[] arguments = [member, name, value, timeToLive];
         var reply = await Table
-            .EvaluateAsync(
-                RespScript.RecordCreate,
-                key.Keyspace,
-                [RespKeys.Member(key), RespKeys.Name(key), value, timeToLive],
-                cancellationToken
-            )
+            .EvaluateAsync(RespScript.RecordCreate, key.Keyspace, arguments, cancellationToken)
             .ConfigureAwait(false);
 
         var (status, fields) = RespReplies.Script(reply);
         switch (status)
         {
             case 0 when fields.Length == 1:
-                return RecordWriteResult.Written(RespRecordTable.ReadRevision(fields[0], reply));
+                var revision = RespRecordTable.ReadRevision(fields[0], reply);
+                return RecordWriteResult.Written(revision);
 
             case 1 when fields.Length == 0:
                 return RecordWriteResult.Conflict;
@@ -113,13 +110,10 @@ internal class RespRecordService(RespRecordTable table) : IRecordService
         ArgumentNullException.ThrowIfNull(key);
         RespCall.Check(options, cancellationToken);
 
+        var member = RespKeys.Member(key);
+        RedisValue[] arguments = [member];
         var reply = await Table
-            .EvaluateAsync(
-                RespScript.RecordRead,
-                key.Keyspace,
-                [RespKeys.Member(key)],
-                cancellationToken
-            )
+            .EvaluateAsync(RespScript.RecordRead, key.Keyspace, arguments, cancellationToken)
             .ConfigureAwait(false);
 
         return ReadRecord(key, reply);
@@ -142,20 +136,19 @@ internal class RespRecordService(RespRecordTable table) : IRecordService
         RespCall.Check(options, cancellationToken);
 
         var timeToLive = RespRecordTable.TimeToLiveOf(lifetime);
+        var member = RespKeys.Member(key);
+        var name = RespKeys.Name(key);
+        RedisValue[] arguments = [member, name, expected.Value, value, timeToLive];
         var reply = await Table
-            .EvaluateAsync(
-                RespScript.RecordSwap,
-                key.Keyspace,
-                [RespKeys.Member(key), RespKeys.Name(key), expected.Value, value, timeToLive],
-                cancellationToken
-            )
+            .EvaluateAsync(RespScript.RecordSwap, key.Keyspace, arguments, cancellationToken)
             .ConfigureAwait(false);
 
         var (status, fields) = RespReplies.Script(reply);
         switch (status)
         {
             case 0 when fields.Length == 1:
-                return RecordWriteResult.Written(RespRecordTable.ReadRevision(fields[0], reply));
+                var revision = RespRecordTable.ReadRevision(fields[0], reply);
+                return RecordWriteResult.Written(revision);
 
             case 1 when fields.Length == 0:
                 return RecordWriteResult.Conflict;
@@ -180,13 +173,10 @@ internal class RespRecordService(RespRecordTable table) : IRecordService
         ArgumentNullException.ThrowIfNull(expected);
         RespCall.Check(options, cancellationToken);
 
+        var member = RespKeys.Member(key);
+        RedisValue[] arguments = [member, expected.Value];
         var reply = await Table
-            .EvaluateAsync(
-                RespScript.RecordDelete,
-                key.Keyspace,
-                [RespKeys.Member(key), expected.Value],
-                cancellationToken
-            )
+            .EvaluateAsync(RespScript.RecordDelete, key.Keyspace, arguments, cancellationToken)
             .ConfigureAwait(false);
 
         var (status, fields) = RespReplies.Script(reply);
@@ -214,13 +204,10 @@ internal class RespRecordService(RespRecordTable table) : IRecordService
         ArgumentNullException.ThrowIfNull(key);
         RespCall.Check(options, cancellationToken);
 
+        var member = RespKeys.Member(key);
+        RedisValue[] arguments = [member];
         var reply = await Table
-            .EvaluateAsync(
-                RespScript.RecordTake,
-                key.Keyspace,
-                [RespKeys.Member(key)],
-                cancellationToken
-            )
+            .EvaluateAsync(RespScript.RecordTake, key.Keyspace, arguments, cancellationToken)
             .ConfigureAwait(false);
 
         return ReadRecord(key, reply);
@@ -255,13 +242,10 @@ internal class RespRecordService(RespRecordTable table) : IRecordService
         RespCall.Check(options, cancellationToken);
 
         var start = token is null ? "[" + member : "(" + token;
+        var end = "(" + member + "~";
+        RedisValue[] arguments = [start, end, page.Limit];
         var reply = await Table
-            .EvaluateAsync(
-                RespScript.RecordList,
-                prefix.Keyspace,
-                [start, "(" + member + "~", page.Limit],
-                cancellationToken
-            )
+            .EvaluateAsync(RespScript.RecordList, prefix.Keyspace, arguments, cancellationToken)
             .ConfigureAwait(false);
 
         var (status, fields) = RespReplies.Script(reply);
@@ -301,13 +285,9 @@ internal class RespRecordService(RespRecordTable table) : IRecordService
                 throw RespReplies.Unexpected(reply);
             }
 
-            records.Add(
-                new StoredRecord(
-                    key,
-                    RespRecordTable.ReadValue(fields[index + 2], reply),
-                    RespRecordTable.ReadRevision(fields[index + 1], reply)
-                )
-            );
+            var recordRevision = RespRecordTable.ReadRevision(fields[index + 1], reply);
+            var recordValue = RespRecordTable.ReadValue(fields[index + 2], reply);
+            records.Add(new StoredRecord(key, recordValue, recordRevision));
         }
 
         return new RecordPage(revision, records)

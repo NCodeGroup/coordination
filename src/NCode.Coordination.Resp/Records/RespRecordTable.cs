@@ -20,8 +20,9 @@ namespace NCode.Coordination.Resp.Records;
 /// <exception cref="ArgumentNullException">The server or the profile is null.</exception>
 internal class RespRecordTable(RespServer server, RespProfile profile)
 {
+    // ADR-1025 rule 7.
     /// <summary>
-    /// The hour, in milliseconds, after the latest deadline that the table's keys expire (ADR-1025 rule 7).
+    /// The hour, in milliseconds, after the latest deadline that the table's keys expire.
     /// </summary>
     internal const long BackstopMilliseconds = 3_600_000;
 
@@ -49,17 +50,6 @@ internal class RespRecordTable(RespServer server, RespProfile profile)
     /// The kind of server key whose name is the keyspace's watch channel.
     /// </summary>
     private const string WatchKind = "watch";
-
-    /// <summary>
-    /// Gets the seam between the provider and its server.
-    /// </summary>
-    private RespServer Server { get; } = server ?? throw new ArgumentNullException(nameof(server));
-
-    /// <summary>
-    /// Gets the vendor the provider expects.
-    /// </summary>
-    private RespProfile Profile { get; } =
-        profile ?? throw new ArgumentNullException(nameof(profile));
 
     /// <summary>
     /// Returns the keys every record script receives.
@@ -153,6 +143,17 @@ internal class RespRecordTable(RespServer server, RespProfile profile)
     }
 
     /// <summary>
+    /// Gets the seam between the provider and its server.
+    /// </summary>
+    private RespServer Server { get; } = server ?? throw new ArgumentNullException(nameof(server));
+
+    /// <summary>
+    /// Gets the vendor the provider expects.
+    /// </summary>
+    private RespProfile Profile { get; } =
+        profile ?? throw new ArgumentNullException(nameof(profile));
+
+    /// <summary>
     /// Runs a record script over a keyspace's table.
     /// </summary>
     /// <param name="script">The record script.</param>
@@ -182,8 +183,9 @@ internal class RespRecordTable(RespServer server, RespProfile profile)
             values[index + 3] = arguments[index];
         }
 
+        var keys = Keys(keyspace);
         return await Server
-            .EvaluateAsync(script, Keys(keyspace), values, cancellationToken)
+            .EvaluateAsync(script, keys, values, cancellationToken)
             .ConfigureAwait(false);
     }
 }

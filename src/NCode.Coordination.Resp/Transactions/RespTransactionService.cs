@@ -18,12 +18,6 @@ namespace NCode.Coordination.Resp.Transactions;
 internal class RespTransactionService(RespRecordTable table) : ITransactionService
 {
     /// <summary>
-    /// Gets the record table that runs the record scripts.
-    /// </summary>
-    private RespRecordTable Table { get; } =
-        table ?? throw new ArgumentNullException(nameof(table));
-
-    /// <summary>
     /// Adds a branch's writes to the arguments of the transaction script.
     /// </summary>
     /// <param name="arguments">The arguments to add to.</param>
@@ -35,24 +29,35 @@ internal class RespTransactionService(RespRecordTable table) : ITransactionServi
 
         foreach (var write in writes)
         {
+            var member = RespKeys.Member(write.Key);
+            var name = RespKeys.Name(write.Key);
+
             if (write.Lifetime is { } lifetime)
             {
+                var timeToLive = RespRecordTable.TimeToLiveOf(lifetime);
+
                 arguments.Add("p");
-                arguments.Add(RespKeys.Member(write.Key));
-                arguments.Add(RespKeys.Name(write.Key));
+                arguments.Add(member);
+                arguments.Add(name);
                 arguments.Add(write.Value);
-                arguments.Add(RespRecordTable.TimeToLiveOf(lifetime));
+                arguments.Add(timeToLive);
             }
             else
             {
                 arguments.Add("d");
-                arguments.Add(RespKeys.Member(write.Key));
-                arguments.Add(RespKeys.Name(write.Key));
+                arguments.Add(member);
+                arguments.Add(name);
                 arguments.Add("");
                 arguments.Add("");
             }
         }
     }
+
+    /// <summary>
+    /// Gets the record table that runs the record scripts.
+    /// </summary>
+    private RespRecordTable Table { get; } =
+        table ?? throw new ArgumentNullException(nameof(table));
 
     /// <inheritdoc />
     public async ValueTask<TransactionResult> ExecuteAsync(
@@ -64,27 +69,29 @@ internal class RespTransactionService(RespRecordTable table) : ITransactionServi
         ArgumentNullException.ThrowIfNull(transaction);
         RespCall.Check(options, cancellationToken);
 
-        var arguments = new List<RedisValue> { transaction.Conditions.Length };
+        List<RedisValue> arguments = [transaction.Conditions.Length];
 
         foreach (var condition in transaction.Conditions)
         {
+            var member = RespKeys.Member(condition.Key);
+
             switch (condition.Kind)
             {
                 case RecordConditionKind.Absent:
                     arguments.Add("a");
-                    arguments.Add(RespKeys.Member(condition.Key));
+                    arguments.Add(member);
                     arguments.Add("");
                     break;
 
                 case RecordConditionKind.RevisionEquals when condition.Revision is { } revision:
                     arguments.Add("r");
-                    arguments.Add(RespKeys.Member(condition.Key));
+                    arguments.Add(member);
                     arguments.Add(revision.Value);
                     break;
 
                 case RecordConditionKind.ValueEquals:
                     arguments.Add("v");
-                    arguments.Add(RespKeys.Member(condition.Key));
+                    arguments.Add(member);
                     arguments.Add(condition.Value);
                     break;
 
@@ -114,16 +121,12 @@ internal class RespTransactionService(RespRecordTable table) : ITransactionServi
             throw RespReplies.Unexpected(reply);
         }
 
+        var resultRevision = RespRecordTable.ReadRevision(fields[0], reply);
+
         return status switch
         {
-            0 => new TransactionResult(
-                TransactionStatus.Succeeded,
-                RespRecordTable.ReadRevision(fields[0], reply)
-            ),
-            1 => new TransactionResult(
-                TransactionStatus.Failed,
-                RespRecordTable.ReadRevision(fields[0], reply)
-            ),
+            0 => new TransactionResult(TransactionStatus.Succeeded, resultRevision),
+            1 => new TransactionResult(TransactionStatus.Failed, resultRevision),
             _ => throw RespReplies.Unexpected(reply),
         };
     }
