@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using System.Collections.Concurrent;
+using System.Text;
 using NCode.Coordination.Resp.Tests.Conformance;
 using NCode.Coordination.Resp.Tests.Servers;
 
@@ -27,6 +28,11 @@ public sealed class RespProviderRestartTests
     /// The number of records that each client writes.
     /// </summary>
     private const int Steps = 12;
+
+    /// <summary>
+    /// The payload of the message, and the name of the record, that the tests write before the restart.
+    /// </summary>
+    private const string BeforeName = "before";
 
     /// <summary>
     /// Restarts a server while clients write records and checks that every failure is unavailable and that no write
@@ -183,9 +189,9 @@ public sealed class RespProviderRestartTests
         var changeStart = await RespTestSupport.NextAsync(changeEnumerator, cancellationToken);
         Assert.True(changeStart.IsResync);
 
-        var beforePayload = "before"u8.ToArray();
+        var beforePayload = Encoding.UTF8.GetBytes(BeforeName);
         await notifications.PublishAsync(topic, beforePayload, null, cancellationToken);
-        var beforeKey = keyspace.CreateKey(RespTestSupport.WatchedName, "before");
+        var beforeKey = keyspace.CreateKey(RespTestSupport.WatchedName, BeforeName);
         await records.CreateAsync(
             beforeKey,
             value,

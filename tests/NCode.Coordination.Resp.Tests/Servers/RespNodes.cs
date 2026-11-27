@@ -28,9 +28,14 @@ internal static class RespNodes
     internal const string LinkUp = "master_link_status:up";
 
     /// <summary>
-    /// The command that reports a node's state.
+    /// The line of <c>CLUSTER INFO</c> that says a cluster serves its slots.
     /// </summary>
-    private const string InfoCommand = "INFO";
+    internal const string ClusterStateOk = "cluster_state:ok";
+
+    /// <summary>
+    /// The command that reports a node's state; <c>CLUSTER</c> takes it as its subcommand too.
+    /// </summary>
+    internal const string InfoCommand = "INFO";
 
     /// <summary>
     /// The command that reads and changes a Garnet or Valkey node's cluster state.

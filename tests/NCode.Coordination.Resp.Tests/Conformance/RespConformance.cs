@@ -76,11 +76,7 @@ internal static class RespConformance
         CancellationToken cancellationToken
     )
     {
-        var options = ConfigurationOptions.Parse(endpoint);
-        options.AllowAdmin = true;
-        await using var admin = await ConnectionMultiplexer
-            .ConnectAsync(options)
-            .WaitAsync(cancellationToken);
+        await using var admin = await RespNodes.ConnectAdminAsync(endpoint, cancellationToken);
 
         long killed = 0;
         foreach (var server in admin.GetServers())

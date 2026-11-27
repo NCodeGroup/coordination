@@ -115,9 +115,9 @@ internal static class RespGarnetCluster
         {
             await RespNodes.WaitForReplyAsync(
                 node,
-                [RespNodes.ClusterCommand, "INFO"],
+                [RespNodes.ClusterCommand, RespNodes.InfoCommand],
                 reply =>
-                    reply.Contains("cluster_state:ok", StringComparison.Ordinal)
+                    reply.Contains(RespNodes.ClusterStateOk, StringComparison.Ordinal)
                     && reply.Contains(knownNodes, StringComparison.Ordinal),
                 cancellationToken
             );

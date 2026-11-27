@@ -156,7 +156,8 @@ public sealed class RespProviderClusterTests(RespServers servers)
         foreach (var server in clusterServers)
         {
             var keys = new List<RedisKey>();
-            await foreach (var key in server.KeysAsync(pattern: pattern))
+            var scanning = server.KeysAsync(pattern: pattern);
+            await foreach (var key in scanning.WithCancellation(cancellationToken))
                 keys.Add(key);
 
             if (keys.Count > 0)
@@ -339,7 +340,8 @@ public sealed class RespProviderClusterTests(RespServers servers)
         var channel = RedisChannel.Literal(name);
         var messages = Channel.CreateUnbounded<string>();
         var subscriber = admin.GetSubscriber();
-        var queue = await subscriber.SubscribeAsync(channel);
+        var subscribing = subscriber.SubscribeAsync(channel);
+        var queue = await subscribing.WaitAsync(cancellationToken);
         queue.OnMessage(message =>
         {
             var text = message.Message.ToString();
@@ -370,7 +372,8 @@ public sealed class RespProviderClusterTests(RespServers servers)
             name,
             cancellationToken
         );
-        await queue.UnsubscribeAsync();
+        var unsubscribing = queue.UnsubscribeAsync();
+        await unsubscribing.WaitAsync(cancellationToken);
         received.Sort(StringComparer.Ordinal);
 
         Assert.Equal(expected, received);

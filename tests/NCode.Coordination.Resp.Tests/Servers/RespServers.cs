@@ -98,7 +98,7 @@ public sealed class RespServers : IAsyncLifetime
             + "--save '' --appendonly no --daemonize yes --logfile /data/$p.log; done; "
             + $"for p in {list}; do until valkey-cli -p $p ping >/dev/null 2>&1; do sleep 0.1; done; done; "
             + $"valkey-cli --cluster create {nodes} --cluster-replicas 0 --cluster-yes; "
-            + $"for p in {list}; do until valkey-cli -p $p cluster info | grep -q cluster_state:ok; do sleep 0.1; done; done; "
+            + $"for p in {list}; do until valkey-cli -p $p cluster info | grep -q {RespNodes.ClusterStateOk}; do sleep 0.1; done; done; "
             + $"echo '{ClusterReadyMessage}'; exec sleep infinity";
     }
 
