@@ -92,8 +92,10 @@ internal class RespNotificationService(
         RespCall.Check(options, cancellationToken);
 
         var key = RespKeys.ForKey(topic, Kind);
+        var channel = key.ToString();
+        var sharded = Profile.ShardedChannels ? "1" : "0";
         RedisKey[] keys = [key];
-        RedisValue[] arguments = [key.ToString(), Profile.ShardedChannels ? "1" : "0", payload];
+        RedisValue[] arguments = [channel, sharded, payload];
 
         var reply = await Server
             .EvaluateAsync(RespScript.NotificationPublish, keys, arguments, cancellationToken)
