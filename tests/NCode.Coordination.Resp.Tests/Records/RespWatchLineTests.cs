@@ -33,5 +33,21 @@ public sealed class RespWatchLineTests
         Assert.False(parsed);
     }
 
+    [Fact]
+    public void TryParse_WhenALineIsEmpty_ReturnsFalse()
+    {
+        var parsed = RespWatchLine.TryParse("12\n\nw1:ta", out _);
+
+        Assert.False(parsed);
+    }
+
+    [Fact]
+    public void TryParse_WhenTheEventEndsWithALineFeed_ReturnsFalse()
+    {
+        var parsed = RespWatchLine.TryParse("12\nw1:ta\n", out _);
+
+        Assert.False(parsed);
+    }
+
     #endregion
 }
