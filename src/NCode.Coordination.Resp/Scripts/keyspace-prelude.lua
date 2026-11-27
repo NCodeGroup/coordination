@@ -3,8 +3,7 @@
 -- 'v:' followed by the record's member, which hold its revision, its name and its value, and a fourth, 's:' followed
 -- by the member, when the record is bound to a session (the record is absent once that session is not live). KEYS[3]
 -- is the index of the records' members, a sorted set whose scores are all 0, read in lexicographic order. KEYS[4]
--- holds the deadline, in
--- milliseconds on the server's clock, of each record that has a time to live.
+-- holds the deadline, in milliseconds on the server's clock, of each record that has a time to live.
 -- KEYS[5] is the sessions: a hash from each session to its time to live in milliseconds. KEYS[6] holds the deadline
 -- of each session, in milliseconds on the server's clock; 0 marks a session that has ended and is not yet cleaned up.
 -- KEYS[7] holds the bindings of sessions: a sorted set whose scores are all 0 of '<session> <kind> <item>', where the
