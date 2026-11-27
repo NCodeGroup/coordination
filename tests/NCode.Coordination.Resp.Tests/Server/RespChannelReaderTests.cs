@@ -16,6 +16,12 @@ public sealed class RespChannelReaderTests
 
     private static RespSignal Message(string text) => RespSignal.ForMessage((RedisValue)text);
 
+    private static async Task WriteAsync(Channel<RespSignal> signals, string text)
+    {
+        var signal = Message(text);
+        await signals.Writer.WriteAsync(signal, TestContext.Current.CancellationToken);
+    }
+
     private static (
         RespChannelReader Reader,
         Channel<RespSignal> Signals,
@@ -37,15 +43,16 @@ public sealed class RespChannelReaderTests
 
     private static Func<ValueTask<long>> Number(long value) => () => ValueTask.FromResult(value);
 
-    private static Func<ValueTask<long>> Fails() =>
-        () => ValueTask.FromException<long>(Unavailable());
+    private static Func<ValueTask<long>> Fails()
+    {
+        var failure = Unavailable();
+        return () => ValueTask.FromException<long>(failure);
+    }
 
     private static async Task<RespChannelItem> NextAsync(IAsyncEnumerator<RespChannelItem> items)
     {
-        var moved = await items
-            .MoveNextAsync()
-            .AsTask()
-            .WaitAsync(Timeout, TestContext.Current.CancellationToken);
+        var moving = items.MoveNextAsync().AsTask();
+        var moved = await moving.WaitAsync(Timeout, TestContext.Current.CancellationToken);
 
         Assert.True(moved);
         return items.Current;
@@ -107,7 +114,8 @@ public sealed class RespChannelReaderTests
     [Fact]
     public async Task ReadAsync_WhenStarted_YieldsAResyncAtTheChannelsNumber()
     {
-        var (reader, _, _) = Create(Number(7));
+        var seven = Number(7);
+        var (reader, _, _) = Create(seven);
         await using var items = Open(reader);
 
         var item = await NextAsync(items);
@@ -118,7 +126,8 @@ public sealed class RespChannelReaderTests
     [Fact]
     public async Task ReadAsync_WhenTheFirstReadFails_Throws()
     {
-        var (reader, _, _) = Create(Fails());
+        var failure = Fails();
+        var (reader, _, _) = Create(failure);
         await using var items = Open(reader);
 
         var exception = await Assert.ThrowsAsync<CoordinationException>(() =>
@@ -131,14 +140,12 @@ public sealed class RespChannelReaderTests
     [Fact]
     public async Task ReadAsync_WhenTheNextNumberArrives_YieldsTheMessage()
     {
-        var (reader, signals, _) = Create(Number(7));
+        var seven = Number(7);
+        var (reader, signals, _) = Create(seven);
         await using var items = Open(reader);
         await NextAsync(items);
 
-        await signals.Writer.WriteAsync(
-            Message("8\npayload"),
-            TestContext.Current.CancellationToken
-        );
+        await WriteAsync(signals, "8\npayload");
         var item = await NextAsync(items);
 
         AssertMessage(item, 8);
@@ -148,13 +155,14 @@ public sealed class RespChannelReaderTests
     [Fact]
     public async Task ReadAsync_WhenMessagesAreAtOrBelowTheStart_DropsThem()
     {
-        var (reader, signals, _) = Create(Number(7));
+        var seven = Number(7);
+        var (reader, signals, _) = Create(seven);
         await using var items = Open(reader);
         await NextAsync(items);
 
-        await signals.Writer.WriteAsync(Message("6"), TestContext.Current.CancellationToken);
-        await signals.Writer.WriteAsync(Message("7"), TestContext.Current.CancellationToken);
-        await signals.Writer.WriteAsync(Message("8"), TestContext.Current.CancellationToken);
+        await WriteAsync(signals, "6");
+        await WriteAsync(signals, "7");
+        await WriteAsync(signals, "8");
         var item = await NextAsync(items);
 
         AssertMessage(item, 8);
@@ -163,11 +171,13 @@ public sealed class RespChannelReaderTests
     [Fact]
     public async Task ReadAsync_WhenANumberIsSkipped_ResyncsAtTheChannelsNumber()
     {
-        var (reader, signals, _) = Create(Number(7), Number(9));
+        var seven = Number(7);
+        var nine = Number(9);
+        var (reader, signals, _) = Create(seven, nine);
         await using var items = Open(reader);
         await NextAsync(items);
 
-        await signals.Writer.WriteAsync(Message("9"), TestContext.Current.CancellationToken);
+        await WriteAsync(signals, "9");
         var item = await NextAsync(items);
 
         AssertResync(item, 9);
@@ -176,13 +186,15 @@ public sealed class RespChannelReaderTests
     [Fact]
     public async Task ReadAsync_WhenTheNumberGoesBackwardsAfterAMessage_Resyncs()
     {
-        var (reader, signals, _) = Create(Number(7), Number(3));
+        var seven = Number(7);
+        var three = Number(3);
+        var (reader, signals, _) = Create(seven, three);
         await using var items = Open(reader);
         await NextAsync(items);
-        await signals.Writer.WriteAsync(Message("8"), TestContext.Current.CancellationToken);
+        await WriteAsync(signals, "8");
         await NextAsync(items);
 
-        await signals.Writer.WriteAsync(Message("3"), TestContext.Current.CancellationToken);
+        await WriteAsync(signals, "3");
         var item = await NextAsync(items);
 
         AssertResync(item, 3);
@@ -191,7 +203,9 @@ public sealed class RespChannelReaderTests
     [Fact]
     public async Task ReadAsync_WhenAConnectionIsRestored_Resyncs()
     {
-        var (reader, signals, _) = Create(Number(7), Number(8));
+        var seven = Number(7);
+        var eight = Number(8);
+        var (reader, signals, _) = Create(seven, eight);
         await using var items = Open(reader);
         await NextAsync(items);
 
@@ -204,7 +218,9 @@ public sealed class RespChannelReaderTests
     [Fact]
     public async Task ReadAsync_WhenACheckFindsTheChannelAheadPastTheGrace_Resyncs()
     {
-        var (reader, signals, time) = Create(Number(7), Number(9), Number(9));
+        var seven = Number(7);
+        var nine = Number(9);
+        var (reader, signals, time) = Create(seven, nine, nine);
         await using var items = Open(reader);
         await NextAsync(items);
 
@@ -219,7 +235,9 @@ public sealed class RespChannelReaderTests
     [Fact]
     public async Task ReadAsync_WhenChecksArriveWithinTheGrace_ResyncsOnce()
     {
-        var (reader, signals, time) = Create(Number(7), Number(9), Number(9));
+        var seven = Number(7);
+        var nine = Number(9);
+        var (reader, signals, time) = Create(seven, nine, nine);
         await using var items = Open(reader);
         await NextAsync(items);
 
@@ -236,16 +254,18 @@ public sealed class RespChannelReaderTests
     [Fact]
     public async Task ReadAsync_WhenTheMessagesArriveWithinTheGrace_DoesNotResync()
     {
-        var (reader, signals, time) = Create(Number(7), Number(8));
+        var seven = Number(7);
+        var eight = Number(8);
+        var (reader, signals, time) = Create(seven, eight);
         await using var items = Open(reader);
         await NextAsync(items);
 
         await signals.Writer.WriteAsync(RespSignal.Check, TestContext.Current.CancellationToken);
         var moving = items.MoveNextAsync().AsTask();
-        await signals.Writer.WriteAsync(Message("8"), TestContext.Current.CancellationToken);
+        await WriteAsync(signals, "8");
         time.Advance(RespChannelReader.Grace);
         var first = await FinishAsync(moving, items);
-        await signals.Writer.WriteAsync(Message("9"), TestContext.Current.CancellationToken);
+        await WriteAsync(signals, "9");
         var second = await NextAsync(items);
 
         AssertMessage(first, 8);
@@ -255,7 +275,8 @@ public sealed class RespChannelReaderTests
     [Fact]
     public async Task ReadAsync_WhenAConnectionFailed_ResyncsAtTheNextCheck()
     {
-        var (reader, signals, _) = Create(Number(7), Number(7), Number(7));
+        var seven = Number(7);
+        var (reader, signals, _) = Create(seven, seven, seven);
         await using var items = Open(reader);
         await NextAsync(items);
 
@@ -269,7 +290,8 @@ public sealed class RespChannelReaderTests
     [Fact]
     public async Task ReadAsync_WhenMarkedInDoubt_ResyncsAtTheNextCheck()
     {
-        var (reader, signals, _) = Create(Number(7), Number(7), Number(7));
+        var seven = Number(7);
+        var (reader, signals, _) = Create(seven, seven, seven);
         await using var items = Open(reader);
         await NextAsync(items);
 
@@ -283,7 +305,9 @@ public sealed class RespChannelReaderTests
     [Fact]
     public async Task ReadAsync_WhenACheckFails_ResyncsAtTheNextCheck()
     {
-        var (reader, signals, _) = Create(Number(7), Fails(), Number(7), Number(7));
+        var seven = Number(7);
+        var failure = Fails();
+        var (reader, signals, _) = Create(seven, failure, seven, seven);
         await using var items = Open(reader);
         await NextAsync(items);
 
