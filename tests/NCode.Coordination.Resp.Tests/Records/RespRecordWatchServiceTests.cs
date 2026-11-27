@@ -73,13 +73,8 @@ public sealed class RespRecordWatchServiceTests(RespServers servers)
         var second = TimeSpan.FromSeconds(1);
         var timeToLive = new TimeToLive(second);
         var lifetime = RecordLifetime.ForTimeToLive(timeToLive);
-        var created = await records.CreateAsync(
-            key,
-            "v"u8.ToArray(),
-            lifetime,
-            null,
-            cancellationToken
-        );
+        var value = "v"u8.ToArray();
+        var created = await records.CreateAsync(key, value, lifetime, null, cancellationToken);
         Assert.True(created.IsWritten);
         var stream = watches.WatchKeyAsync(key, null, null, cancellationToken);
         await using var enumerator = stream.GetAsyncEnumerator(cancellationToken);

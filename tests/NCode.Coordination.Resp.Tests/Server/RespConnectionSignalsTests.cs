@@ -49,21 +49,26 @@ public sealed class RespConnectionSignalsTests : IDisposable
             .Verifiable();
         Assert.NotNull(failed);
         Assert.NotNull(restored);
+        var endPoint = new DnsEndPoint("localhost", 6379);
+        var failure = new InvalidOperationException("The test dropped the connection.");
         var args = new ConnectionFailedEventArgs(
             multiplexer.Object,
-            new DnsEndPoint("localhost", 6379),
+            endPoint,
             ConnectionType.Subscription,
             ConnectionFailureType.SocketFailure,
-            new InvalidOperationException("The test dropped the connection."),
+            failure,
             "test"
         );
 
         failed(multiplexer.Object, args);
         restored(multiplexer.Object, args);
+        var readFirst = channel.Reader.TryRead(out var first);
+        var readSecond = channel.Reader.TryRead(out var second);
+        var readThird = channel.Reader.TryRead(out _);
 
-        Assert.True(channel.Reader.TryRead(out var first));
-        Assert.True(channel.Reader.TryRead(out var second));
-        Assert.False(channel.Reader.TryRead(out _));
+        Assert.True(readFirst);
+        Assert.True(readSecond);
+        Assert.False(readThird);
         Assert.Equal(RespSignalKind.Failed, first.Kind);
         Assert.Equal(RespSignalKind.Restored, second.Kind);
     }

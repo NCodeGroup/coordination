@@ -80,7 +80,8 @@ public sealed class RespNotificationServiceTests(RespServers servers) : IDisposa
 
         var start = await NextAsync(enumerator, cancellationToken);
         Assert.True(start.IsResync);
-        await service.PublishAsync(topic, "a"u8.ToArray(), null, cancellationToken);
+        var payload = "a"u8.ToArray();
+        await service.PublishAsync(topic, payload, null, cancellationToken);
         var first = await NextAsync(enumerator, cancellationToken);
         Assert.Equal(NotificationKind.Message, first.Kind);
         Assert.Equal(1, first.Sequence);
@@ -106,7 +107,8 @@ public sealed class RespNotificationServiceTests(RespServers servers) : IDisposa
 
         var start = await NextAsync(enumerator, cancellationToken);
         Assert.True(start.IsResync);
-        await service.PublishAsync(topic, "a"u8.ToArray(), null, cancellationToken);
+        var payload = "a"u8.ToArray();
+        await service.PublishAsync(topic, payload, null, cancellationToken);
         var first = await NextAsync(enumerator, cancellationToken);
         Assert.Equal(1, first.Sequence);
         var name = key.ToString();
@@ -137,7 +139,8 @@ public sealed class RespNotificationServiceTests(RespServers servers) : IDisposa
         Assert.True(firstStart.IsResync);
         Assert.True(secondStart.IsResync);
         await second.DisposeAsync();
-        await service.PublishAsync(topic, "a"u8.ToArray(), null, cancellationToken);
+        var payload = "a"u8.ToArray();
+        await service.PublishAsync(topic, payload, null, cancellationToken);
         var next = await NextAsync(first, cancellationToken);
 
         Assert.Equal(NotificationKind.Message, next.Kind);
@@ -149,10 +152,11 @@ public sealed class RespNotificationServiceTests(RespServers servers) : IDisposa
     [Fact]
     public void TryReadPayload_WhenTheMessageHasALineFeed_ReturnsTheBytesAfterIt()
     {
+        var expected = "pay\nload"u8.ToArray();
         var found = RespNotificationService.TryReadPayload("12\npay\nload", out var payload);
 
         Assert.True(found);
-        Assert.Equal("pay\nload"u8.ToArray(), payload);
+        Assert.Equal(expected, payload);
     }
 
     [Fact]
@@ -180,8 +184,10 @@ public sealed class RespNotificationServiceTests(RespServers servers) : IDisposa
         var (service, _) = CreateService(multiplexer.Object, RespProfiles.Garnet);
         var topic = CreateKeyspace().CreateKey("t");
         var key = RespKeys.ForKey(topic, RespNotificationService.Kind);
+        var name = key.ToString();
         var payload = "pay"u8.ToArray();
         var text = RespScript.NotificationPublish.Text;
+        var reply = RedisResult.Create((RedisValue)4, ResultType.Integer);
         RedisKey[]? capturedKeys = null;
         RedisValue[]? capturedValues = null;
         database
@@ -200,7 +206,7 @@ public sealed class RespNotificationServiceTests(RespServers servers) : IDisposa
                     capturedValues = values;
                 }
             )
-            .ReturnsAsync(RedisResult.Create((RedisValue)4, ResultType.Integer))
+            .ReturnsAsync(reply)
             .Verifiable();
 
         await service.PublishAsync(topic, payload, null, cancellationToken);
@@ -208,7 +214,7 @@ public sealed class RespNotificationServiceTests(RespServers servers) : IDisposa
         Assert.NotNull(capturedKeys);
         Assert.NotNull(capturedValues);
         Assert.Equal<RedisKey>([key], capturedKeys);
-        Assert.Equal<RedisValue>([key.ToString(), "0", payload], capturedValues);
+        Assert.Equal<RedisValue>([name, "0", payload], capturedValues);
     }
 
     #endregion

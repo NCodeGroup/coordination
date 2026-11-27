@@ -57,14 +57,16 @@ public sealed class RespMembershipServiceTests(RespServers servers)
             _ => ValueTask.FromResult<IConnectionMultiplexer>(multiplexer),
             owned: false
         );
-        var table = new RespRecordTable(new RespServer(connection), profile);
+        var server = new RespServer(connection);
+        var table = new RespRecordTable(server, profile);
         var subscriptions = new RespSubscriptions(
             connection,
             profile,
             RespSubscriptions.DefaultCheckInterval,
             TimeProvider.System
         );
-        var sessions = new RespSessionService(table, new RespRandomTokens());
+        var tokens = new RespRandomTokens();
+        var sessions = new RespSessionService(table, tokens);
         var membership = new RespMembershipService(table, subscriptions);
         var keyspace = CreateKeyspace();
         var minute = TimeSpan.FromMinutes(1);
