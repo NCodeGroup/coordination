@@ -79,6 +79,21 @@ internal sealed class RespChannelReader(
     private bool InDoubt { get; set; }
 
     /// <summary>
+    /// Gets or sets the number of the last item yielded: the last resync's or the last message's.
+    /// </summary>
+    private long Last { get; set; }
+
+    /// <summary>
+    /// Gets or sets whether a message was yielded since the last resync.
+    /// </summary>
+    private bool Accepted { get; set; }
+
+    /// <summary>
+    /// Gets or sets the number that a check found ahead while its grace is pending, or null when none is pending.
+    /// </summary>
+    private long? Target { get; set; }
+
+    /// <summary>
     /// Marks the reader in doubt: the next check resyncs.
     /// </summary>
     public void MarkInDoubt() => InDoubt = true;
@@ -114,108 +129,162 @@ internal sealed class RespChannelReader(
         [EnumeratorCancellation] CancellationToken cancellationToken
     )
     {
-        var last = await ReadNumber(cancellationToken).ConfigureAwait(false);
-        var accepted = false;
-        long? target = null;
-        yield return RespChannelItem.ForResync(last);
+        Last = await ReadNumber(cancellationToken).ConfigureAwait(false);
+        yield return RespChannelItem.ForResync(Last);
 
         while (true)
         {
-            RespSignal? next = null;
-            var resync = false;
-            if (target is { } expected)
+            var item = await NextItemAsync(cancellationToken).ConfigureAwait(false);
+            if (item is { } next)
             {
-                if (Signals.TryRead(out var pending))
-                {
-                    next = pending;
-                }
-                else
-                {
-                    // Every signal that arrived within the grace has been handled.
-                    target = null;
-                    resync = last < expected;
-                }
+                yield return next;
             }
-            else
-            {
-                next = await Signals.ReadAsync(cancellationToken).ConfigureAwait(false);
-            }
-
-            if (next is { } signal)
-            {
-                switch (signal.Kind)
-                {
-                    case RespSignalKind.Message:
-                        var number = ParseNumber(signal.Message);
-                        if (number == last + 1)
-                        {
-                            last += 1;
-                            accepted = true;
-                            yield return RespChannelItem.ForMessage(last, signal.Message);
-                        }
-                        else if (number <= last && !accepted)
-                        {
-                            // Published before the number the last resync read.
-                        }
-                        else
-                        {
-                            resync = true;
-                        }
-
-                        break;
-
-                    case RespSignalKind.Failed:
-                        InDoubt = true;
-                        break;
-
-                    case RespSignalKind.Restored:
-                        resync = true;
-                        break;
-
-                    case RespSignalKind.Check:
-                        if (target is not null)
-                        {
-                            // A check is already waiting for the messages in flight.
-                            break;
-                        }
-
-                        var current = await TryReadNumberAsync(cancellationToken)
-                            .ConfigureAwait(false);
-                        if (current is null)
-                        {
-                            InDoubt = true;
-                        }
-                        else if (InDoubt || current < last)
-                        {
-                            resync = true;
-                        }
-                        else if (current > last)
-                        {
-                            await Task.Delay(Grace, Time, cancellationToken).ConfigureAwait(false);
-                            target = current;
-                        }
-
-                        break;
-                }
-            }
-
-            if (!resync)
-            {
-                continue;
-            }
-
-            var baseline = await TryReadNumberAsync(cancellationToken).ConfigureAwait(false);
-            if (baseline is null)
-            {
-                InDoubt = true;
-                continue;
-            }
-
-            last = baseline.Value;
-            accepted = false;
-            target = null;
-            InDoubt = false;
-            yield return RespChannelItem.ForResync(last);
         }
+    }
+
+    /// <summary>
+    /// Handles the next signal, or ends a pending grace once every signal that arrived within it has been handled.
+    /// </summary>
+    /// <param name="cancellationToken">The token that ends the stream.</param>
+    /// <returns>The item to yield, or null when there is none.</returns>
+    private async ValueTask<RespChannelItem?> NextItemAsync(CancellationToken cancellationToken)
+    {
+        if (Target is not { } target)
+        {
+            var signal = await Signals.ReadAsync(cancellationToken).ConfigureAwait(false);
+            return await HandleAsync(signal, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (Signals.TryRead(out var pending))
+        {
+            return await HandleAsync(pending, cancellationToken).ConfigureAwait(false);
+        }
+
+        // Every signal that arrived within the grace has been handled.
+        Target = null;
+        if (Last >= target)
+        {
+            return null;
+        }
+
+        return await ResyncAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Handles a signal: a message, a failed or restored connection, or a check.
+    /// </summary>
+    /// <param name="signal">The signal.</param>
+    /// <param name="cancellationToken">The token that ends the stream.</param>
+    /// <returns>The item to yield, or null when there is none.</returns>
+    private async ValueTask<RespChannelItem?> HandleAsync(
+        RespSignal signal,
+        CancellationToken cancellationToken
+    )
+    {
+        switch (signal.Kind)
+        {
+            case RespSignalKind.Message:
+                return await HandleMessageAsync(signal.Message, cancellationToken)
+                    .ConfigureAwait(false);
+
+            case RespSignalKind.Restored:
+                return await ResyncAsync(cancellationToken).ConfigureAwait(false);
+
+            case RespSignalKind.Check:
+                return await HandleCheckAsync(cancellationToken).ConfigureAwait(false);
+
+            case RespSignalKind.Failed:
+                InDoubt = true;
+                return null;
+
+            default:
+                return null;
+        }
+    }
+
+    /// <summary>
+    /// Handles a message: one numbered one above the last is delivered, one at or below the last before any message
+    /// since the last resync is dropped, and any other resyncs.
+    /// </summary>
+    /// <param name="message">The message.</param>
+    /// <param name="cancellationToken">The token that ends the stream.</param>
+    /// <returns>The message or the resync to yield, or null when there is none.</returns>
+    private async ValueTask<RespChannelItem?> HandleMessageAsync(
+        RedisValue message,
+        CancellationToken cancellationToken
+    )
+    {
+        var number = ParseNumber(message);
+        if (number == Last + 1)
+        {
+            Last += 1;
+            Accepted = true;
+            return RespChannelItem.ForMessage(Last, message);
+        }
+
+        if (number <= Last && !Accepted)
+        {
+            // Published before the number the last resync read.
+            return null;
+        }
+
+        return await ResyncAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Handles a check: it reads the channel's number and resyncs when the reader is in doubt or the number went
+    /// backwards, or waits the grace when the number is ahead; a check during a pending grace is skipped.
+    /// </summary>
+    /// <param name="cancellationToken">The token that ends the stream.</param>
+    /// <returns>The resync to yield, or null when there is none.</returns>
+    private async ValueTask<RespChannelItem?> HandleCheckAsync(CancellationToken cancellationToken)
+    {
+        if (Target is not null)
+        {
+            // A check is already waiting for the messages in flight.
+            return null;
+        }
+
+        var current = await TryReadNumberAsync(cancellationToken).ConfigureAwait(false);
+        if (current is null)
+        {
+            InDoubt = true;
+            return null;
+        }
+
+        if (InDoubt || current < Last)
+        {
+            return await ResyncAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        if (current > Last)
+        {
+            await Task.Delay(Grace, Time, cancellationToken).ConfigureAwait(false);
+            Target = current;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Reads the channel's number and resyncs at it; when the read fails, the reader stays in doubt, so the next
+    /// check resyncs.
+    /// </summary>
+    /// <param name="cancellationToken">The token that ends the stream.</param>
+    /// <returns>The resync to yield, or null when the read failed.</returns>
+    private async ValueTask<RespChannelItem?> ResyncAsync(CancellationToken cancellationToken)
+    {
+        var baseline = await TryReadNumberAsync(cancellationToken).ConfigureAwait(false);
+        if (baseline is not { } number)
+        {
+            InDoubt = true;
+            return null;
+        }
+
+        Last = number;
+        Accepted = false;
+        Target = null;
+        InDoubt = false;
+        return RespChannelItem.ForResync(number);
     }
 }
