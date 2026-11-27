@@ -38,54 +38,6 @@ public sealed class RespProviderClusterTests(RespServers servers)
     private const int KeyspaceAttempts = 64;
 
     /// <summary>
-    /// Creates a keyspace with a unique id, so that the keys of one test are its own and no other test's keys match
-    /// their prefix.
-    /// </summary>
-    /// <returns>The keyspace.</returns>
-    private static Keyspace CreateKeyspace()
-    {
-        var id = Guid.NewGuid();
-        var segment = KeySegment.FromGuid(id);
-
-        return new Keyspace("cluster", segment);
-    }
-
-    /// <summary>
-    /// Gets a primitive service of the provider, failing the test when the provider offers none.
-    /// </summary>
-    /// <typeparam name="TService">The service interface to get.</typeparam>
-    /// <param name="provider">The provider that offers the service.</param>
-    /// <returns>The service.</returns>
-    private static TService GetService<TService>(ICoordinationProvider provider)
-        where TService : class
-    {
-        var service = provider.GetPrimitiveService(typeof(TService)) as TService;
-        Assert.NotNull(service);
-
-        return service;
-    }
-
-    /// <summary>
-    /// Moves an enumerator to its next item, failing the test when none arrives in time.
-    /// </summary>
-    /// <typeparam name="T">The type of the items.</typeparam>
-    /// <param name="enumerator">The enumerator to move.</param>
-    /// <param name="cancellationToken">The token that cancels the wait.</param>
-    /// <returns>The next item.</returns>
-    private static async ValueTask<T> NextAsync<T>(
-        IAsyncEnumerator<T> enumerator,
-        CancellationToken cancellationToken
-    )
-    {
-        var timeout = TimeSpan.FromSeconds(15);
-        var moving = enumerator.MoveNextAsync().AsTask();
-        var moved = await moving.WaitAsync(timeout, cancellationToken);
-        Assert.True(moved);
-
-        return enumerator.Current;
-    }
-
-    /// <summary>
     /// Subscribes to a topic, waits for the subscription's first resync, publishes a payload and checks that it
     /// arrives, so the topic's sharded channel exists on its node.
     /// </summary>
@@ -102,11 +54,11 @@ public sealed class RespProviderClusterTests(RespServers servers)
         var stream = notifications.SubscribeAsync(topic, null, cancellationToken);
         var enumerator = stream.GetAsyncEnumerator(cancellationToken);
 
-        var start = await NextAsync(enumerator, cancellationToken);
+        var start = await RespTestSupport.NextAsync(enumerator, cancellationToken);
         Assert.True(start.IsResync);
         var payload = "p"u8.ToArray();
         await notifications.PublishAsync(topic, payload, null, cancellationToken);
-        var message = await NextAsync(enumerator, cancellationToken);
+        var message = await RespTestSupport.NextAsync(enumerator, cancellationToken);
         Assert.Equal(NotificationKind.Message, message.Kind);
         var received = message.Payload.ToArray();
         Assert.Equal(payload, received);
@@ -159,17 +111,17 @@ public sealed class RespProviderClusterTests(RespServers servers)
         var target = await RespConformance.CreateTargetAsync(endpoint, profile, cancellationToken);
         await using var disposal = Assert.IsType<RespProvider>(target.Provider);
         var provider = target.Provider;
-        var keyspace = CreateKeyspace();
+        var keyspace = RespTestSupport.CreateKeyspace("cluster");
         var lifetime = TimeSpan.FromSeconds(30);
         var timeToLive = new TimeToLive(lifetime);
 
-        var records = GetService<IRecordService>(provider);
-        var sessions = GetService<ISessionService>(provider);
-        var counters = GetService<ICounterService>(provider);
-        var occurrences = GetService<IOccurrenceService>(provider);
-        var sets = GetService<ISetService>(provider);
-        var sequences = GetService<ISequenceService>(provider);
-        var notifications = GetService<INotificationService>(provider);
+        var records = RespTestSupport.GetService<IRecordService>(provider);
+        var sessions = RespTestSupport.GetService<ISessionService>(provider);
+        var counters = RespTestSupport.GetService<ICounterService>(provider);
+        var occurrences = RespTestSupport.GetService<IOccurrenceService>(provider);
+        var sets = RespTestSupport.GetService<ISetService>(provider);
+        var sequences = RespTestSupport.GetService<ISequenceService>(provider);
+        var notifications = RespTestSupport.GetService<INotificationService>(provider);
         var recordKey = keyspace.CreateKey("record");
         var counterKey = keyspace.CreateKey("counter");
         var occurrenceKey = keyspace.CreateKey("occurrence");
@@ -250,7 +202,7 @@ public sealed class RespProviderClusterTests(RespServers servers)
             cancellationToken
         );
         await using var disposal = Assert.IsType<RespProvider>(target.Provider);
-        var notifications = GetService<INotificationService>(target.Provider);
+        var notifications = RespTestSupport.GetService<INotificationService>(target.Provider);
         await using var admin = await RespNodes.ConnectAdminAsync(
             servers.ValkeyCluster,
             cancellationToken
@@ -259,7 +211,7 @@ public sealed class RespProviderClusterTests(RespServers servers)
         var configuration = clusterServers[0].ClusterConfiguration;
         Assert.NotNull(configuration);
 
-        var first = CreateKeyspace();
+        var first = RespTestSupport.CreateKeyspace("cluster");
         var firstTag = RespKeys.KeyspaceTag(first);
         var firstSlot = admin.HashSlot(firstTag);
         var firstNode = configuration.GetBySlot(firstSlot)?.NodeId;
@@ -267,7 +219,7 @@ public sealed class RespProviderClusterTests(RespServers servers)
         Keyspace? second = null;
         for (var attempt = 0; attempt < KeyspaceAttempts && second is null; attempt++)
         {
-            var candidate = CreateKeyspace();
+            var candidate = RespTestSupport.CreateKeyspace("cluster");
             var candidateTag = RespKeys.KeyspaceTag(candidate);
             var slot = admin.HashSlot(candidateTag);
             if (configuration.GetBySlot(slot)?.NodeId != firstNode)
@@ -308,7 +260,7 @@ public sealed class RespProviderClusterTests(RespServers servers)
             cancellationToken
         );
         await using var disposal = Assert.IsType<RespProvider>(target.Provider);
-        var notifications = GetService<INotificationService>(target.Provider);
+        var notifications = RespTestSupport.GetService<INotificationService>(target.Provider);
         await using var admin = await RespNodes.ConnectAdminAsync(
             servers.GarnetCluster,
             cancellationToken
@@ -325,7 +277,7 @@ public sealed class RespProviderClusterTests(RespServers servers)
             attempt++
         )
         {
-            var keyspace = CreateKeyspace();
+            var keyspace = RespTestSupport.CreateKeyspace("cluster");
             var tag = RespKeys.KeyspaceTag(keyspace);
             var slot = admin.HashSlot(tag);
             var node = configuration.GetBySlot(slot)?.NodeId;

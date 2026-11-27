@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using System.Collections.Concurrent;
-using System.Diagnostics;
 using System.Text;
 using NCode.Coordination.Resp.Tests.Conformance;
 using NCode.Coordination.Resp.Tests.Servers;
@@ -46,86 +45,6 @@ public sealed class RespProviderRestartTests
     private static TimeSpan WaitLimit { get; } = TimeSpan.FromSeconds(30);
 
     /// <summary>
-    /// Creates a keyspace with a unique id, so that no other test sees its keys.
-    /// </summary>
-    /// <returns>The keyspace.</returns>
-    private static Keyspace CreateKeyspace()
-    {
-        var id = Guid.NewGuid();
-        var segment = KeySegment.FromGuid(id);
-
-        return new Keyspace("restart", segment);
-    }
-
-    /// <summary>
-    /// Gets a primitive service of the provider, failing the test when the provider offers none.
-    /// </summary>
-    /// <typeparam name="TService">The service interface to get.</typeparam>
-    /// <param name="provider">The provider that offers the service.</param>
-    /// <returns>The service.</returns>
-    private static TService GetService<TService>(ICoordinationProvider provider)
-        where TService : class
-    {
-        var service = provider.GetPrimitiveService(typeof(TService)) as TService;
-        Assert.NotNull(service);
-
-        return service;
-    }
-
-    /// <summary>
-    /// Repeats a call until it stops failing with a coordination exception, which is how a client sees a server that
-    /// has not yet come back, and fails the test when the server stays silent for too long.
-    /// </summary>
-    /// <param name="call">The call to repeat.</param>
-    /// <param name="cancellationToken">The token that cancels the wait.</param>
-    /// <returns>A task that completes when the call succeeds.</returns>
-    private static async ValueTask WaitUntilAnsweredAsync(
-        Func<CancellationToken, ValueTask> call,
-        CancellationToken cancellationToken
-    )
-    {
-        var stopwatch = Stopwatch.StartNew();
-        var pause = TimeSpan.FromMilliseconds(200);
-        while (true)
-        {
-            try
-            {
-                await call(cancellationToken);
-                return;
-            }
-            catch (CoordinationException exception)
-            {
-                if (stopwatch.Elapsed > WaitLimit)
-                    Assert.Fail(
-                        $"The server did not answer within {WaitLimit}: {exception.Message}"
-                    );
-
-                await Task.Delay(pause, cancellationToken);
-            }
-        }
-    }
-
-    /// <summary>
-    /// Moves an enumerator to its next item, failing the test when none arrives in time.
-    /// </summary>
-    /// <typeparam name="T">The type of the items.</typeparam>
-    /// <param name="enumerator">The enumerator to move.</param>
-    /// <param name="cancellationToken">The token that cancels the wait.</param>
-    /// <returns>The next item.</returns>
-    private static async ValueTask<T> NextAsync<T>(
-        IAsyncEnumerator<T> enumerator,
-        CancellationToken cancellationToken
-    )
-    {
-        var timeout = TimeSpan.FromSeconds(15);
-        var moving = enumerator.MoveNextAsync().AsTask();
-        var moved = await moving.WaitAsync(timeout, cancellationToken);
-        Assert.True(moved);
-
-        return enumerator.Current;
-    }
-
-    /// <summary>
     /// Restarts a server while clients write records and checks that every failure is unavailable and that no write
     /// reported as unapplied is stored.
     /// </summary>
@@ -152,8 +71,8 @@ public sealed class RespProviderRestartTests
             cancellationToken
         );
         await using var disposal = Assert.IsType<RespProvider>(target.Provider);
-        var records = GetService<IRecordService>(target.Provider);
-        var keyspace = CreateKeyspace();
+        var records = RespTestSupport.GetService<IRecordService>(target.Provider);
+        var keyspace = RespTestSupport.CreateKeyspace("restart");
         var value = "v"u8.ToArray();
         var halfway = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var stopped = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -212,7 +131,7 @@ public sealed class RespProviderRestartTests
         await Task.WhenAll(running);
 
         var afterKey = keyspace.CreateKey("after");
-        await WaitUntilAnsweredAsync(
+        await RespTestSupport.WaitUntilAnsweredAsync(
             async ct =>
             {
                 await records.CreateAsync(afterKey, value, RecordLifetime.Persistent, null, ct);
@@ -262,10 +181,10 @@ public sealed class RespProviderRestartTests
             cancellationToken
         );
         await using var disposal = Assert.IsType<RespProvider>(target.Provider);
-        var notifications = GetService<INotificationService>(target.Provider);
-        var records = GetService<IRecordService>(target.Provider);
-        var watches = GetService<IRecordWatchService>(target.Provider);
-        var keyspace = CreateKeyspace();
+        var notifications = RespTestSupport.GetService<INotificationService>(target.Provider);
+        var records = RespTestSupport.GetService<IRecordService>(target.Provider);
+        var watches = RespTestSupport.GetService<IRecordWatchService>(target.Provider);
+        var keyspace = RespTestSupport.CreateKeyspace("restart");
         var value = "v"u8.ToArray();
         var topic = keyspace.CreateKey("topic");
         var prefix = keyspace.CreateKey(WatchedName);
@@ -275,9 +194,9 @@ public sealed class RespProviderRestartTests
         var changes = watches.WatchPrefixAsync(prefix, null, null, cancellationToken);
         await using var changeEnumerator = changes.GetAsyncEnumerator(cancellationToken);
 
-        var messageStart = await NextAsync(messageEnumerator, cancellationToken);
+        var messageStart = await RespTestSupport.NextAsync(messageEnumerator, cancellationToken);
         Assert.True(messageStart.IsResync);
-        var changeStart = await NextAsync(changeEnumerator, cancellationToken);
+        var changeStart = await RespTestSupport.NextAsync(changeEnumerator, cancellationToken);
         Assert.True(changeStart.IsResync);
 
         var beforePayload = "before"u8.ToArray();
@@ -291,11 +210,11 @@ public sealed class RespProviderRestartTests
             cancellationToken
         );
 
-        var beforeMessage = await NextAsync(messageEnumerator, cancellationToken);
+        var beforeMessage = await RespTestSupport.NextAsync(messageEnumerator, cancellationToken);
         Assert.Equal(NotificationKind.Message, beforeMessage.Kind);
         var beforeReceived = beforeMessage.Payload.ToArray();
         Assert.Equal(beforePayload, beforeReceived);
-        var beforeChange = await NextAsync(changeEnumerator, cancellationToken);
+        var beforeChange = await RespTestSupport.NextAsync(changeEnumerator, cancellationToken);
         Assert.Equal(RecordChangeKind.Written, beforeChange.Kind);
         Assert.Equal(beforeKey, beforeChange.Key);
 
@@ -307,12 +226,15 @@ public sealed class RespProviderRestartTests
         for (var attempt = 0; attempt < Attempts && !(resynced && delivered); attempt++)
         {
             var payload = Encoding.UTF8.GetBytes($"{AfterPrefix}{attempt}");
-            await WaitUntilAnsweredAsync(
+            await RespTestSupport.WaitUntilAnsweredAsync(
                 ct => notifications.PublishAsync(topic, payload, null, ct),
                 cancellationToken
             );
 
-            var notification = await NextAsync(messageEnumerator, cancellationToken);
+            var notification = await RespTestSupport.NextAsync(
+                messageEnumerator,
+                cancellationToken
+            );
             if (notification.IsResync)
                 resynced = true;
             else
@@ -327,7 +249,7 @@ public sealed class RespProviderRestartTests
         for (var attempt = 0; attempt < Attempts && !(resynced && delivered); attempt++)
         {
             var key = keyspace.CreateKey(WatchedName, $"{AfterPrefix}{attempt}");
-            await WaitUntilAnsweredAsync(
+            await RespTestSupport.WaitUntilAnsweredAsync(
                 async ct =>
                 {
                     await records.CreateAsync(key, value, RecordLifetime.Persistent, null, ct);
@@ -335,7 +257,7 @@ public sealed class RespProviderRestartTests
                 cancellationToken
             );
 
-            var change = await NextAsync(changeEnumerator, cancellationToken);
+            var change = await RespTestSupport.NextAsync(changeEnumerator, cancellationToken);
             if (change.IsResync)
                 resynced = true;
             else if (change.Kind == RecordChangeKind.Written)
