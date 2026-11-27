@@ -363,6 +363,14 @@ all twelve and first ends expired sessions and grants; a session's end removes w
 and a claim is one `SET` with `NX` and the caller's time to live.
 [ADR-1028](../decisions/1028-resp-ownership-state-lives-in-fixed-keys-per-keyspace-bound-to-sessions-through-one-index.md)
 
+### D29. RESP subscriptions
+
+Each notification subscription and watch reads its channel through one ordered queue and checks its number every
+interval; a record watch reads each written record from the table and delivers it at the event's revision; and a
+membership change names its group in the keyspace's event, so a membership watch lists its group only when it
+changes.
+[ADR-1029](../decisions/1029-resp-watches-read-each-written-record-from-the-table-and-membership-events-name-their-group.md)
+
 ## Open Questions
 
 - **Q1.** How NCode.Identity consumes the packages while both repositories change together: prerelease packages from a

@@ -12,12 +12,14 @@ namespace NCode.Coordination.Resp.Membership;
 /// <summary>
 /// The membership groups of the RESP provider: each member is an entry in the keyspace's <c>members</c> and
 /// <c>member-fields</c> keys bound to its session, so it is absent once its session ends. One keyspace script serves
-/// each operation, and a watch polls the keyspace's revision until the caller cancels, and lists the group again only
-/// once the revision has moved.
+/// each operation, and a watch subscribes to the keyspace's watch channel and lists the group again when an event
+/// names the group or the channel resyncs.
 /// </summary>
 /// <param name="table">The table that runs the keyspace scripts.</param>
-/// <exception cref="ArgumentNullException">The table is null.</exception>
-internal class RespMembershipService(RespRecordTable table) : IMembershipService
+/// <param name="subscriptions">Opens the provider's subscriptions to numbered channels.</param>
+/// <exception cref="ArgumentNullException">The table or the subscriptions are null.</exception>
+internal class RespMembershipService(RespRecordTable table, RespSubscriptions subscriptions)
+    : IMembershipService
 {
     /// <summary>
     /// The number of fields a listed member takes in the reply: node id, session, address and metadata.
@@ -29,6 +31,12 @@ internal class RespMembershipService(RespRecordTable table) : IMembershipService
     /// </summary>
     private RespRecordTable Table { get; } =
         table ?? throw new ArgumentNullException(nameof(table));
+
+    /// <summary>
+    /// Gets the object that opens the provider's subscriptions to numbered channels.
+    /// </summary>
+    private RespSubscriptions Subscriptions { get; } =
+        subscriptions ?? throw new ArgumentNullException(nameof(subscriptions));
 
     /// <inheritdoc />
     public async ValueTask<MembershipJoinStatus> JoinAsync(
@@ -142,60 +150,101 @@ internal class RespMembershipService(RespRecordTable table) : IMembershipService
     }
 
     /// <inheritdoc />
-    public async IAsyncEnumerable<MembershipView> WatchAsync(
+    public IAsyncEnumerable<MembershipView> WatchAsync(
         CoordinationKey group,
         OperationOptions? options,
-        [EnumeratorCancellation] CancellationToken cancellationToken
+        CancellationToken cancellationToken
     )
     {
         ArgumentNullException.ThrowIfNull(group);
         RespCall.Check(options, cancellationToken);
 
-        var last = await ReadAsync(group, options, cancellationToken).ConfigureAwait(false);
-        yield return last;
+        return WatchCoreAsync(group, cancellationToken);
+    }
 
-        while (true)
+    /// <summary>
+    /// Lists a group, reporting a failure instead of throwing it so that a stream can survive it.
+    /// </summary>
+    /// <param name="group">The group to list.</param>
+    /// <param name="cancellationToken">The token that cancels the read.</param>
+    /// <returns>The view of the group, or null when the read failed.</returns>
+    private async ValueTask<MembershipView?> TryReadAsync(
+        CoordinationKey group,
+        CancellationToken cancellationToken
+    )
+    {
+        try
         {
-            await Task.Delay(RespPolling.Interval, cancellationToken).ConfigureAwait(false);
+            return await ReadAsync(group, null, cancellationToken).ConfigureAwait(false);
+        }
+        catch (CoordinationException)
+        {
+            return null;
+        }
+    }
 
-            var revision = await ReadRevisionAsync(group.Keyspace, cancellationToken)
-                .ConfigureAwait(false);
-            if (revision.Value <= last.Revision.Value)
+    /// <summary>
+    /// Streams the views of a watch: the group at the start, then again when an event names the group or the channel
+    /// resyncs, each only when its revision is greater than the last one yielded.
+    /// </summary>
+    /// <param name="group">The group to watch.</param>
+    /// <param name="cancellationToken">The token that cancels the stream.</param>
+    /// <returns>A stream of views.</returns>
+    private async IAsyncEnumerable<MembershipView> WatchCoreAsync(
+        CoordinationKey group,
+        [EnumeratorCancellation] CancellationToken cancellationToken
+    )
+    {
+        var channel = RespRecordTable.WatchChannel(group.Keyspace);
+        var reader = await Subscriptions
+            .OpenAsync(
+                channel,
+                token => Table.ReadWatchNumberAsync(group.Keyspace, token),
+                cancellationToken
+            )
+            .ConfigureAwait(false);
+
+        await using var disposal = reader.ConfigureAwait(false);
+
+        var name = RespKeys.Member(group);
+        var changed = new RespWatchLine('m', name);
+        MembershipView? last = null;
+        await foreach (var item in reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            if (!item.IsResync)
             {
-                continue;
+                if (!RespWatchLine.TryParse(item.Message, out var lines))
+                {
+                    reader.MarkInDoubt();
+                    continue;
+                }
+
+                if (!lines.Contains(changed))
+                {
+                    continue;
+                }
             }
 
-            var view = await ReadAsync(group, options, cancellationToken).ConfigureAwait(false);
-            if (view.Revision.Value > last.Revision.Value)
+            MembershipView? view;
+            if (last is null)
+            {
+                view = await ReadAsync(group, null, cancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                view = await TryReadAsync(group, cancellationToken).ConfigureAwait(false);
+                if (view is null)
+                {
+                    reader.MarkInDoubt();
+                    continue;
+                }
+            }
+
+            if (last is null || view.Revision > last.Revision)
             {
                 last = view;
                 yield return view;
             }
         }
-    }
-
-    /// <summary>
-    /// Reads the revision of a keyspace, which a membership change takes.
-    /// </summary>
-    /// <param name="keyspace">The keyspace to read.</param>
-    /// <param name="cancellationToken">The token that cancels the read.</param>
-    /// <returns>The keyspace's current revision.</returns>
-    /// <exception cref="CoordinationException">The server's reply is not a revision.</exception>
-    private async ValueTask<Revision> ReadRevisionAsync(
-        Keyspace keyspace,
-        CancellationToken cancellationToken
-    )
-    {
-        var reply = await Table
-            .EvaluateAsync(RespScript.KeyspaceRevision, keyspace, [], cancellationToken)
-            .ConfigureAwait(false);
-
-        var (status, fields) = RespReplies.Script(reply);
-        if (status != 0 || fields.Length != 1)
-        {
-            throw RespReplies.Unexpected(reply);
-        }
-
-        return RespRecordTable.ReadRevision(fields[0], reply);
     }
 }

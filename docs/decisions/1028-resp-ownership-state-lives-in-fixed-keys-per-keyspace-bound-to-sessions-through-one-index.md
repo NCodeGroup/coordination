@@ -1,6 +1,6 @@
 # 1028. RESP ownership state lives in fixed keys per keyspace, bound to sessions through one index
 
-- **Status:** Proposed
+- **Status:** Proposed (amended by 1029)
 - **Date:** 2026-11-26
 - **Deciders:** NCode Group
 - **Amends:** 1025, 1027

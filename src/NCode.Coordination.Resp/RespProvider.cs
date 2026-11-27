@@ -8,6 +8,7 @@ using NCode.Coordination.Resp.Counters;
 using NCode.Coordination.Resp.Elections;
 using NCode.Coordination.Resp.Leases;
 using NCode.Coordination.Resp.Membership;
+using NCode.Coordination.Resp.Notifications;
 using NCode.Coordination.Resp.Occurrences;
 using NCode.Coordination.Resp.Records;
 using NCode.Coordination.Resp.Sequences;
@@ -25,11 +26,13 @@ namespace NCode.Coordination.Resp;
 internal sealed class RespProvider : ICoordinationProvider, IAsyncDisposable, IDisposable
 {
     /// <summary>
-    /// Gets the primitives that the provider serves, in the order of <see cref="Primitives.All"/>. The server keeps
-    /// every one of them in memory and its clock measures every expiry. The provider can't see whether the server
-    /// persists or replicates its writes, so it declares them volatile and linearizable only until a failover. A
-    /// counter's batch runs as one script on one slot, so it is atomic across partitions, and a transaction, like a
-    /// counter's batch, runs as one script on one slot. A sequence has no expiry.
+    /// Gets the primitives that the provider serves. The server keeps every one of them in memory and its clock
+    /// measures every expiry. The provider can't see whether the server persists or replicates its writes, so it
+    /// declares every primitive but record watches and notifications volatile, and every one but notifications
+    /// linearizable only until a failover. A counter's batch runs as one script on one slot, so it is atomic across
+    /// partitions, and a transaction, like a counter's batch, runs as one script on one slot. A sequence has no
+    /// expiry. A record watch and a notification subscription deliver each change at most once, numbered so that a
+    /// gap shows, and resync on any doubt.
     /// </summary>
     private static ImmutableArray<PrimitiveSupport> SupportedPrimitives { get; } =
     [
@@ -38,6 +41,11 @@ internal sealed class RespProvider : ICoordinationProvider, IAsyncDisposable, ID
             Guarantees.LinearizableUntilFailover,
             Guarantees.Volatile,
             Guarantees.ServerClock
+        ),
+        PrimitiveSupport.Supported(
+            Primitives.RecordWatch,
+            Guarantees.LinearizableUntilFailover,
+            Guarantees.AtMostOnceWithGapDetection
         ),
         PrimitiveSupport.Supported(
             Primitives.Transaction,
@@ -106,6 +114,7 @@ internal sealed class RespProvider : ICoordinationProvider, IAsyncDisposable, ID
             Guarantees.Volatile,
             Guarantees.ServerClock
         ),
+        PrimitiveSupport.Supported(Primitives.Notification, Guarantees.AtMostOnceWithGapDetection),
     ];
 
     /// <summary>
@@ -119,7 +128,8 @@ internal sealed class RespProvider : ICoordinationProvider, IAsyncDisposable, ID
     /// <summary>
     /// Returns every command the provider sends to a server of a profile, which the startup probe checks that the
     /// server's user may run: the scripting commands, the commands its operations send alone and the commands its
-    /// scripts call, with the publish command of the profile's channels.
+    /// scripts call, with the publish command of the profile's channels and the commands that subscribe to and
+    /// unsubscribe from the profile's channels.
     /// </summary>
     /// <param name="profile">The profile.</param>
     /// <returns>The command names, in upper case.</returns>
@@ -129,6 +139,8 @@ internal sealed class RespProvider : ICoordinationProvider, IAsyncDisposable, ID
         ArgumentNullException.ThrowIfNull(profile);
 
         var publish = profile.ShardedChannels ? "SPUBLISH" : "PUBLISH";
+        var subscribe = profile.ShardedChannels ? "SSUBSCRIBE" : "SUBSCRIBE";
+        var unsubscribe = profile.ShardedChannels ? "SUNSUBSCRIBE" : "UNSUBSCRIBE";
         return
         [
             "EVAL",
@@ -148,7 +160,9 @@ internal sealed class RespProvider : ICoordinationProvider, IAsyncDisposable, ID
             "PTTL",
             publish,
             RespCommands.Set,
+            subscribe,
             "TIME",
+            unsubscribe,
             "ZADD",
             "ZCARD",
             "ZCOUNT",
@@ -168,6 +182,16 @@ internal sealed class RespProvider : ICoordinationProvider, IAsyncDisposable, ID
     /// <param name="profile">The vendor profile that the server must match.</param>
     /// <exception cref="ArgumentNullException">The connection or the profile is null.</exception>
     public RespProvider(RespConnection connection, RespProfile profile)
+        : this(connection, profile, RespSubscriptions.DefaultCheckInterval) { }
+
+    /// <summary>
+    /// Creates the provider and the services that share its connection.
+    /// </summary>
+    /// <param name="connection">The holder of the provider's connection to its server. The provider disposes the holder, which disposes the multiplexer only when it owns it.</param>
+    /// <param name="profile">The vendor profile that the server must match.</param>
+    /// <param name="checkInterval">The time between two periodic checks of each notification subscription and watch.</param>
+    /// <exception cref="ArgumentNullException">The connection or the profile is null.</exception>
+    public RespProvider(RespConnection connection, RespProfile profile, TimeSpan checkInterval)
     {
         ArgumentNullException.ThrowIfNull(connection);
         ArgumentNullException.ThrowIfNull(profile);
@@ -184,20 +208,33 @@ internal sealed class RespProvider : ICoordinationProvider, IAsyncDisposable, ID
         };
         var records = new RespRecordTable(Server, profile);
         var tokens = new RespRandomTokens();
+        var schedule = new RespCheckSchedule(checkInterval, TimeProvider.System);
+        var subscriptions = new RespSubscriptions(connection, profile, schedule);
+        var recordService = new RespRecordService(records);
         var services = new Dictionary<Type, object>
         {
-            [typeof(IRecordService)] = new RespRecordService(records),
+            [typeof(IRecordService)] = recordService,
+            [typeof(IRecordWatchService)] = new RespRecordWatchService(
+                records,
+                recordService,
+                subscriptions
+            ),
             [typeof(ITransactionService)] = new RespTransactionService(records),
             [typeof(IOccurrenceService)] = new RespOccurrenceService(Server),
             [typeof(ISetService)] = new RespSetService(Server),
             [typeof(ICounterService)] = new RespCounterService(Server),
             [typeof(ISequenceService)] = new RespSequenceService(Server),
             [typeof(ISessionService)] = new RespSessionService(records, tokens),
-            [typeof(IMembershipService)] = new RespMembershipService(records),
+            [typeof(IMembershipService)] = new RespMembershipService(records, subscriptions),
             [typeof(ILeaseService)] = new RespLeaseService(records, tokens),
             [typeof(ISemaphoreService)] = new RespSemaphoreService(records, tokens),
             [typeof(IElectionService)] = new RespElectionService(records, tokens),
             [typeof(IClaimService)] = new RespClaimService(Server),
+            [typeof(INotificationService)] = new RespNotificationService(
+                Server,
+                profile,
+                subscriptions
+            ),
         };
         Services = services.ToFrozenDictionary();
     }

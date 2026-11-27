@@ -256,4 +256,55 @@ internal class RespRecordTable(RespServer server, RespProfile profile)
             .EvaluateAsync(script, keys, values, cancellationToken)
             .ConfigureAwait(false);
     }
+
+    /// <summary>
+    /// Reads the revision of a keyspace, after the script's start has removed the expired records and ended the expired
+    /// sessions.
+    /// </summary>
+    /// <param name="keyspace">The keyspace to read.</param>
+    /// <param name="cancellationToken">The token that cancels the read.</param>
+    /// <returns>The keyspace's current revision.</returns>
+    /// <exception cref="ArgumentNullException">The keyspace is null.</exception>
+    /// <exception cref="CoordinationException">The call failed or the server's reply is not a revision.</exception>
+    public async ValueTask<Revision> ReadRevisionAsync(
+        Keyspace keyspace,
+        CancellationToken cancellationToken
+    )
+    {
+        ArgumentNullException.ThrowIfNull(keyspace);
+
+        var reply = await EvaluateAsync(
+                RespScript.KeyspaceRevision,
+                keyspace,
+                [],
+                cancellationToken
+            )
+            .ConfigureAwait(false);
+
+        var (status, fields) = RespReplies.Script(reply);
+        if (status != 0 || fields.Length != 1)
+        {
+            throw RespReplies.Unexpected(reply);
+        }
+
+        return ReadRevision(fields[0], reply);
+    }
+
+    /// <summary>
+    /// Reads the number of a keyspace's watch channel, which is the keyspace's revision.
+    /// </summary>
+    /// <param name="keyspace">The keyspace.</param>
+    /// <param name="cancellationToken">The token that cancels the read.</param>
+    /// <returns>The revision's value.</returns>
+    /// <exception cref="ArgumentNullException">The keyspace is null.</exception>
+    /// <exception cref="CoordinationException">The call failed or the server's reply is not a revision.</exception>
+    public async ValueTask<long> ReadWatchNumberAsync(
+        Keyspace keyspace,
+        CancellationToken cancellationToken
+    )
+    {
+        var revision = await ReadRevisionAsync(keyspace, cancellationToken).ConfigureAwait(false);
+
+        return revision.Value;
+    }
 }

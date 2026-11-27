@@ -18,10 +18,10 @@
 -- ARGV[1] is the keyspace's watch channel, ARGV[2] is '1' to publish on it with SPUBLISH and '0' with PUBLISH, and
 -- ARGV[3] is how many milliseconds the records outlive their last deadline when none of them is persistent.
 -- A record whose deadline is not after the server's current time is absent. Each change takes the keyspace's next
--- revision and publishes an event on the watch channel: the revision, then a line for each record it wrote, 'w' and
--- the record's name, or deleted, 'd' and the record's name, the lines separated by line feeds. The script first
--- deletes up to 64 records whose deadline has passed, as one change, and drops up to 64 grants whose deadline has
--- passed.
+-- revision and publishes an event on the watch channel: the revision, then a line for each record it wrote, 'w' and the
+-- record's name, or deleted, 'd' and the record's name, and for each group whose members it changed, 'm' and the group,
+-- the lines separated by line feeds. The script first deletes up to 64 records whose deadline has passed, as one
+-- change, and drops up to 64 grants whose deadline has passed.
 -- Functions the script's own text calls: live(session) is true when the session's deadline is after now. holdBackstop()
 -- deletes the sessions, session deadlines, bindings, grants, grant deadlines, members and member fields keys when no
 -- session deadline and no grant deadline is left, and else expires each of them ARGV[3] milliseconds after the latest
@@ -257,7 +257,9 @@ local function endSession(session, budget)
       end
     elseif kind == 'm' then
       if redis.call('HGET', memberFields, 's ' .. item) == session then
-        dropMember(string.match(item, '^(%S+) (.+)$'))
+        local group, node = string.match(item, '^(%S+) (.+)$')
+        dropMember(group, node)
+        changes[#changes + 1] = 'm' .. group
         visible = true
       end
     end
