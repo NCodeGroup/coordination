@@ -54,6 +54,14 @@ internal static class RespConformance
         };
     }
 
+    /// <summary>
+    /// Kills every connection that the provider under test holds, on every node, so a test sees the provider recover
+    /// from a dropped connection without disturbing the other tests that share the servers.
+    /// </summary>
+    /// <param name="endpoint">The <c>host:port</c> list of the servers.</param>
+    /// <param name="clientName">The client name that only the provider under test uses.</param>
+    /// <param name="cancellationToken">The token that cancels the drop.</param>
+    /// <returns>A task that completes when the connections are killed.</returns>
     private static async ValueTask DropConnectionsAsync(
         string endpoint,
         string clientName,

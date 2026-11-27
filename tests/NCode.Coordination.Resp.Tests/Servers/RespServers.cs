@@ -25,9 +25,23 @@ public sealed class RespServers : IAsyncLifetime
     public const string GarnetImage =
         "ghcr.io/microsoft/garnet:2.2.13@sha256:a5b11ca8292400a6239437c34c96aaa515a55ab3613ef2e41a33914405f89442";
 
+    /// <summary>
+    /// The line that a Valkey or Garnet server logs when it accepts connections, which the container's wait strategy
+    /// watches for.
+    /// </summary>
     internal const string ReadyMessage = "Ready to accept connections";
 
+    /// <summary>
+    /// The line that the cluster script prints once every node is up and the cluster state is ok, which the cluster
+    /// container's wait strategy watches for.
+    /// </summary>
     private const string ClusterReadyMessage = "Cluster ready";
+
+    /// <summary>
+    /// The address that the cluster's nodes announce and that the cluster endpoint names, so the client sees each node
+    /// once and can reach it from the host.
+    /// </summary>
+    private const string ClusterHost = "127.0.0.1";
 
     private const ushort Port = 6379;
 
@@ -54,20 +68,38 @@ public sealed class RespServers : IAsyncLifetime
     private static string GetEndpoint(IContainer container) =>
         $"{container.Hostname}:{container.GetMappedPublicPort(Port)}";
 
+    /// <summary>
+    /// Builds the shell script that starts one Valkey node per port, creates a cluster of them with no replicas, and
+    /// prints the ready message once the cluster state is ok.
+    /// </summary>
+    /// <param name="ports">The host ports of the nodes, each published as itself.</param>
+    /// <returns>The script that the cluster container runs.</returns>
     private static string ClusterScript(IReadOnlyList<int> ports)
     {
         var list = string.Join(" ", ports);
-        var addresses = ports.Select(port => $"127.0.0.1:{port}");
+        var addresses = GetClusterAddresses(ports);
         var nodes = string.Join(" ", addresses);
         return "i=0; "
             + $"for p in {list}; do i=$((i+1)); "
             + "valkey-server --port $p --cluster-enabled yes --cluster-port $((16379+i)) "
-            + "--cluster-config-file nodes-$p.conf --cluster-announce-ip 127.0.0.1 "
+            + $"--cluster-config-file nodes-$p.conf --cluster-announce-ip {ClusterHost} "
             + "--save '' --appendonly no --daemonize yes --logfile /data/$p.log; done; "
             + $"for p in {list}; do until valkey-cli -p $p ping >/dev/null 2>&1; do sleep 0.1; done; done; "
             + $"valkey-cli --cluster create {nodes} --cluster-replicas 0 --cluster-yes; "
             + $"for p in {list}; do until valkey-cli -p $p cluster info | grep -q cluster_state:ok; do sleep 0.1; done; done; "
             + $"echo '{ClusterReadyMessage}'; exec sleep infinity";
+    }
+
+    /// <summary>
+    /// Gets the <c>host:port</c> of each node of the cluster.
+    /// </summary>
+    /// <param name="ports">The host ports of the nodes.</param>
+    /// <returns>The address of each node, in the order of the ports.</returns>
+    private static IReadOnlyList<string> GetClusterAddresses(IReadOnlyList<int> ports)
+    {
+        var addresses = ports.Select(port => $"{ClusterHost}:{port}");
+
+        return [.. addresses];
     }
 
     /// <summary>Gets the <c>host:port</c> of the Valkey server, empty until it is started.</summary>
@@ -79,11 +111,16 @@ public sealed class RespServers : IAsyncLifetime
     /// <summary>Gets the <c>host:port</c> of the Garnet server with Lua disabled, empty until it is started.</summary>
     public string GarnetWithoutLua { get; private set; } = "";
 
-    /// <summary>Gets the <c>host:port</c> list of the Valkey cluster's three nodes, empty until it is started.</summary>
+    /// <summary>
+    /// Gets the <c>host:port</c> list of the Valkey cluster's three nodes, empty until it is started.
+    /// </summary>
     public string ValkeyCluster { get; private set; } = "";
 
     private IContainer? ValkeyContainer { get; set; }
 
+    /// <summary>
+    /// Gets the container that runs the three nodes of the Valkey cluster, so that disposing it stops them all.
+    /// </summary>
     private IContainer? ValkeyClusterContainer { get; set; }
 
     private IContainer? GarnetContainer { get; set; }
@@ -129,7 +166,7 @@ public sealed class RespServers : IAsyncLifetime
         Valkey = GetEndpoint(valkey);
         Garnet = GetEndpoint(garnet);
         GarnetWithoutLua = GetEndpoint(garnetWithoutLua);
-        var addresses = ports.Select(port => $"127.0.0.1:{port}");
+        var addresses = GetClusterAddresses(ports);
         ValkeyCluster = string.Join(",", addresses);
     }
 

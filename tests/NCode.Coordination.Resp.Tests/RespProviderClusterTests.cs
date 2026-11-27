@@ -9,8 +9,21 @@ using StackExchange.Redis;
 
 namespace NCode.Coordination.Resp.Tests;
 
+/// <summary>
+/// Proves that each keyspace of the RESP provider stays in one slot of the Valkey cluster and that its sharded channel
+/// lives on the node that owns that slot.
+/// </summary>
 public sealed class RespProviderClusterTests(RespServers servers)
 {
+    /// <summary>
+    /// The name of the notification topic that the tests publish to and subscribe on.
+    /// </summary>
+    private const string TopicName = "topic";
+
+    /// <summary>
+    /// Creates a keyspace with a unique id, so that its keys share no slot with another test's by design.
+    /// </summary>
+    /// <returns>The keyspace.</returns>
     private static Keyspace CreateKeyspace()
     {
         var id = Guid.NewGuid();
@@ -19,6 +32,12 @@ public sealed class RespProviderClusterTests(RespServers servers)
         return new Keyspace("cluster", segment);
     }
 
+    /// <summary>
+    /// Gets a primitive service of the provider, failing the test when the provider offers none.
+    /// </summary>
+    /// <typeparam name="TService">The service interface to get.</typeparam>
+    /// <param name="provider">The provider that offers the service.</param>
+    /// <returns>The service.</returns>
     private static TService GetService<TService>(ICoordinationProvider provider)
         where TService : class
     {
@@ -28,7 +47,14 @@ public sealed class RespProviderClusterTests(RespServers servers)
         return service;
     }
 
-    private static async Task<T> NextAsync<T>(
+    /// <summary>
+    /// Moves an enumerator to its next item, failing the test when none arrives in time.
+    /// </summary>
+    /// <typeparam name="T">The type of the items.</typeparam>
+    /// <param name="enumerator">The enumerator to move.</param>
+    /// <param name="cancellationToken">The token that cancels the wait.</param>
+    /// <returns>The next item.</returns>
+    private static async ValueTask<T> NextAsync<T>(
         IAsyncEnumerator<T> enumerator,
         CancellationToken cancellationToken
     )
@@ -41,7 +67,15 @@ public sealed class RespProviderClusterTests(RespServers servers)
         return enumerator.Current;
     }
 
-    private static async Task<IAsyncEnumerator<Notification>> SubscribeAndPublishAsync(
+    /// <summary>
+    /// Subscribes to a topic, waits for the subscription's first resync, publishes a payload and checks that it
+    /// arrives, so the topic's sharded channel exists on its node.
+    /// </summary>
+    /// <param name="notifications">The notification service to subscribe and publish through.</param>
+    /// <param name="topic">The topic to subscribe to.</param>
+    /// <param name="cancellationToken">The token that cancels the waits.</param>
+    /// <returns>The enumerator of the subscription, which keeps the channel open until it is disposed.</returns>
+    private static async ValueTask<IAsyncEnumerator<Notification>> SubscribeAndPublishAsync(
         INotificationService notifications,
         CoordinationKey topic,
         CancellationToken cancellationToken
@@ -62,14 +96,20 @@ public sealed class RespProviderClusterTests(RespServers servers)
         return enumerator;
     }
 
-    private static async Task<List<int>> FindShardChannelAsync(
-        IServer[] clusterServers,
+    /// <summary>
+    /// Finds the nodes of the cluster on which a sharded channel exists.
+    /// </summary>
+    /// <param name="clusterServers">The nodes of the cluster.</param>
+    /// <param name="channel">The name of the sharded channel.</param>
+    /// <returns>The indexes in <paramref name="clusterServers"/> of the nodes that hold the channel.</returns>
+    private static async ValueTask<IReadOnlyList<int>> FindShardChannelAsync(
+        IReadOnlyList<IServer> clusterServers,
         string channel
     )
     {
         var holders = new List<int>();
 
-        for (var index = 0; index < clusterServers.Length; index++)
+        for (var index = 0; index < clusterServers.Count; index++)
         {
             var result = await clusterServers[index].ExecuteAsync("PUBSUB", "SHARDCHANNELS");
             var channels = (string[]?)result;
@@ -82,7 +122,14 @@ public sealed class RespProviderClusterTests(RespServers servers)
         return holders;
     }
 
-    private async Task<ConnectionMultiplexer> ConnectAdminAsync(CancellationToken cancellationToken)
+    /// <summary>
+    /// Connects to the cluster with admin commands allowed, so a test can read each node's configuration and channels.
+    /// </summary>
+    /// <param name="cancellationToken">The token that cancels the connection.</param>
+    /// <returns>The connection, which the caller disposes.</returns>
+    private async ValueTask<ConnectionMultiplexer> ConnectAdminAsync(
+        CancellationToken cancellationToken
+    )
     {
         var options = ConfigurationOptions.Parse(servers.ValkeyCluster);
         options.AllowAdmin = true;
@@ -120,7 +167,7 @@ public sealed class RespProviderClusterTests(RespServers servers)
         var occurrenceKey = keyspace.CreateKey("occurrence");
         var setKey = keyspace.CreateKey("set");
         var sequenceKey = keyspace.CreateKey("sequence");
-        var topic = keyspace.CreateKey("topic");
+        var topic = keyspace.CreateKey(TopicName);
         var value = "v"u8.ToArray();
         var payload = "p"u8.ToArray();
         await records.CreateAsync(
@@ -142,10 +189,11 @@ public sealed class RespProviderClusterTests(RespServers servers)
         var tag = RespKeys.KeyspaceTag(keyspace);
         var expectedSlot = admin.HashSlot(tag);
         var holders = new List<List<RedisKey>>();
+        var pattern = tag + "*";
         foreach (var server in clusterServers)
         {
             var keys = new List<RedisKey>();
-            await foreach (var key in server.KeysAsync(pattern: tag + "*"))
+            await foreach (var key in server.KeysAsync(pattern: pattern))
                 keys.Add(key);
 
             if (keys.Count > 0)
@@ -198,8 +246,8 @@ public sealed class RespProviderClusterTests(RespServers servers)
         }
 
         Assert.NotNull(second);
-        var firstTopic = first.CreateKey("topic");
-        var secondTopic = second.CreateKey("topic");
+        var firstTopic = first.CreateKey(TopicName);
+        var secondTopic = second.CreateKey(TopicName);
         await using var firstEnumerator = await SubscribeAndPublishAsync(
             notifications,
             firstTopic,

@@ -6,12 +6,17 @@ using System.Net.Sockets;
 
 namespace NCode.Coordination.Resp.Tests.Servers;
 
+/// <summary>
+/// Reserves free host ports for the test servers that publish a port as itself.
+/// </summary>
 internal static class RespPorts
 {
-    /// <summary>Reserves host ports that are free at the moment, for containers that publish a port as itself.</summary>
+    /// <summary>
+    /// Reserves host ports that are free at the moment, for containers that publish a port as itself.
+    /// </summary>
     /// <param name="count">The number of distinct ports to reserve.</param>
     /// <returns>The reserved ports.</returns>
-    public static int[] Reserve(int count)
+    public static IReadOnlyList<int> Reserve(int count)
     {
         var listeners = new List<TcpListener>(count);
         try

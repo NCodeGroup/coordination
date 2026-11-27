@@ -10,11 +10,15 @@ namespace NCode.Coordination.Resp.Tests.Servers;
 /// A RESP server in Docker of one test's own, published on a host port reserved before it starts, so a stop and a start
 /// keep its endpoint.
 /// </summary>
-internal sealed class RespRestartableServer : IAsyncDisposable
+/// <param name="container">The container that runs the server.</param>
+/// <param name="hostPort">The host port on which the container publishes the server's port.</param>
+internal sealed class RespRestartableServer(IContainer container, int hostPort) : IAsyncDisposable
 {
     private const ushort Port = 6379;
 
-    /// <summary>Starts a server from an image.</summary>
+    /// <summary>
+    /// Starts a server from an image.
+    /// </summary>
     /// <param name="image">The image to run.</param>
     /// <param name="command">The arguments of the server's command, empty to run the image's default.</param>
     /// <param name="cancellationToken">The token that cancels the start.</param>
@@ -41,26 +45,33 @@ internal sealed class RespRestartableServer : IAsyncDisposable
         return new RespRestartableServer(container, hostPort);
     }
 
-    private RespRestartableServer(IContainer container, int hostPort)
-    {
-        Container = container;
-        HostPort = hostPort;
-    }
+    /// <summary>
+    /// Gets the container that runs the server, which a stop and a start keep.
+    /// </summary>
+    private IContainer Container { get; } = container;
 
-    private IContainer Container { get; }
+    /// <summary>
+    /// Gets the host port on which the container publishes the server, reserved before the first start so that every
+    /// start uses it.
+    /// </summary>
+    private int HostPort { get; } = hostPort;
 
-    private int HostPort { get; }
-
-    /// <summary>Gets the <c>host:port</c> of the server, which a stop and a start keep.</summary>
+    /// <summary>
+    /// Gets the <c>host:port</c> of the server, which a stop and a start keep.
+    /// </summary>
     public string Endpoint => $"{Container.Hostname}:{HostPort}";
 
-    /// <summary>Stops the server.</summary>
+    /// <summary>
+    /// Stops the server.
+    /// </summary>
     /// <param name="cancellationToken">The token that cancels the stop.</param>
     /// <returns>A task that completes when the server has stopped.</returns>
     public async ValueTask StopAsync(CancellationToken cancellationToken) =>
         await Container.StopAsync(cancellationToken);
 
-    /// <summary>Starts the stopped server again on the same endpoint.</summary>
+    /// <summary>
+    /// Starts the stopped server again on the same endpoint.
+    /// </summary>
     /// <param name="cancellationToken">The token that cancels the start.</param>
     /// <returns>A task that completes when the server accepts connections.</returns>
     public async ValueTask StartAgainAsync(CancellationToken cancellationToken) =>

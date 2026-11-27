@@ -9,15 +9,48 @@ using NCode.Coordination.Resp.Tests.Servers;
 
 namespace NCode.Coordination.Resp.Tests;
 
-/// <summary>Each test restarts a server of its own.</summary>
+/// <summary>
+/// Proves that a RESP provider reports failures honestly and resubscribes when its server restarts, each test restarting
+/// a server of its own.
+/// </summary>
 public sealed class RespProviderRestartTests
 {
+    /// <summary>
+    /// The number of clients that write concurrently while the server restarts.
+    /// </summary>
     private const int Clients = 3;
 
+    /// <summary>
+    /// The number of records that each client writes.
+    /// </summary>
     private const int Steps = 12;
 
+    /// <summary>
+    /// The name of the record prefix that the tests watch.
+    /// </summary>
+    private const string WatchedName = "watched";
+
+    /// <summary>
+    /// The number of rounds that a test waits for a subscription to resync and deliver again after a restart.
+    /// </summary>
+    private const int Attempts = 20;
+
+    /// <summary>
+    /// Gets the arguments that start Garnet with Lua scripting and Lua in transactions turned on, which the provider
+    /// needs.
+    /// </summary>
+    private static IReadOnlyList<string> GarnetCommand { get; } =
+    ["--lua", "--lua-transaction-mode", "true"];
+
+    /// <summary>
+    /// Gets how long a test waits for a restarted server to answer or for a restart step to happen.
+    /// </summary>
     private static TimeSpan WaitLimit { get; } = TimeSpan.FromSeconds(30);
 
+    /// <summary>
+    /// Creates a keyspace with a unique id, so that no other test sees its keys.
+    /// </summary>
+    /// <returns>The keyspace.</returns>
     private static Keyspace CreateKeyspace()
     {
         var id = Guid.NewGuid();
@@ -26,6 +59,12 @@ public sealed class RespProviderRestartTests
         return new Keyspace("restart", segment);
     }
 
+    /// <summary>
+    /// Gets a primitive service of the provider, failing the test when the provider offers none.
+    /// </summary>
+    /// <typeparam name="TService">The service interface to get.</typeparam>
+    /// <param name="provider">The provider that offers the service.</param>
+    /// <returns>The service.</returns>
     private static TService GetService<TService>(ICoordinationProvider provider)
         where TService : class
     {
@@ -35,7 +74,14 @@ public sealed class RespProviderRestartTests
         return service;
     }
 
-    private static async Task WaitUntilAnsweredAsync(
+    /// <summary>
+    /// Repeats a call until it stops failing with a coordination exception, which is how a client sees a server that
+    /// has not yet come back, and fails the test when the server stays silent for too long.
+    /// </summary>
+    /// <param name="call">The call to repeat.</param>
+    /// <param name="cancellationToken">The token that cancels the wait.</param>
+    /// <returns>A task that completes when the call succeeds.</returns>
+    private static async ValueTask WaitUntilAnsweredAsync(
         Func<CancellationToken, ValueTask> call,
         CancellationToken cancellationToken
     )
@@ -61,7 +107,14 @@ public sealed class RespProviderRestartTests
         }
     }
 
-    private static async Task<T> NextAsync<T>(
+    /// <summary>
+    /// Moves an enumerator to its next item, failing the test when none arrives in time.
+    /// </summary>
+    /// <typeparam name="T">The type of the items.</typeparam>
+    /// <param name="enumerator">The enumerator to move.</param>
+    /// <param name="cancellationToken">The token that cancels the wait.</param>
+    /// <returns>The next item.</returns>
+    private static async ValueTask<T> NextAsync<T>(
         IAsyncEnumerator<T> enumerator,
         CancellationToken cancellationToken
     )
@@ -74,7 +127,15 @@ public sealed class RespProviderRestartTests
         return enumerator.Current;
     }
 
-    private static async Task AssertWritesAcrossARestartAsync(
+    /// <summary>
+    /// Restarts a server while clients write records and checks that every failure is unavailable and that no write
+    /// reported as unapplied is stored.
+    /// </summary>
+    /// <param name="image">The image of the server to restart.</param>
+    /// <param name="command">The arguments of the server's command, empty to run the image's default.</param>
+    /// <param name="profile">The profile of the provider that writes.</param>
+    /// <returns>A task that completes when the checks pass.</returns>
+    private static async ValueTask AssertWritesAcrossARestartAsync(
         string image,
         IReadOnlyList<string> command,
         RespProfile profile
@@ -101,7 +162,7 @@ public sealed class RespProviderRestartTests
         var failures = new ConcurrentQueue<(CoordinationKey Key, CoordinationException Failure)>();
         var reached = 0;
 
-        async Task RestartAsync()
+        async ValueTask RestartAsync()
         {
             await halfway.Task.WaitAsync(WaitLimit, cancellationToken);
             await server.StopAsync(cancellationToken);
@@ -110,7 +171,7 @@ public sealed class RespProviderRestartTests
             await server.StartAgainAsync(cancellationToken);
         }
 
-        async Task ClientAsync(int client)
+        async ValueTask ClientAsync(int client)
         {
             for (var step = 0; step < Steps; step++)
             {
@@ -141,9 +202,15 @@ public sealed class RespProviderRestartTests
             }
         }
 
-        var restarting = RestartAsync();
-        var writing = Enumerable.Range(0, Clients).Select(ClientAsync).ToArray();
-        await Task.WhenAll([restarting, .. writing]);
+        var restarting = RestartAsync().AsTask();
+        List<Task> running = [restarting];
+        for (var client = 0; client < Clients; client++)
+        {
+            var writer = ClientAsync(client).AsTask();
+            running.Add(writer);
+        }
+
+        await Task.WhenAll(running);
 
         var afterKey = keyspace.CreateKey("after");
         await WaitUntilAnsweredAsync(
@@ -169,7 +236,15 @@ public sealed class RespProviderRestartTests
         Assert.NotNull(after);
     }
 
-    private static async Task AssertSubscriptionsAcrossARestartAsync(
+    /// <summary>
+    /// Restarts a server while a subscription and a record watch are open and checks that each resyncs and then
+    /// delivers later messages and changes.
+    /// </summary>
+    /// <param name="image">The image of the server to restart.</param>
+    /// <param name="command">The arguments of the server's command, empty to run the image's default.</param>
+    /// <param name="profile">The profile of the provider that subscribes.</param>
+    /// <returns>A task that completes when the checks pass.</returns>
+    private static async ValueTask AssertSubscriptionsAcrossARestartAsync(
         string image,
         IReadOnlyList<string> command,
         RespProfile profile
@@ -193,7 +268,7 @@ public sealed class RespProviderRestartTests
         var keyspace = CreateKeyspace();
         var value = "v"u8.ToArray();
         var topic = keyspace.CreateKey("topic");
-        var prefix = keyspace.CreateKey("watched");
+        var prefix = keyspace.CreateKey(WatchedName);
 
         var messages = notifications.SubscribeAsync(topic, null, cancellationToken);
         await using var messageEnumerator = messages.GetAsyncEnumerator(cancellationToken);
@@ -207,7 +282,7 @@ public sealed class RespProviderRestartTests
 
         var beforePayload = "before"u8.ToArray();
         await notifications.PublishAsync(topic, beforePayload, null, cancellationToken);
-        var beforeKey = keyspace.CreateKey("watched", "before");
+        var beforeKey = keyspace.CreateKey(WatchedName, "before");
         await records.CreateAsync(
             beforeKey,
             value,
@@ -229,7 +304,7 @@ public sealed class RespProviderRestartTests
 
         var resynced = false;
         var delivered = false;
-        for (var attempt = 0; attempt < 20 && !(resynced && delivered); attempt++)
+        for (var attempt = 0; attempt < Attempts && !(resynced && delivered); attempt++)
         {
             var payload = Encoding.UTF8.GetBytes($"after-{attempt}");
             await WaitUntilAnsweredAsync(
@@ -249,9 +324,9 @@ public sealed class RespProviderRestartTests
 
         resynced = false;
         delivered = false;
-        for (var attempt = 0; attempt < 20 && !(resynced && delivered); attempt++)
+        for (var attempt = 0; attempt < Attempts && !(resynced && delivered); attempt++)
         {
-            var key = keyspace.CreateKey("watched", $"after-{attempt}");
+            var key = keyspace.CreateKey(WatchedName, $"after-{attempt}");
             await WaitUntilAnsweredAsync(
                 async ct =>
                 {
@@ -274,14 +349,14 @@ public sealed class RespProviderRestartTests
     #region CreateAsync Tests
 
     [RespServerFact]
-    public Task CreateAsync_WhenValkeyRestartsMidRun_FailsOnlyAsUnavailableAndAppliesNoCallReportedUnapplied() =>
-        AssertWritesAcrossARestartAsync(RespServers.ValkeyImage, [], RespProfiles.Valkey);
+    public async Task CreateAsync_WhenValkeyRestartsMidRun_FailsOnlyAsUnavailableAndAppliesNoCallReportedUnapplied() =>
+        await AssertWritesAcrossARestartAsync(RespServers.ValkeyImage, [], RespProfiles.Valkey);
 
     [RespServerFact]
-    public Task CreateAsync_WhenGarnetRestartsMidRun_FailsOnlyAsUnavailableAndAppliesNoCallReportedUnapplied() =>
-        AssertWritesAcrossARestartAsync(
+    public async Task CreateAsync_WhenGarnetRestartsMidRun_FailsOnlyAsUnavailableAndAppliesNoCallReportedUnapplied() =>
+        await AssertWritesAcrossARestartAsync(
             RespServers.GarnetImage,
-            ["--lua", "--lua-transaction-mode", "true"],
+            GarnetCommand,
             RespProfiles.Garnet
         );
 
@@ -290,14 +365,18 @@ public sealed class RespProviderRestartTests
     #region SubscribeAsync Tests
 
     [RespServerFact]
-    public Task SubscribeAsync_WhenValkeyRestarts_ResyncsAndDeliversLaterChanges() =>
-        AssertSubscriptionsAcrossARestartAsync(RespServers.ValkeyImage, [], RespProfiles.Valkey);
+    public async Task SubscribeAsync_WhenValkeyRestarts_ResyncsAndDeliversLaterChanges() =>
+        await AssertSubscriptionsAcrossARestartAsync(
+            RespServers.ValkeyImage,
+            [],
+            RespProfiles.Valkey
+        );
 
     [RespServerFact]
-    public Task SubscribeAsync_WhenGarnetRestarts_ResyncsAndDeliversLaterChanges() =>
-        AssertSubscriptionsAcrossARestartAsync(
+    public async Task SubscribeAsync_WhenGarnetRestarts_ResyncsAndDeliversLaterChanges() =>
+        await AssertSubscriptionsAcrossARestartAsync(
             RespServers.GarnetImage,
-            ["--lua", "--lua-transaction-mode", "true"],
+            GarnetCommand,
             RespProfiles.Garnet
         );
 

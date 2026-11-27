@@ -6,6 +6,9 @@ using NCode.Coordination.Testing;
 
 namespace NCode.Coordination.Resp.Tests.Conformance;
 
+/// <summary>
+/// Runs the semaphore contract suite against the Valkey cluster of three nodes.
+/// </summary>
 public sealed class ValkeyClusterSemaphoreContractTests(RespServers servers)
     : SemaphoreContractTests
 {
