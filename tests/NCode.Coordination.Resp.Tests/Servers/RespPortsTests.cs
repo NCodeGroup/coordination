@@ -19,10 +19,9 @@ public sealed class RespPortsTests
         {
             attempts++;
             portCounts.Add(ports.Count);
+            var failure = new InvalidOperationException("The port is taken.");
             return attempts == 1
-                ? ValueTask.FromException<string>(
-                    new InvalidOperationException("The port is taken.")
-                )
+                ? ValueTask.FromException<string>(failure)
                 : ValueTask.FromResult(started);
         };
 
@@ -46,9 +45,8 @@ public sealed class RespPortsTests
         Func<IReadOnlyList<int>, CancellationToken, ValueTask<string>> start = (_, _) =>
         {
             attempts++;
-            return ValueTask.FromException<string>(
-                new InvalidOperationException($"The port is taken, try {attempts}.")
-            );
+            var failure = new InvalidOperationException($"The port is taken, try {attempts}.");
+            return ValueTask.FromException<string>(failure);
         };
 
         var exception = await Assert.ThrowsAsync<AggregateException>(async () =>
@@ -67,7 +65,8 @@ public sealed class RespPortsTests
         Func<IReadOnlyList<int>, CancellationToken, ValueTask<string>> start = (_, _) =>
         {
             attempts++;
-            return ValueTask.FromException<string>(new OperationCanceledException());
+            var failure = new OperationCanceledException();
+            return ValueTask.FromException<string>(failure);
         };
 
         await Assert.ThrowsAsync<OperationCanceledException>(async () =>
