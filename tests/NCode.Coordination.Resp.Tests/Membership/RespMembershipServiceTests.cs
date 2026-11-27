@@ -142,6 +142,142 @@ public sealed class RespMembershipServiceTests(RespServers servers)
         Assert.Equal($"{revision + 1}\nm{name}", left);
     }
 
+    private static async Task<MembershipView> FinishAsync(
+        Task<bool> moving,
+        IAsyncEnumerator<MembershipView> enumerator,
+        CancellationToken cancellationToken
+    )
+    {
+        var timeout = TimeSpan.FromSeconds(15);
+        var moved = await moving.WaitAsync(timeout, cancellationToken);
+        Assert.True(moved);
+
+        return enumerator.Current;
+    }
+
+    private static async Task<MembershipView> NextAsync(
+        IAsyncEnumerator<MembershipView> enumerator,
+        CancellationToken cancellationToken
+    )
+    {
+        var moving = enumerator.MoveNextAsync().AsTask();
+
+        return await FinishAsync(moving, enumerator, cancellationToken);
+    }
+
+    // Proving that nothing is yielded takes a bounded wait: a second spans five 200 ms checks.
+    private static async Task AssertNoViewWithinASecondAsync(
+        Task<bool> moving,
+        CancellationToken cancellationToken
+    )
+    {
+        var second = TimeSpan.FromSeconds(1);
+
+        await Assert.ThrowsAsync<TimeoutException>(() =>
+            moving.WaitAsync(second, cancellationToken)
+        );
+    }
+
+    private static async Task AssertAnotherGroupsChangeYieldsNoViewAsync(
+        string endpoint,
+        RespProfile profile
+    )
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var multiplexer = await ConnectAsync(endpoint, cancellationToken);
+        var (sessions, membership, _) = CreateServices(multiplexer, profile);
+        var keyspace = CreateKeyspace();
+        var grant = await OpenSessionAsync(sessions, keyspace, cancellationToken);
+        var group = keyspace.CreateKey("group");
+        var other = keyspace.CreateKey("other");
+        var outsider = new Member(grant.Id, "node-2", "address-2");
+        var member = new Member(grant.Id, "node-1", "address-1");
+        var stream = membership.WatchAsync(group, null, cancellationToken);
+        await using var enumerator = stream.GetAsyncEnumerator(cancellationToken);
+        var start = await NextAsync(enumerator, cancellationToken);
+        Assert.Empty(start.Members);
+
+        var moving = enumerator.MoveNextAsync().AsTask();
+        var joinedOther = await membership.JoinAsync(other, outsider, null, cancellationToken);
+        Assert.Equal(MembershipJoinStatus.Joined, joinedOther);
+        await AssertNoViewWithinASecondAsync(moving, cancellationToken);
+        var joined = await membership.JoinAsync(group, member, null, cancellationToken);
+        Assert.Equal(MembershipJoinStatus.Joined, joined);
+        var view = await FinishAsync(moving, enumerator, cancellationToken);
+
+        var only = Assert.Single(view.Members);
+        Assert.Equal("node-1", only.NodeId);
+        var expected = new Revision(start.Revision.Value + 2);
+        Assert.Equal(expected, view.Revision);
+    }
+
+    private static async Task AssertMalformedEventListsTheGroupAgainAsync(
+        string endpoint,
+        RespProfile profile
+    )
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var multiplexer = await ConnectAsync(endpoint, cancellationToken);
+        var (_, membership, subscriptions) = CreateServices(multiplexer, profile);
+        var keyspace = CreateKeyspace();
+        var group = keyspace.CreateKey("group");
+        var keys = RespRecordTable.Keys(keyspace);
+        var watchChannel = RespRecordTable.WatchChannel(keyspace);
+        var channel = subscriptions.Channel(watchChannel);
+        var database = multiplexer.GetDatabase();
+        var subscriber = multiplexer.GetSubscriber();
+        var stream = membership.WatchAsync(group, null, cancellationToken);
+        await using var enumerator = stream.GetAsyncEnumerator(cancellationToken);
+        var start = await NextAsync(enumerator, cancellationToken);
+
+        var next = start.Revision.Value + 1;
+        var set = await database.StringSetAsync(keys[0], next);
+        Assert.True(set);
+        var number = next.ToString(CultureInfo.InvariantCulture);
+        var malformed = number + "\nw";
+        await subscriber.PublishAsync(channel, malformed);
+        var view = await NextAsync(enumerator, cancellationToken);
+
+        var expected = new Revision(next);
+        Assert.Equal(expected, view.Revision);
+        Assert.Empty(view.Members);
+    }
+
+    private static async Task AssertUnchangedResyncYieldsNoViewAsync(
+        string endpoint,
+        RespProfile profile
+    )
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var multiplexer = await ConnectAsync(endpoint, cancellationToken);
+        var (sessions, membership, subscriptions) = CreateServices(multiplexer, profile);
+        var keyspace = CreateKeyspace();
+        var grant = await OpenSessionAsync(sessions, keyspace, cancellationToken);
+        var group = keyspace.CreateKey("group");
+        var member = new Member(grant.Id, "node-1", "address-1");
+        var watchChannel = RespRecordTable.WatchChannel(keyspace);
+        var channel = subscriptions.Channel(watchChannel);
+        var subscriber = multiplexer.GetSubscriber();
+        var stream = membership.WatchAsync(group, null, cancellationToken);
+        await using var enumerator = stream.GetAsyncEnumerator(cancellationToken);
+        var start = await NextAsync(enumerator, cancellationToken);
+
+        var ahead = start.Revision.Value + 1;
+        var number = ahead.ToString(CultureInfo.InvariantCulture);
+        var malformed = number + "\nw";
+        var moving = enumerator.MoveNextAsync().AsTask();
+        await subscriber.PublishAsync(channel, malformed);
+        await AssertNoViewWithinASecondAsync(moving, cancellationToken);
+        var joined = await membership.JoinAsync(group, member, null, cancellationToken);
+        Assert.Equal(MembershipJoinStatus.Joined, joined);
+        var view = await FinishAsync(moving, enumerator, cancellationToken);
+
+        var only = Assert.Single(view.Members);
+        Assert.Equal("node-1", only.NodeId);
+        var expected = new Revision(ahead);
+        Assert.Equal(expected, view.Revision);
+    }
+
     #region JoinAsync Tests
 
     [RespServerFact]
@@ -163,6 +299,34 @@ public sealed class RespMembershipServiceTests(RespServers servers)
     [RespServerFact]
     public Task LeaveAsync_Garnet_WhenTheMemberLeaves_PublishesTheGroup() =>
         AssertLeavePublishesTheGroupAsync(servers.Garnet, RespProfiles.Garnet);
+
+    #endregion
+
+    #region WatchAsync Tests
+
+    [RespServerFact]
+    public Task WatchAsync_Valkey_WhenAnotherGroupChanges_YieldsNoView() =>
+        AssertAnotherGroupsChangeYieldsNoViewAsync(servers.Valkey, RespProfiles.Valkey);
+
+    [RespServerFact]
+    public Task WatchAsync_Garnet_WhenAnotherGroupChanges_YieldsNoView() =>
+        AssertAnotherGroupsChangeYieldsNoViewAsync(servers.Garnet, RespProfiles.Garnet);
+
+    [RespServerFact]
+    public Task WatchAsync_Valkey_WhenAnEventIsMalformed_ListsTheGroupAgainAtACheck() =>
+        AssertMalformedEventListsTheGroupAgainAsync(servers.Valkey, RespProfiles.Valkey);
+
+    [RespServerFact]
+    public Task WatchAsync_Garnet_WhenAnEventIsMalformed_ListsTheGroupAgainAtACheck() =>
+        AssertMalformedEventListsTheGroupAgainAsync(servers.Garnet, RespProfiles.Garnet);
+
+    [RespServerFact]
+    public Task WatchAsync_Valkey_WhenAResyncFindsTheGroupUnchanged_YieldsNoView() =>
+        AssertUnchangedResyncYieldsNoViewAsync(servers.Valkey, RespProfiles.Valkey);
+
+    [RespServerFact]
+    public Task WatchAsync_Garnet_WhenAResyncFindsTheGroupUnchanged_YieldsNoView() =>
+        AssertUnchangedResyncYieldsNoViewAsync(servers.Garnet, RespProfiles.Garnet);
 
     #endregion
 }
