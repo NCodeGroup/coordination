@@ -10,7 +10,17 @@ namespace NCode.Coordination.Resp.Server;
 /// Feeds a channel reader: one subscription to a server channel, a timer for the periodic check and the connection's
 /// events, each written as a signal to a queue of at most <see cref="Capacity" /> signals.
 /// </summary>
-internal sealed class RespChannelFeed : IAsyncDisposable
+/// <param name="queue">The queue of the signals.</param>
+/// <param name="subscription">The subscription to the server channel.</param>
+/// <param name="events">The signals of the connection's events.</param>
+/// <param name="timer">The timer of the periodic check.</param>
+/// <exception cref="ArgumentNullException">The queue, the subscription, the events or the timer is null.</exception>
+internal sealed class RespChannelFeed(
+    Channel<RespSignal> queue,
+    ChannelMessageQueue subscription,
+    RespConnectionSignals events,
+    ITimer timer
+) : IAsyncDisposable
 {
     /// <summary>
     /// The most signals that the queue holds; a signal that finds it full is dropped.
@@ -77,44 +87,27 @@ internal sealed class RespChannelFeed : IAsyncDisposable
     }
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="RespChannelFeed" /> class.
-    /// </summary>
-    /// <param name="queue">The queue of the signals.</param>
-    /// <param name="subscription">The subscription to the server channel.</param>
-    /// <param name="events">The signals of the connection's events.</param>
-    /// <param name="timer">The timer of the periodic check.</param>
-    private RespChannelFeed(
-        Channel<RespSignal> queue,
-        ChannelMessageQueue subscription,
-        RespConnectionSignals events,
-        ITimer timer
-    )
-    {
-        Queue = queue;
-        Subscription = subscription;
-        Events = events;
-        Timer = timer;
-    }
-
-    /// <summary>
     /// Gets the queue of the signals.
     /// </summary>
-    private Channel<RespSignal> Queue { get; }
+    private Channel<RespSignal> Queue { get; } =
+        queue ?? throw new ArgumentNullException(nameof(queue));
 
     /// <summary>
     /// Gets the subscription to the server channel.
     /// </summary>
-    private ChannelMessageQueue Subscription { get; }
+    private ChannelMessageQueue Subscription { get; } =
+        subscription ?? throw new ArgumentNullException(nameof(subscription));
 
     /// <summary>
     /// Gets the signals of the connection's events.
     /// </summary>
-    private RespConnectionSignals Events { get; }
+    private RespConnectionSignals Events { get; } =
+        events ?? throw new ArgumentNullException(nameof(events));
 
     /// <summary>
     /// Gets the timer of the periodic check.
     /// </summary>
-    private ITimer Timer { get; }
+    private ITimer Timer { get; } = timer ?? throw new ArgumentNullException(nameof(timer));
 
     /// <summary>
     /// Gets the reader of the queue of the signals.
@@ -126,16 +119,27 @@ internal sealed class RespChannelFeed : IAsyncDisposable
     {
         await Timer.DisposeAsync().ConfigureAwait(false);
         Events.Dispose();
+        _ = await TryUnsubscribeAsync().ConfigureAwait(false);
 
+        _ = Queue.Writer.TryComplete();
+    }
+
+    // No token: DisposeAsync takes none, and the unsubscribe can't be canceled.
+    /// <summary>
+    /// Unsubscribes from the server channel. A failed or disposed connection is not an error here: the subscription
+    /// ends with the connection.
+    /// </summary>
+    /// <returns>True when the unsubscribe completed; false when the connection failed or was disposed.</returns>
+    private async ValueTask<bool> TryUnsubscribeAsync()
+    {
         try
         {
             await Subscription.UnsubscribeAsync().ConfigureAwait(false);
+            return true;
         }
         catch (Exception e) when (RespFailures.IsClientFailure(e) || e is ObjectDisposedException)
         {
-            // The subscription ends with the connection.
+            return false;
         }
-
-        _ = Queue.Writer.TryComplete();
     }
 }
