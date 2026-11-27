@@ -61,4 +61,30 @@ public sealed class PgNotificationServiceTests
     }
 
     #endregion
+
+    #region SubscribeAsync Tests
+
+    [Fact]
+    public async Task SubscribeAsync_Extension_ThrowsUnsupportedOnFirstMove()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var topic = new Keyspace("prod").CreateKey("t");
+        var options = new OperationOptions
+        {
+            Extensions = ImmutableDictionary<string, string>.Empty.Add("consul.lock-delay", "15s"),
+        };
+        await WithServiceAsync(async service =>
+        {
+            var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
+            {
+                await foreach (var _ in service.SubscribeAsync(topic, options, cancellationToken))
+                { }
+            });
+
+            Assert.Equal(CoordinationErrorCodes.Unsupported, exception.Code);
+            Assert.False(exception.OutcomeUnknown);
+        });
+    }
+
+    #endregion
 }
