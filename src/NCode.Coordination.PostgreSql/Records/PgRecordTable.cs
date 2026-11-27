@@ -32,6 +32,18 @@ internal sealed class PgRecordTable(PgServer server, PgKeyspaces keyspaces, PgSe
         WHERE r.keyspace_id = $1 AND (r.idx, r.depth) IN (SELECT * FROM unnest($2::bytea[], $3::smallint[]))
         """;
 
+    /// <summary>The template of the statement that reads the server's instant and one record's row, if it has one.</summary>
+    private const string SelectOne = """
+        SELECT now.t, r.value, r.revision, r.deadline, r.session_id
+        FROM (SELECT clock_timestamp() AS t) now
+        LEFT JOIN {schema}.records r ON r.keyspace_id = $1 AND r.idx = $2 AND r.depth = $3
+        """;
+
+    /// <summary>The template of the statement that waits for the writers of a keyspace's row.</summary>
+    private const string LockShare = """
+        SELECT 1 FROM {schema}.keyspaces WHERE id = $1 FOR SHARE
+        """;
+
     /// <summary>Gets the seam to the server.</summary>
     public PgServer Server { get; } = server;
 
@@ -46,6 +58,155 @@ internal sealed class PgRecordTable(PgServer server, PgKeyspaces keyspaces, PgSe
 
     /// <summary>Gets the statement that reads the rows of keys.</summary>
     private string SelectRowsSql { get; } = settings.Schema.Apply(SelectRows);
+
+    /// <summary>Gets the statement that reads the server's instant and one record's row.</summary>
+    private string SelectOneSql { get; } = settings.Schema.Apply(SelectOne);
+
+    /// <summary>Gets the statement that waits for the writers of a keyspace's row.</summary>
+    private string LockShareSql { get; } = settings.Schema.Apply(LockShare);
+
+    /// <summary>
+    /// Reads one record. A record that is live in the single statement is returned; one that is expired is read again
+    /// in a transaction that first waits for the keyspace's writers, so the answer follows a write that replaces it.
+    /// </summary>
+    /// <param name="key">The record's key.</param>
+    /// <param name="cancellationToken">The token that cancels the call.</param>
+    /// <returns>The record, or null when it is absent or expired.</returns>
+    /// <exception cref="ArgumentNullException">The key is null.</exception>
+    /// <exception cref="CoordinationException">The server could not be reached or failed.</exception>
+    public async ValueTask<StoredRecord?> ReadOneAsync(
+        CoordinationKey key,
+        CancellationToken cancellationToken
+    )
+    {
+        ArgumentNullException.ThrowIfNull(key);
+
+        var index = PgKeys.Index(key);
+        var depth = (short)key.PartitionDepth;
+
+        return await Keyspaces
+            .RunAsync<StoredRecord?>(
+                key.Keyspace,
+                async (id, token) =>
+                {
+                    var first = await Server
+                        .ExecuteAsync(
+                            [SelectOneStatement(id, index, depth)],
+                            ReadOneResultAsync,
+                            token
+                        )
+                        .ConfigureAwait(false);
+
+                    if (first is null)
+                    {
+                        return null;
+                    }
+
+                    if (first.StateAt() == PgRecordState.Live)
+                    {
+                        return ToRecord(key, first);
+                    }
+
+                    var second = await Server
+                        .TransactAsync(
+                            PgIsolation.ReadCommitted,
+                            async (transaction, transactionToken) =>
+                                await transaction
+                                    .FirstAsync(
+                                        [
+                                            new PgStatement(LockShareSql, PgArgument.Of(id)),
+                                            SelectOneStatement(id, index, depth),
+                                        ],
+                                        async (results, readToken) =>
+                                        {
+                                            await results
+                                                .ReadAsync(reader => reader.GetInt32(0), readToken)
+                                                .ConfigureAwait(false);
+                                            return await ReadOneResultAsync(results, readToken)
+                                                .ConfigureAwait(false);
+                                        },
+                                        transactionToken
+                                    )
+                                    .ConfigureAwait(false),
+                            token
+                        )
+                        .ConfigureAwait(false);
+
+                    return second is not null && second.StateAt() == PgRecordState.Live
+                        ? ToRecord(key, second)
+                        : null;
+                },
+                cancellationToken
+            )
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Builds the statement that reads the server's instant and one record's row.
+    /// </summary>
+    /// <param name="keyspaceId">The keyspace's id.</param>
+    /// <param name="index">The key's index value.</param>
+    /// <param name="depth">The key's partition depth.</param>
+    /// <returns>The statement.</returns>
+    private PgStatement SelectOneStatement(long keyspaceId, byte[] index, short depth) =>
+        new(SelectOneSql, PgArgument.Of(keyspaceId), PgArgument.Of(index), PgArgument.Of(depth));
+
+    /// <summary>
+    /// Reads the result of <see cref="SelectOne"/>.
+    /// </summary>
+    /// <param name="results">The results of the batch.</param>
+    /// <param name="cancellationToken">The token that cancels the call.</param>
+    /// <returns>The row and the instant, or null when the key has no row.</returns>
+    private static async ValueTask<OneRead?> ReadOneResultAsync(
+        PgResults results,
+        CancellationToken cancellationToken
+    )
+    {
+        var rows = await results
+            .ReadAsync(
+                reader =>
+                    reader.IsDBNull(1)
+                        ? null
+                        : new OneRead(
+                            DateTime.SpecifyKind(reader.GetDateTime(0), DateTimeKind.Utc),
+                            reader.GetFieldValue<byte[]>(1),
+                            reader.GetInt64(2),
+                            reader.IsDBNull(3)
+                                ? null
+                                : DateTime.SpecifyKind(reader.GetDateTime(3), DateTimeKind.Utc)
+                        ),
+                cancellationToken
+            )
+            .ConfigureAwait(false);
+
+        return rows.Length == 0 ? null : rows[0];
+    }
+
+    /// <summary>
+    /// Converts a row that was read to the record it holds.
+    /// </summary>
+    /// <param name="key">The record's key.</param>
+    /// <param name="read">The row.</param>
+    /// <returns>The record.</returns>
+    private static StoredRecord ToRecord(CoordinationKey key, OneRead read) =>
+        new(key, read.Value, new Revision(read.Revision));
+
+    /// <summary>
+    /// Holds the row that <see cref="ReadOneAsync"/> read, with the instant the server read it at.
+    /// </summary>
+    /// <param name="Now">The server's instant.</param>
+    /// <param name="Value">The record's value.</param>
+    /// <param name="Revision">The keyspace's revision at which the record was written.</param>
+    /// <param name="Deadline">The instant the record expires, or null when it doesn't.</param>
+    private sealed record OneRead(DateTime Now, byte[] Value, long Revision, DateTime? Deadline)
+    {
+        /// <summary>Tells whether the record holds at the instant that it was read.</summary>
+        /// <returns><see cref="PgRecordState.Expired"/> when the deadline is at or before the instant.</returns>
+        public PgRecordState StateAt() =>
+            Deadline is { } deadline && deadline <= Now
+                ? PgRecordState.Expired
+                : PgRecordState.Live;
+    }
 
     /// <summary>
     /// Decodes the key of a row that the server returned.
