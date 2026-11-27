@@ -3,9 +3,14 @@
 
 using System.Collections.Frozen;
 using System.Collections.Immutable;
+using NCode.Coordination.PostgreSql.Counters;
 using NCode.Coordination.PostgreSql.Keys;
+using NCode.Coordination.PostgreSql.Occurrences;
 using NCode.Coordination.PostgreSql.Schema;
+using NCode.Coordination.PostgreSql.Sequences;
 using NCode.Coordination.PostgreSql.Server;
+using NCode.Coordination.PostgreSql.Sets;
+using NCode.Coordination.PostgreSql.Sweep;
 
 namespace NCode.Coordination.PostgreSql;
 
@@ -15,15 +20,46 @@ namespace NCode.Coordination.PostgreSql;
 internal sealed class PostgreSqlProvider : ICoordinationProvider, IAsyncDisposable, IDisposable
 {
     /// <summary>
-    /// Returns the primitives that the provider serves on a server of a profile.
+    /// Returns the primitives that the provider serves on a server of a profile. The server keeps every one of them in
+    /// tables and its clock measures every expiry. The provider can't see whether a failover keeps the writes it
+    /// acknowledged, so it declares every primitive linearizable only until a failover, and the durability that the
+    /// profile names. A counter's batch runs as one transaction, so it is atomic across partitions. A sequence has no
+    /// expiry.
     /// </summary>
     /// <param name="profile">The profile whose durability the provider declares.</param>
-    /// <returns>The primitives, which are none until the services that serve them exist.</returns>
+    /// <returns>The primitives: occurrences, sets, counters and sequences.</returns>
+    /// <exception cref="ArgumentNullException">The profile is null.</exception>
     internal static ImmutableArray<PrimitiveSupport> Declare(PostgreSqlProfile profile)
     {
         ArgumentNullException.ThrowIfNull(profile);
 
-        return [];
+        return
+        [
+            PrimitiveSupport.Supported(
+                Primitives.Occurrence,
+                Guarantees.LinearizableUntilFailover,
+                profile.Durability,
+                Guarantees.ServerClock
+            ),
+            PrimitiveSupport.Supported(
+                Primitives.Set,
+                Guarantees.LinearizableUntilFailover,
+                profile.Durability,
+                Guarantees.ServerClock
+            ),
+            PrimitiveSupport.Supported(
+                Primitives.Counter,
+                Guarantees.LinearizableUntilFailover,
+                profile.Durability,
+                Guarantees.ServerClock,
+                Guarantees.AtomicAcrossPartitions
+            ),
+            PrimitiveSupport.Supported(
+                Primitives.Sequence,
+                Guarantees.LinearizableUntilFailover,
+                profile.Durability
+            ),
+        ];
     }
 
     /// <summary>
@@ -51,6 +87,22 @@ internal sealed class PostgreSqlProvider : ICoordinationProvider, IAsyncDisposab
         {
             Profile = profile.Name,
         };
+        Sweeper = new PgSweeper(
+            new PgSweeps(Server, settings),
+            settings.SweepInterval,
+            TimeProvider.System
+        );
+        Services = new Dictionary<Type, object>
+        {
+            [typeof(IOccurrenceService)] = new PgOccurrenceService(
+                Server,
+                Keyspaces,
+                settings.Schema
+            ),
+            [typeof(ISetService)] = new PgSetService(Server, Keyspaces, settings.Schema),
+            [typeof(ICounterService)] = new PgCounterService(Server, Keyspaces, settings.Schema),
+            [typeof(ISequenceService)] = new PgSequenceService(Server, Keyspaces, settings.Schema),
+        }.ToFrozenDictionary();
     }
 
     /// <summary>
@@ -79,9 +131,14 @@ internal sealed class PostgreSqlProvider : ICoordinationProvider, IAsyncDisposab
     private PgKeyspaces Keyspaces { get; }
 
     /// <summary>
+    /// Gets the loop that deletes the expired rows.
+    /// </summary>
+    private PgSweeper Sweeper { get; }
+
+    /// <summary>
     /// Gets the primitive services by the interface that each implements.
     /// </summary>
-    private FrozenDictionary<Type, object> Services { get; } = FrozenDictionary<Type, object>.Empty;
+    private FrozenDictionary<Type, object> Services { get; }
 
     /// <inheritdoc />
     public ProviderDeclaration Declaration { get; }
@@ -95,12 +152,25 @@ internal sealed class PostgreSqlProvider : ICoordinationProvider, IAsyncDisposab
     }
 
     /// <inheritdoc />
-    public ValueTask ProbeAsync(CancellationToken cancellationToken) =>
-        new PgProbe(Server, Source, Profile, Settings).RunAsync(cancellationToken);
+    public async ValueTask ProbeAsync(CancellationToken cancellationToken)
+    {
+        await new PgProbe(Server, Source, Profile, Settings)
+            .RunAsync(cancellationToken)
+            .ConfigureAwait(false);
+        Sweeper.Start();
+    }
 
     /// <inheritdoc />
-    public ValueTask DisposeAsync() => Source.DisposeAsync();
+    public async ValueTask DisposeAsync()
+    {
+        await Sweeper.DisposeAsync().ConfigureAwait(false);
+        await Source.DisposeAsync().ConfigureAwait(false);
+    }
 
     /// <inheritdoc />
-    public void Dispose() => Source.Dispose();
+    public void Dispose()
+    {
+        Sweeper.Dispose();
+        Source.Dispose();
+    }
 }
