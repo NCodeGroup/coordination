@@ -32,7 +32,28 @@ internal sealed class RespRestartableServer(IContainer container, int hostPort) 
         CancellationToken cancellationToken
     )
     {
-        var hostPort = RespPorts.Reserve(1)[0];
+        return await RespPorts.StartOnFreePortsAsync(
+            1,
+            (ports, token) => StartOnPortAsync(image, command, ports[0], token),
+            cancellationToken
+        );
+    }
+
+    /// <summary>
+    /// Starts a server from an image on a host port.
+    /// </summary>
+    /// <param name="image">The image to run.</param>
+    /// <param name="command">The arguments of the server's command, empty to run the image's default.</param>
+    /// <param name="hostPort">The host port on which the container publishes the server's port.</param>
+    /// <param name="cancellationToken">The token that cancels the start.</param>
+    /// <returns>The started server.</returns>
+    private static async ValueTask<RespRestartableServer> StartOnPortAsync(
+        string image,
+        IReadOnlyList<string> command,
+        int hostPort,
+        CancellationToken cancellationToken
+    )
+    {
         var waitStrategy = Wait.ForUnixContainer().UntilMessageIsLogged(RespServers.ReadyMessage);
         var builder = new ContainerBuilder(image)
             .WithPortBinding(hostPort, Port)

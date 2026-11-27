@@ -37,7 +37,20 @@ internal sealed class RespGarnetFailoverServer(
         CancellationToken cancellationToken
     )
     {
-        var ports = RespPorts.Reserve(2);
+        return await RespPorts.StartOnFreePortsAsync(2, StartOnPortsAsync, cancellationToken);
+    }
+
+    /// <summary>
+    /// Starts the primary and its replica on two host ports and joins them into a cluster.
+    /// </summary>
+    /// <param name="ports">The host ports of the primary and the replica.</param>
+    /// <param name="cancellationToken">The token that cancels the start.</param>
+    /// <returns>The started servers.</returns>
+    private static async ValueTask<IRespFailoverServer> StartOnPortsAsync(
+        IReadOnlyList<int> ports,
+        CancellationToken cancellationToken
+    )
+    {
         var container = RespGarnetCluster.CreateContainer(ports, ReplicationArguments);
         try
         {

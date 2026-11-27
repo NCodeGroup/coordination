@@ -34,7 +34,20 @@ internal sealed class RespValkeyFailoverServer(
         CancellationToken cancellationToken
     )
     {
-        var ports = RespPorts.Reserve(2);
+        return await RespPorts.StartOnFreePortsAsync(2, StartOnPortsAsync, cancellationToken);
+    }
+
+    /// <summary>
+    /// Starts a Valkey primary and a replica of it on two host ports.
+    /// </summary>
+    /// <param name="ports">The host ports of the primary and the replica.</param>
+    /// <param name="cancellationToken">The token that cancels the start.</param>
+    /// <returns>The started servers.</returns>
+    private static async ValueTask<IRespFailoverServer> StartOnPortsAsync(
+        IReadOnlyList<int> ports,
+        CancellationToken cancellationToken
+    )
+    {
         var primaryPort = ports[0];
         var replicaPort = ports[1];
         var script = Script(primaryPort, replicaPort);
