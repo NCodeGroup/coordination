@@ -1,0 +1,69 @@
+// Copyright © NCode Group
+// SPDX-License-Identifier: Apache-2.0
+
+using System.Collections.Immutable;
+using Npgsql;
+
+namespace NCode.Coordination.PostgreSql.Server;
+
+/// <summary>
+/// Reads the results of one batch in order, which are those of its statements that return rows.
+/// </summary>
+/// <param name="reader">The reader of the batch.</param>
+internal sealed class PgResults(NpgsqlDataReader reader)
+{
+    private bool _started;
+
+    /// <summary>
+    /// Reads every row of the next result: the current one on the first call, then each after it.
+    /// </summary>
+    /// <typeparam name="T">The type of a mapped row.</typeparam>
+    /// <param name="map">Maps the reader's current row.</param>
+    /// <param name="cancellationToken">The token that cancels the read.</param>
+    /// <returns>The mapped rows, in the order the server sent them.</returns>
+    /// <exception cref="InvalidOperationException">The batch has no further result.</exception>
+    public async ValueTask<ImmutableArray<T>> ReadAsync<T>(
+        Func<NpgsqlDataReader, T> map,
+        CancellationToken cancellationToken
+    )
+    {
+        ArgumentNullException.ThrowIfNull(map);
+
+        if (!await MoveNextAsync(cancellationToken).ConfigureAwait(false))
+        {
+            throw new InvalidOperationException("The batch has no further result.");
+        }
+
+        var rows = ImmutableArray.CreateBuilder<T>();
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            rows.Add(map(reader));
+        }
+
+        return rows.ToImmutable();
+    }
+
+    /// <summary>
+    /// Reads every remaining result, so that an error later in the batch surfaces.
+    /// </summary>
+    /// <param name="cancellationToken">The token that cancels the read.</param>
+    /// <returns>A task that completes when the batch has been read to its end.</returns>
+    public async ValueTask DrainAsync(CancellationToken cancellationToken)
+    {
+        while (await MoveNextAsync(cancellationToken).ConfigureAwait(false))
+        {
+            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false)) { }
+        }
+    }
+
+    private async ValueTask<bool> MoveNextAsync(CancellationToken cancellationToken)
+    {
+        if (!_started)
+        {
+            _started = true;
+            return true;
+        }
+
+        return await reader.NextResultAsync(cancellationToken).ConfigureAwait(false);
+    }
+}
