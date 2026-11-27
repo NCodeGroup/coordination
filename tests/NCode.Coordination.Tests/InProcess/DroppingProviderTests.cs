@@ -126,5 +126,69 @@ public sealed class DroppingProviderTests
         Assert.Equal(fivePayload, payload);
     }
 
+    [Fact]
+    public async Task GetPrimitiveService_WhenRecordWatchesAfterADrop_YieldsAResyncInPlaceOfTheLostChange()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var time = InProcessTesting.CreateTime();
+        var inner = new InProcessProvider(time);
+        using var provider = new DroppingProvider(inner);
+        var primitive = provider.GetPrimitiveService(typeof(IRecordWatchService));
+        var service = Assert.IsAssignableFrom<IRecordWatchService>(primitive);
+        var innerRecords = inner.GetPrimitiveService(typeof(IRecordService));
+        var records = Assert.IsAssignableFrom<IRecordService>(innerRecords);
+        var prefix = InProcessTesting.Keyspace.CreateKey("w");
+        var a = InProcessTesting.Keyspace.CreateKey("w", "a");
+        var b = InProcessTesting.Keyspace.CreateKey("w", "b");
+        var c = InProcessTesting.Keyspace.CreateKey("w", "c");
+        ReadOnlyMemory<byte> value = (byte[])[1];
+        var changes = service.WatchPrefixAsync(prefix, null, null, cancellationToken);
+        await using var stream = changes.GetAsyncEnumerator(cancellationToken);
+        var moved = await stream.MoveNextAsync();
+        Assert.True(moved);
+        Assert.True(stream.Current.IsResync);
+        var first = await records.CreateAsync(
+            a,
+            value,
+            RecordLifetime.Persistent,
+            null,
+            cancellationToken
+        );
+        moved = await stream.MoveNextAsync();
+        var written = stream.Current;
+        Assert.True(moved);
+        await provider.Connection.DropAsync(cancellationToken);
+
+        var lost = await records.CreateAsync(
+            b,
+            value,
+            RecordLifetime.Persistent,
+            null,
+            cancellationToken
+        );
+        var later = await records.CreateAsync(
+            c,
+            value,
+            RecordLifetime.Persistent,
+            null,
+            cancellationToken
+        );
+
+        moved = await stream.MoveNextAsync();
+        var resync = stream.Current;
+        Assert.True(moved);
+        moved = await stream.MoveNextAsync();
+        var next = stream.Current;
+        Assert.True(moved);
+
+        Assert.Equal(a, written.Key);
+        Assert.Equal(first.Revision, written.Revision);
+        Assert.True(resync.IsResync);
+        Assert.Equal(lost.Revision, resync.Revision);
+        Assert.Equal(RecordChangeKind.Written, next.Kind);
+        Assert.Equal(c, next.Key);
+        Assert.Equal(later.Revision, next.Revision);
+    }
+
     #endregion
 }
