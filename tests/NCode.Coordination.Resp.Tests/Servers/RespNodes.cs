@@ -33,6 +33,16 @@ internal static class RespNodes
     private const string InfoCommand = "INFO";
 
     /// <summary>
+    /// The command that reads and changes a Garnet or Valkey node's cluster state.
+    /// </summary>
+    internal const string ClusterCommand = "CLUSTER";
+
+    /// <summary>
+    /// The command that makes a node follow another node, or, with the arguments <c>NO ONE</c>, stop following one.
+    /// </summary>
+    internal const string ReplicaOfCommand = "REPLICAOF";
+
+    /// <summary>
     /// The section of the reply to <c>INFO</c> that reports a node's replication state.
     /// </summary>
     private const string ReplicationSection = "replication";

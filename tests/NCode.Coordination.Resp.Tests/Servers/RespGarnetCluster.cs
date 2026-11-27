@@ -89,19 +89,20 @@ internal static class RespGarnetCluster
         for (var index = 0; index < nodes.Count; index++)
         {
             var epoch = index + 1;
-            await nodes[index].ExecuteAsync("CLUSTER", "SET-CONFIG-EPOCH", epoch);
+            await nodes[index].ExecuteAsync(RespNodes.ClusterCommand, "SET-CONFIG-EPOCH", epoch);
         }
 
         for (var index = 0; index < primaries; index++)
         {
             var first = SlotCount * index / primaries;
             var last = (SlotCount * (index + 1) / primaries) - 1;
-            await nodes[index].ExecuteAsync("CLUSTER", "ADDSLOTSRANGE", first, last);
+            await nodes[index].ExecuteAsync(RespNodes.ClusterCommand, "ADDSLOTSRANGE", first, last);
         }
 
         for (var index = 1; index < nodes.Count; index++)
         {
-            await nodes[0].ExecuteAsync("CLUSTER", "MEET", RespNodes.Host, ports[index]);
+            await nodes[0]
+                .ExecuteAsync(RespNodes.ClusterCommand, "MEET", RespNodes.Host, ports[index]);
         }
 
         var knownNodes = $"cluster_known_nodes:{nodes.Count}";
@@ -109,7 +110,7 @@ internal static class RespGarnetCluster
         {
             await RespNodes.WaitForReplyAsync(
                 node,
-                ["CLUSTER", "INFO"],
+                [RespNodes.ClusterCommand, "INFO"],
                 reply =>
                     reply.Contains("cluster_state:ok", StringComparison.Ordinal)
                     && reply.Contains(knownNodes, StringComparison.Ordinal),
@@ -120,10 +121,10 @@ internal static class RespGarnetCluster
         for (var index = primaries; index < nodes.Count; index++)
         {
             var followed = nodes[(index - primaries) % primaries];
-            var reply = await followed.ExecuteAsync("CLUSTER", "MYID");
+            var reply = await followed.ExecuteAsync(RespNodes.ClusterCommand, "MYID");
             var id = reply.ToString();
             var replica = nodes[index];
-            await replica.ExecuteAsync("CLUSTER", "REPLICATE", id);
+            await replica.ExecuteAsync(RespNodes.ClusterCommand, "REPLICATE", id);
             await RespNodes.WaitForReplicationAsync(
                 replica,
                 text => text.Contains(RespNodes.LinkUp, StringComparison.Ordinal),

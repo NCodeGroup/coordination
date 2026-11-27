@@ -39,8 +39,17 @@ internal sealed class RespGarnetFailoverServer(
     {
         var ports = RespPorts.Reserve(2);
         var container = RespGarnetCluster.CreateContainer(ports, ReplicationArguments);
-        await container.StartAsync(cancellationToken);
-        await RespGarnetCluster.JoinAsync(ports, 1, cancellationToken);
+        try
+        {
+            await container.StartAsync(cancellationToken);
+            await RespGarnetCluster.JoinAsync(ports, 1, cancellationToken);
+        }
+        catch
+        {
+            await container.DisposeAsync();
+            throw;
+        }
+
         return new RespGarnetFailoverServer(container, ports[0], ports[1]);
     }
 
@@ -90,7 +99,7 @@ internal sealed class RespGarnetFailoverServer(
     {
         await using var admin = await RespNodes.ConnectAdminAsync(Endpoint, cancellationToken);
         var replica = admin.GetServer(RespNodes.Host, ReplicaPort);
-        await replica.ExecuteAsync("CLUSTER", "FAILOVER", "FORCE");
+        await replica.ExecuteAsync(RespNodes.ClusterCommand, "FAILOVER", "FORCE");
         await RespNodes.WaitForReplicationAsync(
             replica,
             reply => reply.Contains("role:master", StringComparison.Ordinal),
@@ -105,7 +114,7 @@ internal sealed class RespGarnetFailoverServer(
         var primary = admin.GetServer(RespNodes.Host, PrimaryPort);
         await RespNodes.WaitForReplyAsync(
             primary,
-            ["CLUSTER", "NODES"],
+            [RespNodes.ClusterCommand, "NODES"],
             reply => !ServesSlots(reply),
             cancellationToken
         );

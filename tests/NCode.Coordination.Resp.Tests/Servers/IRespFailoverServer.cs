@@ -32,6 +32,6 @@ internal interface IRespFailoverServer : IAsyncDisposable
     /// Demotes the old primary, which drops the writes it took after the promotion.
     /// </summary>
     /// <param name="cancellationToken">The token that cancels the demotion.</param>
-    /// <returns>A task that completes when the old primary no longer takes writes.</returns>
+    /// <returns>A task that completes when the old primary refuses writes.</returns>
     ValueTask DemotePrimaryAsync(CancellationToken cancellationToken);
 }

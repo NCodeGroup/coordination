@@ -44,7 +44,16 @@ internal sealed class RespRestartableServer(IContainer container, int hostPort) 
         }
 
         var container = builder.Build();
-        await container.StartAsync(cancellationToken);
+        try
+        {
+            await container.StartAsync(cancellationToken);
+        }
+        catch
+        {
+            await container.DisposeAsync();
+            throw;
+        }
+
         return new RespRestartableServer(container, hostPort);
     }
 
