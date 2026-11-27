@@ -3,13 +3,18 @@
 
 using System.Collections.Frozen;
 using System.Collections.Immutable;
+using NCode.Coordination.PostgreSql.Claims;
 using NCode.Coordination.PostgreSql.Counters;
+using NCode.Coordination.PostgreSql.Elections;
 using NCode.Coordination.PostgreSql.Keys;
+using NCode.Coordination.PostgreSql.Leases;
+using NCode.Coordination.PostgreSql.Membership;
 using NCode.Coordination.PostgreSql.Occurrences;
 using NCode.Coordination.PostgreSql.Records;
 using NCode.Coordination.PostgreSql.Schema;
 using NCode.Coordination.PostgreSql.Sequences;
 using NCode.Coordination.PostgreSql.Server;
+using NCode.Coordination.PostgreSql.Sessions;
 using NCode.Coordination.PostgreSql.Sets;
 using NCode.Coordination.PostgreSql.Sweep;
 using NCode.Coordination.PostgreSql.Transactions;
@@ -29,7 +34,7 @@ internal sealed class PostgreSqlProvider : ICoordinationProvider, IAsyncDisposab
     /// partition, so each is atomic across partitions. A sequence has no expiry.
     /// </summary>
     /// <param name="profile">The profile whose durability the provider declares.</param>
-    /// <returns>The primitives: records, transactions, occurrences, sets, counters and sequences.</returns>
+    /// <returns>The primitives: records, transactions, occurrences, sets, counters, sequences, sessions, membership, leases, semaphores, elections and claims.</returns>
     /// <exception cref="ArgumentNullException">The profile is null.</exception>
     internal static ImmutableArray<PrimitiveSupport> Declare(PostgreSqlProfile profile)
     {
@@ -74,6 +79,42 @@ internal sealed class PostgreSqlProvider : ICoordinationProvider, IAsyncDisposab
                 Guarantees.LinearizableUntilFailover,
                 profile.Durability
             ),
+            PrimitiveSupport.Supported(
+                Primitives.Session,
+                Guarantees.LinearizableUntilFailover,
+                profile.Durability,
+                Guarantees.ServerClock
+            ),
+            PrimitiveSupport.Supported(
+                Primitives.Membership,
+                Guarantees.LinearizableUntilFailover,
+                profile.Durability,
+                Guarantees.ServerClock
+            ),
+            PrimitiveSupport.Supported(
+                Primitives.Lease,
+                Guarantees.LinearizableUntilFailover,
+                profile.Durability,
+                Guarantees.ServerClock
+            ),
+            PrimitiveSupport.Supported(
+                Primitives.Semaphore,
+                Guarantees.LinearizableUntilFailover,
+                profile.Durability,
+                Guarantees.ServerClock
+            ),
+            PrimitiveSupport.Supported(
+                Primitives.Election,
+                Guarantees.LinearizableUntilFailover,
+                profile.Durability,
+                Guarantees.ServerClock
+            ),
+            PrimitiveSupport.Supported(
+                Primitives.Claim,
+                Guarantees.LinearizableUntilFailover,
+                profile.Durability,
+                Guarantees.ServerClock
+            ),
         ];
     }
 
@@ -108,6 +149,8 @@ internal sealed class PostgreSqlProvider : ICoordinationProvider, IAsyncDisposab
             settings.SweepInterval,
             TimeProvider.System
         );
+        var tokens = new PgRandomTokens();
+        var grants = new PgGrants(RecordTable);
         Services = new Dictionary<Type, object>
         {
             [typeof(IRecordService)] = new PgRecordService(RecordTable),
@@ -120,6 +163,12 @@ internal sealed class PostgreSqlProvider : ICoordinationProvider, IAsyncDisposab
             [typeof(ISetService)] = new PgSetService(Server, Keyspaces, settings.Schema),
             [typeof(ICounterService)] = new PgCounterService(Server, Keyspaces, settings.Schema),
             [typeof(ISequenceService)] = new PgSequenceService(Server, Keyspaces, settings.Schema),
+            [typeof(ISessionService)] = new PgSessionService(RecordTable, tokens),
+            [typeof(IMembershipService)] = new PgMembershipService(RecordTable),
+            [typeof(ILeaseService)] = new PgLeaseService(grants, tokens),
+            [typeof(ISemaphoreService)] = new PgSemaphoreService(grants, tokens),
+            [typeof(IElectionService)] = new PgElectionService(grants, tokens),
+            [typeof(IClaimService)] = new PgClaimService(Server, Keyspaces, settings.Schema),
         }.ToFrozenDictionary();
     }
 

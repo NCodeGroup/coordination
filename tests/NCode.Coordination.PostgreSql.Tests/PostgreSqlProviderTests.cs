@@ -32,9 +32,7 @@ public sealed class PostgreSqlProviderTests
 
     [Theory]
     [MemberData(nameof(Profiles))]
-    public void Declaration_Always_DeclaresRecordsTransactionsOccurrencesSetsCountersAndSequences(
-        PostgreSqlProfile profile
-    )
+    public void Declaration_Always_DeclaresEveryServedPrimitive(PostgreSqlProfile profile)
     {
         var primitives = PostgreSqlProvider.Declare(profile);
 
@@ -109,6 +107,78 @@ public sealed class PostgreSqlProviderTests
                     [Guarantees.LinearizableUntilFailover, profile.Durability],
                     support.Guarantees
                 );
+            },
+            support =>
+            {
+                Assert.Equal(Primitives.Session, support.Primitive);
+                Assert.Equal<Guarantee>(
+                    [
+                        Guarantees.LinearizableUntilFailover,
+                        profile.Durability,
+                        Guarantees.ServerClock,
+                    ],
+                    support.Guarantees
+                );
+            },
+            support =>
+            {
+                Assert.Equal(Primitives.Membership, support.Primitive);
+                Assert.Equal<Guarantee>(
+                    [
+                        Guarantees.LinearizableUntilFailover,
+                        profile.Durability,
+                        Guarantees.ServerClock,
+                    ],
+                    support.Guarantees
+                );
+            },
+            support =>
+            {
+                Assert.Equal(Primitives.Lease, support.Primitive);
+                Assert.Equal<Guarantee>(
+                    [
+                        Guarantees.LinearizableUntilFailover,
+                        profile.Durability,
+                        Guarantees.ServerClock,
+                    ],
+                    support.Guarantees
+                );
+            },
+            support =>
+            {
+                Assert.Equal(Primitives.Semaphore, support.Primitive);
+                Assert.Equal<Guarantee>(
+                    [
+                        Guarantees.LinearizableUntilFailover,
+                        profile.Durability,
+                        Guarantees.ServerClock,
+                    ],
+                    support.Guarantees
+                );
+            },
+            support =>
+            {
+                Assert.Equal(Primitives.Election, support.Primitive);
+                Assert.Equal<Guarantee>(
+                    [
+                        Guarantees.LinearizableUntilFailover,
+                        profile.Durability,
+                        Guarantees.ServerClock,
+                    ],
+                    support.Guarantees
+                );
+            },
+            support =>
+            {
+                Assert.Equal(Primitives.Claim, support.Primitive);
+                Assert.Equal<Guarantee>(
+                    [
+                        Guarantees.LinearizableUntilFailover,
+                        profile.Durability,
+                        Guarantees.ServerClock,
+                    ],
+                    support.Guarantees
+                );
             }
         );
     }
@@ -124,6 +194,12 @@ public sealed class PostgreSqlProviderTests
     [InlineData(typeof(ISetService))]
     [InlineData(typeof(ICounterService))]
     [InlineData(typeof(ISequenceService))]
+    [InlineData(typeof(ISessionService))]
+    [InlineData(typeof(IMembershipService))]
+    [InlineData(typeof(ILeaseService))]
+    [InlineData(typeof(ISemaphoreService))]
+    [InlineData(typeof(IElectionService))]
+    [InlineData(typeof(IClaimService))]
     public async Task GetPrimitiveService_ServedPrimitive_ReturnsItsService(Type serviceType)
     {
         await using var provider = CreateProvider("Host=127.0.0.1;Port=1");
