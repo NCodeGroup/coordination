@@ -59,6 +59,11 @@ internal sealed class RespScript(string name, string text)
     public static RespScript SetList { get; } = Load("set-list");
 
     /// <summary>
+    /// Gets the notification-publish script: it takes a topic's next sequence and publishes it with the payload.
+    /// </summary>
+    public static RespScript NotificationPublish { get; } = Load("notification-publish");
+
+    /// <summary>
     /// Gets the record-create script: it creates a record when its key is absent.
     /// </summary>
     public static RespScript RecordCreate { get; } = LoadKeyspace("record-create");
