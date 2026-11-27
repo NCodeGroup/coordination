@@ -21,6 +21,27 @@ public sealed class RespServersTests(RespServers servers)
 
     #endregion
 
+    #region ValkeyCluster Property Tests
+
+    [RespServerFact]
+    public async Task ValkeyCluster_Started_ServesEverySlotFromThreeNodes()
+    {
+        var options = ConfigurationOptions.Parse(servers.ValkeyCluster);
+        options.AllowAdmin = true;
+        await using var connection = await ConnectionMultiplexer
+            .ConnectAsync(options)
+            .WaitAsync(TestContext.Current.CancellationToken);
+
+        var clusterServers = connection.GetServers();
+        var info = (await clusterServers[0].ExecuteAsync("CLUSTER", "INFO")).ToString();
+
+        Assert.Equal(3, clusterServers.Length);
+        Assert.Contains("cluster_state:ok", info);
+        Assert.Contains("cluster_slots_assigned:16384", info);
+    }
+
+    #endregion
+
     #region Garnet Property Tests
 
     [RespServerFact]

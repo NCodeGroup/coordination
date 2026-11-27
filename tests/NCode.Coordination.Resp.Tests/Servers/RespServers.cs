@@ -9,7 +9,7 @@ using DotNet.Testcontainers.Containers;
 namespace NCode.Coordination.Resp.Tests.Servers;
 
 /// <summary>
-/// Starts one Valkey and two Garnet servers in Docker for the whole test run, when
+/// Starts one Valkey server, two Garnet servers and a three-node Valkey cluster in Docker for the whole test run, when
 /// <see cref="EnvironmentVariable"/> is <c>docker</c>.
 /// </summary>
 public sealed class RespServers : IAsyncLifetime
@@ -25,7 +25,9 @@ public sealed class RespServers : IAsyncLifetime
     public const string GarnetImage =
         "ghcr.io/microsoft/garnet:2.2.13@sha256:a5b11ca8292400a6239437c34c96aaa515a55ab3613ef2e41a33914405f89442";
 
-    private const string ReadyMessage = "Ready to accept connections";
+    internal const string ReadyMessage = "Ready to accept connections";
+
+    private const string ClusterReadyMessage = "Cluster ready";
 
     private const ushort Port = 6379;
 
@@ -52,6 +54,21 @@ public sealed class RespServers : IAsyncLifetime
     private static string GetEndpoint(IContainer container) =>
         $"{container.Hostname}:{container.GetMappedPublicPort(Port)}";
 
+    private static string ClusterScript(IReadOnlyList<int> ports)
+    {
+        var list = string.Join(" ", ports);
+        var nodes = string.Join(" ", ports.Select(port => $"127.0.0.1:{port}"));
+        return "i=0; "
+            + $"for p in {list}; do i=$((i+1)); "
+            + "valkey-server --port $p --cluster-enabled yes --cluster-port $((16379+i)) "
+            + "--cluster-config-file nodes-$p.conf --cluster-announce-ip 127.0.0.1 "
+            + "--save '' --appendonly no --daemonize yes --logfile /data/$p.log; done; "
+            + $"for p in {list}; do until valkey-cli -p $p ping >/dev/null 2>&1; do sleep 0.1; done; done; "
+            + $"valkey-cli --cluster create {nodes} --cluster-replicas 0 --cluster-yes; "
+            + $"for p in {list}; do until valkey-cli -p $p cluster info | grep -q cluster_state:ok; do sleep 0.1; done; done; "
+            + $"echo '{ClusterReadyMessage}'; exec sleep infinity";
+    }
+
     /// <summary>Gets the <c>host:port</c> of the Valkey server, empty until it is started.</summary>
     public string Valkey { get; private set; } = "";
 
@@ -61,7 +78,12 @@ public sealed class RespServers : IAsyncLifetime
     /// <summary>Gets the <c>host:port</c> of the Garnet server with Lua disabled, empty until it is started.</summary>
     public string GarnetWithoutLua { get; private set; } = "";
 
+    /// <summary>Gets the <c>host:port</c> list of the Valkey cluster's three nodes, empty until it is started.</summary>
+    public string ValkeyCluster { get; private set; } = "";
+
     private IContainer? ValkeyContainer { get; set; }
+
+    private IContainer? ValkeyClusterContainer { get; set; }
 
     private IContainer? GarnetContainer { get; set; }
 
@@ -78,18 +100,33 @@ public sealed class RespServers : IAsyncLifetime
         var valkey = CreateContainer(ValkeyImage);
         var garnet = CreateContainer(GarnetImage, "--lua", "--lua-transaction-mode", "true");
         var garnetWithoutLua = CreateContainer(GarnetImage);
+
+        var ports = RespPorts.Reserve(3);
+        var clusterBuilder = new ContainerBuilder(ValkeyImage)
+            .WithEntrypoint("sh", "-c")
+            .WithCommand(ClusterScript(ports))
+            .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged(ClusterReadyMessage));
+        foreach (var port in ports)
+        {
+            clusterBuilder = clusterBuilder.WithPortBinding(port, port);
+        }
+
+        var valkeyCluster = clusterBuilder.Build();
         ValkeyContainer = valkey;
         GarnetContainer = garnet;
         GarnetWithoutLuaContainer = garnetWithoutLua;
+        ValkeyClusterContainer = valkeyCluster;
 
         var startValkey = valkey.StartAsync(CancellationToken.None);
         var startGarnet = garnet.StartAsync(CancellationToken.None);
         var startGarnetWithoutLua = garnetWithoutLua.StartAsync(CancellationToken.None);
-        await Task.WhenAll(startValkey, startGarnet, startGarnetWithoutLua);
+        var startValkeyCluster = valkeyCluster.StartAsync(CancellationToken.None);
+        await Task.WhenAll(startValkey, startGarnet, startGarnetWithoutLua, startValkeyCluster);
 
         Valkey = GetEndpoint(valkey);
         Garnet = GetEndpoint(garnet);
         GarnetWithoutLua = GetEndpoint(garnetWithoutLua);
+        ValkeyCluster = string.Join(",", ports.Select(port => $"127.0.0.1:{port}"));
     }
 
     /// <inheritdoc />
@@ -108,6 +145,11 @@ public sealed class RespServers : IAsyncLifetime
         if (GarnetWithoutLuaContainer is { } garnetWithoutLua)
         {
             await garnetWithoutLua.DisposeAsync();
+        }
+
+        if (ValkeyClusterContainer is { } valkeyCluster)
+        {
+            await valkeyCluster.DisposeAsync();
         }
     }
 }
