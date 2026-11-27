@@ -30,14 +30,21 @@ internal sealed class PgTransactionService(PgRecordTable table) : ITransactionSe
     {
         ArgumentNullException.ThrowIfNull(transaction);
         PgCall.Check(options, cancellationToken);
-        CheckNoSession(transaction.OnSuccess);
-        CheckNoSession(transaction.OnFailure);
 
         var keys = transaction
             .Conditions.Select(condition => condition.Key)
             .Concat(transaction.OnSuccess.Select(write => write.Key))
             .Concat(transaction.OnFailure.Select(write => write.Key))
             .Distinct()
+            .ToArray();
+
+        var sessions = transaction
+            .OnSuccess.Concat(transaction.OnFailure)
+            .Select(write => write.Lifetime?.Session)
+            .OfType<SessionId>()
+            .Where(session => session.Keyspace == transaction.Keyspace)
+            .Select(session => session.Value)
+            .Distinct(StringComparer.Ordinal)
             .ToArray();
 
         return await Table
@@ -50,21 +57,27 @@ internal sealed class PgTransactionService(PgRecordTable table) : ITransactionSe
                             async (pgTransaction, transactionToken) =>
                             {
                                 var start = await Table
-                                    .BeginAsync(pgTransaction, id, keys, [], transactionToken)
+                                    .BeginAsync(pgTransaction, id, keys, sessions, transactionToken)
                                     .ConfigureAwait(false);
 
                                 var change = start.Change;
+                                var ended = start.EndExpiredSessions();
                                 var live = new Dictionary<CoordinationKey, PgRecordRow>();
+                                var replaceable = new Dictionary<CoordinationKey, PgRecordRow>();
                                 var expired = new List<PgRecordRow>();
                                 foreach (var (key, row) in start.Rows)
                                 {
-                                    if (row.StateAt(change.Now) == PgRecordState.Live)
+                                    switch (row.StateAt(change.Now))
                                     {
-                                        live[key] = row;
-                                    }
-                                    else
-                                    {
-                                        expired.Add(row);
+                                        case PgRecordState.Live:
+                                            live[key] = row;
+                                            break;
+                                        case PgRecordState.Expired:
+                                            expired.Add(row);
+                                            break;
+                                        default:
+                                            replaceable[key] = row;
+                                            break;
                                     }
                                 }
 
@@ -77,6 +90,22 @@ internal sealed class PgTransactionService(PgRecordTable table) : ITransactionSe
                                 var status = succeeded
                                     ? TransactionStatus.Succeeded
                                     : TransactionStatus.Failed;
+
+                                if (
+                                    writes.Any(write =>
+                                        write.Lifetime?.Session is { } session
+                                        && IsEnded(start, ended, transaction.Keyspace, session)
+                                    )
+                                )
+                                {
+                                    await Table
+                                        .CommitAsync(pgTransaction, change, id, transactionToken)
+                                        .ConfigureAwait(false);
+                                    return new TransactionResult(
+                                        TransactionStatus.SessionEnded,
+                                        new Revision(change.Revision)
+                                    );
+                                }
 
                                 if (!writes.IsEmpty)
                                 {
@@ -96,8 +125,10 @@ internal sealed class PgTransactionService(PgRecordTable table) : ITransactionSe
                                                 write.Key,
                                                 write.Value,
                                                 deadline,
-                                                null,
-                                                null
+                                                lifetime.Session?.Value,
+                                                replaceable.Remove(write.Key, out var replaced)
+                                                    ? replaced.Session
+                                                    : null
                                             );
                                             continue;
                                         }
@@ -123,24 +154,23 @@ internal sealed class PgTransactionService(PgRecordTable table) : ITransactionSe
     }
 
     /// <summary>
-    /// Refuses a branch whose writes bind a record to a session, which this build keeps none of.
+    /// Tells whether a write's session has ended, was never opened in the transaction's keyspace, or was ended by
+    /// this transaction because it had expired.
     /// </summary>
-    /// <param name="writes">The writes of a branch.</param>
-    /// <exception cref="CoordinationException">A write is bound to a session; the call did not apply.</exception>
-    private static void CheckNoSession(ImmutableArray<RecordWrite> writes)
-    {
-        foreach (var write in writes)
-        {
-            if (write.Lifetime?.Session is not null)
-            {
-                throw new CoordinationException(
-                    CoordinationErrorCodes.Unsupported,
-                    outcomeUnknown: false,
-                    "The PostgreSQL provider keeps no sessions in this build."
-                );
-            }
-        }
-    }
+    /// <param name="start">What the transaction's first batch read.</param>
+    /// <param name="ended">The sessions that the transaction ended because they had expired.</param>
+    /// <param name="keyspace">The transaction's keyspace.</param>
+    /// <param name="session">The session that a write binds a record to.</param>
+    /// <returns>True when the session is not live.</returns>
+    private static bool IsEnded(
+        PgChangeStart start,
+        ImmutableHashSet<string> ended,
+        Keyspace keyspace,
+        SessionId session
+    ) =>
+        session.Keyspace != keyspace
+        || ended.Contains(session.Value)
+        || !start.Sessions.ContainsKey(session.Value);
 
     /// <summary>
     /// Checks whether every condition of a transaction holds over the live rows.

@@ -36,7 +36,7 @@ public sealed class PgTransactionServiceTests
     }
 
     [Fact]
-    public async Task ExecuteAsync_SessionInTheFailureBranch_ThrowsUnsupported()
+    public async Task ExecuteAsync_SessionInTheFailureBranch_ReachesTheServer()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var keyspace = new Keyspace("prod");
@@ -62,8 +62,7 @@ public sealed class PgTransactionServiceTests
                 await service.ExecuteAsync(transaction, null, cancellationToken)
             );
 
-            Assert.Equal(CoordinationErrorCodes.Unsupported, exception.Code);
-            Assert.False(exception.OutcomeUnknown);
+            Assert.Equal(CoordinationErrorCodes.Unavailable, exception.Code);
         });
     }
 

@@ -44,7 +44,7 @@ public sealed class PgRecordServiceTests
     }
 
     [Fact]
-    public async Task CreateAsync_SessionLifetime_ThrowsUnsupportedNotApplied()
+    public async Task CreateAsync_SessionLifetime_ReachesTheServer()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var keyspace = new Keyspace("prod");
@@ -56,8 +56,7 @@ public sealed class PgRecordServiceTests
                 await service.CreateAsync(key, new byte[1], lifetime, null, cancellationToken)
             );
 
-            Assert.Equal(CoordinationErrorCodes.Unsupported, exception.Code);
-            Assert.False(exception.OutcomeUnknown);
+            Assert.Equal(CoordinationErrorCodes.Unavailable, exception.Code);
         });
     }
 

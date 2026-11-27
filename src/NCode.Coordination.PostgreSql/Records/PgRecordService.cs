@@ -64,21 +64,42 @@ internal sealed class PgRecordService(PgRecordTable table) : IRecordService
     }
 
     /// <summary>
-    /// Refuses a lifetime that is bound to a session, which this build keeps none of.
+    /// Gets the id of the session that a lifetime binds a record to, when the session lives in the record's keyspace.
     /// </summary>
+    /// <param name="key">The record's key.</param>
     /// <param name="lifetime">The lifetime.</param>
-    /// <exception cref="CoordinationException">The lifetime is bound to a session; the call did not apply.</exception>
-    private static void CheckNoSession(RecordLifetime lifetime)
-    {
-        if (lifetime.Session is not null)
-        {
-            throw new CoordinationException(
-                CoordinationErrorCodes.Unsupported,
-                outcomeUnknown: false,
-                "The PostgreSQL provider keeps no sessions in this build."
-            );
-        }
-    }
+    /// <returns>The session's id, or null when the lifetime binds to no session or to one of another keyspace, which
+    /// the keyspace's rows can't hold.</returns>
+    private static string? SessionOf(CoordinationKey key, RecordLifetime lifetime) =>
+        lifetime.Session is { } session && session.Keyspace == key.Keyspace ? session.Value : null;
+
+    /// <summary>
+    /// Tells whether a lifetime binds a record to a session that has ended or was never opened in the keyspace.
+    /// </summary>
+    /// <param name="start">What the transaction's first batch read.</param>
+    /// <param name="ended">The sessions that the transaction ended because they had expired.</param>
+    /// <param name="lifetime">The lifetime.</param>
+    /// <param name="session">The id that <see cref="SessionOf"/> returned for the lifetime.</param>
+    /// <returns>True when the lifetime binds to a session that is not live.</returns>
+    private static bool BindsToEndedSession(
+        PgChangeStart start,
+        ImmutableHashSet<string> ended,
+        RecordLifetime lifetime,
+        string? session
+    ) =>
+        lifetime.Session is not null
+        && (session is null || ended.Contains(session) || !start.Sessions.ContainsKey(session));
+
+    /// <summary>
+    /// Gets the session that a row that is about to be replaced was bound to, when that session has ended.
+    /// </summary>
+    /// <param name="row">The row, or null when the key has none.</param>
+    /// <param name="now">The instant the transaction read on the server's clock.</param>
+    /// <returns>The ended session's id, or null.</returns>
+    private static string? ReplacedSession(PgRecordRow? row, DateTime now) =>
+        row?.StateAt(now) is PgRecordState.SessionEnded or PgRecordState.SessionExpired
+            ? row.Session
+            : null;
 
     /// <inheritdoc />
     public async ValueTask<RecordWriteResult> CreateAsync(
@@ -93,10 +114,11 @@ internal sealed class PgRecordService(PgRecordTable table) : IRecordService
         ArgumentNullException.ThrowIfNull(lifetime);
         CheckValue(value, nameof(value));
         PgCall.Check(options, cancellationToken);
-        CheckNoSession(lifetime);
 
         var copy = value.ToArray();
         var timeToLive = lifetime.TimeToLive;
+        var session = SessionOf(key, lifetime);
+        string[] sessions = session is null ? [] : [session];
 
         return await Table
             .Keyspaces.RunAsync<RecordWriteResult>(
@@ -108,28 +130,48 @@ internal sealed class PgRecordService(PgRecordTable table) : IRecordService
                             async (transaction, transactionToken) =>
                             {
                                 var start = await Table
-                                    .BeginAsync(transaction, id, [key], [], transactionToken)
+                                    .BeginAsync(transaction, id, [key], sessions, transactionToken)
                                     .ConfigureAwait(false);
 
                                 var change = start.Change;
+                                var ended = start.EndExpiredSessions();
+                                var state = PgRecordState.Live;
                                 if (start.Rows.TryGetValue(key, out var row))
                                 {
-                                    if (row.StateAt(change.Now) == PgRecordState.Live)
+                                    state = row.StateAt(change.Now);
+                                    if (state == PgRecordState.Expired)
                                     {
-                                        await Table
-                                            .CommitAsync(transaction, change, id, transactionToken)
-                                            .ConfigureAwait(false);
-                                        return RecordWriteResult.Conflict;
+                                        change.Expire([row]);
                                     }
+                                }
 
-                                    change.Expire([row]);
+                                if (BindsToEndedSession(start, ended, lifetime, session))
+                                {
+                                    await Table
+                                        .CommitAsync(transaction, change, id, transactionToken)
+                                        .ConfigureAwait(false);
+                                    return RecordWriteResult.SessionEnded;
+                                }
+
+                                if (row is not null && state == PgRecordState.Live)
+                                {
+                                    await Table
+                                        .CommitAsync(transaction, change, id, transactionToken)
+                                        .ConfigureAwait(false);
+                                    return RecordWriteResult.Conflict;
                                 }
 
                                 var revision = change.Begin();
                                 DateTime? deadline = timeToLive is null
                                     ? null
                                     : change.Now.AddTicks(PgCall.ToMicroseconds(timeToLive) * 10);
-                                change.Put(key, copy, deadline, null, null);
+                                change.Put(
+                                    key,
+                                    copy,
+                                    deadline,
+                                    session,
+                                    ReplacedSession(row, change.Now)
+                                );
 
                                 await Table
                                     .CommitAsync(transaction, change, id, transactionToken)
@@ -172,11 +214,12 @@ internal sealed class PgRecordService(PgRecordTable table) : IRecordService
         ArgumentNullException.ThrowIfNull(lifetime);
         CheckValue(value, nameof(value));
         PgCall.Check(options, cancellationToken);
-        CheckNoSession(lifetime);
 
         var copy = value.ToArray();
         var timeToLive = lifetime.TimeToLive;
         var expectedRevision = expected.Value;
+        var session = SessionOf(key, lifetime);
+        string[] sessions = session is null ? [] : [session];
 
         return await Table
             .Keyspaces.RunAsync<RecordWriteResult>(
@@ -188,25 +231,31 @@ internal sealed class PgRecordService(PgRecordTable table) : IRecordService
                             async (transaction, transactionToken) =>
                             {
                                 var start = await Table
-                                    .BeginAsync(transaction, id, [key], [], transactionToken)
+                                    .BeginAsync(transaction, id, [key], sessions, transactionToken)
                                     .ConfigureAwait(false);
 
                                 var change = start.Change;
+                                var ended = start.EndExpiredSessions();
                                 var live = false;
                                 if (start.Rows.TryGetValue(key, out var row))
                                 {
-                                    if (row.StateAt(change.Now) == PgRecordState.Live)
+                                    var state = row.StateAt(change.Now);
+                                    if (state == PgRecordState.Live)
                                     {
                                         live = true;
                                     }
-                                    else
+                                    else if (state == PgRecordState.Expired)
                                     {
                                         change.Expire([row]);
                                     }
                                 }
 
                                 RecordWriteResult result;
-                                if (!live)
+                                if (BindsToEndedSession(start, ended, lifetime, session))
+                                {
+                                    result = RecordWriteResult.SessionEnded;
+                                }
+                                else if (!live)
                                 {
                                     result = RecordWriteResult.NotFound;
                                 }
@@ -222,7 +271,7 @@ internal sealed class PgRecordService(PgRecordTable table) : IRecordService
                                         : change.Now.AddTicks(
                                             PgCall.ToMicroseconds(timeToLive) * 10
                                         );
-                                    change.Put(key, copy, deadline, null, null);
+                                    change.Put(key, copy, deadline, session, null);
                                     result = RecordWriteResult.Written(new Revision(revision));
                                 }
 
@@ -267,10 +316,12 @@ internal sealed class PgRecordService(PgRecordTable table) : IRecordService
                                     .ConfigureAwait(false);
 
                                 var change = start.Change;
+                                start.EndExpiredSessions();
                                 var status = RecordDeleteStatus.NotFound;
                                 if (start.Rows.TryGetValue(key, out var row))
                                 {
-                                    if (row.StateAt(change.Now) == PgRecordState.Live)
+                                    var state = row.StateAt(change.Now);
+                                    if (state == PgRecordState.Live)
                                     {
                                         if (row.Revision == expectedRevision)
                                         {
@@ -283,7 +334,7 @@ internal sealed class PgRecordService(PgRecordTable table) : IRecordService
                                             status = RecordDeleteStatus.Conflict;
                                         }
                                     }
-                                    else
+                                    else if (state == PgRecordState.Expired)
                                     {
                                         change.Expire([row]);
                                     }
@@ -326,10 +377,12 @@ internal sealed class PgRecordService(PgRecordTable table) : IRecordService
                                     .ConfigureAwait(false);
 
                                 var change = start.Change;
+                                start.EndExpiredSessions();
                                 StoredRecord? taken = null;
                                 if (start.Rows.TryGetValue(key, out var row))
                                 {
-                                    if (row.StateAt(change.Now) == PgRecordState.Live)
+                                    var state = row.StateAt(change.Now);
+                                    if (state == PgRecordState.Live)
                                     {
                                         change.Begin();
                                         change.Delete(row);
@@ -339,7 +392,7 @@ internal sealed class PgRecordService(PgRecordTable table) : IRecordService
                                             new Revision(row.Revision)
                                         );
                                     }
-                                    else
+                                    else if (state == PgRecordState.Expired)
                                     {
                                         change.Expire([row]);
                                     }
