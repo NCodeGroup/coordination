@@ -12,6 +12,7 @@ using NCode.Coordination.PostgreSql.Sequences;
 using NCode.Coordination.PostgreSql.Server;
 using NCode.Coordination.PostgreSql.Sets;
 using NCode.Coordination.PostgreSql.Sweep;
+using NCode.Coordination.PostgreSql.Transactions;
 
 namespace NCode.Coordination.PostgreSql;
 
@@ -24,11 +25,11 @@ internal sealed class PostgreSqlProvider : ICoordinationProvider, IAsyncDisposab
     /// Returns the primitives that the provider serves on a server of a profile. The server keeps every one of them in
     /// tables and its clock measures every expiry. The provider can't see whether a failover keeps the writes it
     /// acknowledged, so it declares every primitive linearizable only until a failover, and the durability that the
-    /// profile names. A counter's batch runs as one transaction, so it is atomic across partitions. A sequence has no
-    /// expiry.
+    /// profile names. A transaction and a counter's batch run as one database transaction over the rows of every
+    /// partition, so each is atomic across partitions. A sequence has no expiry.
     /// </summary>
     /// <param name="profile">The profile whose durability the provider declares.</param>
-    /// <returns>The primitives: occurrences, sets, counters and sequences.</returns>
+    /// <returns>The primitives: records, transactions, occurrences, sets, counters and sequences.</returns>
     /// <exception cref="ArgumentNullException">The profile is null.</exception>
     internal static ImmutableArray<PrimitiveSupport> Declare(PostgreSqlProfile profile)
     {
@@ -36,6 +37,19 @@ internal sealed class PostgreSqlProvider : ICoordinationProvider, IAsyncDisposab
 
         return
         [
+            PrimitiveSupport.Supported(
+                Primitives.Record,
+                Guarantees.LinearizableUntilFailover,
+                profile.Durability,
+                Guarantees.ServerClock
+            ),
+            PrimitiveSupport.Supported(
+                Primitives.Transaction,
+                Guarantees.LinearizableUntilFailover,
+                profile.Durability,
+                Guarantees.ServerClock,
+                Guarantees.AtomicAcrossPartitions
+            ),
             PrimitiveSupport.Supported(
                 Primitives.Occurrence,
                 Guarantees.LinearizableUntilFailover,
@@ -96,6 +110,8 @@ internal sealed class PostgreSqlProvider : ICoordinationProvider, IAsyncDisposab
         );
         Services = new Dictionary<Type, object>
         {
+            [typeof(IRecordService)] = new PgRecordService(RecordTable),
+            [typeof(ITransactionService)] = new PgTransactionService(RecordTable),
             [typeof(IOccurrenceService)] = new PgOccurrenceService(
                 Server,
                 Keyspaces,

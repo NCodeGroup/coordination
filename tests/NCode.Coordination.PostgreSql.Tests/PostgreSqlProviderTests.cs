@@ -32,7 +32,7 @@ public sealed class PostgreSqlProviderTests
 
     [Theory]
     [MemberData(nameof(Profiles))]
-    public void Declaration_Always_DeclaresOccurrencesSetsCountersAndSequences(
+    public void Declaration_Always_DeclaresRecordsTransactionsOccurrencesSetsCountersAndSequences(
         PostgreSqlProfile profile
     )
     {
@@ -40,6 +40,31 @@ public sealed class PostgreSqlProviderTests
 
         Assert.Collection(
             primitives,
+            support =>
+            {
+                Assert.Equal(Primitives.Record, support.Primitive);
+                Assert.Equal<Guarantee>(
+                    [
+                        Guarantees.LinearizableUntilFailover,
+                        profile.Durability,
+                        Guarantees.ServerClock,
+                    ],
+                    support.Guarantees
+                );
+            },
+            support =>
+            {
+                Assert.Equal(Primitives.Transaction, support.Primitive);
+                Assert.Equal<Guarantee>(
+                    [
+                        Guarantees.LinearizableUntilFailover,
+                        profile.Durability,
+                        Guarantees.ServerClock,
+                        Guarantees.AtomicAcrossPartitions,
+                    ],
+                    support.Guarantees
+                );
+            },
             support =>
             {
                 Assert.Equal(Primitives.Occurrence, support.Primitive);
@@ -93,6 +118,8 @@ public sealed class PostgreSqlProviderTests
     #region GetPrimitiveService Tests
 
     [Theory]
+    [InlineData(typeof(IRecordService))]
+    [InlineData(typeof(ITransactionService))]
     [InlineData(typeof(IOccurrenceService))]
     [InlineData(typeof(ISetService))]
     [InlineData(typeof(ICounterService))]
@@ -112,7 +139,7 @@ public sealed class PostgreSqlProviderTests
     {
         await using var provider = CreateProvider("Host=127.0.0.1;Port=1");
 
-        var service = provider.GetPrimitiveService(typeof(IRecordService));
+        var service = provider.GetPrimitiveService(typeof(IRecordWatchService));
 
         Assert.Null(service);
     }
