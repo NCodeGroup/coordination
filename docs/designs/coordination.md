@@ -441,7 +441,8 @@ further closing messages while a resync might have covered the last one.
    its hosts can ([#47](https://github.com/NCodeGroup/coordination/issues/47)).
 5. **First-consumer adoption.** NCode.Identity depends on NCode.Coordination and retires its shared-state packages;
    its interval passes and refresh lease become claims and fenced leases. This phase is planned and landed in
-   NCode.Identity, and the first stable release follows it ([D8](#d8-first-stable-release)).
+   NCode.Identity, and the first stable release follows it ([D8](#d8-first-stable-release)). Its stories span both
+   repositories, so its epic is [NCodeGroup/.github#4](https://github.com/NCodeGroup/.github/issues/4).
 6. **etcd and Consul.** Providers whose servers keep sessions, leases and watches natively, linearizable across
    failover. On the first consumer's hosting, at least three small Kubernetes nodes in one datacenter whose first limit
    is memory, an etcd cluster adds three members, nodes with room for them and storage with a low sync latency,

@@ -25,7 +25,8 @@ maintainers say whether it fits.
   to
   [ADR-1034](docs/decisions/1034-postgresql-notifications-and-watches-are-numbered-in-the-writing-transaction-kept-in-a-bounded-log-and-woken-by-notify.md)
   ([design](docs/designs/coordination.md#rollout-and-phases)).
-- **First-consumer adoption.** NCode.Identity moves its shared state onto NCode.Coordination.
+- **First-consumer adoption.** NCode.Identity moves its shared state onto NCode.Coordination, tracked in the
+  cross-repository epic [NCodeGroup/.github#4](https://github.com/NCodeGroup/.github/issues/4).
 - **etcd and Consul.** Providers that keep sessions, leases and watches linearizable across failover.
 - **Supply chain.** Keep external inputs pinned and current
   ([ADR-0008](docs/decisions/project-template/0008-external-inputs-are-pinned-and-kept-current.md)),
