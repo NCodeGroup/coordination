@@ -139,4 +139,42 @@ public sealed class PgRecordServiceTests
     }
 
     #endregion
+
+    #region ListAsync Tests
+
+    [Fact]
+    public async Task ListAsync_TokenOfAnotherPrefix_Throws()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var keyspace = new Keyspace("prod");
+        var prefix = keyspace.CreateKey("a");
+        var other = keyspace.CreateKey("b");
+        var page = new RecordPageRequest(10)
+        {
+            ContinuationToken = PgKeys.PageToken(PgKeys.Index(other), 1),
+        };
+        await WithServiceAsync(async service =>
+        {
+            var exception = await Assert.ThrowsAsync<ArgumentException>(async () =>
+                await service.ListAsync(prefix, page, null, cancellationToken)
+            );
+
+            Assert.Equal("page", exception.ParamName);
+        });
+    }
+
+    [Fact]
+    public async Task ListAsync_NullPage_Throws()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var prefix = new Keyspace("prod").CreateKey("a");
+        await WithServiceAsync(async service =>
+        {
+            await Assert.ThrowsAsync<ArgumentNullException>(async () =>
+                await service.ListAsync(prefix, null!, null, cancellationToken)
+            );
+        });
+    }
+
+    #endregion
 }

@@ -1,7 +1,10 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using System.Collections.Immutable;
+using NCode.Coordination.PostgreSql.Keys;
 using NCode.Coordination.PostgreSql.Server;
+using NpgsqlTypes;
 
 namespace NCode.Coordination.PostgreSql.Records;
 
@@ -13,10 +16,32 @@ namespace NCode.Coordination.PostgreSql.Records;
 /// <exception cref="ArgumentNullException">The table is null.</exception>
 internal sealed class PgRecordService(PgRecordTable table) : IRecordService
 {
+    /// <summary>The template of the statement that lists the rows under a prefix after a position.</summary>
+    private const string ListRows = """
+        WITH now AS (SELECT clock_timestamp() AS t)
+        SELECT k.revision, now.t, r.idx, r.depth, r.key, r.value, r.revision, r.deadline, r.session_id
+        FROM now CROSS JOIN {schema}.keyspaces k
+        LEFT JOIN LATERAL (SELECT * FROM {schema}.records x WHERE x.keyspace_id = k.id AND x.idx >= $2
+          AND ($3::bytea IS NULL OR x.idx < $3) AND (x.idx, x.depth) > ($4, $5)
+          ORDER BY x.idx, x.depth LIMIT $6) r ON true
+        WHERE k.id = $1
+        """;
+
+    /// <summary>The template of the statement that waits for the writers of a keyspace's row.</summary>
+    private const string LockShare = """
+        SELECT 1 FROM {schema}.keyspaces WHERE id = $1 FOR SHARE
+        """;
+
     /// <summary>
     /// Gets the record table that the operations share.
     /// </summary>
     private PgRecordTable Table { get; } = table ?? throw new ArgumentNullException(nameof(table));
+
+    /// <summary>Gets the statement that lists the rows under a prefix after a position.</summary>
+    private string ListSql { get; } = table.Settings.Schema.Apply(ListRows);
+
+    /// <summary>Gets the statement that waits for the writers of a keyspace's row.</summary>
+    private string LockShareSql { get; } = table.Settings.Schema.Apply(LockShare);
 
     /// <summary>
     /// Checks that a value is no longer than the largest value.
@@ -331,13 +356,190 @@ internal sealed class PgRecordService(PgRecordTable table) : IRecordService
     }
 
     /// <inheritdoc />
-    public ValueTask<RecordPage> ListAsync(
+    public async ValueTask<RecordPage> ListAsync(
         CoordinationKey prefix,
         RecordPageRequest page,
         OperationOptions? options,
         CancellationToken cancellationToken
     )
     {
-        throw new NotImplementedException();
+        ArgumentNullException.ThrowIfNull(prefix);
+        ArgumentNullException.ThrowIfNull(page);
+
+        var prefixIndex = PgKeys.Index(prefix);
+        byte[] startIndex;
+        short startDepth;
+        if (page.ContinuationToken is null)
+        {
+            startIndex = prefixIndex;
+            startDepth = -1;
+        }
+        else if (
+            PgKeys.TryReadPageToken(
+                page.ContinuationToken,
+                prefixIndex,
+                out var tokenIndex,
+                out var tokenDepth
+            )
+        )
+        {
+            startIndex = tokenIndex;
+            startDepth = (short)tokenDepth;
+        }
+        else
+        {
+            throw new ArgumentException(
+                "The continuation token was not issued by the PostgreSQL provider for this prefix.",
+                nameof(page)
+            );
+        }
+
+        PgCall.Check(options, cancellationToken);
+
+        var limit = page.Limit;
+        var prefixEnd = PgKeys.PrefixEnd(prefixIndex);
+
+        return await Table
+            .Keyspaces.RunAsync<RecordPage>(
+                prefix.Keyspace,
+                async (id, token) =>
+                {
+                    PgStatement Statement() =>
+                        new(
+                            ListSql,
+                            PgArgument.Of(id),
+                            PgArgument.Typed(prefixIndex, NpgsqlDbType.Bytea),
+                            PgArgument.Typed(prefixEnd, NpgsqlDbType.Bytea),
+                            PgArgument.Typed(startIndex, NpgsqlDbType.Bytea),
+                            PgArgument.Typed(startDepth, NpgsqlDbType.Smallint),
+                            PgArgument.Typed(limit + 1, NpgsqlDbType.Integer)
+                        );
+
+                    var first = await Table
+                        .Server.ExecuteAsync([Statement()], ReadListAsync, token)
+                        .ConfigureAwait(false);
+
+                    if (first.Length == 0)
+                    {
+                        throw new PgKeyspaceMissingException("The keyspace's row does not exist.");
+                    }
+
+                    var read = first;
+                    if (
+                        first
+                            .Where(item => item.Row is not null)
+                            .Take(limit)
+                            .Any(item => item.StateAt() == PgRecordState.Expired)
+                    )
+                    {
+                        read = await Table
+                            .Server.TransactAsync(
+                                PgIsolation.ReadCommitted,
+                                async (transaction, transactionToken) =>
+                                    await transaction
+                                        .FirstAsync(
+                                            [
+                                                new PgStatement(LockShareSql, PgArgument.Of(id)),
+                                                Statement(),
+                                            ],
+                                            async (results, readToken) =>
+                                            {
+                                                await results
+                                                    .ReadAsync(
+                                                        reader => reader.GetInt32(0),
+                                                        readToken
+                                                    )
+                                                    .ConfigureAwait(false);
+                                                return await ReadListAsync(results, readToken)
+                                                    .ConfigureAwait(false);
+                                            },
+                                            transactionToken
+                                        )
+                                        .ConfigureAwait(false),
+                                token
+                            )
+                            .ConfigureAwait(false);
+
+                        if (read.Length == 0)
+                        {
+                            throw new PgKeyspaceMissingException(
+                                "The keyspace's row does not exist."
+                            );
+                        }
+                    }
+
+                    var listed = read.Where(item => item.Row is not null).ToArray();
+                    var records = new List<StoredRecord>();
+                    foreach (var item in listed.Take(limit))
+                    {
+                        if (item.Row is { } row && item.StateAt() == PgRecordState.Live)
+                        {
+                            var key = PgRecordTable.DecodeKey(prefix.Keyspace, row.Key, row.Depth);
+                            records.Add(
+                                new StoredRecord(key, row.Value, new Revision(row.Revision))
+                            );
+                        }
+                    }
+
+                    string? next = null;
+                    if (listed.Length > limit && listed[limit - 1].Row is { } last)
+                    {
+                        next = PgKeys.PageToken(last.Index, last.Depth);
+                    }
+
+                    return new RecordPage(new Revision(read[0].KeyspaceRevision), records)
+                    {
+                        ContinuationToken = next,
+                    };
+                },
+                cancellationToken
+            )
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Reads the result of <see cref="ListRows"/>.
+    /// </summary>
+    /// <param name="results">The results of the batch.</param>
+    /// <param name="cancellationToken">The token that cancels the call.</param>
+    /// <returns>One item for each row: the keyspace's revision, the server's instant and the record's row, if any.</returns>
+    private static async ValueTask<ImmutableArray<ListItem>> ReadListAsync(
+        PgResults results,
+        CancellationToken cancellationToken
+    ) =>
+        await results
+            .ReadAsync(
+                reader => new ListItem(
+                    reader.GetInt64(0),
+                    DateTime.SpecifyKind(reader.GetDateTime(1), DateTimeKind.Utc),
+                    reader.IsDBNull(2)
+                        ? null
+                        : new PgRecordRow(
+                            reader.GetFieldValue<byte[]>(2),
+                            reader.GetInt16(3),
+                            reader.GetString(4),
+                            reader.GetFieldValue<byte[]>(5),
+                            reader.GetInt64(6),
+                            reader.IsDBNull(7)
+                                ? null
+                                : DateTime.SpecifyKind(reader.GetDateTime(7), DateTimeKind.Utc),
+                            reader.IsDBNull(8) ? null : reader.GetString(8)
+                        )
+                ),
+                cancellationToken
+            )
+            .ConfigureAwait(false);
+
+    /// <summary>
+    /// Holds one row that the list statement returned.
+    /// </summary>
+    /// <param name="KeyspaceRevision">The keyspace's revision.</param>
+    /// <param name="Now">The server's instant.</param>
+    /// <param name="Row">The record's row, or null when the row holds no record.</param>
+    private sealed record ListItem(long KeyspaceRevision, DateTime Now, PgRecordRow? Row)
+    {
+        /// <summary>Tells whether the record holds at the instant that it was read.</summary>
+        /// <returns><see cref="PgRecordState.Expired"/> when the row's deadline is at or before the instant.</returns>
+        public PgRecordState StateAt() => Row?.StateAt(Now) ?? PgRecordState.Live;
     }
 }
