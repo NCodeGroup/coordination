@@ -94,6 +94,14 @@ public sealed partial class RespProviderTests(RespServers servers) : IDisposable
             },
             support =>
             {
+                Assert.Equal(Primitives.RecordWatch, support.Primitive);
+                Assert.Equal<Guarantee>(
+                    [Guarantees.LinearizableUntilFailover, Guarantees.AtMostOnceWithGapDetection],
+                    support.Guarantees
+                );
+            },
+            support =>
+            {
                 Assert.Equal(Primitives.Transaction, support.Primitive);
                 Assert.Equal<Guarantee>(
                     [
@@ -221,6 +229,14 @@ public sealed partial class RespProviderTests(RespServers servers) : IDisposable
                     ],
                     support.Guarantees
                 );
+            },
+            support =>
+            {
+                Assert.Equal(Primitives.Notification, support.Primitive);
+                Assert.Equal<Guarantee>(
+                    [Guarantees.AtMostOnceWithGapDetection],
+                    support.Guarantees
+                );
             }
         );
     }
@@ -230,11 +246,11 @@ public sealed partial class RespProviderTests(RespServers servers) : IDisposable
     #region GetPrimitiveService Tests
 
     [Fact]
-    public async Task GetPrimitiveService_UnservedPrimitive_ReturnsNull()
+    public async Task GetPrimitiveService_TypeOfNoPrimitive_ReturnsNull()
     {
         await using var provider = CreateProvider();
 
-        var service = provider.GetPrimitiveService(typeof(INotificationService));
+        var service = provider.GetPrimitiveService(typeof(IServiceProvider));
 
         Assert.Null(service);
     }
@@ -252,6 +268,8 @@ public sealed partial class RespProviderTests(RespServers servers) : IDisposable
     [InlineData(typeof(ISemaphoreService))]
     [InlineData(typeof(IElectionService))]
     [InlineData(typeof(IClaimService))]
+    [InlineData(typeof(IRecordWatchService))]
+    [InlineData(typeof(INotificationService))]
     public async Task GetPrimitiveService_ServedPrimitive_ReturnsItsService(Type serviceType)
     {
         await using var provider = CreateProvider();
@@ -908,6 +926,27 @@ public sealed partial class RespProviderTests(RespServers servers) : IDisposable
         Assert.DoesNotContain("PUBLISH", valkey);
         Assert.Contains("PUBLISH", garnet);
         Assert.DoesNotContain("SPUBLISH", garnet);
+    }
+
+    [Fact]
+    public void ProbedCommands_Profile_SubscribesOnItsChannels()
+    {
+        var valkey = RespProvider
+            .ProbedCommands(RespProfiles.Valkey)
+            .Select(c => (string?)c)
+            .ToList();
+        var garnet = RespProvider
+            .ProbedCommands(RespProfiles.Garnet)
+            .Select(c => (string?)c)
+            .ToList();
+
+        Assert.Contains("SSUBSCRIBE", valkey);
+        Assert.Contains("SUNSUBSCRIBE", valkey);
+        Assert.DoesNotContain("SUBSCRIBE", valkey);
+        Assert.Contains("SUBSCRIBE", garnet);
+        Assert.Contains("UNSUBSCRIBE", garnet);
+        Assert.DoesNotContain("SSUBSCRIBE", garnet);
+        Assert.DoesNotContain("SUNSUBSCRIBE", garnet);
     }
 
     #endregion
