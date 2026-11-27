@@ -112,6 +112,35 @@ public sealed class RespNotificationServiceTests(RespServers servers) : IDisposa
         Assert.Equal(1, resync.Sequence);
     }
 
+    private static async Task AssertMessageWithoutAPayloadResyncsAsync(
+        string endpoint,
+        RespProfile profile
+    )
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var multiplexer = await ConnectAsync(endpoint, cancellationToken);
+        var (service, subscriptions) = CreateService(multiplexer, profile);
+        var topic = CreateKeyspace().CreateKey("t");
+        var key = RespKeys.ForKey(topic, RespNotificationService.Kind);
+        var name = key.ToString();
+        var channel = subscriptions.Channel(name);
+        var database = multiplexer.GetDatabase();
+        var subscriber = multiplexer.GetSubscriber();
+        var stream = service.SubscribeAsync(topic, null, cancellationToken);
+        await using var enumerator = stream.GetAsyncEnumerator(cancellationToken);
+
+        var start = await NextAsync(enumerator, cancellationToken);
+        Assert.True(start.IsResync);
+        Assert.Equal(0, start.Sequence);
+        var set = await database.StringSetAsync(key, 1);
+        Assert.True(set);
+        await subscriber.PublishAsync(channel, "1");
+        var resync = await NextAsync(enumerator, cancellationToken);
+
+        Assert.True(resync.IsResync);
+        Assert.Equal(0, resync.Sequence);
+    }
+
     private static async Task AssertAnotherSubscriptionEndingKeepsDeliveringAsync(
         string endpoint,
         RespProfile profile
@@ -161,6 +190,43 @@ public sealed class RespNotificationServiceTests(RespServers servers) : IDisposa
         var found = RespNotificationService.TryReadPayload("12", out _);
 
         Assert.False(found);
+    }
+
+    [Fact]
+    public void TryReadPayload_WhenTheMessageIsNull_ReturnsFalse()
+    {
+        var found = RespNotificationService.TryReadPayload(RedisValue.Null, out var payload);
+
+        Assert.False(found);
+        Assert.Empty(payload);
+    }
+
+    [Fact]
+    public void TryReadPayload_WhenThePayloadIsAtTheLimit_ReturnsIt()
+    {
+        var expected = new byte[CoordinationLimits.MaxPayloadLength];
+        Array.Fill(expected, (byte)'a');
+        var prefix = "1\n"u8.ToArray();
+        byte[] message = [.. prefix, .. expected];
+
+        var found = RespNotificationService.TryReadPayload(message, out var payload);
+
+        Assert.True(found);
+        Assert.Equal(expected, payload);
+    }
+
+    [Fact]
+    public void TryReadPayload_WhenThePayloadIsOverTheLimit_ReturnsFalse()
+    {
+        var oversized = new byte[CoordinationLimits.MaxPayloadLength + 1];
+        Array.Fill(oversized, (byte)'a');
+        var prefix = "1\n"u8.ToArray();
+        byte[] message = [.. prefix, .. oversized];
+
+        var found = RespNotificationService.TryReadPayload(message, out var payload);
+
+        Assert.False(found);
+        Assert.Empty(payload);
     }
 
     #endregion
@@ -232,6 +298,14 @@ public sealed class RespNotificationServiceTests(RespServers servers) : IDisposa
     [RespServerFact]
     public Task SubscribeAsync_Garnet_WhenAMessageSkipsANumber_Resyncs() =>
         AssertMessageSkippingANumberResyncsAsync(servers.Garnet, RespProfiles.Garnet);
+
+    [RespServerFact]
+    public Task SubscribeAsync_Valkey_WhenAMessageHasNoPayload_ResyncsAtACheck() =>
+        AssertMessageWithoutAPayloadResyncsAsync(servers.Valkey, RespProfiles.Valkey);
+
+    [RespServerFact]
+    public Task SubscribeAsync_Garnet_WhenAMessageHasNoPayload_ResyncsAtACheck() =>
+        AssertMessageWithoutAPayloadResyncsAsync(servers.Garnet, RespProfiles.Garnet);
 
     [RespServerFact]
     public Task SubscribeAsync_Valkey_WhenAnotherSubscriptionEnds_KeepsDelivering() =>
