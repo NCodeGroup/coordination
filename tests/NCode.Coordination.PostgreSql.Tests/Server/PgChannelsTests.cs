@@ -54,4 +54,53 @@ public sealed class PgChannelsTests
     }
 
     #endregion
+
+    #region TryParseWake Tests
+
+    [Fact]
+    public void TryParseWake_Change_ReadsTheRevision()
+    {
+        Assert.True(PgChannels.TryParseWake("c:42", out var wake));
+
+        Assert.Null(wake.TopicToken);
+        Assert.Equal(42L, wake.Number);
+    }
+
+    [Fact]
+    public void TryParseWake_Topic_ReadsTokenAndSequence()
+    {
+        Assert.True(PgChannels.TryParseWake("t:abc_-9:7", out var wake));
+
+        Assert.Equal("abc_-9", wake.TopicToken);
+        Assert.Equal(7L, wake.Number);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("c:")]
+    [InlineData("c:x")]
+    [InlineData("t:abc")]
+    [InlineData("x:1")]
+    public void TryParseWake_Malformed_ReturnsFalse(string payload)
+    {
+        Assert.False(PgChannels.TryParseWake(payload, out _));
+    }
+
+    #endregion
+
+    #region IsChannel Tests
+
+    [Fact]
+    public void IsChannel_ForKeyspace_IsTrue()
+    {
+        Assert.True(PgChannels.IsChannel(PgChannels.ForKeyspace(PgSchemaName.Default, 5)));
+    }
+
+    [Fact]
+    public void IsChannel_Quote_IsFalse()
+    {
+        Assert.False(PgChannels.IsChannel("ncode.01234567.0123456789abcdef\""));
+    }
+
+    #endregion
 }

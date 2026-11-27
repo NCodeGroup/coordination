@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using System.Globalization;
+using System.Text.RegularExpressions;
 using NCode.Coordination.PostgreSql.Schema;
 
 namespace NCode.Coordination.PostgreSql.Server;
@@ -9,7 +10,7 @@ namespace NCode.Coordination.PostgreSql.Server;
 /// <summary>
 /// Names the <c>pg_notify</c> channel of each keyspace and builds the payloads that wake its subscribers.
 /// </summary>
-internal static class PgChannels
+internal static partial class PgChannels
 {
     /// <summary>
     /// Gets the name of a keyspace's channel: <c>ncode.</c>, the schema's hash, <c>.</c> and the keyspace's id as 16
@@ -45,4 +46,81 @@ internal static class PgChannels
 
         return "t:" + topicToken + ":" + sequence.ToString(CultureInfo.InvariantCulture);
     }
+
+    /// <summary>
+    /// Reads a payload that <see cref="ChangePayload"/> or <see cref="TopicPayload"/> built.
+    /// </summary>
+    /// <param name="payload">The payload of a notification.</param>
+    /// <param name="wake">When this method returns true, what the payload says.</param>
+    /// <returns>True when the payload is well formed; otherwise, false.</returns>
+    public static bool TryParseWake(string payload, out PgWake wake)
+    {
+        ArgumentNullException.ThrowIfNull(payload);
+
+        wake = default;
+
+        if (payload.StartsWith("c:", StringComparison.Ordinal))
+        {
+            if (!TryParseNumber(payload.AsSpan(2), out var revision))
+            {
+                return false;
+            }
+
+            wake = new PgWake(null, revision);
+            return true;
+        }
+
+        if (payload.StartsWith("t:", StringComparison.Ordinal))
+        {
+            var rest = payload.AsSpan(2);
+            var colon = rest.IndexOf(':');
+            if (colon <= 0 || rest[(colon + 1)..].Contains(':'))
+            {
+                return false;
+            }
+
+            if (!TryParseNumber(rest[(colon + 1)..], out var sequence))
+            {
+                return false;
+            }
+
+            wake = new PgWake(rest[..colon].ToString(), sequence);
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Determines whether a name is a channel that <see cref="ForKeyspace"/> builds.
+    /// </summary>
+    /// <param name="channel">The name to check.</param>
+    /// <returns>True when the name is <c>ncode.</c>, eight hex digits, <c>.</c> and sixteen hex digits; otherwise, false.</returns>
+    public static bool IsChannel(string channel)
+    {
+        ArgumentNullException.ThrowIfNull(channel);
+
+        return ChannelPattern().IsMatch(channel);
+    }
+
+    /// <summary>
+    /// Reads a non-negative invariant decimal number made of digits only.
+    /// </summary>
+    /// <param name="text">The text to read.</param>
+    /// <param name="number">When this method returns true, the number.</param>
+    /// <returns>True when the text is a non-negative <see cref="long"/>; otherwise, false.</returns>
+    private static bool TryParseNumber(ReadOnlySpan<char> text, out long number)
+    {
+        number = 0;
+        return !text.IsEmpty
+            && text[0] is >= '0' and <= '9'
+            && long.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out number);
+    }
+
+    /// <summary>
+    /// Gets the pattern of a keyspace's channel name.
+    /// </summary>
+    /// <returns>The compiled pattern.</returns>
+    [GeneratedRegex(@"^ncode\.[0-9a-f]{8}\.[0-9a-f]{16}\z", RegexOptions.CultureInvariant)]
+    private static partial Regex ChannelPattern();
 }
