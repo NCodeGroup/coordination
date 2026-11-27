@@ -112,6 +112,30 @@ public sealed class NotificationClosingTests
     }
 
     [Fact]
+    public async ValueTask WaitAsync_WhenAResyncWasReadBeforeThePublishBegan_ReturnsMissing()
+    {
+        var recorder = new HistoryRecorder();
+        var channel = Channel.CreateUnbounded<Notification>();
+        await using var subscriber = new RunSubscriber<Notification>(
+            token => StreamAsync(channel, token),
+            recorder,
+            ShortWait,
+            Token
+        );
+        var resync = Notification.Resync(Topic, 0);
+        await channel.Writer.WriteAsync(resync, Token);
+        var read = await subscriber.WaitForAsync(_ => true, Token);
+        Assert.True(read);
+        var invoked = recorder.Stamp();
+        var responded = recorder.Stamp();
+        var closing = Closing(invoked, responded);
+
+        var outcome = await NotificationClosing.WaitAsync(subscriber, closing, true, Token);
+
+        Assert.Equal(ClosingOutcome.Missing, outcome);
+    }
+
+    [Fact]
     public async ValueTask WaitAsync_WhenNothingArrives_ReturnsMissing()
     {
         var recorder = new HistoryRecorder();
