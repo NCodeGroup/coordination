@@ -26,7 +26,9 @@ public sealed class RespClaimServiceTests
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         var service = new RespClaimService(CreateUnreachableServer());
-        var keyspace = new Keyspace("resp-tests", KeySegment.FromGuid(Guid.NewGuid()));
+        var id = Guid.NewGuid();
+        var segment = KeySegment.FromGuid(id);
+        var keyspace = new Keyspace("resp-tests", segment);
         var segments = Enumerable.Repeat<KeySegment>("a", CoordinationKey.MaxSegments);
         var name = keyspace.CreateKey(segments);
         var hour = TimeSpan.FromHours(1);

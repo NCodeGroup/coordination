@@ -38,13 +38,13 @@ public sealed class RespMembershipServiceTests : IDisposable
         var (server, database) = CreateServer();
         var table = new RespRecordTable(server, RespProfiles.Valkey);
         var service = new RespMembershipService(table);
-        var group = new Keyspace("resp-tests", KeySegment.FromGuid(Guid.NewGuid())).CreateKey(
-            "group"
-        );
-        var reply = RedisResult.Create([
-            RedisResult.Create((RedisValue)0, ResultType.Integer),
-            RedisResult.Create((RedisValue)"5"),
-        ]);
+        var id = Guid.NewGuid();
+        var segment = KeySegment.FromGuid(id);
+        var keyspace = new Keyspace("resp-tests", segment);
+        var group = keyspace.CreateKey("group");
+        var ready = RedisResult.Create((RedisValue)0, ResultType.Integer);
+        var revision = RedisResult.Create((RedisValue)"5");
+        var reply = RedisResult.Create([ready, revision]);
         var listText = RespScript.MemberList.Text;
         var revisionText = RespScript.KeyspaceRevision.Text;
         var polls = 0;
@@ -86,9 +86,11 @@ public sealed class RespMembershipServiceTests : IDisposable
             .WatchAsync(group, null, source.Token)
             .GetAsyncEnumerator(source.Token);
 
-        Assert.True(await enumerator.MoveNextAsync());
+        var moved = await enumerator.MoveNextAsync();
+        Assert.True(moved);
         var next = enumerator.MoveNextAsync().AsTask();
-        await polled.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+        var timeout = TimeSpan.FromSeconds(5);
+        await polled.Task.WaitAsync(timeout, TestContext.Current.CancellationToken);
         await source.CancelAsync();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => next);
         await enumerator.DisposeAsync();

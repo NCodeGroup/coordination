@@ -49,26 +49,21 @@ public sealed class RespSessionServiceTests(RespServers servers)
         var records = new RespRecordService(table);
         var membership = new RespMembershipService(table);
         var keyspace = CreateKeyspace();
-        var timeToLive = new TimeToLive(TimeSpan.FromMinutes(1));
+        var minute = TimeSpan.FromMinutes(1);
+        var timeToLive = new TimeToLive(minute);
         var grant = await sessions.OpenAsync(keyspace, timeToLive, null, cancellationToken);
         var resource = keyspace.CreateKey("resource");
-        var acquired = await leases.TryAcquireAsync(
-            resource,
-            LeaseTerms.ForSession(grant.Id),
-            null,
-            cancellationToken
-        );
+        var terms = LeaseTerms.ForSession(grant.Id);
+        var acquired = await leases.TryAcquireAsync(resource, terms, null, cancellationToken);
         Assert.True(acquired.IsAcquired);
-        var created = await records.CreateAsync(
-            keyspace.CreateKey("record"),
-            "v"u8.ToArray(),
-            RecordLifetime.ForSession(grant.Id),
-            null,
-            cancellationToken
-        );
+        var record = keyspace.CreateKey("record");
+        var value = "v"u8.ToArray();
+        var lifetime = RecordLifetime.ForSession(grant.Id);
+        var created = await records.CreateAsync(record, value, lifetime, null, cancellationToken);
         Assert.True(created.IsWritten);
         var member = new Member(grant.Id, "node-1", "address-1");
-        await membership.JoinAsync(keyspace.CreateKey("group"), member, null, cancellationToken);
+        var group = keyspace.CreateKey("group");
+        await membership.JoinAsync(group, member, null, cancellationToken);
         var keys = RespRecordTable.Keys(keyspace);
         var database = multiplexer.GetDatabase();
         var bound = await database.SortedSetLengthAsync(keys[6]);
@@ -80,7 +75,8 @@ public sealed class RespSessionServiceTests(RespServers servers)
         var bindings = await database.SortedSetLengthAsync(keys[6]);
         var index = await database.SortedSetLengthAsync(keys[2]);
         var members = await database.SortedSetLengthAsync(keys[10]);
-        var leased = await database.HashExistsAsync(keys[7], "l " + RespKeys.Name(resource));
+        var leaseField = "l " + RespKeys.Name(resource);
+        var leased = await database.HashExistsAsync(keys[7], leaseField);
         var after = (long)await database.StringGetAsync(keys[0]);
         Assert.Equal(0, bindings);
         Assert.Equal(0, index);
@@ -105,7 +101,8 @@ public sealed class RespSessionServiceTests(RespServers servers)
         var sessions = new RespSessionService(table, tokens);
         var records = new RespRecordService(table);
         var keyspace = CreateKeyspace();
-        var timeToLive = new TimeToLive(TimeSpan.FromMinutes(1));
+        var minute = TimeSpan.FromMinutes(1);
+        var timeToLive = new TimeToLive(minute);
         var grant = await sessions.OpenAsync(keyspace, timeToLive, null, cancellationToken);
         var value = "v"u8.ToArray();
         var lifetime = RecordLifetime.ForSession(grant.Id);
@@ -127,7 +124,8 @@ public sealed class RespSessionServiceTests(RespServers servers)
         Assert.Equal(1, bindingsAfterClose);
         Assert.Equal(1, indexAfterClose);
 
-        await records.ReadAsync(keyspace.CreateKey("other"), null, cancellationToken);
+        var other = keyspace.CreateKey("other");
+        await records.ReadAsync(other, null, cancellationToken);
 
         var bindingsAfterRead = await database.SortedSetLengthAsync(keys[6]);
         var indexAfterRead = await database.SortedSetLengthAsync(keys[2]);
