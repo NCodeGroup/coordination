@@ -177,5 +177,43 @@ public sealed class NotificationClosingTests
         Assert.Equal(ClosingOutcome.Missing, outcome);
     }
 
+    [Fact]
+    public async ValueTask WaitAsync_WhenTheSubscriberIsNull_ThrowsArgumentNullException()
+    {
+        var closing = Closing(1, 2);
+
+        var exception = await Assert.ThrowsAsync<ArgumentNullException>(async () =>
+            await NotificationClosing.WaitAsync(null!, closing, true, Token)
+        );
+
+        Assert.Equal("subscriber", exception.ParamName);
+    }
+
+    [Fact]
+    public async ValueTask WaitAsync_WhenTheClosingOperationIsNotAPublish_ThrowsArgumentException()
+    {
+        var recorder = new HistoryRecorder();
+        var channel = Channel.CreateUnbounded<Notification>();
+        await using var subscriber = new RunSubscriber<Notification>(
+            token => StreamAsync(channel, token),
+            recorder,
+            Token
+        );
+        var closing = HistoryTesting.Operation(
+            0,
+            HistoryTesting.Partition,
+            NotificationCall.Last,
+            1,
+            2,
+            null
+        );
+
+        var exception = await Assert.ThrowsAsync<ArgumentException>(async () =>
+            await NotificationClosing.WaitAsync(subscriber, closing, true, Token)
+        );
+
+        Assert.Equal("closing", exception.ParamName);
+    }
+
     #endregion
 }

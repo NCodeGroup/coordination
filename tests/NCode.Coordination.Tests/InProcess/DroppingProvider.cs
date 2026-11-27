@@ -4,8 +4,8 @@
 namespace NCode.Coordination.InProcess.Tests;
 
 /// <summary>
-/// A provider whose connection a test drops: it decorates the records, record watches and notifications of another provider and
-/// serves the rest as they are.
+/// A provider whose connection a test drops: it decorates the records, record watches and notifications of another
+/// provider and serves the rest as they are.
 /// </summary>
 /// <param name="inner">The provider to decorate.</param>
 internal sealed class DroppingProvider(ICoordinationProvider inner)

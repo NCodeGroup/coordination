@@ -57,8 +57,8 @@ messages until no subscriber's resync is in doubt.**
 2. **Record watches drop too.** The kit's record watch suite has `ConcurrentRun_WhenConnectionsDrop_DeliversAsDeclared`,
    run like the notification suite's, so watches show their resync under drops. This amends ADR-1019 rule 7. The
    in-process provider's test decorator drops record watches too: in place of a watch's next change after a drop it
-   gives a resync at that change's revision, so the run runs without Docker. Against the in-process provider alone it
-   skips.
+   gives a resync at that change's revision, so the run runs without Docker. The plain in-process target drops nothing,
+   so its run skips there; behind the decorator it runs.
 3. **Restarts in the RESP tests.** Each restart test starts a server of its own on a host port reserved before it
    starts, so a stop and a start keep its endpoint (F3), and no other test meets the restart (F1). Three clients
    create records while the server stops and starts. Every failure is `unavailable`, and each create that failed
