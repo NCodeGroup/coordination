@@ -49,6 +49,7 @@ internal static partial class PgMigrations
     [
         (1, "keyspaces", 1),
         (2, "counting", 1),
+        (3, "records", 1),
     ];
 
     /// <summary>
@@ -65,7 +66,17 @@ internal static partial class PgMigrations
     /// Gets the tables that the provider reads and writes, which a role needs privileges on.
     /// </summary>
     public static ImmutableArray<string> Tables { get; } =
-    ["keyspaces", "occurrences", "counters", "sequences", "sets", "set_members"];
+    [
+        "keyspaces",
+        "occurrences",
+        "counters",
+        "sequences",
+        "sets",
+        "set_members",
+        "records",
+        "changes",
+        "change_items",
+    ];
 
     /// <summary>
     /// Splits a script into its statements: each ends at a semicolon that ends a line.
