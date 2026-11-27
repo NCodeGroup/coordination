@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using System.Diagnostics;
+using System.Text;
 
 namespace NCode.Coordination.Resp.Tests;
 
@@ -11,9 +12,29 @@ namespace NCode.Coordination.Resp.Tests;
 internal static class RespTestSupport
 {
     /// <summary>
-    /// Gets how long a test waits for a server to answer again.
+    /// The name of the notification topic that the tests subscribe to.
     /// </summary>
-    private static TimeSpan WaitLimit { get; } = TimeSpan.FromSeconds(30);
+    public const string TopicName = "topic";
+
+    /// <summary>
+    /// The name of the record prefix that the tests watch.
+    /// </summary>
+    public const string WatchedName = "watched";
+
+    /// <summary>
+    /// The number of rounds that a test waits for a subscription to resync and deliver again.
+    /// </summary>
+    public const int Attempts = 20;
+
+    /// <summary>
+    /// The prefix of the payloads and record names that a test writes after a fault, numbered by attempt.
+    /// </summary>
+    public const string AfterPrefix = "after-";
+
+    /// <summary>
+    /// Gets how long a test waits for a server to answer again, or for a fault to take a step.
+    /// </summary>
+    public static TimeSpan WaitLimit { get; } = TimeSpan.FromSeconds(30);
 
     /// <summary>
     /// Gets how long a test waits for the next item of a stream.
@@ -100,5 +121,83 @@ internal static class RespTestSupport
                 await Task.Delay(pause, cancellationToken);
             }
         }
+    }
+
+    /// <summary>
+    /// Publishes numbered messages until the subscription resyncs and then delivers a later message, and fails the test
+    /// when it doesn't within <see cref="Attempts"/> rounds.
+    /// </summary>
+    /// <param name="notifications">The notification service to publish through.</param>
+    /// <param name="topic">The topic to publish to.</param>
+    /// <param name="enumerator">The enumerator of the subscription to the topic.</param>
+    /// <param name="cancellationToken">The token that cancels the wait.</param>
+    /// <returns>A task that completes when the subscription has resynced and delivered.</returns>
+    public static async ValueTask AssertTopicResyncsThenDeliversAsync(
+        INotificationService notifications,
+        CoordinationKey topic,
+        IAsyncEnumerator<Notification> enumerator,
+        CancellationToken cancellationToken
+    )
+    {
+        var resynced = false;
+        var delivered = false;
+        for (var attempt = 0; attempt < Attempts && !(resynced && delivered); attempt++)
+        {
+            var payload = Encoding.UTF8.GetBytes($"{AfterPrefix}{attempt}");
+            await WaitUntilAnsweredAsync(
+                ct => notifications.PublishAsync(topic, payload, null, ct),
+                cancellationToken
+            );
+
+            var notification = await NextAsync(enumerator, cancellationToken);
+            if (notification.IsResync)
+                resynced = true;
+            else if (resynced)
+                delivered = true;
+        }
+
+        Assert.True(resynced);
+        Assert.True(delivered);
+    }
+
+    /// <summary>
+    /// Creates numbered records under <see cref="WatchedName"/> until the watch resyncs and then delivers a later
+    /// write, and fails the test when it doesn't within <see cref="Attempts"/> rounds.
+    /// </summary>
+    /// <param name="records">The record service to write through.</param>
+    /// <param name="keyspace">The keyspace that holds the watched records.</param>
+    /// <param name="enumerator">The enumerator of the watch on the records.</param>
+    /// <param name="cancellationToken">The token that cancels the wait.</param>
+    /// <returns>A task that completes when the watch has resynced and delivered.</returns>
+    public static async ValueTask AssertWatchResyncsThenDeliversAsync(
+        IRecordService records,
+        Keyspace keyspace,
+        IAsyncEnumerator<RecordChange> enumerator,
+        CancellationToken cancellationToken
+    )
+    {
+        var value = "v"u8.ToArray();
+        var resynced = false;
+        var delivered = false;
+        for (var attempt = 0; attempt < Attempts && !(resynced && delivered); attempt++)
+        {
+            var key = keyspace.CreateKey(WatchedName, $"{AfterPrefix}{attempt}");
+            await WaitUntilAnsweredAsync(
+                async ct =>
+                {
+                    await records.CreateAsync(key, value, RecordLifetime.Persistent, null, ct);
+                },
+                cancellationToken
+            );
+
+            var change = await NextAsync(enumerator, cancellationToken);
+            if (change.IsResync)
+                resynced = true;
+            else if (resynced && change.Kind == RecordChangeKind.Written)
+                delivered = true;
+        }
+
+        Assert.True(resynced);
+        Assert.True(delivered);
     }
 }

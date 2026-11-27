@@ -30,26 +30,6 @@ public sealed class RespProviderFailoverTests
     private const string LostName = "lost";
 
     /// <summary>
-    /// The name of the record prefix that the tests watch.
-    /// </summary>
-    private const string WatchedName = "watched";
-
-    /// <summary>
-    /// The name of the topic that the tests subscribe to.
-    /// </summary>
-    private const string TopicName = "topic";
-
-    /// <summary>
-    /// The number of rounds that a test waits for a subscription to resync and deliver again after a failover.
-    /// </summary>
-    private const int Attempts = 20;
-
-    /// <summary>
-    /// The prefix of the payloads and record names that a test writes after the failover, numbered by attempt.
-    /// </summary>
-    private const string AfterPrefix = "after-";
-
-    /// <summary>
     /// Promotes a replica while the provider writes and checks that the write the old primary took after the promotion
     /// is the only one lost.
     /// </summary>
@@ -130,8 +110,8 @@ public sealed class RespProviderFailoverTests
         var watches = RespTestSupport.GetService<IRecordWatchService>(target.Provider);
         var keyspace = RespTestSupport.CreateKeyspace(KeyspaceName);
         var value = "v"u8.ToArray();
-        var topic = keyspace.CreateKey(TopicName);
-        var prefix = keyspace.CreateKey(WatchedName);
+        var topic = keyspace.CreateKey(RespTestSupport.TopicName);
+        var prefix = keyspace.CreateKey(RespTestSupport.WatchedName);
 
         var messages = notifications.SubscribeAsync(topic, null, cancellationToken);
         await using var messageEnumerator = messages.GetAsyncEnumerator(cancellationToken);
@@ -147,7 +127,7 @@ public sealed class RespProviderFailoverTests
         await server.PromoteReplicaAsync(cancellationToken);
         var lostPayload = Encoding.UTF8.GetBytes(LostName);
         await notifications.PublishAsync(topic, lostPayload, null, cancellationToken);
-        var lostKey = keyspace.CreateKey(WatchedName, LostName);
+        var lostKey = keyspace.CreateKey(RespTestSupport.WatchedName, LostName);
         await records.CreateAsync(
             lostKey,
             value,
@@ -162,51 +142,18 @@ public sealed class RespProviderFailoverTests
         Assert.Equal(RecordChangeKind.Written, lostChange.Kind);
         await server.DemotePrimaryAsync(cancellationToken);
 
-        var resynced = false;
-        var delivered = false;
-        for (var attempt = 0; attempt < Attempts && !(resynced && delivered); attempt++)
-        {
-            var payload = Encoding.UTF8.GetBytes($"{AfterPrefix}{attempt}");
-            await RespTestSupport.WaitUntilAnsweredAsync(
-                ct => notifications.PublishAsync(topic, payload, null, ct),
-                cancellationToken
-            );
-
-            var notification = await RespTestSupport.NextAsync(
-                messageEnumerator,
-                cancellationToken
-            );
-            if (notification.IsResync)
-                resynced = true;
-            else if (resynced)
-                delivered = true;
-        }
-
-        Assert.True(resynced);
-        Assert.True(delivered);
-
-        resynced = false;
-        delivered = false;
-        for (var attempt = 0; attempt < Attempts && !(resynced && delivered); attempt++)
-        {
-            var key = keyspace.CreateKey(WatchedName, $"{AfterPrefix}{attempt}");
-            await RespTestSupport.WaitUntilAnsweredAsync(
-                async ct =>
-                {
-                    await records.CreateAsync(key, value, RecordLifetime.Persistent, null, ct);
-                },
-                cancellationToken
-            );
-
-            var change = await RespTestSupport.NextAsync(changeEnumerator, cancellationToken);
-            if (change.IsResync)
-                resynced = true;
-            else if (resynced && change.Kind == RecordChangeKind.Written)
-                delivered = true;
-        }
-
-        Assert.True(resynced);
-        Assert.True(delivered);
+        await RespTestSupport.AssertTopicResyncsThenDeliversAsync(
+            notifications,
+            topic,
+            messageEnumerator,
+            cancellationToken
+        );
+        await RespTestSupport.AssertWatchResyncsThenDeliversAsync(
+            records,
+            keyspace,
+            changeEnumerator,
+            cancellationToken
+        );
     }
 
     #region CreateAsync Tests

@@ -22,11 +22,6 @@ public sealed class RespProviderClusterTests(RespServers servers)
     private const string KeyspaceName = "cluster";
 
     /// <summary>
-    /// The name of the notification topic that the tests publish to and subscribe on.
-    /// </summary>
-    private const string TopicName = "topic";
-
-    /// <summary>
     /// The <c>PUBSUB</c> subcommand that lists the sharded channels of a node.
     /// </summary>
     private const string ShardChannels = "SHARDCHANNELS";
@@ -135,7 +130,7 @@ public sealed class RespProviderClusterTests(RespServers servers)
         var occurrenceKey = keyspace.CreateKey("occurrence");
         var setKey = keyspace.CreateKey("set");
         var sequenceKey = keyspace.CreateKey("sequence");
-        var topic = keyspace.CreateKey(TopicName);
+        var topic = keyspace.CreateKey(RespTestSupport.TopicName);
         var value = "v"u8.ToArray();
         var payload = "p"u8.ToArray();
         await records.CreateAsync(
@@ -235,8 +230,8 @@ public sealed class RespProviderClusterTests(RespServers servers)
         }
 
         Assert.NotNull(second);
-        var firstTopic = first.CreateKey(TopicName);
-        var secondTopic = second.CreateKey(TopicName);
+        var firstTopic = first.CreateKey(RespTestSupport.TopicName);
+        var secondTopic = second.CreateKey(RespTestSupport.TopicName);
         await using var firstEnumerator = await SubscribeAndPublishAsync(
             notifications,
             firstTopic,
@@ -300,7 +295,7 @@ public sealed class RespProviderClusterTests(RespServers servers)
             var slot = admin.HashSlot(tag);
             var node = configuration.GetBySlot(slot)?.NodeId;
             if (node is not null && nodes.Add(node))
-                topics.Add(keyspace.CreateKey(TopicName));
+                topics.Add(keyspace.CreateKey(RespTestSupport.TopicName));
         }
 
         Assert.Equal(clusterServers.Length, topics.Count);
