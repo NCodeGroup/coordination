@@ -3,11 +3,16 @@
 
 using System.Collections.Frozen;
 using System.Collections.Immutable;
+using NCode.Coordination.Resp.Claims;
 using NCode.Coordination.Resp.Counters;
+using NCode.Coordination.Resp.Elections;
+using NCode.Coordination.Resp.Leases;
+using NCode.Coordination.Resp.Membership;
 using NCode.Coordination.Resp.Occurrences;
 using NCode.Coordination.Resp.Records;
 using NCode.Coordination.Resp.Sequences;
 using NCode.Coordination.Resp.Server;
+using NCode.Coordination.Resp.Sessions;
 using NCode.Coordination.Resp.Sets;
 using NCode.Coordination.Resp.Transactions;
 using StackExchange.Redis;
@@ -187,12 +192,12 @@ internal sealed class RespProvider : ICoordinationProvider, IAsyncDisposable, ID
             [typeof(ISetService)] = new RespSetService(Server),
             [typeof(ICounterService)] = new RespCounterService(Server),
             [typeof(ISequenceService)] = new RespSequenceService(Server),
-            [typeof(ISessionService)] = new Sessions.RespSessionService(records, tokens),
-            [typeof(IMembershipService)] = new Membership.RespMembershipService(records),
-            [typeof(ILeaseService)] = new Leases.RespLeaseService(records, tokens),
-            [typeof(ISemaphoreService)] = new Leases.RespSemaphoreService(records, tokens),
-            [typeof(IElectionService)] = new Elections.RespElectionService(records, tokens),
-            [typeof(IClaimService)] = new Claims.RespClaimService(Server),
+            [typeof(ISessionService)] = new RespSessionService(records, tokens),
+            [typeof(IMembershipService)] = new RespMembershipService(records),
+            [typeof(ILeaseService)] = new RespLeaseService(records, tokens),
+            [typeof(ISemaphoreService)] = new RespSemaphoreService(records, tokens),
+            [typeof(IElectionService)] = new RespElectionService(records, tokens),
+            [typeof(IClaimService)] = new RespClaimService(Server),
         };
         Services = services.ToFrozenDictionary();
     }
