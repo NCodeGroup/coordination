@@ -42,6 +42,12 @@ public sealed class RespServers : IAsyncLifetime
     /// </summary>
     private const int ClusterNodes = 3;
 
+    /// <summary>
+    /// The port just below the Valkey cluster's bus ports: the script gives node <c>i</c>, counted from 1, the bus port
+    /// this plus <c>i</c>, so they stay below 65,536 whatever host ports the nodes get.
+    /// </summary>
+    private const int ClusterBusPortBase = 16379;
+
     private const ushort Port = 6379;
 
     /// <summary>Gets a value indicating whether the server tests run.</summary>
@@ -87,7 +93,7 @@ public sealed class RespServers : IAsyncLifetime
         var nodes = string.Join(" ", addresses);
         return "i=0; "
             + $"for p in {list}; do i=$((i+1)); "
-            + "valkey-server --port $p --cluster-enabled yes --cluster-port $((16379+i)) "
+            + $"valkey-server --port $p --cluster-enabled yes --cluster-port $(({ClusterBusPortBase}+i)) "
             + $"--cluster-config-file nodes-$p.conf --cluster-announce-ip {RespNodes.Host} "
             + "--save '' --appendonly no --daemonize yes --logfile /data/$p.log; done; "
             + $"for p in {list}; do until valkey-cli -p $p ping >/dev/null 2>&1; do sleep 0.1; done; done; "
@@ -181,14 +187,22 @@ public sealed class RespServers : IAsyncLifetime
         var startGarnetWithoutLua = garnetWithoutLua.StartAsync(CancellationToken.None);
         var startValkeyCluster = valkeyCluster.StartAsync(CancellationToken.None);
         var startGarnetCluster = garnetCluster.StartAsync(CancellationToken.None);
-        await Task.WhenAll(
-            startValkey,
-            startGarnet,
-            startGarnetWithoutLua,
-            startValkeyCluster,
-            startGarnetCluster
-        );
-        await RespGarnetCluster.JoinAsync(garnetPorts, ClusterNodes, CancellationToken.None);
+        try
+        {
+            await Task.WhenAll(
+                startValkey,
+                startGarnet,
+                startGarnetWithoutLua,
+                startValkeyCluster,
+                startGarnetCluster
+            );
+            await RespGarnetCluster.JoinAsync(garnetPorts, ClusterNodes, CancellationToken.None);
+        }
+        catch
+        {
+            await DisposeAsync();
+            throw;
+        }
 
         Valkey = GetEndpoint(valkey);
         Garnet = GetEndpoint(garnet);
@@ -204,26 +218,31 @@ public sealed class RespServers : IAsyncLifetime
         if (ValkeyContainer is { } valkey)
         {
             await valkey.DisposeAsync();
+            ValkeyContainer = null;
         }
 
         if (GarnetContainer is { } garnet)
         {
             await garnet.DisposeAsync();
+            GarnetContainer = null;
         }
 
         if (GarnetWithoutLuaContainer is { } garnetWithoutLua)
         {
             await garnetWithoutLua.DisposeAsync();
+            GarnetWithoutLuaContainer = null;
         }
 
         if (ValkeyClusterContainer is { } valkeyCluster)
         {
             await valkeyCluster.DisposeAsync();
+            ValkeyClusterContainer = null;
         }
 
         if (GarnetClusterContainer is { } garnetCluster)
         {
             await garnetCluster.DisposeAsync();
+            GarnetClusterContainer = null;
         }
     }
 }
