@@ -26,12 +26,13 @@ namespace NCode.Coordination.Resp;
 internal sealed class RespProvider : ICoordinationProvider, IAsyncDisposable, IDisposable
 {
     /// <summary>
-    /// Gets the primitives that the provider serves. The server keeps
-    /// every one of them in memory and its clock measures every expiry. The provider can't see whether the server
-    /// persists or replicates its writes, so it declares them volatile and linearizable only until a failover. A
-    /// counter's batch runs as one script on one slot, so it is atomic across partitions, and a transaction, like a
-    /// counter's batch, runs as one script on one slot. A sequence has no expiry. A record watch and a notification
-    /// subscription deliver each change at most once, numbered so that a gap shows, and resync on any doubt.
+    /// Gets the primitives that the provider serves. The server keeps every one of them in memory and its clock
+    /// measures every expiry. The provider can't see whether the server persists or replicates its writes, so it
+    /// declares every primitive but record watches and notifications volatile, and every one but notifications
+    /// linearizable only until a failover. A counter's batch runs as one script on one slot, so it is atomic across
+    /// partitions, and a transaction, like a counter's batch, runs as one script on one slot. A sequence has no
+    /// expiry. A record watch and a notification subscription deliver each change at most once, numbered so that a
+    /// gap shows, and resync on any doubt.
     /// </summary>
     private static ImmutableArray<PrimitiveSupport> SupportedPrimitives { get; } =
     [
