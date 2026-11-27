@@ -118,4 +118,159 @@ public sealed class PgKeysTests
     }
 
     #endregion
+
+    #region Index Tests
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(3)]
+    [InlineData(16)]
+    public void Index_EachSegment_AddsThirtyTwoBytes(int count)
+    {
+        var keyspace = new Keyspace("prod");
+        var segments = Enumerable
+            .Range(0, count)
+            .Select(number => KeySegment.FromInt64(number))
+            .ToArray();
+        var key = new CoordinationKey(keyspace, segments);
+
+        var index = PgKeys.Index(key);
+
+        Assert.Equal(32 * count, index.Length);
+    }
+
+    [Fact]
+    public void Index_Prefix_IsABytePrefixOfAKeyUnderIt()
+    {
+        var keyspace = new Keyspace("prod");
+        var prefix = keyspace.CreateKey("a", 1);
+        var key = keyspace.CreateKey("a", 1, "b");
+
+        var prefixIndex = PgKeys.Index(prefix);
+        var keyIndex = PgKeys.Index(key);
+
+        Assert.True(keyIndex.AsSpan().StartsWith(prefixIndex));
+    }
+
+    [Fact]
+    public void Index_DepthsDiffer_GivesTheSameIndex()
+    {
+        var keyspace = new Keyspace("prod");
+        var shallow = keyspace.CreateKey("a", 1, "b") with { PartitionDepth = 1 };
+        var deep = keyspace.CreateKey("a", 1, "b") with { PartitionDepth = 3 };
+
+        var shallowIndex = PgKeys.Index(shallow);
+        var deepIndex = PgKeys.Index(deep);
+
+        Assert.Equal(shallowIndex, deepIndex);
+    }
+
+    [Fact]
+    public void Index_LongestKey_HasFiveHundredTwelveBytes()
+    {
+        var keyspace = new Keyspace("prod");
+        var text = new string('\u00e9', KeySegment.MaxTextLength);
+        var segments = Enumerable
+            .Range(0, CoordinationKey.MaxSegments)
+            .Select(_ => KeySegment.FromString(text))
+            .ToArray();
+        var key = new CoordinationKey(keyspace, segments);
+
+        var index = PgKeys.Index(key);
+
+        Assert.Equal(512, index.Length);
+    }
+
+    #endregion
+
+    #region PageToken Tests
+
+    [Fact]
+    public void PageToken_LongestKey_FitsTheTokenLimit()
+    {
+        var index = new byte[512];
+
+        var token = PgKeys.PageToken(index, 16);
+
+        Assert.True(token.Length <= CoordinationLimits.MaxContinuationTokenLength);
+        Assert.True(token.Length <= 684);
+    }
+
+    [Fact]
+    public void PageToken_Read_RoundTrips()
+    {
+        var keyspace = new Keyspace("prod");
+        var key = keyspace.CreateKey("a", 1, "b");
+        var index = PgKeys.Index(key);
+        var prefix = PgKeys.Index(keyspace.CreateKey("a"));
+        var token = PgKeys.PageToken(index, 2);
+
+        var read = PgKeys.TryReadPageToken(token, prefix, out var result, out var depth);
+
+        Assert.True(read);
+        Assert.Equal(index, result);
+        Assert.Equal(2, depth);
+    }
+
+    [Fact]
+    public void TryReadPageToken_OtherPrefix_ReturnsFalse()
+    {
+        var keyspace = new Keyspace("prod");
+        var index = PgKeys.Index(keyspace.CreateKey("a", 1));
+        var prefix = PgKeys.Index(keyspace.CreateKey("b"));
+        var token = PgKeys.PageToken(index, 1);
+
+        var read = PgKeys.TryReadPageToken(token, prefix, out var result, out var depth);
+
+        Assert.False(read);
+        Assert.Null(result);
+        Assert.Equal(0, depth);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("!!!")]
+    [InlineData("AA")]
+    [InlineData("AAAA")]
+    public void TryReadPageToken_Garbage_ReturnsFalse(string token)
+    {
+        var read = PgKeys.TryReadPageToken(token, [], out var result, out var depth);
+
+        Assert.False(read);
+        Assert.Null(result);
+        Assert.Equal(0, depth);
+    }
+
+    [Fact]
+    public void TryReadPageToken_DepthBeyondSegments_ReturnsFalse()
+    {
+        var token = PgKeys.PageToken(new byte[32], 2);
+
+        var read = PgKeys.TryReadPageToken(token, [], out var result, out _);
+
+        Assert.False(read);
+        Assert.Null(result);
+    }
+
+    #endregion
+
+    #region PrefixEnd Tests
+
+    [Fact]
+    public void PrefixEnd_Bytes_IncrementsTheLastBelowFf()
+    {
+        var end = PgKeys.PrefixEnd([0x01, 0xFF]);
+
+        Assert.Equal([0x02], end);
+    }
+
+    [Fact]
+    public void PrefixEnd_AllFf_ReturnsNull()
+    {
+        var end = PgKeys.PrefixEnd([0xFF, 0xFF]);
+
+        Assert.Null(end);
+    }
+
+    #endregion
 }

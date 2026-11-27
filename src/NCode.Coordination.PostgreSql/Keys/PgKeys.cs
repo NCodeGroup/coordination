@@ -1,8 +1,10 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using System.Buffers.Text;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
+using System.Security.Cryptography;
 using System.Text;
 
 namespace NCode.Coordination.PostgreSql.Keys;
@@ -239,6 +241,148 @@ internal static class PgKeys
             key = null;
             return false;
         }
+    }
+
+    /// <summary>
+    /// Returns the index value of a key: the SHA-256 digest of each encoded segment's UTF-8 bytes, concatenated, so
+    /// that a key's index starts with the index of every prefix of its segments.
+    /// </summary>
+    /// <param name="key">The key.</param>
+    /// <returns>The index value, 32 bytes for each segment.</returns>
+    /// <exception cref="ArgumentNullException">The key is null.</exception>
+    public static byte[] Index(CoordinationKey key)
+    {
+        ArgumentNullException.ThrowIfNull(key);
+
+        var index = new byte[key.Segments.Length * SHA256.HashSizeInBytes];
+
+        for (var position = 0; position < key.Segments.Length; position++)
+        {
+            var encoded = EncodeSegment(key.Segments[position]);
+            var bytes = Encoding.UTF8.GetBytes(encoded);
+            var destination = index.AsSpan(
+                position * SHA256.HashSizeInBytes,
+                SHA256.HashSizeInBytes
+            );
+            SHA256.HashData(bytes, destination);
+        }
+
+        return index;
+    }
+
+    /// <summary>
+    /// Returns the least byte string that is greater than every byte string that starts with a prefix.
+    /// </summary>
+    /// <param name="prefix">The prefix.</param>
+    /// <returns>
+    /// The end of the prefix's range: the prefix without its trailing 0xFF bytes and with 1 added to the last byte
+    /// left; null when no byte is left.
+    /// </returns>
+    /// <exception cref="ArgumentNullException">The prefix is null.</exception>
+    public static byte[]? PrefixEnd(byte[] prefix)
+    {
+        ArgumentNullException.ThrowIfNull(prefix);
+
+        var length = prefix.Length;
+
+        while (length > 0 && prefix[length - 1] == 0xFF)
+        {
+            length--;
+        }
+
+        if (length == 0)
+        {
+            return null;
+        }
+
+        var end = prefix.AsSpan(0, length).ToArray();
+        end[length - 1]++;
+        return end;
+    }
+
+    /// <summary>
+    /// Returns the continuation token of a listed row: the Base64Url text, without padding, of one byte holding the
+    /// row's depth followed by the row's index value.
+    /// </summary>
+    /// <param name="index">The row's index value.</param>
+    /// <param name="depth">The row's depth.</param>
+    /// <returns>The token.</returns>
+    /// <exception cref="ArgumentNullException">The index is null.</exception>
+    public static string PageToken(byte[] index, int depth)
+    {
+        ArgumentNullException.ThrowIfNull(index);
+
+        var bytes = new byte[index.Length + 1];
+        bytes[0] = (byte)depth;
+        index.CopyTo(bytes, 1);
+        return Base64Url.EncodeToString(bytes);
+    }
+
+    /// <summary>
+    /// Reads a token that <see cref="PageToken"/> wrote: the inverse of <see cref="PageToken"/>.
+    /// </summary>
+    /// <param name="token">The token.</param>
+    /// <param name="prefix">The index value that the listed rows start with.</param>
+    /// <param name="index">The row's index value, when the token is one that <see cref="PageToken"/> writes.</param>
+    /// <param name="depth">The row's depth, or 0 when the token is not.</param>
+    /// <returns>
+    /// False unless the token decodes, holds 1 and 32 bytes for each of 1 to 16 segments, starts with a depth of at
+    /// most that many segments, and holds an index value that starts with the prefix; true otherwise.
+    /// </returns>
+    /// <exception cref="ArgumentNullException">The prefix is null.</exception>
+    public static bool TryReadPageToken(
+        string? token,
+        byte[] prefix,
+        [NotNullWhen(true)] out byte[]? index,
+        out int depth
+    )
+    {
+        ArgumentNullException.ThrowIfNull(prefix);
+
+        index = null;
+        depth = 0;
+
+        if (string.IsNullOrEmpty(token))
+        {
+            return false;
+        }
+
+        byte[] bytes;
+
+        try
+        {
+            bytes = Base64Url.DecodeFromChars(token);
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
+
+        if (
+            bytes.Length < 1 + SHA256.HashSizeInBytes
+            || (bytes.Length - 1) % SHA256.HashSizeInBytes != 0
+        )
+        {
+            return false;
+        }
+
+        var segments = (bytes.Length - 1) / SHA256.HashSizeInBytes;
+
+        if (segments > CoordinationKey.MaxSegments || bytes[0] > segments)
+        {
+            return false;
+        }
+
+        var candidate = bytes.AsSpan(1).ToArray();
+
+        if (!candidate.AsSpan().StartsWith(prefix))
+        {
+            return false;
+        }
+
+        index = candidate;
+        depth = bytes[0];
+        return true;
     }
 
     /// <summary>
