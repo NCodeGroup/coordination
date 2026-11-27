@@ -1,111 +1,102 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
-using Moq;
+using System.Globalization;
+using NCode.Coordination.Resp.Keys;
 using NCode.Coordination.Resp.Records;
 using NCode.Coordination.Resp.Server;
+using NCode.Coordination.Resp.Sessions;
+using NCode.Coordination.Resp.Tests.Servers;
 using StackExchange.Redis;
 
 namespace NCode.Coordination.Resp.Membership.Tests;
 
-public sealed class RespMembershipServiceTests : IDisposable
+public sealed class RespMembershipServiceTests(RespServers servers)
 {
-    private MockRepository Mocks { get; } = new(MockBehavior.Strict);
-
-    public void Dispose() => Mocks.Verify();
-
-    private (RespServer Server, Mock<IDatabase> Database) CreateServer()
+    private static async Task<ConnectionMultiplexer> ConnectAsync(
+        string endpoint,
+        CancellationToken cancellationToken
+    )
     {
-        var database = Mocks.Create<IDatabase>();
-        var multiplexer = Mocks.Create<IConnectionMultiplexer>();
-        multiplexer
-            .Setup(x => x.GetDatabase(It.IsAny<int>(), It.IsAny<object?>()))
-            .Returns(database.Object)
-            .Verifiable();
-        var connection = new RespConnection(
-            _ => ValueTask.FromResult(multiplexer.Object),
-            owned: false
-        );
+        var connecting = ConnectionMultiplexer.ConnectAsync(endpoint);
 
-        return (new RespServer(connection), database);
+        return await connecting.WaitAsync(cancellationToken);
     }
 
-    #region WatchAsync Tests
-
-    [Fact]
-    public async Task WatchAsync_WhenTheRevisionHasNotMoved_ListsTheGroupOnlyOnce()
+    private static Keyspace CreateKeyspace()
     {
-        var (server, database) = CreateServer();
-        var table = new RespRecordTable(server, RespProfiles.Valkey);
-        var service = new RespMembershipService(table);
         var id = Guid.NewGuid();
         var segment = KeySegment.FromGuid(id);
-        var keyspace = new Keyspace("resp-tests", segment);
-        var group = keyspace.CreateKey("group");
-        var ready = RedisResult.Create((RedisValue)0, ResultType.Integer);
-        var revision = RedisResult.Create((RedisValue)"5");
-        var reply = RedisResult.Create([ready, revision]);
-        var listText = RespScript.MemberList.Text;
-        var revisionText = RespScript.KeyspaceRevision.Text;
-        var polls = 0;
-        var polled = new TaskCompletionSource();
-        database
-            .Setup(x =>
-                x.ScriptEvaluateAsync(
-                    listText,
-                    It.IsAny<RedisKey[]?>(),
-                    It.IsAny<RedisValue[]?>(),
-                    CommandFlags.None
-                )
-            )
-            .ReturnsAsync(reply)
-            .Verifiable();
-        database
-            .Setup(x =>
-                x.ScriptEvaluateAsync(
-                    revisionText,
-                    It.IsAny<RedisKey[]?>(),
-                    It.IsAny<RedisValue[]?>(),
-                    CommandFlags.None
-                )
-            )
-            .Callback(() =>
-            {
-                polls++;
-                if (polls == 2)
-                {
-                    polled.TrySetResult();
-                }
-            })
-            .ReturnsAsync(reply)
-            .Verifiable();
-        using var source = CancellationTokenSource.CreateLinkedTokenSource(
-            TestContext.Current.CancellationToken
-        );
-        var enumerator = service
-            .WatchAsync(group, null, source.Token)
-            .GetAsyncEnumerator(source.Token);
 
-        var moved = await enumerator.MoveNextAsync();
-        Assert.True(moved);
-        var next = enumerator.MoveNextAsync().AsTask();
-        var timeout = TimeSpan.FromSeconds(5);
-        await polled.Task.WaitAsync(timeout, TestContext.Current.CancellationToken);
-        await source.CancelAsync();
-        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => next);
-        await enumerator.DisposeAsync();
-
-        database.Verify(
-            x =>
-                x.ScriptEvaluateAsync(
-                    listText,
-                    It.IsAny<RedisKey[]?>(),
-                    It.IsAny<RedisValue[]?>(),
-                    CommandFlags.None
-                ),
-            Times.Once()
-        );
+        return new Keyspace("resp-tests", segment);
     }
+
+    private static async Task<string> ReadMessageAsync(
+        ChannelMessageQueue queue,
+        CancellationToken cancellationToken
+    )
+    {
+        var timeout = TimeSpan.FromSeconds(15);
+        var reading = queue.ReadAsync(cancellationToken);
+        var task = reading.AsTask();
+        var message = await task.WaitAsync(timeout, cancellationToken);
+        var text = (string?)message.Message;
+        Assert.NotNull(text);
+
+        return text;
+    }
+
+    private static async Task AssertJoinAndLeavePublishTheGroupAsync(
+        string endpoint,
+        RespProfile profile
+    )
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var multiplexer = await ConnectAsync(endpoint, cancellationToken);
+        var connection = new RespConnection(
+            _ => ValueTask.FromResult<IConnectionMultiplexer>(multiplexer),
+            owned: false
+        );
+        var table = new RespRecordTable(new RespServer(connection), profile);
+        var subscriptions = new RespSubscriptions(
+            connection,
+            profile,
+            RespSubscriptions.DefaultCheckInterval,
+            TimeProvider.System
+        );
+        var sessions = new RespSessionService(table, new RespRandomTokens());
+        var membership = new RespMembershipService(table, subscriptions);
+        var keyspace = CreateKeyspace();
+        var minute = TimeSpan.FromMinutes(1);
+        var timeToLive = new TimeToLive(minute);
+        var grant = await sessions.OpenAsync(keyspace, timeToLive, null, cancellationToken);
+        var group = keyspace.CreateKey("group");
+        var channel = subscriptions.Channel(RespRecordTable.WatchChannel(keyspace));
+        var subscriber = multiplexer.GetSubscriber();
+        var queue = await subscriber.SubscribeAsync(channel);
+        var member = new Member(grant.Id, "node-1", "address-1");
+
+        await membership.JoinAsync(group, member, null, cancellationToken);
+        var joined = await ReadMessageAsync(queue, cancellationToken);
+        await membership.LeaveAsync(group, grant.Id, null, cancellationToken);
+        var left = await ReadMessageAsync(queue, cancellationToken);
+        await queue.UnsubscribeAsync();
+
+        var revision = long.Parse(joined.Split('\n')[0], CultureInfo.InvariantCulture);
+        var name = RespKeys.Member(group);
+        Assert.Equal($"{revision}\nm{name}", joined);
+        Assert.Equal($"{revision + 1}\nm{name}", left);
+    }
+
+    #region JoinAsync Tests
+
+    [RespServerFact]
+    public Task JoinAsync_Valkey_PublishesTheGroupAndLeaveAsyncPublishesItAgain() =>
+        AssertJoinAndLeavePublishTheGroupAsync(servers.Valkey, RespProfiles.Valkey);
+
+    [RespServerFact]
+    public Task JoinAsync_Garnet_PublishesTheGroupAndLeaveAsyncPublishesItAgain() =>
+        AssertJoinAndLeavePublishTheGroupAsync(servers.Garnet, RespProfiles.Garnet);
 
     #endregion
 }

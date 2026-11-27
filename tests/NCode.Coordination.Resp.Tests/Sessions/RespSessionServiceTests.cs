@@ -47,7 +47,13 @@ public sealed class RespSessionServiceTests(RespServers servers)
         var sessions = new RespSessionService(table, tokens);
         var leases = new RespLeaseService(table, tokens);
         var records = new RespRecordService(table);
-        var membership = new RespMembershipService(table);
+        var subscriptions = new RespSubscriptions(
+            connection,
+            profile,
+            RespSubscriptions.DefaultCheckInterval,
+            TimeProvider.System
+        );
+        var membership = new RespMembershipService(table, subscriptions);
         var keyspace = CreateKeyspace();
         var minute = TimeSpan.FromMinutes(1);
         var timeToLive = new TimeToLive(minute);

@@ -228,7 +228,7 @@ internal sealed class RespProvider : ICoordinationProvider, IAsyncDisposable, ID
             [typeof(ICounterService)] = new RespCounterService(Server),
             [typeof(ISequenceService)] = new RespSequenceService(Server),
             [typeof(ISessionService)] = new RespSessionService(records, tokens),
-            [typeof(IMembershipService)] = new RespMembershipService(records),
+            [typeof(IMembershipService)] = new RespMembershipService(records, subscriptions),
             [typeof(ILeaseService)] = new RespLeaseService(records, tokens),
             [typeof(ISemaphoreService)] = new RespSemaphoreService(records, tokens),
             [typeof(IElectionService)] = new RespElectionService(records, tokens),
