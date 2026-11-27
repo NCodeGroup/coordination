@@ -51,6 +51,7 @@ internal static partial class PgMigrations
         (2, "counting", 1),
         (3, "records", 1),
         (4, "ownership", 1),
+        (5, "notifications", 1),
     ];
 
     /// <summary>
@@ -82,6 +83,8 @@ internal static partial class PgMigrations
         "grants",
         "fencing",
         "claims",
+        "topics",
+        "messages",
     ];
 
     /// <summary>
