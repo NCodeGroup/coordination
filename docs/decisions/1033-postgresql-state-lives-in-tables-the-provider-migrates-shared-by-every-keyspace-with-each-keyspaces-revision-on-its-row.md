@@ -170,7 +170,8 @@ a sweep removes in bounded batches.**
   [Table partitioning](https://www.postgresql.org/docs/19/ddl-partitioning.html),
   [Advisory locks](https://www.postgresql.org/docs/19/explicit-locking.html#ADVISORY-LOCKS) and
   [Privileges](https://www.postgresql.org/docs/19/ddl-priv.html)
-- [PgBouncer: Features](https://www.pgbouncer.org/features.html), read 2026-11-27: advisory locks under each pooling mode
+- [PgBouncer: Features](https://www.pgbouncer.org/features.html), read 2026-11-27: advisory locks under each pooling
+  mode
 - NCode.Identity's [ADR-1073](https://github.com/NCodeGroup/identity/blob/main/docs/decisions/1073-one-postgresql-database-holds-the-hosts-schema-and-key-ring-migrated-by-a-worker-and-drift-checked.md),
   a product of this organization: a host that migrates its database with a worker
 - A test run on 2026-11-27 with `psql` against a `postgres:18` (18.7) container: `bytea` comparisons, a range on a
