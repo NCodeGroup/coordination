@@ -375,9 +375,13 @@ changes.
 
 The RESP provider's conformance targets drop only their own provider's connections, by client name; its own tests
 restart servers of their own mid-run, where every failure is unavailable, no call reported unapplied applies, and every
-subscription and watch resyncs; and every suite runs again against a Valkey cluster of three nodes, with tests that each
-keyspace keeps its keys in its slot and its sharded channel on that slot's node. The record watch suite has a
-dropped-connection run too.
+subscription and watch resyncs; they fail over a Valkey primary and a Garnet cluster's primary of their own while the
+primary still takes writes, where only the writes the old primary took after the promotion are lost and every
+subscription and watch resyncs when its numbers go back; and every suite runs again against a Valkey cluster and a
+Garnet cluster of three nodes, with tests that each keyspace keeps its keys in its slot, its Valkey sharded channel on
+that slot's node, and its Garnet plain channel delivering from any node. The record watch suite has a
+dropped-connection run too, which the in-process provider's test decorator runs, and a notification run publishes
+further closing messages while a resync might have covered the last one.
 [ADR-1030](../decisions/1030-the-resp-providers-runs-drop-its-own-connections-restart-and-fail-over-servers-of-their-own-and-repeat-every-suite-on-clusters.md)
 
 ## Open Questions

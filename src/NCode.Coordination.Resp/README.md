@@ -96,8 +96,16 @@ cluster spreads keyspaces across its shards, not one keyspace: a keyspace per te
 
 ## Verification
 
-The provider passes every suite of the conformance kit against Valkey and Garnet, and against a Valkey cluster of three
-nodes: concurrent runs of every primitive checked for linearizability and declared delivery, and runs that drop its
-connections mid-run. Its own tests restart the server mid-run: every failure is `unavailable`, a call that fails as not
-applied never applies, and every subscription and watch resyncs and goes on delivering. On a cluster, every key of a
-keyspace lies in the keyspace's slot, and its sharded channel is subscribed on that slot's node.
+The provider passes every suite of the conformance kit against Valkey and Garnet, and against a Valkey cluster and a
+Garnet cluster of three nodes each: concurrent runs of every primitive checked for linearizability and declared
+delivery, and runs that drop its connections mid-run. Its own tests restart the server mid-run: every failure is
+`unavailable`, a call that fails as not applied never applies, and every subscription and watch resyncs and goes on
+delivering. They also promote a replica while its primary still takes writes, on Valkey and on a Garnet cluster: the
+writes the old primary acknowledged after the promotion are lost, as linearizable until a failover allows, and every
+subscription and watch resyncs when the failover takes its numbers back. On a cluster, every key of a keyspace lies in
+the keyspace's slot; on Valkey its sharded channel is subscribed on that slot's node, and on Garnet a message published
+on any node reaches its plain channel's subscriber.
+
+Without Sentinel or a cluster to announce a failover, StackExchange.Redis learns of a Valkey replica's promotion only at
+its next check of each server's role, every `configCheckSeconds`, 60 seconds by default; until then a write fails as
+`unavailable`. Lower it in the configuration string to shorten that outage.
