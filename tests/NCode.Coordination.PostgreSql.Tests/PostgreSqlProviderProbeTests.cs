@@ -333,7 +333,12 @@ public sealed class PostgreSqlProviderProbeTests(PgServers servers)
         Assert.Equal(CoordinationErrorCodes.AccessDenied, exception.Code);
         Assert.False(exception.OutcomeUnknown);
         Assert.Contains(
-            "privileges on keyspaces, schema_version in schema",
+            "privileges on "
+                + string.Join(
+                    ", ",
+                    PgMigrations.Tables.Append("schema_version").Order(StringComparer.Ordinal)
+                )
+                + " in schema",
             exception.Message,
             StringComparison.Ordinal
         );
@@ -353,7 +358,9 @@ public sealed class PostgreSqlProviderProbeTests(PgServers servers)
         Assert.Equal(CoordinationErrorCodes.AccessDenied, exception.Code);
         Assert.False(exception.OutcomeUnknown);
         Assert.Contains(
-            "privileges on keyspaces in schema",
+            "privileges on "
+                + string.Join(", ", PgMigrations.Tables.Order(StringComparer.Ordinal))
+                + " in schema",
             exception.Message,
             StringComparison.Ordinal
         );
@@ -367,7 +374,9 @@ public sealed class PostgreSqlProviderProbeTests(PgServers servers)
         var exception = await ProbeAsRoleWithGrantsAsync(
             [
                 "GRANT SELECT ON {0}.schema_version TO {1}",
-                "GRANT SELECT, INSERT, UPDATE, DELETE ON {0}.keyspaces TO {1}",
+                .. PgMigrations.Tables.Select(table =>
+                    "GRANT SELECT, INSERT, UPDATE, DELETE ON {0}." + table + " TO {1}"
+                ),
             ],
             cancellationToken
         );

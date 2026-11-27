@@ -48,6 +48,7 @@ internal static partial class PgMigrations
     private static readonly (int Version, string Name, int CompatibleFrom)[] Table =
     [
         (1, "keyspaces", 1),
+        (2, "counting", 1),
     ];
 
     /// <summary>
@@ -63,7 +64,8 @@ internal static partial class PgMigrations
     /// <summary>
     /// Gets the tables that the provider reads and writes, which a role needs privileges on.
     /// </summary>
-    public static ImmutableArray<string> Tables { get; } = ["keyspaces"];
+    public static ImmutableArray<string> Tables { get; } =
+    ["keyspaces", "occurrences", "counters", "sequences", "sets", "set_members"];
 
     /// <summary>
     /// Splits a script into its statements: each ends at a semicolon that ends a line.
