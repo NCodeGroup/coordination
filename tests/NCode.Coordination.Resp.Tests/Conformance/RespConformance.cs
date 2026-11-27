@@ -12,6 +12,14 @@ namespace NCode.Coordination.Resp.Tests.Conformance;
 // The target drops only its own provider's connections, by client name, since every test shares the servers.
 internal static class RespConformance
 {
+    /// <summary>
+    /// Creates the target of one conformance test: a provider connected to the servers at an endpoint under a client
+    /// name of its own, so the target's drop kills only its own connections, and a clock that advances by waiting.
+    /// </summary>
+    /// <param name="endpoint">The <c>host:port</c> list of the servers.</param>
+    /// <param name="profile">The profile of the provider under test.</param>
+    /// <param name="cancellationToken">The token that cancels the creation.</param>
+    /// <returns>The target of the test.</returns>
     public static async ValueTask<ConformanceTarget> CreateTargetAsync(
         string endpoint,
         RespProfile profile,

@@ -12,6 +12,7 @@ namespace NCode.Coordination.Resp.Tests.Conformance;
 public sealed class ValkeyClusterTransactionContractTests(RespServers servers)
     : TransactionContractTests
 {
+    /// <inheritdoc />
     protected override ValueTask<ConformanceTarget> CreateTargetAsync(
         CancellationToken cancellationToken
     ) =>

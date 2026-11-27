@@ -14,6 +14,9 @@ namespace NCode.Coordination.Resp.Tests.Servers;
 /// <param name="hostPort">The host port on which the container publishes the server's port.</param>
 internal sealed class RespRestartableServer(IContainer container, int hostPort) : IAsyncDisposable
 {
+    /// <summary>
+    /// The port on which a RESP server listens inside its container, to which the host port is published.
+    /// </summary>
     private const ushort Port = 6379;
 
     /// <summary>

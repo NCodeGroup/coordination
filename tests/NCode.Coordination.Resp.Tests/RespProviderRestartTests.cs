@@ -134,14 +134,15 @@ public sealed class RespProviderRestartTests
     /// <param name="image">The image of the server to restart.</param>
     /// <param name="command">The arguments of the server's command, empty to run the image's default.</param>
     /// <param name="profile">The profile of the provider that writes.</param>
+    /// <param name="cancellationToken">The token that cancels the run.</param>
     /// <returns>A task that completes when the checks pass.</returns>
     private static async ValueTask AssertWritesAcrossARestartAsync(
         string image,
         IReadOnlyList<string> command,
-        RespProfile profile
+        RespProfile profile,
+        CancellationToken cancellationToken
     )
     {
-        var cancellationToken = TestContext.Current.CancellationToken;
         await using var server = await RespRestartableServer.StartAsync(
             image,
             command,
@@ -243,14 +244,15 @@ public sealed class RespProviderRestartTests
     /// <param name="image">The image of the server to restart.</param>
     /// <param name="command">The arguments of the server's command, empty to run the image's default.</param>
     /// <param name="profile">The profile of the provider that subscribes.</param>
+    /// <param name="cancellationToken">The token that cancels the run.</param>
     /// <returns>A task that completes when the checks pass.</returns>
     private static async ValueTask AssertSubscriptionsAcrossARestartAsync(
         string image,
         IReadOnlyList<string> command,
-        RespProfile profile
+        RespProfile profile,
+        CancellationToken cancellationToken
     )
     {
-        var cancellationToken = TestContext.Current.CancellationToken;
         await using var server = await RespRestartableServer.StartAsync(
             image,
             command,
@@ -350,14 +352,20 @@ public sealed class RespProviderRestartTests
 
     [RespServerFact]
     public async Task CreateAsync_WhenValkeyRestartsMidRun_FailsOnlyAsUnavailableAndAppliesNoCallReportedUnapplied() =>
-        await AssertWritesAcrossARestartAsync(RespServers.ValkeyImage, [], RespProfiles.Valkey);
+        await AssertWritesAcrossARestartAsync(
+            RespServers.ValkeyImage,
+            [],
+            RespProfiles.Valkey,
+            TestContext.Current.CancellationToken
+        );
 
     [RespServerFact]
     public async Task CreateAsync_WhenGarnetRestartsMidRun_FailsOnlyAsUnavailableAndAppliesNoCallReportedUnapplied() =>
         await AssertWritesAcrossARestartAsync(
             RespServers.GarnetImage,
             GarnetCommand,
-            RespProfiles.Garnet
+            RespProfiles.Garnet,
+            TestContext.Current.CancellationToken
         );
 
     #endregion
@@ -369,7 +377,8 @@ public sealed class RespProviderRestartTests
         await AssertSubscriptionsAcrossARestartAsync(
             RespServers.ValkeyImage,
             [],
-            RespProfiles.Valkey
+            RespProfiles.Valkey,
+            TestContext.Current.CancellationToken
         );
 
     [RespServerFact]
@@ -377,7 +386,8 @@ public sealed class RespProviderRestartTests
         await AssertSubscriptionsAcrossARestartAsync(
             RespServers.GarnetImage,
             GarnetCommand,
-            RespProfiles.Garnet
+            RespProfiles.Garnet,
+            TestContext.Current.CancellationToken
         );
 
     #endregion
