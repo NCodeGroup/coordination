@@ -7,10 +7,26 @@ NCode.Coordination.PostgreSqlMigration.Equals(NCode.Coordination.PostgreSqlMigra
 NCode.Coordination.PostgreSqlMigration.Name.get -> string!
 NCode.Coordination.PostgreSqlMigration.Script.get -> string!
 NCode.Coordination.PostgreSqlMigration.Version.get -> int
+NCode.Coordination.PostgreSqlProfile
+NCode.Coordination.PostgreSqlProfile.<Clone>$() -> NCode.Coordination.PostgreSqlProfile!
+NCode.Coordination.PostgreSqlProfile.Durability.get -> NCode.Coordination.Guarantee!
+NCode.Coordination.PostgreSqlProfile.Equals(NCode.Coordination.PostgreSqlProfile? other) -> bool
+NCode.Coordination.PostgreSqlProfile.Name.get -> string!
+NCode.Coordination.PostgreSqlProfile.PostgreSqlProfile(string! name, NCode.Coordination.Guarantee! durability, bool requiresSynchronousStandby) -> void
+NCode.Coordination.PostgreSqlProfile.RequiresSynchronousStandby.get -> bool
+NCode.Coordination.PostgreSqlProfiles
 NCode.Coordination.PostgreSqlSchema
 override NCode.Coordination.PostgreSqlMigration.Equals(object? obj) -> bool
 override NCode.Coordination.PostgreSqlMigration.GetHashCode() -> int
 override NCode.Coordination.PostgreSqlMigration.ToString() -> string!
+override NCode.Coordination.PostgreSqlProfile.Equals(object? obj) -> bool
+override NCode.Coordination.PostgreSqlProfile.GetHashCode() -> int
+override NCode.Coordination.PostgreSqlProfile.ToString() -> string!
 static NCode.Coordination.PostgreSqlMigration.operator !=(NCode.Coordination.PostgreSqlMigration? left, NCode.Coordination.PostgreSqlMigration? right) -> bool
 static NCode.Coordination.PostgreSqlMigration.operator ==(NCode.Coordination.PostgreSqlMigration? left, NCode.Coordination.PostgreSqlMigration? right) -> bool
+static NCode.Coordination.PostgreSqlProfile.operator !=(NCode.Coordination.PostgreSqlProfile? left, NCode.Coordination.PostgreSqlProfile? right) -> bool
+static NCode.Coordination.PostgreSqlProfile.operator ==(NCode.Coordination.PostgreSqlProfile? left, NCode.Coordination.PostgreSqlProfile? right) -> bool
+static NCode.Coordination.PostgreSqlProfiles.Asynchronous.get -> NCode.Coordination.PostgreSqlProfile!
+static NCode.Coordination.PostgreSqlProfiles.Standalone.get -> NCode.Coordination.PostgreSqlProfile!
+static NCode.Coordination.PostgreSqlProfiles.Synchronous.get -> NCode.Coordination.PostgreSqlProfile!
 static NCode.Coordination.PostgreSqlSchema.GetMigrations(string! schema) -> System.Collections.Generic.IReadOnlyList<NCode.Coordination.PostgreSqlMigration!>!
