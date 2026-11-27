@@ -1,6 +1,6 @@
--- Joins a node to a group. ARGV[4] is the group, ARGV[5] the node id, ARGV[6] the session the member belongs to, ARGV[7]
--- the member's address and ARGV[8] its encoded metadata. A node that joins again under another node id leaves its
--- previous one, and a node id whose session is not live is taken over. Takes the next revision and publishes it.
+-- Joins a node to a group. ARGV[4] is the group, ARGV[5] the node id, ARGV[6] the session the member belongs to,
+-- ARGV[7] the member's address and ARGV[8] its encoded metadata. A node that joins again under another node id leaves
+-- its previous one, and a node id whose session is not live is taken over. Takes the next revision and publishes it.
 -- Returns {0} when the member joined, {1} when another live session holds the node id, and {2} when the session is not
 -- live.
 local group, node, session = ARGV[4], ARGV[5], ARGV[6]

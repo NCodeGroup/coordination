@@ -1,6 +1,6 @@
--- Acquires a semaphore slot. ARGV[4] is the semaphore's name, ARGV[5] its capacity, ARGV[6] the new owner token, ARGV[7]
--- the session the slot is bound to or '' for none, and ARGV[8] the slot's time to live in milliseconds or 0 when it is
--- bound to a session.
+-- Acquires a semaphore slot. ARGV[4] is the semaphore's name, ARGV[5] its capacity, ARGV[6] the new owner token,
+-- ARGV[7] the session the slot is bound to or '' for none, and ARGV[8] the slot's time to live in milliseconds or 0
+-- when it is bound to a session.
 -- Returns {0, slot, owner token, fencing token} when the caller holds a slot, either newly or because the same session
 -- already held one, {1} when every slot is held, {2} when the session is not live, and {3} when the semaphore is held
 -- with another capacity.
