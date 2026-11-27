@@ -53,24 +53,30 @@ internal static class RespPorts
     /// <param name="start">The start that takes the reserved ports and disposes what it built when it fails.</param>
     /// <param name="cancellationToken">The token that cancels the start.</param>
     /// <returns>The started server.</returns>
+    /// <exception cref="AggregateException">Thrown when every try failed; it holds each failure.</exception>
     public static async ValueTask<T> StartOnFreePortsAsync<T>(
         int count,
         Func<IReadOnlyList<int>, CancellationToken, ValueTask<T>> start,
         CancellationToken cancellationToken
     )
     {
-        for (var attempt = 1; ; attempt++)
+        List<Exception> failures = [];
+        for (var attempt = 1; attempt <= StartAttempts; attempt++)
         {
             var ports = Reserve(count);
             try
             {
                 return await start(ports, cancellationToken);
             }
-            catch (Exception exception)
-                when (attempt < StartAttempts && exception is not OperationCanceledException)
+            catch (Exception exception) when (exception is not OperationCanceledException)
             {
-                // Try again on ports reserved afresh; the start disposed what it built.
+                failures.Add(exception);
             }
         }
+
+        throw new AggregateException(
+            "The server did not start on any of the host ports reserved for it.",
+            failures
+        );
     }
 }
