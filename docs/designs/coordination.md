@@ -378,7 +378,7 @@ restart servers of their own mid-run, where every failure is unavailable, no cal
 subscription and watch resyncs; and every suite runs again against a Valkey cluster of three nodes, with tests that each
 keyspace keeps its keys in its slot and its sharded channel on that slot's node. The record watch suite has a
 dropped-connection run too.
-[ADR-1030](../decisions/1030-the-resp-providers-runs-drop-its-own-connections-restart-servers-of-their-own-and-repeat-every-suite-on-a-valkey-cluster.md)
+[ADR-1030](../decisions/1030-the-resp-providers-runs-drop-its-own-connections-restart-and-fail-over-servers-of-their-own-and-repeat-every-suite-on-clusters.md)
 
 ## Open Questions
 

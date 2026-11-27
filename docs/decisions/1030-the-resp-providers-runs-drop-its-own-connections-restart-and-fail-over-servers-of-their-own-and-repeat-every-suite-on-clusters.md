@@ -1,4 +1,4 @@
-# 1030. The RESP provider's runs drop its own connections, restart servers of their own, and repeat every suite on a Valkey cluster
+# 1030. The RESP provider's runs drop its own connections, restart and fail over servers of their own, and repeat every suite on clusters
 
 - **Status:** Proposed
 - **Date:** 2026-11-26
