@@ -84,11 +84,10 @@ script, and every time to live is measured on the server's clock, in whole milli
   ahead for more than a second. A watch's check reads the keyspace's revision, which deletes and announces its
   expired records and ends its expired sessions, so an expiry reaches the watch within the interval.
 
-The provider declares each of them but record watches and notifications linearizable until the server fails over,
-and volatile, since it can't tell whether the server persists or replicates its writes; transactions and counter
-batches are atomic across partitions, because a keyspace lives in one slot. It declares record watches linearizable
-until a failover, and record watches and notifications at most once with gap detection: a message can be lost, but
-never without a resync after it.
+The provider declares every primitive but notifications linearizable until the server fails over, and every primitive
+but record watches and notifications volatile, since it can't tell whether the server persists or replicates its writes.
+Transactions and counter batches are atomic across partitions, because a keyspace lives in one slot. Record watches and
+notifications are at most once with gap detection: a message can be lost, but never without a resync after it.
 
 ## Keyspaces
 
