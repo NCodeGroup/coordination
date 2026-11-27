@@ -63,6 +63,59 @@ public sealed class PgRecordServiceTests
 
     #endregion
 
+    #region CompareAndSwapAsync Tests
+
+    [Fact]
+    public async Task CompareAndSwapAsync_NullRevision_Throws()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var key = new Keyspace("prod").CreateKey("k");
+        await WithServiceAsync(async service =>
+        {
+            await Assert.ThrowsAsync<ArgumentNullException>(async () =>
+                await service.CompareAndSwapAsync(
+                    key,
+                    null!,
+                    new byte[1],
+                    RecordLifetime.Persistent,
+                    null,
+                    cancellationToken
+                )
+            );
+        });
+    }
+
+    #endregion
+
+    #region CompareAndDeleteAsync Tests
+
+    [Fact]
+    public async Task CompareAndDeleteAsync_Extension_ThrowsUnsupported()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var key = new Keyspace("prod").CreateKey("k");
+        var options = new OperationOptions
+        {
+            Extensions = ImmutableDictionary<string, string>.Empty.Add("consul.lock-delay", "15s"),
+        };
+        await WithServiceAsync(async service =>
+        {
+            var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
+                await service.CompareAndDeleteAsync(
+                    key,
+                    new Revision(1),
+                    options,
+                    cancellationToken
+                )
+            );
+
+            Assert.Equal(CoordinationErrorCodes.Unsupported, exception.Code);
+            Assert.False(exception.OutcomeUnknown);
+        });
+    }
+
+    #endregion
+
     #region ReadAsync Tests
 
     [Fact]

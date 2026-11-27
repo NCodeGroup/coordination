@@ -130,7 +130,7 @@ internal sealed class PgRecordService(PgRecordTable table) : IRecordService
     }
 
     /// <inheritdoc />
-    public ValueTask<RecordWriteResult> CompareAndSwapAsync(
+    public async ValueTask<RecordWriteResult> CompareAndSwapAsync(
         CoordinationKey key,
         Revision expected,
         ReadOnlyMemory<byte> value,
@@ -139,18 +139,139 @@ internal sealed class PgRecordService(PgRecordTable table) : IRecordService
         CancellationToken cancellationToken
     )
     {
-        throw new NotImplementedException();
+        ArgumentNullException.ThrowIfNull(key);
+        ArgumentNullException.ThrowIfNull(expected);
+        ArgumentNullException.ThrowIfNull(lifetime);
+        CheckValue(value, nameof(value));
+        PgCall.Check(options, cancellationToken);
+        CheckNoSession(lifetime);
+
+        var copy = value.ToArray();
+        var timeToLive = lifetime.TimeToLive;
+        var expectedRevision = expected.Value;
+
+        return await Table
+            .Keyspaces.RunAsync<RecordWriteResult>(
+                key.Keyspace,
+                async (id, token) =>
+                    await Table
+                        .Server.TransactAsync(
+                            PgIsolation.ReadCommitted,
+                            async (transaction, transactionToken) =>
+                            {
+                                var start = await Table
+                                    .BeginAsync(transaction, id, [key], transactionToken)
+                                    .ConfigureAwait(false);
+
+                                var change = start.Change;
+                                var live = false;
+                                if (start.Rows.TryGetValue(key, out var row))
+                                {
+                                    if (row.StateAt(change.Now) == PgRecordState.Live)
+                                    {
+                                        live = true;
+                                    }
+                                    else
+                                    {
+                                        change.Expire([row]);
+                                    }
+                                }
+
+                                RecordWriteResult result;
+                                if (!live)
+                                {
+                                    result = RecordWriteResult.NotFound;
+                                }
+                                else if (row is null || row.Revision != expectedRevision)
+                                {
+                                    result = RecordWriteResult.Conflict;
+                                }
+                                else
+                                {
+                                    var revision = change.Begin();
+                                    DateTime? deadline = timeToLive is null
+                                        ? null
+                                        : change.Now.AddTicks(
+                                            PgCall.ToMicroseconds(timeToLive) * 10
+                                        );
+                                    change.Put(key, copy, deadline, null, null);
+                                    result = RecordWriteResult.Written(new Revision(revision));
+                                }
+
+                                await Table
+                                    .CommitAsync(transaction, change, id, transactionToken)
+                                    .ConfigureAwait(false);
+                                return result;
+                            },
+                            token
+                        )
+                        .ConfigureAwait(false),
+                cancellationToken
+            )
+            .ConfigureAwait(false);
     }
 
     /// <inheritdoc />
-    public ValueTask<RecordDeleteStatus> CompareAndDeleteAsync(
+    public async ValueTask<RecordDeleteStatus> CompareAndDeleteAsync(
         CoordinationKey key,
         Revision expected,
         OperationOptions? options,
         CancellationToken cancellationToken
     )
     {
-        throw new NotImplementedException();
+        ArgumentNullException.ThrowIfNull(key);
+        ArgumentNullException.ThrowIfNull(expected);
+        PgCall.Check(options, cancellationToken);
+
+        var expectedRevision = expected.Value;
+
+        return await Table
+            .Keyspaces.RunAsync<RecordDeleteStatus>(
+                key.Keyspace,
+                async (id, token) =>
+                    await Table
+                        .Server.TransactAsync(
+                            PgIsolation.ReadCommitted,
+                            async (transaction, transactionToken) =>
+                            {
+                                var start = await Table
+                                    .BeginAsync(transaction, id, [key], transactionToken)
+                                    .ConfigureAwait(false);
+
+                                var change = start.Change;
+                                var status = RecordDeleteStatus.NotFound;
+                                if (start.Rows.TryGetValue(key, out var row))
+                                {
+                                    if (row.StateAt(change.Now) == PgRecordState.Live)
+                                    {
+                                        if (row.Revision == expectedRevision)
+                                        {
+                                            change.Begin();
+                                            change.Delete(row);
+                                            status = RecordDeleteStatus.Deleted;
+                                        }
+                                        else
+                                        {
+                                            status = RecordDeleteStatus.Conflict;
+                                        }
+                                    }
+                                    else
+                                    {
+                                        change.Expire([row]);
+                                    }
+                                }
+
+                                await Table
+                                    .CommitAsync(transaction, change, id, transactionToken)
+                                    .ConfigureAwait(false);
+                                return status;
+                            },
+                            token
+                        )
+                        .ConfigureAwait(false),
+                cancellationToken
+            )
+            .ConfigureAwait(false);
     }
 
     /// <inheritdoc />
