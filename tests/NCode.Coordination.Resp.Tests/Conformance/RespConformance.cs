@@ -9,6 +9,7 @@ using StackExchange.Redis;
 namespace NCode.Coordination.Resp.Tests.Conformance;
 
 // The server's clock advances only by waiting, so the target's clock waits.
+// The target drops only its own provider's connections, by client name, since every test shares the servers.
 internal static class RespConformance
 {
     public static async ValueTask<ConformanceTarget> CreateTargetAsync(
@@ -22,10 +23,14 @@ internal static class RespConformance
             $"Set {RespServers.EnvironmentVariable}=docker to run the tests against Valkey and Garnet in Docker."
         );
 
+        var clientName = "conformance-" + Guid.NewGuid().ToString("N");
+
         var connection = new RespConnection(
             async ct =>
             {
-                var connecting = ConnectionMultiplexer.ConnectAsync(endpoint);
+                var options = ConfigurationOptions.Parse(endpoint);
+                options.ClientName = clientName;
+                var connecting = ConnectionMultiplexer.ConnectAsync(options);
                 return await connecting.WaitAsync(ct);
             },
             owned: true
@@ -42,7 +47,38 @@ internal static class RespConformance
             throw;
         }
 
-        return new ConformanceTarget(provider) { AdvanceClock = WaitAsync };
+        return new ConformanceTarget(provider)
+        {
+            AdvanceClock = WaitAsync,
+            DropConnections = ct => DropConnectionsAsync(endpoint, clientName, ct),
+        };
+    }
+
+    private static async ValueTask DropConnectionsAsync(
+        string endpoint,
+        string clientName,
+        CancellationToken cancellationToken
+    )
+    {
+        var options = ConfigurationOptions.Parse(endpoint);
+        options.AllowAdmin = true;
+        await using var admin = await ConnectionMultiplexer
+            .ConnectAsync(options)
+            .WaitAsync(cancellationToken);
+
+        long killed = 0;
+        foreach (var server in admin.GetServers())
+        {
+            foreach (var client in await server.ClientListAsync())
+            {
+                if (!string.Equals(client.Name, clientName, StringComparison.Ordinal))
+                    continue;
+
+                killed += await server.ClientKillAsync(client.Id, null, null, true);
+            }
+        }
+
+        Assert.True(killed > 0, "The drop found no connection of the provider to kill.");
     }
 
     private static ValueTask WaitAsync(TimeSpan duration, CancellationToken cancellationToken)
