@@ -49,9 +49,10 @@ the keyspace's event, and a membership watch lists its group only when an event 
    the subscription; after that, the stream ends only when its caller cancels.
 3. **The check.** Every `RespProviderOptions.CheckInterval`, 5 seconds by default, at least a millisecond, the
    shortest period a timer takes, and less than the hour of ADR-1027 rule 6's backstop, a subscription reads its
-   channel's number. A number below the last delivered, or any number while in doubt, resyncs. A number above it waits a grace of 1 second, handles what arrived
-   meanwhile, and resyncs unless the messages reached it; a check during the grace is skipped. Reading a keyspace's
-   revision runs its expiry removal, so an expiry reaches a watch within the interval.
+   channel's number. A number below the last delivered, or any number while in doubt, resyncs. A number above it
+   waits a grace of 1 second, handles what arrived meanwhile, and resyncs unless the messages reached it; a check
+   during the grace is skipped. Reading a keyspace's revision runs its expiry removal, so an expiry reaches a watch
+   within the interval.
 4. **Notifications.** A topic's sequence is the key `{keyspace}:topic:<name>`, which never expires, and its channel
    has the same name. One script increments the sequence and publishes it, a line feed and the payload. A resync
    carries the last sequence the subscription delivered, or 0 (F1); the number it read stays the subscription's own.
