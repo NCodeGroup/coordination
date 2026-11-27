@@ -96,8 +96,11 @@ a sweep removes in bounded batches.**
    left the change log (ADR-1034 rule 6), so a watch that reads that entry still finds the keys bound to the session.
 8. **Migrations.** The provider ships its schema as numbered, forward-only migrations of constant SQL. A table in the
    schema records the version applied and the oldest provider version that can still use it.
-   - By default the provider applies what is missing when it starts, each migration in one transaction, serialized
-     across instances by a transaction's advisory lock. Operations never take one (ADR-1032 rule 11).
+   - By default the provider applies what is missing when it starts, each migration in one transaction that first
+     takes a transaction's advisory lock with `pg_advisory_xact_lock`, then reads the version applied, so instances
+     that start together apply each migration once. No row can serve as the lock, since the first migration creates
+     the tables. The lock ends with its transaction, so it works through transaction pooling, and only migrations
+     take one: ADR-1032 rule 11 keeps every operation from taking an advisory lock.
    - A host that applies schema changes itself turns that off and takes the provider's scripts, which the package
      exposes, into its own process.
    - Either way the probe fails the start when the schema is older than the provider needs, or newer and no longer
@@ -167,6 +170,7 @@ a sweep removes in bounded batches.**
   [Table partitioning](https://www.postgresql.org/docs/19/ddl-partitioning.html),
   [Advisory locks](https://www.postgresql.org/docs/19/explicit-locking.html#ADVISORY-LOCKS) and
   [Privileges](https://www.postgresql.org/docs/19/ddl-priv.html)
+- [PgBouncer: Features](https://www.pgbouncer.org/features.html), read 2026-11-27: advisory locks under each pooling mode
 - NCode.Identity's [ADR-1073](https://github.com/NCodeGroup/identity/blob/main/docs/decisions/1073-one-postgresql-database-holds-the-hosts-schema-and-key-ring-migrated-by-a-worker-and-drift-checked.md),
   a product of this organization: a host that migrates its database with a worker
 - A test run on 2026-11-27 with `psql` against a `postgres:18` (18.7) container: `bytea` comparisons, a range on a
