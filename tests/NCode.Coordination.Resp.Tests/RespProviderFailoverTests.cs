@@ -14,6 +14,11 @@ namespace NCode.Coordination.Resp.Tests;
 public sealed class RespProviderFailoverTests
 {
     /// <summary>
+    /// The name of the keyspaces that the tests create, which tells their keys apart from other tests'.
+    /// </summary>
+    private const string KeyspaceName = "failover";
+
+    /// <summary>
     /// The client option that has StackExchange.Redis check every server's role each second, so it finds a promoted
     /// Valkey replica with no Sentinel to announce it.
     /// </summary>
@@ -63,7 +68,7 @@ public sealed class RespProviderFailoverTests
         var target = await RespConformance.CreateTargetAsync(endpoint, profile, cancellationToken);
         await using var disposal = Assert.IsType<RespProvider>(target.Provider);
         var records = RespTestSupport.GetService<IRecordService>(target.Provider);
-        var keyspace = RespTestSupport.CreateKeyspace("failover");
+        var keyspace = RespTestSupport.CreateKeyspace(KeyspaceName);
         var value = "v"u8.ToArray();
         var beforeKey = keyspace.CreateKey("before");
         var lostKey = keyspace.CreateKey(LostName);
@@ -123,7 +128,7 @@ public sealed class RespProviderFailoverTests
         var notifications = RespTestSupport.GetService<INotificationService>(target.Provider);
         var records = RespTestSupport.GetService<IRecordService>(target.Provider);
         var watches = RespTestSupport.GetService<IRecordWatchService>(target.Provider);
-        var keyspace = RespTestSupport.CreateKeyspace("failover");
+        var keyspace = RespTestSupport.CreateKeyspace(KeyspaceName);
         var value = "v"u8.ToArray();
         var topic = keyspace.CreateKey(TopicName);
         var prefix = keyspace.CreateKey(WatchedName);

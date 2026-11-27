@@ -15,6 +15,11 @@ namespace NCode.Coordination.Resp.Tests;
 public sealed class RespProviderRestartTests
 {
     /// <summary>
+    /// The name of the keyspaces that the tests create, which tells their keys apart from other tests'.
+    /// </summary>
+    private const string KeyspaceName = "restart";
+
+    /// <summary>
     /// The number of clients that write concurrently while the server restarts.
     /// </summary>
     private const int Clients = 3;
@@ -72,7 +77,7 @@ public sealed class RespProviderRestartTests
         );
         await using var disposal = Assert.IsType<RespProvider>(target.Provider);
         var records = RespTestSupport.GetService<IRecordService>(target.Provider);
-        var keyspace = RespTestSupport.CreateKeyspace("restart");
+        var keyspace = RespTestSupport.CreateKeyspace(KeyspaceName);
         var value = "v"u8.ToArray();
         var halfway = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var stopped = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -184,7 +189,7 @@ public sealed class RespProviderRestartTests
         var notifications = RespTestSupport.GetService<INotificationService>(target.Provider);
         var records = RespTestSupport.GetService<IRecordService>(target.Provider);
         var watches = RespTestSupport.GetService<IRecordWatchService>(target.Provider);
-        var keyspace = RespTestSupport.CreateKeyspace("restart");
+        var keyspace = RespTestSupport.CreateKeyspace(KeyspaceName);
         var value = "v"u8.ToArray();
         var topic = keyspace.CreateKey("topic");
         var prefix = keyspace.CreateKey(WatchedName);

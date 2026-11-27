@@ -17,6 +17,11 @@ namespace NCode.Coordination.Resp.Tests;
 public sealed class RespProviderClusterTests(RespServers servers)
 {
     /// <summary>
+    /// The name of the keyspaces that the tests create, which tells their keys apart from other tests'.
+    /// </summary>
+    private const string KeyspaceName = "cluster";
+
+    /// <summary>
     /// The name of the notification topic that the tests publish to and subscribe on.
     /// </summary>
     private const string TopicName = "topic";
@@ -111,7 +116,7 @@ public sealed class RespProviderClusterTests(RespServers servers)
         var target = await RespConformance.CreateTargetAsync(endpoint, profile, cancellationToken);
         await using var disposal = Assert.IsType<RespProvider>(target.Provider);
         var provider = target.Provider;
-        var keyspace = RespTestSupport.CreateKeyspace("cluster");
+        var keyspace = RespTestSupport.CreateKeyspace(KeyspaceName);
         var lifetime = TimeSpan.FromSeconds(30);
         var timeToLive = new TimeToLive(lifetime);
 
@@ -211,7 +216,7 @@ public sealed class RespProviderClusterTests(RespServers servers)
         var configuration = clusterServers[0].ClusterConfiguration;
         Assert.NotNull(configuration);
 
-        var first = RespTestSupport.CreateKeyspace("cluster");
+        var first = RespTestSupport.CreateKeyspace(KeyspaceName);
         var firstTag = RespKeys.KeyspaceTag(first);
         var firstSlot = admin.HashSlot(firstTag);
         var firstNode = configuration.GetBySlot(firstSlot)?.NodeId;
@@ -219,7 +224,7 @@ public sealed class RespProviderClusterTests(RespServers servers)
         Keyspace? second = null;
         for (var attempt = 0; attempt < KeyspaceAttempts && second is null; attempt++)
         {
-            var candidate = RespTestSupport.CreateKeyspace("cluster");
+            var candidate = RespTestSupport.CreateKeyspace(KeyspaceName);
             var candidateTag = RespKeys.KeyspaceTag(candidate);
             var slot = admin.HashSlot(candidateTag);
             if (configuration.GetBySlot(slot)?.NodeId != firstNode)
@@ -277,7 +282,7 @@ public sealed class RespProviderClusterTests(RespServers servers)
             attempt++
         )
         {
-            var keyspace = RespTestSupport.CreateKeyspace("cluster");
+            var keyspace = RespTestSupport.CreateKeyspace(KeyspaceName);
             var tag = RespKeys.KeyspaceTag(keyspace);
             var slot = admin.HashSlot(tag);
             var node = configuration.GetBySlot(slot)?.NodeId;
