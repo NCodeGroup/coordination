@@ -1,1 +1,16 @@
 #nullable enable
+const NCode.Coordination.PostgreSqlSchema.DefaultName = "coordination" -> string!
+NCode.Coordination.PostgreSqlMigration
+NCode.Coordination.PostgreSqlMigration.<Clone>$() -> NCode.Coordination.PostgreSqlMigration!
+NCode.Coordination.PostgreSqlMigration.CompatibleFrom.get -> int
+NCode.Coordination.PostgreSqlMigration.Equals(NCode.Coordination.PostgreSqlMigration? other) -> bool
+NCode.Coordination.PostgreSqlMigration.Name.get -> string!
+NCode.Coordination.PostgreSqlMigration.Script.get -> string!
+NCode.Coordination.PostgreSqlMigration.Version.get -> int
+NCode.Coordination.PostgreSqlSchema
+override NCode.Coordination.PostgreSqlMigration.Equals(object? obj) -> bool
+override NCode.Coordination.PostgreSqlMigration.GetHashCode() -> int
+override NCode.Coordination.PostgreSqlMigration.ToString() -> string!
+static NCode.Coordination.PostgreSqlMigration.operator !=(NCode.Coordination.PostgreSqlMigration? left, NCode.Coordination.PostgreSqlMigration? right) -> bool
+static NCode.Coordination.PostgreSqlMigration.operator ==(NCode.Coordination.PostgreSqlMigration? left, NCode.Coordination.PostgreSqlMigration? right) -> bool
+static NCode.Coordination.PostgreSqlSchema.GetMigrations(string! schema) -> System.Collections.Generic.IReadOnlyList<NCode.Coordination.PostgreSqlMigration!>!
