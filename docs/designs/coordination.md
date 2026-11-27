@@ -1,6 +1,6 @@
 # Design: NCode.Coordination
 
-- **Status:** In progress (phase 3 of 7)
+- **Status:** In progress (phase 4 of 7)
 - **Date:** 2026-11-24
 - **Issue:** [#4](https://github.com/NCodeGroup/coordination/issues/4)
 - **Authors:** NCode Group
@@ -370,6 +370,19 @@ interval; a record watch reads each written record from the table and delivers i
 membership change names its group in the keyspace's event, so a membership watch lists its group only when it
 changes.
 [ADR-1029](../decisions/1029-resp-watches-read-each-written-record-from-the-table-and-membership-events-name-their-group.md)
+
+### D30. RESP proof
+
+The RESP provider's conformance targets drop only their own provider's connections, by client name; its own tests
+restart servers of their own mid-run, where every failure is unavailable, no call reported unapplied applies, and every
+subscription and watch resyncs; they fail over a Valkey primary and a Garnet cluster's primary of their own while the
+primary still takes writes, where only the writes the old primary took after the promotion are lost and every
+subscription and watch resyncs when its numbers go back; and every suite runs again against a Valkey cluster and a
+Garnet cluster of three nodes, with tests that each keyspace keeps its keys in its slot, its Valkey sharded channel on
+that slot's node, and its Garnet plain channel delivering from any node. The record watch suite has a
+dropped-connection run too, which the in-process provider's test decorator runs, and a notification run publishes
+further closing messages while a resync might have covered the last one.
+[ADR-1030](../decisions/1030-the-resp-providers-runs-drop-its-own-connections-restart-and-fail-over-servers-of-their-own-and-repeat-every-suite-on-clusters.md)
 
 ## Open Questions
 

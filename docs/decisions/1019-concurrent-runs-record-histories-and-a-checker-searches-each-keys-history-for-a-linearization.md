@@ -1,6 +1,6 @@
 # 1019. Concurrent runs record histories, and a checker searches each key's history for a linearization
 
-- **Status:** Proposed
+- **Status:** Proposed (amended by 1030)
 - **Date:** 2026-11-25
 - **Deciders:** NCode Group
 

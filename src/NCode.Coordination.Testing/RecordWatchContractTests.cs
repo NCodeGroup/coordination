@@ -492,7 +492,31 @@ public abstract class RecordWatchContractTests : ProviderContractTests
     /// Checks that a watch receives the changes that clients make to records at once as the provider declares.
     /// </summary>
     [Fact]
-    public async Task ConcurrentRun_WhenClientsWrite_DeliversAsDeclared()
+    public async Task ConcurrentRun_WhenClientsWrite_DeliversAsDeclared() =>
+        await RunDeliveryAsync(null, TestCancellationToken);
+
+    /// <summary>
+    /// Checks that a watch receives the changes as the provider declares when its connections drop in the middle of
+    /// the run.
+    /// </summary>
+    [Fact]
+    public async Task ConcurrentRun_WhenConnectionsDrop_DeliversAsDeclared()
+    {
+        var fault = GetDropConnections();
+        await RunDeliveryAsync(fault, TestCancellationToken);
+    }
+
+    /// <summary>
+    /// Runs clients that write records that a watch reads, with a fault, and asserts that what the watch received is
+    /// as the provider declares.
+    /// </summary>
+    /// <param name="fault">The fault to inject once half of the steps are done, or null for none.</param>
+    /// <param name="cancellationToken">A token that cancels the run.</param>
+    /// <returns>A task that completes when the deliveries have been checked.</returns>
+    private async ValueTask RunDeliveryAsync(
+        Func<CancellationToken, ValueTask>? fault,
+        CancellationToken cancellationToken
+    )
     {
         var keepsDelivery = Keeps(Primitives.RecordWatch, Guarantees.AtMostOnce);
         Assert.SkipUnless(
@@ -508,9 +532,9 @@ public abstract class RecordWatchContractTests : ProviderContractTests
         await using var subscriber = new RunSubscriber<RecordChange>(
             token => watches.WatchPrefixAsync(prefix, null, null, token),
             recorder,
-            TestCancellationToken
+            cancellationToken
         );
-        var ready = await subscriber.WaitForAsync(_ => true, TestCancellationToken);
+        var ready = await subscriber.WaitForAsync(_ => true, cancellationToken);
         Assert.True(ready);
 
         var keys = CreateRunKeys();
@@ -519,16 +543,16 @@ public abstract class RecordWatchContractTests : ProviderContractTests
         await ConcurrentRun.RunAsync(
             ConcurrentRun.Steps,
             script.StepAsync,
-            null,
-            TestCancellationToken
+            fault,
+            cancellationToken
         );
 
-        var closing = await script.WriteClosingValuesAsync(TestCancellationToken);
+        var closing = await script.WriteClosingValuesAsync(cancellationToken);
         var lastRevision = closing.Values.Max();
 
         var done = await subscriber.WaitForAsync(
             delivery => delivery.Item.Revision >= lastRevision,
-            TestCancellationToken
+            cancellationToken
         );
         Assert.True(
             done || !gapDetection,

@@ -1,6 +1,7 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using System.Diagnostics;
 using System.Globalization;
 using NCode.Coordination.Testing.Checking;
 using NCode.Coordination.Testing.Histories;
@@ -20,6 +21,11 @@ namespace NCode.Coordination.Testing;
 /// </remarks>
 public abstract class NotificationContractTests : ProviderContractTests
 {
+    /// <summary>
+    /// Gets how long a run pauses before it publishes another closing message, so the resyncs a fault set off can pass.
+    /// </summary>
+    private static TimeSpan ClosingPause { get; } = TimeSpan.FromMilliseconds(100);
+
     /// <summary>
     /// Gets the provider's notification service, and skips the test when the provider does not support notifications.
     /// </summary>
@@ -308,31 +314,43 @@ public abstract class NotificationContractTests : ProviderContractTests
             cancellationToken
         );
 
-        var lastBytes = HistoryValues.Encode(NotificationCall.Last);
-        var last = await recorder.RecordAsync(
-            HistoryOperation.TestClient,
-            partition,
-            new NotificationCall(NotificationCall.Last),
-            token => notifications.PublishAsync(topic, lastBytes, null, token),
-            cancellationToken
-        );
-        Assert.Equal(HistoryOutcome.Returned, last.Outcome);
-
-        bool IsLastOrResync(Delivery<Notification> delivery)
+        // A resync read while a closing publish is in flight may or may not cover it, so another closing message settles it.
+        IReadOnlyList<RunSubscriber<Notification>> subscribers = [first, second];
+        var outcomes = new ClosingOutcome[subscribers.Count];
+        Array.Fill(outcomes, ClosingOutcome.Unsettled);
+        var settling = Stopwatch.StartNew();
+        for (
+            var round = 0;
+            outcomes.Contains(ClosingOutcome.Unsettled)
+                && settling.Elapsed < ContractStreams.Timeout;
+            round++
+        )
         {
-            if (delivery.Item.IsResync)
+            if (round > 0)
             {
-                return gapDetection && delivery.Stamp > last.Responded;
+                await Task.Delay(ClosingPause, cancellationToken);
             }
 
-            var payload = HistoryValues.Decode(delivery.Item.Payload);
-            return string.Equals(payload, NotificationCall.Last, StringComparison.Ordinal);
+            var closing = await PublishClosingAsync(recorder, topic, round, cancellationToken);
+            Assert.Equal(HistoryOutcome.Returned, closing.Outcome);
+
+            for (var index = 0; index < subscribers.Count; index++)
+            {
+                if (outcomes[index] == ClosingOutcome.Unsettled)
+                {
+                    outcomes[index] = await NotificationClosing.WaitAsync(
+                        subscribers[index],
+                        closing,
+                        gapDetection,
+                        cancellationToken
+                    );
+                }
+            }
         }
 
-        var firstDone = await first.WaitForAsync(IsLastOrResync, cancellationToken);
-        var secondDone = await second.WaitForAsync(IsLastOrResync, cancellationToken);
+        var closed = outcomes.All(outcome => outcome == ClosingOutcome.Closed);
         Assert.True(
-            (firstDone && secondDone) || !gapDetection,
+            closed || !gapDetection,
             "A subscriber neither received the last message nor a resync after it."
         );
 
@@ -343,6 +361,40 @@ public abstract class NotificationContractTests : ProviderContractTests
             gapDetection
         );
         Assert.Empty(violations);
+    }
+
+    /// <summary>
+    /// Publishes the closing message of a round: the last message's payload in the first round, and that payload
+    /// numbered by its round after it, so every closing message is told apart.
+    /// </summary>
+    /// <param name="recorder">The recorder of the run.</param>
+    /// <param name="topic">The topic of the run.</param>
+    /// <param name="round">The round, from 0.</param>
+    /// <param name="cancellationToken">A token that cancels the run.</param>
+    /// <returns>The recorded publish.</returns>
+    private async ValueTask<HistoryOperation> PublishClosingAsync(
+        HistoryRecorder recorder,
+        CoordinationKey topic,
+        int round,
+        CancellationToken cancellationToken
+    )
+    {
+        var payload =
+            round == 0
+                ? NotificationCall.Last
+                : string.Create(CultureInfo.InvariantCulture, $"{NotificationCall.Last}-{round}");
+        var bytes = HistoryValues.Encode(payload);
+        var partition = topic.ToString();
+        var input = new NotificationCall(payload);
+        var notifications = Notifications;
+
+        return await recorder.RecordAsync(
+            HistoryOperation.TestClient,
+            partition,
+            input,
+            token => notifications.PublishAsync(topic, bytes, null, token),
+            cancellationToken
+        );
     }
 
     #endregion
