@@ -2,6 +2,8 @@
 const NCode.Coordination.PostgreSqlCoordinationBuilderExtensions.ProviderName = "postgresql" -> string!
 const NCode.Coordination.PostgreSqlSchema.DefaultName = "coordination" -> string!
 NCode.Coordination.PostgreSqlCoordinationBuilderExtensions
+NCode.Coordination.PostgreSqlCoordinationBuilderExtensions.extension(NCode.Coordination.ICoordinationBuilder!)
+NCode.Coordination.PostgreSqlCoordinationBuilderExtensions.extension(NCode.Coordination.ICoordinationBuilder!).AddPostgreSqlProvider(System.Action<NCode.Coordination.PostgreSqlProviderOptions!>! configure) -> NCode.Coordination.ICoordinationBuilder!
 NCode.Coordination.PostgreSqlMigration
 NCode.Coordination.PostgreSqlMigration.<Clone>$() -> NCode.Coordination.PostgreSqlMigration!
 NCode.Coordination.PostgreSqlMigration.CompatibleFrom.get -> int
@@ -17,6 +19,32 @@ NCode.Coordination.PostgreSqlProfile.Name.get -> string!
 NCode.Coordination.PostgreSqlProfile.PostgreSqlProfile(string! name, NCode.Coordination.Guarantee! durability, bool requiresSynchronousStandby) -> void
 NCode.Coordination.PostgreSqlProfile.RequiresSynchronousStandby.get -> bool
 NCode.Coordination.PostgreSqlProfiles
+NCode.Coordination.PostgreSqlProviderOptions
+NCode.Coordination.PostgreSqlProviderOptions.ApplyMigrations.get -> bool
+NCode.Coordination.PostgreSqlProviderOptions.ApplyMigrations.set -> void
+NCode.Coordination.PostgreSqlProviderOptions.CheckInterval.get -> System.TimeSpan
+NCode.Coordination.PostgreSqlProviderOptions.CheckInterval.set -> void
+NCode.Coordination.PostgreSqlProviderOptions.ConnectionString.get -> string?
+NCode.Coordination.PostgreSqlProviderOptions.ConnectionString.set -> void
+NCode.Coordination.PostgreSqlProviderOptions.DataSource.get -> System.Func<System.IServiceProvider!, Npgsql.NpgsqlDataSource!>?
+NCode.Coordination.PostgreSqlProviderOptions.DataSource.set -> void
+NCode.Coordination.PostgreSqlProviderOptions.IdleInTransactionTimeout.get -> System.TimeSpan
+NCode.Coordination.PostgreSqlProviderOptions.IdleInTransactionTimeout.set -> void
+NCode.Coordination.PostgreSqlProviderOptions.LockTimeout.get -> System.TimeSpan
+NCode.Coordination.PostgreSqlProviderOptions.LockTimeout.set -> void
+NCode.Coordination.PostgreSqlProviderOptions.LogRetention.get -> System.TimeSpan
+NCode.Coordination.PostgreSqlProviderOptions.LogRetention.set -> void
+NCode.Coordination.PostgreSqlProviderOptions.PostgreSqlProviderOptions() -> void
+NCode.Coordination.PostgreSqlProviderOptions.Profile.get -> NCode.Coordination.PostgreSqlProfile!
+NCode.Coordination.PostgreSqlProviderOptions.Profile.set -> void
+NCode.Coordination.PostgreSqlProviderOptions.Schema.get -> string!
+NCode.Coordination.PostgreSqlProviderOptions.Schema.set -> void
+NCode.Coordination.PostgreSqlProviderOptions.StatementTimeout.get -> System.TimeSpan
+NCode.Coordination.PostgreSqlProviderOptions.StatementTimeout.set -> void
+NCode.Coordination.PostgreSqlProviderOptions.SweepBatchSize.get -> int
+NCode.Coordination.PostgreSqlProviderOptions.SweepBatchSize.set -> void
+NCode.Coordination.PostgreSqlProviderOptions.SweepInterval.get -> System.TimeSpan
+NCode.Coordination.PostgreSqlProviderOptions.SweepInterval.set -> void
 NCode.Coordination.PostgreSqlSchema
 override NCode.Coordination.PostgreSqlMigration.Equals(object? obj) -> bool
 override NCode.Coordination.PostgreSqlMigration.GetHashCode() -> int
@@ -24,6 +52,7 @@ override NCode.Coordination.PostgreSqlMigration.ToString() -> string!
 override NCode.Coordination.PostgreSqlProfile.Equals(object? obj) -> bool
 override NCode.Coordination.PostgreSqlProfile.GetHashCode() -> int
 override NCode.Coordination.PostgreSqlProfile.ToString() -> string!
+static NCode.Coordination.PostgreSqlCoordinationBuilderExtensions.AddPostgreSqlProvider(this NCode.Coordination.ICoordinationBuilder! builder, System.Action<NCode.Coordination.PostgreSqlProviderOptions!>! configure) -> NCode.Coordination.ICoordinationBuilder!
 static NCode.Coordination.PostgreSqlMigration.operator !=(NCode.Coordination.PostgreSqlMigration? left, NCode.Coordination.PostgreSqlMigration? right) -> bool
 static NCode.Coordination.PostgreSqlMigration.operator ==(NCode.Coordination.PostgreSqlMigration? left, NCode.Coordination.PostgreSqlMigration? right) -> bool
 static NCode.Coordination.PostgreSqlProfile.operator !=(NCode.Coordination.PostgreSqlProfile? left, NCode.Coordination.PostgreSqlProfile? right) -> bool
