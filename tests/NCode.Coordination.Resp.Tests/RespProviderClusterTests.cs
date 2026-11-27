@@ -21,7 +21,8 @@ public sealed class RespProviderClusterTests(RespServers servers)
     private const string TopicName = "topic";
 
     /// <summary>
-    /// Creates a keyspace with a unique id, so that its keys share no slot with another test's by design.
+    /// Creates a keyspace with a unique id, so that the keys of one test are its own and no other test's keys match
+    /// their prefix.
     /// </summary>
     /// <returns>The keyspace.</returns>
     private static Keyspace CreateKeyspace()

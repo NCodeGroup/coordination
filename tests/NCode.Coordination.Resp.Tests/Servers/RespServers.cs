@@ -49,6 +49,13 @@ public sealed class RespServers : IAsyncLifetime
     public static bool Enabled =>
         Environment.GetEnvironmentVariable(EnvironmentVariable) == "docker";
 
+    /// <summary>
+    /// Gets the arguments that start Garnet with Lua scripting and Lua in transactions turned on, which the provider
+    /// needs.
+    /// </summary>
+    internal static IReadOnlyList<string> GarnetCommand { get; } =
+    ["--lua", "--lua-transaction-mode", "true"];
+
     private static IContainer CreateContainer(string image, params IEnumerable<string> command)
     {
         string[] arguments = [.. command];
@@ -136,7 +143,7 @@ public sealed class RespServers : IAsyncLifetime
         }
 
         var valkey = CreateContainer(ValkeyImage);
-        var garnet = CreateContainer(GarnetImage, "--lua", "--lua-transaction-mode", "true");
+        var garnet = CreateContainer(GarnetImage, GarnetCommand);
         var garnetWithoutLua = CreateContainer(GarnetImage);
 
         var ports = RespPorts.Reserve(3);

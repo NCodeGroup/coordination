@@ -36,13 +36,6 @@ public sealed class RespProviderRestartTests
     private const int Attempts = 20;
 
     /// <summary>
-    /// Gets the arguments that start Garnet with Lua scripting and Lua in transactions turned on, which the provider
-    /// needs.
-    /// </summary>
-    private static IReadOnlyList<string> GarnetCommand { get; } =
-    ["--lua", "--lua-transaction-mode", "true"];
-
-    /// <summary>
     /// Gets how long a test waits for a restarted server to answer or for a restart step to happen.
     /// </summary>
     private static TimeSpan WaitLimit { get; } = TimeSpan.FromSeconds(30);
@@ -363,7 +356,7 @@ public sealed class RespProviderRestartTests
     public async Task CreateAsync_WhenGarnetRestartsMidRun_FailsOnlyAsUnavailableAndAppliesNoCallReportedUnapplied() =>
         await AssertWritesAcrossARestartAsync(
             RespServers.GarnetImage,
-            GarnetCommand,
+            RespServers.GarnetCommand,
             RespProfiles.Garnet,
             TestContext.Current.CancellationToken
         );
@@ -385,7 +378,7 @@ public sealed class RespProviderRestartTests
     public async Task SubscribeAsync_WhenGarnetRestarts_ResyncsAndDeliversLaterChanges() =>
         await AssertSubscriptionsAcrossARestartAsync(
             RespServers.GarnetImage,
-            GarnetCommand,
+            RespServers.GarnetCommand,
             RespProfiles.Garnet,
             TestContext.Current.CancellationToken
         );
