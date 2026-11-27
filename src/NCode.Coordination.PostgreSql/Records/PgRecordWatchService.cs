@@ -1,0 +1,167 @@
+// Copyright © NCode Group
+// SPDX-License-Identifier: Apache-2.0
+
+using System.Runtime.CompilerServices;
+using NCode.Coordination.PostgreSql.Keys;
+using NCode.Coordination.PostgreSql.Server;
+using NCode.Coordination.PostgreSql.Subscriptions;
+
+namespace NCode.Coordination.PostgreSql.Records;
+
+/// <summary>
+/// The record watches of the PostgreSQL provider: each subscribes to its keyspace's change log, which numbers every
+/// change a watch can see, and yields the entries' items that its key or prefix covers. A subscriber that names a
+/// revision the log still holds is replayed from it without a resync.
+/// </summary>
+/// <param name="keyspaces">The resolver of keyspace ids.</param>
+/// <param name="log">The reader of a keyspace's change log.</param>
+/// <param name="hub">The owner of the provider's listening connection and logs' fanouts.</param>
+/// <exception cref="ArgumentNullException">An argument is null.</exception>
+internal sealed class PgRecordWatchService(PgKeyspaces keyspaces, PgChangeLog log, PgLogHub hub)
+    : IRecordWatchService
+{
+    /// <summary>The kind that a change item holds for a record that was written.</summary>
+    private const short WrittenKind = 1;
+
+    /// <summary>
+    /// Gets the resolver of keyspace ids.
+    /// </summary>
+    private PgKeyspaces Keyspaces { get; } =
+        keyspaces ?? throw new ArgumentNullException(nameof(keyspaces));
+
+    /// <summary>
+    /// Gets the reader of a keyspace's change log.
+    /// </summary>
+    private PgChangeLog Log { get; } = log ?? throw new ArgumentNullException(nameof(log));
+
+    /// <summary>
+    /// Gets the owner of the provider's listening connection and logs' fanouts.
+    /// </summary>
+    private PgLogHub Hub { get; } = hub ?? throw new ArgumentNullException(nameof(hub));
+
+    /// <inheritdoc />
+    public IAsyncEnumerable<RecordChange> WatchKeyAsync(
+        CoordinationKey key,
+        Revision? after,
+        OperationOptions? options,
+        CancellationToken cancellationToken
+    )
+    {
+        ArgumentNullException.ThrowIfNull(key);
+        PgCall.Check(options, cancellationToken);
+
+        var index = PgKeys.Index(key);
+        var depth = (short)key.PartitionDepth;
+
+        return WatchCoreAsync(
+            key.Keyspace,
+            after,
+            item => item.Depth == depth && item.Index.AsSpan().SequenceEqual(index),
+            cancellationToken
+        );
+    }
+
+    /// <inheritdoc />
+    public IAsyncEnumerable<RecordChange> WatchPrefixAsync(
+        CoordinationKey prefix,
+        Revision? after,
+        OperationOptions? options,
+        CancellationToken cancellationToken
+    )
+    {
+        ArgumentNullException.ThrowIfNull(prefix);
+        PgCall.Check(options, cancellationToken);
+
+        var index = PgKeys.Index(prefix);
+
+        return WatchCoreAsync(
+            prefix.Keyspace,
+            after,
+            item => item.Index.AsSpan().StartsWith(index),
+            cancellationToken
+        );
+    }
+
+    /// <summary>
+    /// Streams the changes of a watch: the entries after the subscriber's revision, or a resync, then each covered
+    /// item of each entry in order, and a resync after each gap.
+    /// </summary>
+    /// <param name="keyspace">The keyspace to watch.</param>
+    /// <param name="after">The revision after which the subscriber wants the changes, or null for none.</param>
+    /// <param name="matches">Tells whether the watch covers a change item.</param>
+    /// <param name="cancellationToken">The token that cancels the stream.</param>
+    /// <returns>A stream of changes.</returns>
+    private async IAsyncEnumerable<RecordChange> WatchCoreAsync(
+        Keyspace keyspace,
+        Revision? after,
+        Func<PgChangeItem, bool> matches,
+        [EnumeratorCancellation] CancellationToken cancellationToken
+    )
+    {
+        var keyspaceId = await Keyspaces
+            .ResolveAsync(keyspace, cancellationToken)
+            .ConfigureAwait(false);
+
+        var logId = new PgLogId(keyspaceId, null);
+        var subscriber = await Hub.SubscribeAsync(
+                logId,
+                () =>
+                    new PgLogFanout<PgChange>(
+                        (cursor, limit, readToken) =>
+                            Log.ReadAsync(keyspaceId, cursor, limit, readToken)
+                    ),
+                after?.Value,
+                cancellationToken
+            )
+            .ConfigureAwait(false);
+
+        try
+        {
+            await foreach (
+                var item in subscriber.Reader.ReadAllAsync(cancellationToken).ConfigureAwait(false)
+            )
+            {
+                if (item.IsResync)
+                {
+                    yield return RecordChange.Resync(new Revision(item.Current));
+                    continue;
+                }
+
+                if (item.Entry is not { } entry)
+                {
+                    continue;
+                }
+
+                var revision = new Revision(entry.Number);
+
+                foreach (var changed in entry.Items)
+                {
+                    if (!matches(changed))
+                    {
+                        continue;
+                    }
+
+                    var key = PgRecordTable.DecodeKey(keyspace, changed.Key, changed.Depth);
+                    yield return changed.Kind == WrittenKind
+                        ? RecordChange.Written(new StoredRecord(key, changed.Value ?? [], revision))
+                        : RecordChange.Deleted(key, revision);
+                }
+
+                foreach (var ended in entry.EndedKeys)
+                {
+                    if (!matches(ended))
+                    {
+                        continue;
+                    }
+
+                    var key = PgRecordTable.DecodeKey(keyspace, ended.Key, ended.Depth);
+                    yield return RecordChange.Deleted(key, revision);
+                }
+            }
+        }
+        finally
+        {
+            await Hub.UnsubscribeAsync(logId, subscriber).ConfigureAwait(false);
+        }
+    }
+}
