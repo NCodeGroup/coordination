@@ -289,4 +289,22 @@ internal class RespRecordTable(RespServer server, RespProfile profile)
 
         return ReadRevision(fields[0], reply);
     }
+
+    /// <summary>
+    /// Reads the number of a keyspace's watch channel, which is the keyspace's revision.
+    /// </summary>
+    /// <param name="keyspace">The keyspace.</param>
+    /// <param name="cancellationToken">The token that cancels the read.</param>
+    /// <returns>The revision's value.</returns>
+    /// <exception cref="ArgumentNullException">The keyspace is null.</exception>
+    /// <exception cref="CoordinationException">The call failed or the server's reply is not a revision.</exception>
+    public async ValueTask<long> ReadWatchNumberAsync(
+        Keyspace keyspace,
+        CancellationToken cancellationToken
+    )
+    {
+        var revision = await ReadRevisionAsync(keyspace, cancellationToken).ConfigureAwait(false);
+
+        return revision.Value;
+    }
 }

@@ -163,24 +163,6 @@ internal class RespMembershipService(RespRecordTable table, RespSubscriptions su
     }
 
     /// <summary>
-    /// Reads the revision of a keyspace, which is the number of its watch channel.
-    /// </summary>
-    /// <param name="keyspace">The keyspace.</param>
-    /// <param name="cancellationToken">The token that cancels the read.</param>
-    /// <returns>The revision's value.</returns>
-    private async ValueTask<long> ReadNumberAsync(
-        Keyspace keyspace,
-        CancellationToken cancellationToken
-    )
-    {
-        var revision = await Table
-            .ReadRevisionAsync(keyspace, cancellationToken)
-            .ConfigureAwait(false);
-
-        return revision.Value;
-    }
-
-    /// <summary>
     /// Lists a group, reporting a failure instead of throwing it so that a stream can survive it.
     /// </summary>
     /// <param name="group">The group to list.</param>
@@ -215,7 +197,11 @@ internal class RespMembershipService(RespRecordTable table, RespSubscriptions su
     {
         var channel = RespRecordTable.WatchChannel(group.Keyspace);
         var reader = await Subscriptions
-            .OpenAsync(channel, token => ReadNumberAsync(group.Keyspace, token), cancellationToken)
+            .OpenAsync(
+                channel,
+                token => Table.ReadWatchNumberAsync(group.Keyspace, token),
+                cancellationToken
+            )
             .ConfigureAwait(false);
 
         await using var disposal = reader.ConfigureAwait(false);
