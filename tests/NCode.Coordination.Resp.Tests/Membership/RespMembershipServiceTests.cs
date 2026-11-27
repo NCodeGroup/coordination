@@ -71,7 +71,8 @@ public sealed class RespMembershipServiceTests(RespServers servers)
         var timeToLive = new TimeToLive(minute);
         var grant = await sessions.OpenAsync(keyspace, timeToLive, null, cancellationToken);
         var group = keyspace.CreateKey("group");
-        var channel = subscriptions.Channel(RespRecordTable.WatchChannel(keyspace));
+        var watchChannel = RespRecordTable.WatchChannel(keyspace);
+        var channel = subscriptions.Channel(watchChannel);
         var subscriber = multiplexer.GetSubscriber();
         var queue = await subscriber.SubscribeAsync(channel);
         var member = new Member(grant.Id, "node-1", "address-1");
@@ -82,7 +83,8 @@ public sealed class RespMembershipServiceTests(RespServers servers)
         var left = await ReadMessageAsync(queue, cancellationToken);
         await queue.UnsubscribeAsync();
 
-        var revision = long.Parse(joined.Split('\n')[0], CultureInfo.InvariantCulture);
+        var digits = joined.Split('\n')[0];
+        var revision = long.Parse(digits, CultureInfo.InvariantCulture);
         var name = RespKeys.Member(group);
         Assert.Equal($"{revision}\nm{name}", joined);
         Assert.Equal($"{revision + 1}\nm{name}", left);

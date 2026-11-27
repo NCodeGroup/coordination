@@ -109,7 +109,8 @@ public sealed class RespNotificationServiceTests(RespServers servers) : IDisposa
         await service.PublishAsync(topic, "a"u8.ToArray(), null, cancellationToken);
         var first = await NextAsync(enumerator, cancellationToken);
         Assert.Equal(1, first.Sequence);
-        var channel = subscriptions.Channel(key.ToString());
+        var name = key.ToString();
+        var channel = subscriptions.Channel(name);
         await multiplexer.GetSubscriber().PublishAsync(channel, "3\nb");
         var resync = await NextAsync(enumerator, cancellationToken);
 
@@ -129,7 +130,7 @@ public sealed class RespNotificationServiceTests(RespServers servers) : IDisposa
         var firstStream = service.SubscribeAsync(topic, null, cancellationToken);
         var secondStream = service.SubscribeAsync(topic, null, cancellationToken);
         await using var first = firstStream.GetAsyncEnumerator(cancellationToken);
-        var second = secondStream.GetAsyncEnumerator(cancellationToken);
+        await using var second = secondStream.GetAsyncEnumerator(cancellationToken);
 
         var firstStart = await NextAsync(first, cancellationToken);
         var secondStart = await NextAsync(second, cancellationToken);

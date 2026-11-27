@@ -36,38 +36,36 @@ public sealed class RespConnectionSignalsTests : IDisposable
             .Verifiable();
         var channel = Channel.CreateUnbounded<RespSignal>();
 
-        using (var signals = new RespConnectionSignals(multiplexer.Object, channel.Writer))
-        {
-            multiplexer
-                .SetupRemove(x =>
-                    x.ConnectionFailed -= It.IsAny<EventHandler<ConnectionFailedEventArgs>>()
-                )
-                .Verifiable();
-            multiplexer
-                .SetupRemove(x =>
-                    x.ConnectionRestored -= It.IsAny<EventHandler<ConnectionFailedEventArgs>>()
-                )
-                .Verifiable();
-            Assert.NotNull(failed);
-            Assert.NotNull(restored);
-            var args = new ConnectionFailedEventArgs(
-                multiplexer.Object,
-                new DnsEndPoint("localhost", 6379),
-                ConnectionType.Subscription,
-                ConnectionFailureType.SocketFailure,
-                new InvalidOperationException("The test dropped the connection."),
-                "test"
-            );
+        using var signals = new RespConnectionSignals(multiplexer.Object, channel.Writer);
+        multiplexer
+            .SetupRemove(x =>
+                x.ConnectionFailed -= It.IsAny<EventHandler<ConnectionFailedEventArgs>>()
+            )
+            .Verifiable();
+        multiplexer
+            .SetupRemove(x =>
+                x.ConnectionRestored -= It.IsAny<EventHandler<ConnectionFailedEventArgs>>()
+            )
+            .Verifiable();
+        Assert.NotNull(failed);
+        Assert.NotNull(restored);
+        var args = new ConnectionFailedEventArgs(
+            multiplexer.Object,
+            new DnsEndPoint("localhost", 6379),
+            ConnectionType.Subscription,
+            ConnectionFailureType.SocketFailure,
+            new InvalidOperationException("The test dropped the connection."),
+            "test"
+        );
 
-            failed(multiplexer.Object, args);
-            restored(multiplexer.Object, args);
+        failed(multiplexer.Object, args);
+        restored(multiplexer.Object, args);
 
-            Assert.True(channel.Reader.TryRead(out var first));
-            Assert.True(channel.Reader.TryRead(out var second));
-            Assert.False(channel.Reader.TryRead(out _));
-            Assert.Equal(RespSignalKind.Failed, first.Kind);
-            Assert.Equal(RespSignalKind.Restored, second.Kind);
-        }
+        Assert.True(channel.Reader.TryRead(out var first));
+        Assert.True(channel.Reader.TryRead(out var second));
+        Assert.False(channel.Reader.TryRead(out _));
+        Assert.Equal(RespSignalKind.Failed, first.Kind);
+        Assert.Equal(RespSignalKind.Restored, second.Kind);
     }
 
     #endregion

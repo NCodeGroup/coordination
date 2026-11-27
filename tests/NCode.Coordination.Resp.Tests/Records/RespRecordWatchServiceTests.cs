@@ -70,7 +70,9 @@ public sealed class RespRecordWatchServiceTests(RespServers servers)
         await using var multiplexer = await ConnectAsync(endpoint, cancellationToken);
         var (records, watches) = CreateServices(multiplexer, profile);
         var key = CreateKeyspace().CreateKey("a");
-        var lifetime = RecordLifetime.ForTimeToLive(new TimeToLive(TimeSpan.FromSeconds(1)));
+        var second = TimeSpan.FromSeconds(1);
+        var timeToLive = new TimeToLive(second);
+        var lifetime = RecordLifetime.ForTimeToLive(timeToLive);
         var created = await records.CreateAsync(
             key,
             "v"u8.ToArray(),
