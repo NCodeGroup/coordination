@@ -72,7 +72,7 @@ What PostgreSQL and Npgsql offer (read 2026-11-27; sources under References):
 **An operation that one statement does runs as that statement. Every other operation runs as one short explicit
 transaction at read committed, whose statements are constant SQL sent in batches, at most two round trips, and whose
 decisions are made in C# between them. A change a watch can see first locks its keyspace's row. The provider installs
-no functions and uses no serializable transactions, advisory locks or two-phase commit.**
+no functions, and no operation uses a serializable transaction, an advisory lock or two-phase commit.**
 
 1. **One statement when one does it.** An operation whose whole effect is one statement runs as that statement outside
    an explicit transaction, such as an insert that skips an unexpired occurrence, an upsert that increments a counter
@@ -108,8 +108,12 @@ no functions and uses no serializable transactions, advisory locks or two-phase 
     committing step is sent, so ADR-1031 rule 4 reports either with `OutcomeUnknown` false. Only a committing step,
     the `COMMIT` or the message that carries a single statement or a batch outside an explicit transaction, that was
     sent without a reply that settles it leaves the outcome unknown.
-11. **No functions, no serializable transactions, no advisory locks, no two-phase commit.** Rule 3's row locks serialize
-    what must be serialized, and nothing else on the server is the provider's code.
+11. **No functions, and no serializable transactions, advisory locks or two-phase commit in an operation.** Rule 3's
+    row locks serialize what an operation must serialize, and nothing else on the server is the provider's code.
+    Applying the schema's migrations is not an operation: before the first one there is no row to lock, so
+    [ADR-1033](1033-postgresql-state-lives-in-tables-the-provider-migrates-shared-by-every-keyspace-with-each-keyspaces-revision-on-its-row.md)
+    rule 8 serializes them with a transaction's advisory lock, which ends with its transaction and works through
+    transaction pooling.
 
 ## Options considered
 
@@ -138,8 +142,9 @@ no functions and uses no serializable transactions, advisory locks or two-phase 
 - **One statement per operation.** Rejected as the general rule: a check and a write across several tables in one
   statement depends on how read committed rechecks a row it waited for, which is easy to get wrong and hard to review.
   Where one plain statement is the whole operation, rule 1 uses it.
-- **Advisory locks.** Rejected: a session's advisory lock outlives a pooled connection's use and doesn't work through
-  transaction pooling, and a transaction's lock adds nothing to rule 3's row lock.
+- **Advisory locks.** Rejected for operations: a session's advisory lock outlives a pooled connection's use and doesn't
+  work through transaction pooling, and a transaction's lock adds nothing to rule 3's row lock. Migrations have no such
+  row before the first one creates the tables, so they take a transaction's lock (rule 11).
 
 ## Consequences
 
@@ -166,7 +171,8 @@ no functions and uses no serializable transactions, advisory locks or two-phase 
   [ADR-1019](1019-concurrent-runs-record-histories-and-a-checker-searches-each-keys-history-for-a-linearization.md),
   [ADR-1023](1023-the-resp-provider-runs-each-operation-as-one-command-or-one-lua-script-and-never-as-a-client-side-transaction.md),
   the RESP provider's counterpart,
-  [ADR-1031](1031-the-postgresql-provider-speaks-through-npgsql-and-can-share-the-hosts-data-source.md)
+  [ADR-1031](1031-the-postgresql-provider-speaks-through-npgsql-and-can-share-the-hosts-data-source.md),
+  [ADR-1033](1033-postgresql-state-lives-in-tables-the-provider-migrates-shared-by-every-keyspace-with-each-keyspaces-revision-on-its-row.md)
 - PostgreSQL 19 documentation, read 2026-11-27:
   [Transaction isolation](https://www.postgresql.org/docs/19/transaction-iso.html),
   [Explicit locking](https://www.postgresql.org/docs/19/explicit-locking.html),
