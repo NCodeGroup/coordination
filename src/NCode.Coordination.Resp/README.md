@@ -19,6 +19,10 @@ A shared connection keeps its own settings. The provider runs on its default dat
 and works with any backlog policy, reporting a call that times out as possibly applied. Its command map must keep
 `EVAL` and `EVALSHA`, or the host's start fails.
 
+`CheckInterval`, 5 seconds by default, sets how often each notification subscription and watch checks its channel's
+number, which notices a lost message and, for a watch, deletes and announces the keyspace's expired state. It is more
+than zero and less than an hour.
+
 ## Profiles
 
 `Profile` names the server, `RespProfiles.Valkey` by default. When the host starts, the provider checks that the
@@ -31,8 +35,8 @@ command the provider sends, and fails the start otherwise.
 
 ## Primitives
 
-The provider keeps records, transactions, occurrences, sets, counters, sequences, sessions, membership, leases,
-semaphores, elections and claims. Each operation is one server command or one Lua script, and every time to live is
+The provider keeps records, record watches, transactions, occurrences, sets, counters, sequences, sessions,
+membership, leases, semaphores, elections, claims and notifications. Each operation is one server command or one Lua script, and every time to live is
 measured on the server's clock, in whole milliseconds rounded up.
 
 - **Records**: a keyspace keeps its records in one hash, beside an index that lists them under a prefix and the
@@ -46,6 +50,10 @@ measured on the server's clock, in whole milliseconds rounded up.
 - **Transactions**: up to 64 conditions and two branches of up to 64 writes, run as one script on one keyspace's
   records. A put that binds a record to a session that has ended ends the transaction as session ended, with nothing
   written.
+- **Record watches**: a watch on a key or a prefix subscribes to its keyspace's watch channel, starts with a resync
+  at the keyspace's revision, and reads each written record from the keyspace, delivering it when the record still
+  holds that write's revision; a later write of the key arrives with its own event. A delete arrives at its own
+  revision. The provider keeps no history, so a watch that names a revision to resume after starts with a resync too.
 - **Occurrences**: `SET` with `NX` and a time to live. A call the server doesn't answer throws, so a replay guard
   refuses rather than accepts.
 - **Sets**: one sorted set per key, each member scored with its own deadline; at most 10,000 live members.
@@ -58,19 +66,29 @@ measured on the server's clock, in whole milliseconds rounded up.
   expiry ends it at once with the memberships, leases, semaphore slots, leaderships and records bound to it, which
   are absent from then on; each script on the keyspace removes up to 64 of them. A session's id is 128 random bits.
 - **Membership**: a group is read at the keyspace's revision, which a join takes, and a leave or a session's end
-  takes when it removes a member or a record, and each member's address and metadata come back as written.
+  takes when it removes a member or a record, and each member's address and metadata come back as written. A join, a
+  leave and a session's end name the group in the keyspace's event, and a group's watch lists the group again only
+  when an event names it or its channel resyncs.
 - **Leases, semaphores and elections**: each grant carries a fencing token from a counter per resource that never
   expires and an owner token of 128 random bits, and is bound to a session or to a time to live. A semaphore has up
   to 1,024 slots, and a leader's value up to 65,536 bytes.
 - **Claims**: `SET` with `NX` and the time to live the caller gives, on the claim's name followed by its window's
   segment, so the skew allowance is the caller's, from `TimeWindow.TryCreateTimeToLive`.
-- **Waits and watches**: waiting for a session's end or a release, and watching a role or a group, read the server
-  every 100 milliseconds until the condition holds or the caller cancels. A group's watch reads only the keyspace's
-  revision on each poll, and lists the group again only once the revision has moved.
+- **Waits**: waiting for a session's end or a release, and watching a role, read the server every 100 milliseconds
+  until the condition holds or the caller cancels.
+- **Notifications**: a publish is one script that takes the topic's next sequence, which never expires, and publishes
+  it with the payload, up to 4,096 bytes, on the topic's channel. A subscription starts with a resync carrying 0,
+  delivers consecutive sequences, and resyncs carrying the last sequence it delivered.
+- **Resyncs**: every subscription and watch reads its channel's messages in order, and resyncs after a gap, a number
+  that goes backwards, a dropped and restored connection, or a check, every `CheckInterval`, that finds its channel
+  ahead for more than a second. A watch's check reads the keyspace's revision, which deletes and announces its
+  expired records and ends its expired sessions, so an expiry reaches the watch within the interval.
 
-The provider declares each of them linearizable until the server fails over, and volatile, since it can't tell
-whether the server persists or replicates its writes; transactions and counter batches are atomic across
-partitions, because a keyspace lives in one slot. It serves no other primitive.
+The provider declares each of them but record watches and notifications linearizable until the server fails over,
+and volatile, since it can't tell whether the server persists or replicates its writes; transactions and counter
+batches are atomic across partitions, because a keyspace lives in one slot. It declares record watches linearizable
+until a failover, and record watches and notifications at most once with gap detection: a message can be lost, but
+never without a resync after it.
 
 ## Keyspaces
 
