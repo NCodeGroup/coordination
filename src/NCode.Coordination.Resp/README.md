@@ -93,3 +93,11 @@ notifications are at most once with gap detection: a message can be lost, but ne
 
 Every key carries its keyspace as its cluster hash tag, so a keyspace and everything in it live in one slot. A
 cluster spreads keyspaces across its shards, not one keyspace: a keyspace per tenant is the usual unit.
+
+## Verification
+
+The provider passes every suite of the conformance kit against Valkey and Garnet, and against a Valkey cluster of three
+nodes: concurrent runs of every primitive checked for linearizability and declared delivery, and runs that drop its
+connections mid-run. Its own tests restart the server mid-run: every failure is `unavailable`, a call that fails as not
+applied never applies, and every subscription and watch resyncs and goes on delivering. On a cluster, every key of a
+keyspace lies in the keyspace's slot, and its sharded channel is subscribed on that slot's node.

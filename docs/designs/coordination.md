@@ -1,6 +1,6 @@
 # Design: NCode.Coordination
 
-- **Status:** In progress (phase 3 of 7)
+- **Status:** In progress (phase 4 of 7)
 - **Date:** 2026-11-24
 - **Issue:** [#4](https://github.com/NCodeGroup/coordination/issues/4)
 - **Authors:** NCode Group
@@ -370,6 +370,15 @@ interval; a record watch reads each written record from the table and delivers i
 membership change names its group in the keyspace's event, so a membership watch lists its group only when it
 changes.
 [ADR-1029](../decisions/1029-resp-watches-read-each-written-record-from-the-table-and-membership-events-name-their-group.md)
+
+### D30. RESP proof
+
+The RESP provider's conformance targets drop only their own provider's connections, by client name; its own tests
+restart servers of their own mid-run, where every failure is unavailable, no call reported unapplied applies, and every
+subscription and watch resyncs; and every suite runs again against a Valkey cluster of three nodes, with tests that each
+keyspace keeps its keys in its slot and its sharded channel on that slot's node. The record watch suite has a
+dropped-connection run too.
+[ADR-1030](../decisions/1030-the-resp-providers-runs-drop-its-own-connections-restart-servers-of-their-own-and-repeat-every-suite-on-a-valkey-cluster.md)
 
 ## Open Questions
 
