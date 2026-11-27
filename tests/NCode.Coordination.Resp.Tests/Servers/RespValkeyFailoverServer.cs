@@ -20,20 +20,10 @@ internal sealed class RespValkeyFailoverServer(
 ) : IRespFailoverServer
 {
     /// <summary>
-    /// The address that both servers are published on, which the tests connect to.
-    /// </summary>
-    private const string Host = "127.0.0.1";
-
-    /// <summary>
     /// The line that the container's script prints once the replica's link to the primary is up, which the container's
     /// wait strategy watches for.
     /// </summary>
     private const string ReplicationReadyMessage = "Replication ready";
-
-    /// <summary>
-    /// The line of <c>INFO replication</c> that says a replica's link to its primary is up.
-    /// </summary>
-    private const string LinkUp = "master_link_status:up";
 
     /// <summary>
     /// Starts a Valkey primary and a replica of it, neither of which persists anything.
@@ -73,8 +63,8 @@ internal sealed class RespValkeyFailoverServer(
         const string options =
             "--save '' --appendonly no --repl-diskless-sync-delay 0 --daemonize yes";
         return $"valkey-server --port {primaryPort} {options} --logfile /data/{primaryPort}.log; "
-            + $"valkey-server --port {replicaPort} --replicaof {Host} {primaryPort} {options} --logfile /data/{replicaPort}.log; "
-            + $"until valkey-cli -p {replicaPort} info replication | grep -q {LinkUp}; do sleep 0.1; done; "
+            + $"valkey-server --port {replicaPort} --replicaof {RespNodes.Host} {primaryPort} {options} --logfile /data/{replicaPort}.log; "
+            + $"until valkey-cli -p {replicaPort} info replication | grep -q {RespNodes.LinkUp}; do sleep 0.1; done; "
             + $"echo '{ReplicationReadyMessage}'; exec sleep infinity";
     }
 
@@ -94,14 +84,14 @@ internal sealed class RespValkeyFailoverServer(
     private int ReplicaPort { get; } = replicaPort;
 
     /// <inheritdoc />
-    public string Endpoint => $"{Host}:{PrimaryPort},{Host}:{ReplicaPort}";
+    public string Endpoint => $"{RespNodes.Host}:{PrimaryPort},{RespNodes.Host}:{ReplicaPort}";
 
     /// <inheritdoc />
     public async ValueTask WaitForReplicaAsync(CancellationToken cancellationToken)
     {
         await using var admin = await RespNodes.ConnectAdminAsync(Endpoint, cancellationToken);
-        var primary = admin.GetServer(Host, PrimaryPort);
-        var replica = admin.GetServer(Host, ReplicaPort);
+        var primary = admin.GetServer(RespNodes.Host, PrimaryPort);
+        var replica = admin.GetServer(RespNodes.Host, ReplicaPort);
         await RespNodes.WaitForReplicaAsync(primary, replica, cancellationToken);
     }
 
@@ -109,7 +99,7 @@ internal sealed class RespValkeyFailoverServer(
     public async ValueTask PromoteReplicaAsync(CancellationToken cancellationToken)
     {
         await using var admin = await RespNodes.ConnectAdminAsync(Endpoint, cancellationToken);
-        var replica = admin.GetServer(Host, ReplicaPort);
+        var replica = admin.GetServer(RespNodes.Host, ReplicaPort);
         await replica.ExecuteAsync("REPLICAOF", "NO", "ONE");
     }
 
@@ -117,12 +107,11 @@ internal sealed class RespValkeyFailoverServer(
     public async ValueTask DemotePrimaryAsync(CancellationToken cancellationToken)
     {
         await using var admin = await RespNodes.ConnectAdminAsync(Endpoint, cancellationToken);
-        var primary = admin.GetServer(Host, PrimaryPort);
-        await primary.ExecuteAsync("REPLICAOF", Host, ReplicaPort);
-        await RespNodes.WaitForReplyAsync(
+        var primary = admin.GetServer(RespNodes.Host, PrimaryPort);
+        await primary.ExecuteAsync("REPLICAOF", RespNodes.Host, ReplicaPort);
+        await RespNodes.WaitForReplicationAsync(
             primary,
-            ["INFO", "replication"],
-            reply => reply.Contains(LinkUp, StringComparison.Ordinal),
+            reply => reply.Contains(RespNodes.LinkUp, StringComparison.Ordinal),
             cancellationToken
         );
     }

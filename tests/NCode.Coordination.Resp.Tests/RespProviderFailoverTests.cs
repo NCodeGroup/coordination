@@ -41,6 +41,11 @@ public sealed class RespProviderFailoverTests
     private const int Attempts = 20;
 
     /// <summary>
+    /// The prefix of the payloads and record names that a test writes after the failover, numbered by attempt.
+    /// </summary>
+    private const string AfterPrefix = "after-";
+
+    /// <summary>
     /// Gets how long a test waits for the client to find the new primary.
     /// </summary>
     private static TimeSpan WaitLimit { get; } = TimeSpan.FromSeconds(30);
@@ -244,7 +249,7 @@ public sealed class RespProviderFailoverTests
         var delivered = false;
         for (var attempt = 0; attempt < Attempts && !(resynced && delivered); attempt++)
         {
-            var payload = Encoding.UTF8.GetBytes($"after-{attempt}");
+            var payload = Encoding.UTF8.GetBytes($"{AfterPrefix}{attempt}");
             await WaitUntilAnsweredAsync(
                 ct => notifications.PublishAsync(topic, payload, null, ct),
                 cancellationToken
@@ -264,7 +269,7 @@ public sealed class RespProviderFailoverTests
         delivered = false;
         for (var attempt = 0; attempt < Attempts && !(resynced && delivered); attempt++)
         {
-            var key = keyspace.CreateKey(WatchedName, $"after-{attempt}");
+            var key = keyspace.CreateKey(WatchedName, $"{AfterPrefix}{attempt}");
             await WaitUntilAnsweredAsync(
                 async ct =>
                 {

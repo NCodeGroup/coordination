@@ -38,12 +38,6 @@ public sealed class RespServers : IAsyncLifetime
     private const string ClusterReadyMessage = "Cluster ready";
 
     /// <summary>
-    /// The address that the cluster's nodes announce and that the cluster endpoint names, so the client sees each node
-    /// once and can reach it from the host.
-    /// </summary>
-    private const string ClusterHost = "127.0.0.1";
-
-    /// <summary>
     /// The number of nodes of each cluster the tests start.
     /// </summary>
     private const int ClusterNodes = 3;
@@ -94,7 +88,7 @@ public sealed class RespServers : IAsyncLifetime
         return "i=0; "
             + $"for p in {list}; do i=$((i+1)); "
             + "valkey-server --port $p --cluster-enabled yes --cluster-port $((16379+i)) "
-            + $"--cluster-config-file nodes-$p.conf --cluster-announce-ip {ClusterHost} "
+            + $"--cluster-config-file nodes-$p.conf --cluster-announce-ip {RespNodes.Host} "
             + "--save '' --appendonly no --daemonize yes --logfile /data/$p.log; done; "
             + $"for p in {list}; do until valkey-cli -p $p ping >/dev/null 2>&1; do sleep 0.1; done; done; "
             + $"valkey-cli --cluster create {nodes} --cluster-replicas 0 --cluster-yes; "
@@ -109,7 +103,7 @@ public sealed class RespServers : IAsyncLifetime
     /// <returns>The address of each node, in the order of the ports.</returns>
     private static IReadOnlyList<string> GetClusterAddresses(IReadOnlyList<int> ports)
     {
-        var addresses = ports.Select(port => $"{ClusterHost}:{port}");
+        var addresses = ports.Select(port => $"{RespNodes.Host}:{port}");
 
         return [.. addresses];
     }

@@ -19,11 +19,6 @@ internal sealed class RespGarnetFailoverServer(
 ) : IRespFailoverServer
 {
     /// <summary>
-    /// The address that both nodes announce and that the tests connect to.
-    /// </summary>
-    private const string Host = "127.0.0.1";
-
-    /// <summary>
     /// The number of fields of a <c>CLUSTER NODES</c> line before its slots.
     /// </summary>
     private const int NodeFields = 8;
@@ -85,8 +80,8 @@ internal sealed class RespGarnetFailoverServer(
     public async ValueTask WaitForReplicaAsync(CancellationToken cancellationToken)
     {
         await using var admin = await RespNodes.ConnectAdminAsync(Endpoint, cancellationToken);
-        var primary = admin.GetServer(Host, PrimaryPort);
-        var replica = admin.GetServer(Host, ReplicaPort);
+        var primary = admin.GetServer(RespNodes.Host, PrimaryPort);
+        var replica = admin.GetServer(RespNodes.Host, ReplicaPort);
         await RespNodes.WaitForReplicaAsync(primary, replica, cancellationToken);
     }
 
@@ -94,11 +89,10 @@ internal sealed class RespGarnetFailoverServer(
     public async ValueTask PromoteReplicaAsync(CancellationToken cancellationToken)
     {
         await using var admin = await RespNodes.ConnectAdminAsync(Endpoint, cancellationToken);
-        var replica = admin.GetServer(Host, ReplicaPort);
+        var replica = admin.GetServer(RespNodes.Host, ReplicaPort);
         await replica.ExecuteAsync("CLUSTER", "FAILOVER", "FORCE");
-        await RespNodes.WaitForReplyAsync(
+        await RespNodes.WaitForReplicationAsync(
             replica,
-            ["INFO", "replication"],
             reply => reply.Contains("role:master", StringComparison.Ordinal),
             cancellationToken
         );
@@ -108,7 +102,7 @@ internal sealed class RespGarnetFailoverServer(
     public async ValueTask DemotePrimaryAsync(CancellationToken cancellationToken)
     {
         await using var admin = await RespNodes.ConnectAdminAsync(Endpoint, cancellationToken);
-        var primary = admin.GetServer(Host, PrimaryPort);
+        var primary = admin.GetServer(RespNodes.Host, PrimaryPort);
         await RespNodes.WaitForReplyAsync(
             primary,
             ["CLUSTER", "NODES"],

@@ -20,12 +20,6 @@ internal static class RespGarnetCluster
     private const string NodesReadyMessage = "Garnet nodes ready";
 
     /// <summary>
-    /// The address that every node announces and that the tests connect to, so the client sees each node once and can
-    /// reach it from the host.
-    /// </summary>
-    private const string Host = "127.0.0.1";
-
-    /// <summary>
     /// The number of hash slots that a cluster divides between its primaries.
     /// </summary>
     private const int SlotCount = 16_384;
@@ -63,7 +57,7 @@ internal static class RespGarnetCluster
     /// <returns>The comma-separated list of the nodes' addresses.</returns>
     public static string GetEndpoint(IReadOnlyList<int> ports)
     {
-        var addresses = ports.Select(port => $"{Host}:{port}");
+        var addresses = ports.Select(port => $"{RespNodes.Host}:{port}");
         return string.Join(",", addresses);
     }
 
@@ -88,7 +82,7 @@ internal static class RespGarnetCluster
         var nodes = new List<IServer>(ports.Count);
         foreach (var port in ports)
         {
-            var node = admin.GetServer(Host, port);
+            var node = admin.GetServer(RespNodes.Host, port);
             nodes.Add(node);
         }
 
@@ -107,7 +101,7 @@ internal static class RespGarnetCluster
 
         for (var index = 1; index < nodes.Count; index++)
         {
-            await nodes[0].ExecuteAsync("CLUSTER", "MEET", Host, ports[index]);
+            await nodes[0].ExecuteAsync("CLUSTER", "MEET", RespNodes.Host, ports[index]);
         }
 
         var knownNodes = $"cluster_known_nodes:{nodes.Count}";
@@ -130,10 +124,9 @@ internal static class RespGarnetCluster
             var id = reply.ToString();
             var replica = nodes[index];
             await replica.ExecuteAsync("CLUSTER", "REPLICATE", id);
-            await RespNodes.WaitForReplyAsync(
+            await RespNodes.WaitForReplicationAsync(
                 replica,
-                ["INFO", "replication"],
-                text => text.Contains("master_link_status:up", StringComparison.Ordinal),
+                text => text.Contains(RespNodes.LinkUp, StringComparison.Ordinal),
                 cancellationToken
             );
         }
@@ -152,7 +145,7 @@ internal static class RespGarnetCluster
         IReadOnlyList<string> arguments = [.. RespServers.GarnetCommand, .. nodeArguments];
         var extra = string.Join(" ", arguments);
         return $"for p in {list}; do "
-            + $"/app/GarnetServer --port $p --cluster --checkpointdir /data/$p --cluster-announce-ip {Host} {extra} "
+            + $"/app/GarnetServer --port $p --cluster --checkpointdir /data/$p --cluster-announce-ip {RespNodes.Host} {extra} "
             + "> /data/$p.log 2>&1 & done; "
             + $"for p in {list}; do until grep -q '{RespServers.ReadyMessage}' /data/$p.log; do sleep 0.1; done; done; "
             + $"echo '{NodesReadyMessage}'; wait";

@@ -17,6 +17,27 @@ internal static class RespNodes
     private const string OffsetField = "master_repl_offset:";
 
     /// <summary>
+    /// The address that every node of the tests' own servers announces and that the tests connect to, so the client
+    /// sees each node once and can reach it from the host.
+    /// </summary>
+    internal const string Host = "127.0.0.1";
+
+    /// <summary>
+    /// The line of <c>INFO replication</c> that says a replica's link to its primary is up.
+    /// </summary>
+    internal const string LinkUp = "master_link_status:up";
+
+    /// <summary>
+    /// The command that reports a node's state.
+    /// </summary>
+    private const string InfoCommand = "INFO";
+
+    /// <summary>
+    /// The section of the reply to <c>INFO</c> that reports a node's replication state.
+    /// </summary>
+    private const string ReplicationSection = "replication";
+
+    /// <summary>
     /// Gets how long a wait asks a node again before it fails.
     /// </summary>
     private static TimeSpan WaitLimit { get; } = TimeSpan.FromSeconds(60);
@@ -81,6 +102,24 @@ internal static class RespNodes
     }
 
     /// <summary>
+    /// Asks a node for its replication state until the reply holds, and fails when it doesn't within the limit.
+    /// </summary>
+    /// <param name="node">The node to ask.</param>
+    /// <param name="holds">The check that the node's reply must pass.</param>
+    /// <param name="cancellationToken">The token that cancels the wait.</param>
+    /// <returns>A task that completes when the reply holds.</returns>
+    /// <exception cref="TimeoutException">The reply never held within the limit.</exception>
+    public static async ValueTask WaitForReplicationAsync(
+        IServer node,
+        Func<string, bool> holds,
+        CancellationToken cancellationToken
+    )
+    {
+        IReadOnlyList<string> command = [InfoCommand, ReplicationSection];
+        await WaitForReplyAsync(node, command, holds, cancellationToken);
+    }
+
+    /// <summary>
     /// Waits until a replica has every write of its primary: both report the same replication offset.
     /// </summary>
     /// <param name="primary">The primary node.</param>
@@ -122,7 +161,7 @@ internal static class RespNodes
     /// <returns>The trimmed line.</returns>
     private static async ValueTask<string> ReadOffsetAsync(IServer node)
     {
-        var result = await node.ExecuteAsync("INFO", "replication");
+        var result = await node.ExecuteAsync(InfoCommand, ReplicationSection);
         var reply = result.ToString();
         var lines = reply.Split('\n');
         var line = lines.First(text => text.StartsWith(OffsetField, StringComparison.Ordinal));

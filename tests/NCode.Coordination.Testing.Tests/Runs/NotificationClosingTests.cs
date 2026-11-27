@@ -30,15 +30,18 @@ public sealed class NotificationClosingTests
         }
     }
 
-    private static HistoryOperation Closing(long invoked, long responded) =>
-        HistoryTesting.Operation(
+    private static HistoryOperation Closing(long invoked, long responded)
+    {
+        var call = new NotificationCall(NotificationCall.Last);
+        return HistoryTesting.Operation(
             0,
             HistoryTesting.Partition,
-            new NotificationCall(NotificationCall.Last),
+            call,
             invoked,
             responded,
             null
         );
+    }
 
     #region WaitAsync Tests
 
@@ -55,7 +58,8 @@ public sealed class NotificationClosingTests
         var invoked = recorder.Stamp();
         var responded = recorder.Stamp();
         var payload = HistoryValues.Encode(NotificationCall.Last);
-        await channel.Writer.WriteAsync(Notification.Message(Topic, 1, payload), Token);
+        var message = Notification.Message(Topic, 1, payload);
+        await channel.Writer.WriteAsync(message, Token);
         var closing = Closing(invoked, responded);
 
         var outcome = await NotificationClosing.WaitAsync(subscriber, closing, true, Token);
@@ -75,7 +79,8 @@ public sealed class NotificationClosingTests
         );
         var invoked = recorder.Stamp();
         var responded = recorder.Stamp();
-        await channel.Writer.WriteAsync(Notification.Resync(Topic, 0), Token);
+        var resync = Notification.Resync(Topic, 0);
+        await channel.Writer.WriteAsync(resync, Token);
         var closing = Closing(invoked, responded);
 
         var outcome = await NotificationClosing.WaitAsync(subscriber, closing, true, Token);
@@ -94,7 +99,8 @@ public sealed class NotificationClosingTests
             Token
         );
         var invoked = recorder.Stamp();
-        await channel.Writer.WriteAsync(Notification.Resync(Topic, 0), Token);
+        var resync = Notification.Resync(Topic, 0);
+        await channel.Writer.WriteAsync(resync, Token);
         var read = await subscriber.WaitForAsync(_ => true, Token);
         Assert.True(read);
         var responded = recorder.Stamp();
@@ -138,7 +144,8 @@ public sealed class NotificationClosingTests
         );
         var invoked = recorder.Stamp();
         var responded = recorder.Stamp();
-        await channel.Writer.WriteAsync(Notification.Resync(Topic, 0), Token);
+        var resync = Notification.Resync(Topic, 0);
+        await channel.Writer.WriteAsync(resync, Token);
         var closing = Closing(invoked, responded);
 
         var outcome = await NotificationClosing.WaitAsync(subscriber, closing, false, Token);
