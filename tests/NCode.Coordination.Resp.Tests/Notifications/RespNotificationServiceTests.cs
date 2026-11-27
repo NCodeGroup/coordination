@@ -11,10 +11,6 @@ namespace NCode.Coordination.Resp.Notifications.Tests;
 
 public sealed class RespNotificationServiceTests(RespServers servers) : IDisposable
 {
-    private MockRepository Mocks { get; } = new(MockBehavior.Strict);
-
-    public void Dispose() => Mocks.Verify();
-
     private static Keyspace CreateKeyspace()
     {
         var id = Guid.NewGuid();
@@ -146,6 +142,10 @@ public sealed class RespNotificationServiceTests(RespServers servers) : IDisposa
         Assert.Equal(NotificationKind.Message, next.Kind);
         Assert.Equal(1, next.Sequence);
     }
+
+    private MockRepository Mocks { get; } = new(MockBehavior.Strict);
+
+    public void Dispose() => Mocks.Verify();
 
     #region TryReadPayload Tests
 
