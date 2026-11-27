@@ -64,6 +64,16 @@
     <PackageVersion Include="Testcontainers" Version="4.17.0" />
   </ItemGroup>
 
+  <!-- The PostgreSQL provider (NCode.Coordination.PostgreSql): Npgsql, its only client (ADR-1031). -->
+  <ItemGroup>
+    <PackageVersion Include="Npgsql" Version="10.0.4" />
+  </ItemGroup>
+
+  <!-- The PostgreSQL provider's tests: Testcontainers' PostgreSQL module, which starts the servers they run against. -->
+  <ItemGroup>
+    <PackageVersion Include="Testcontainers.PostgreSql" Version="4.17.0" />
+  </ItemGroup>
+
   <!-- The composition's tests: the real container, metrics and host, the metric collector, the fake clock, and Moq. -->
   <ItemGroup>
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="11.0.0" />
