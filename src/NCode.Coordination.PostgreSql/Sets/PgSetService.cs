@@ -5,7 +5,6 @@ using System.Collections.Immutable;
 using NCode.Coordination.PostgreSql.Keys;
 using NCode.Coordination.PostgreSql.Schema;
 using NCode.Coordination.PostgreSql.Server;
-using NpgsqlTypes;
 
 namespace NCode.Coordination.PostgreSql.Sets;
 
@@ -31,31 +30,70 @@ internal sealed class PgSetService(PgServer server, PgKeyspaces keyspaces, PgSch
         """;
 
     /// <summary>
-    /// The statement that reads the server's clock, the deadline of a member and the number of live members.
+    /// The statement that reads the server's clock, the member and the set's bound, counts the live members only when
+    /// the bound has reached the limit, writes the member when it is present or the set has room, keeps the bound, and
+    /// returns whether the member was present and whether it was written.
     /// </summary>
-    private const string ReadSql = """
-        SELECT now.t,
-          (SELECT m.deadline FROM {schema}.set_members m
-           WHERE m.keyspace_id = $1 AND m.idx = $2 AND m.depth = $3 AND m.member = $4),
-          (SELECT count(*) FROM {schema}.set_members m
-           WHERE m.keyspace_id = $1 AND m.idx = $2 AND m.depth = $3 AND m.deadline > now.t)
-        FROM (SELECT clock_timestamp() AS t) now
+    private const string AddSql = """
+        WITH now AS (SELECT clock_timestamp() AS t),
+        cur AS (
+          SELECT now.t,
+            m.deadline IS NOT NULL AS stored,
+            coalesce(m.deadline > now.t, false) AS present,
+            s.members AS bound
+          FROM now
+          CROSS JOIN {schema}.sets s
+          LEFT JOIN {schema}.set_members m
+            ON m.keyspace_id = s.keyspace_id AND m.idx = s.idx AND m.depth = s.depth AND m.member = $4
+          WHERE s.keyspace_id = $1 AND s.idx = $2 AND s.depth = $3
+        ),
+        chk AS (
+          SELECT cur.t, cur.stored, cur.present, cur.bound,
+            CASE WHEN cur.present OR cur.bound < $6 THEN NULL ELSE
+              (SELECT count(*) FROM {schema}.set_members m
+               WHERE m.keyspace_id = $1 AND m.idx = $2 AND m.depth = $3 AND m.deadline > cur.t) END AS live,
+            CASE WHEN cur.present OR cur.bound < $6 THEN NULL ELSE
+              (SELECT count(*) FROM {schema}.set_members m
+               WHERE m.keyspace_id = $1 AND m.idx = $2 AND m.depth = $3) END AS total
+          FROM cur
+        ),
+        w AS (
+          INSERT INTO {schema}.set_members (keyspace_id, idx, depth, member, deadline)
+          SELECT $1, $2, $3, $4, chk.t + $5 * interval '1 microsecond' FROM chk
+          WHERE chk.present OR chk.bound < $6 OR chk.live < $6
+          ON CONFLICT (keyspace_id, idx, depth, member) DO UPDATE SET deadline = EXCLUDED.deadline
+          RETURNING 1
+        ),
+        u AS (
+          UPDATE {schema}.sets s
+          SET members = coalesce(chk.total, s.members) + CASE WHEN chk.stored THEN 0 ELSE 1 END
+          FROM chk
+          WHERE s.keyspace_id = $1 AND s.idx = $2 AND s.depth = $3 AND EXISTS (SELECT 1 FROM w)
+          RETURNING 1
+        )
+        SELECT chk.present, EXISTS (SELECT 1 FROM w) FROM chk
         """;
 
-    /// <summary>The statement that writes a member and its deadline.</summary>
-    private const string WriteSql = """
-        INSERT INTO {schema}.set_members (keyspace_id, idx, depth, member, deadline)
-        VALUES ($1, $2, $3, $4, $5)
-        ON CONFLICT (keyspace_id, idx, depth, member) DO UPDATE SET deadline = EXCLUDED.deadline
+    /// <summary>The statement that takes the row lock of a set when the set has a row.</summary>
+    private const string LockExistingSql = """
+        SELECT 1 FROM {schema}.sets WHERE keyspace_id = $1 AND idx = $2 AND depth = $3 FOR UPDATE
         """;
 
-    /// <summary>The statement that deletes a member and tells whether an unexpired one was deleted.</summary>
+    /// <summary>
+    /// The statement that deletes a member, lowers the set's bound when a row was deleted, and tells whether an
+    /// unexpired member was deleted.
+    /// </summary>
     private const string RemoveSql = """
         WITH now AS (SELECT clock_timestamp() AS t),
         d AS (
           DELETE FROM {schema}.set_members
           WHERE keyspace_id = $1 AND idx = $2 AND depth = $3 AND member = $4
           RETURNING deadline
+        ),
+        u AS (
+          UPDATE {schema}.sets SET members = greatest(members - (SELECT count(*) FROM d), 0)
+          WHERE keyspace_id = $1 AND idx = $2 AND depth = $3 AND EXISTS (SELECT 1 FROM d)
+          RETURNING 1
         )
         SELECT EXISTS (SELECT 1 FROM d, now WHERE d.deadline > now.t)
         """;
@@ -94,17 +132,17 @@ internal sealed class PgSetService(PgServer server, PgKeyspaces keyspaces, PgSch
     private string Lock { get; } = schema.Apply(LockSql);
 
     /// <summary>
-    /// Gets the statement that reads the server's clock, the deadline of a member and the number of live members.
+    /// Gets the statement that adds a member when it is present or the set has room, and keeps the set's bound.
     /// </summary>
-    private string Read { get; } = schema.Apply(ReadSql);
+    private string Add { get; } = schema.Apply(AddSql);
 
     /// <summary>
-    /// Gets the statement that writes a member and its deadline.
+    /// Gets the statement that takes the row lock of a set when the set has a row.
     /// </summary>
-    private string Write { get; } = schema.Apply(WriteSql);
+    private string LockExisting { get; } = schema.Apply(LockExistingSql);
 
     /// <summary>
-    /// Gets the statement that deletes a member and tells whether an unexpired one was deleted.
+    /// Gets the statement that deletes a member, lowers the set's bound, and tells whether an unexpired one was deleted.
     /// </summary>
     private string Remove { get; } = schema.Apply(RemoveSql);
 
@@ -125,10 +163,11 @@ internal sealed class PgSetService(PgServer server, PgKeyspaces keyspaces, PgSch
 
     /// <inheritdoc />
     /// <remarks>
-    /// The operation is one transaction. Its first batch takes the row lock of the set and reads the server's clock,
-    /// the member's deadline and the number of live members, the decision is made here, and its second batch writes
-    /// the member and commits. A member that is absent from a full set rolls back and fails as
-    /// <c>limit-exceeded</c>, not applied.
+    /// The operation is one batch, which the server runs as one transaction: it takes the row lock of the set, then
+    /// one statement reads the member and the set's bound, writes the member when it is present or the set has room,
+    /// and keeps the bound. The bound is never below the number of the set's member rows, so the live members are
+    /// counted only when it has reached the limit, and the count then resets it. A member that is absent from a full
+    /// set isn't written and fails as <c>limit-exceeded</c>, not applied.
     /// </remarks>
     public async ValueTask<bool> AddAsync(
         CoordinationKey key,
@@ -149,104 +188,68 @@ internal sealed class PgSetService(PgServer server, PgKeyspaces keyspaces, PgSch
         var encoded = PgKeys.EncodeSegment(member);
         var microseconds = PgCall.ToMicroseconds(timeToLive);
 
-        return await Keyspaces
+        var (present, written) = await Keyspaces
             .RunAsync(
                 key.Keyspace,
-                async (id, runToken) =>
+                async (id, token) =>
                     await Server
-                        .TransactAsync(
-                            PgIsolation.ReadCommitted,
-                            async (transaction, token) =>
+                        .ExecuteAsync(
+                            [
+                                new PgStatement(
+                                    Lock,
+                                    PgArgument.Of(id),
+                                    PgArgument.Of(index),
+                                    PgArgument.Of(depth),
+                                    PgArgument.Of(text)
+                                ),
+                                new PgStatement(
+                                    Add,
+                                    PgArgument.Of(id),
+                                    PgArgument.Of(index),
+                                    PgArgument.Of(depth),
+                                    PgArgument.Of(encoded),
+                                    PgArgument.Of(microseconds),
+                                    PgArgument.Of((long)CoordinationLimits.MaxSetMembers)
+                                ),
+                            ],
+                            async (results, readToken) =>
                             {
-                                var (now, deadline, live) = await transaction
-                                    .FirstAsync(
-                                        [
-                                            new PgStatement(
-                                                Lock,
-                                                PgArgument.Of(id),
-                                                PgArgument.Of(index),
-                                                PgArgument.Of(depth),
-                                                PgArgument.Of(text)
-                                            ),
-                                            new PgStatement(
-                                                Read,
-                                                PgArgument.Of(id),
-                                                PgArgument.Of(index),
-                                                PgArgument.Of(depth),
-                                                PgArgument.Of(encoded)
-                                            ),
-                                        ],
-                                        async (results, t) =>
-                                        {
-                                            await results
-                                                .ReadAsync(reader => reader.GetInt32(0), t)
-                                                .ConfigureAwait(false);
-                                            var rows = await results
-                                                .ReadAsync(
-                                                    reader =>
-                                                        (
-                                                            Now: reader.GetDateTime(0),
-                                                            Deadline: reader.IsDBNull(1)
-                                                                ? (DateTime?)null
-                                                                : reader.GetDateTime(1),
-                                                            Live: reader.GetInt64(2)
-                                                        ),
-                                                    t
-                                                )
-                                                .ConfigureAwait(false);
-
-                                            return rows[0];
-                                        },
-                                        token
+                                await results
+                                    .ReadAsync(reader => reader.GetInt32(0), readToken)
+                                    .ConfigureAwait(false);
+                                var rows = await results
+                                    .ReadAsync(
+                                        reader => (reader.GetBoolean(0), reader.GetBoolean(1)),
+                                        readToken
                                     )
                                     .ConfigureAwait(false);
 
-                                var instant = DateTime.SpecifyKind(now, DateTimeKind.Utc);
-                                var wasAbsent =
-                                    deadline is not { } stored
-                                    || DateTime.SpecifyKind(stored, DateTimeKind.Utc) <= instant;
-
-                                if (wasAbsent && live >= CoordinationLimits.MaxSetMembers)
-                                {
-                                    await transaction.RollbackAsync(token).ConfigureAwait(false);
-                                    throw new CoordinationException(
-                                        CoordinationErrorCodes.LimitExceeded,
-                                        outcomeUnknown: false,
-                                        $"A set holds at most {CoordinationLimits.MaxSetMembers} live members."
-                                    );
-                                }
-
-                                var expires = instant.AddTicks(microseconds * 10);
-
-                                await transaction
-                                    .CommitAsync(
-                                        [
-                                            new PgStatement(
-                                                Write,
-                                                PgArgument.Of(id),
-                                                PgArgument.Of(index),
-                                                PgArgument.Of(depth),
-                                                PgArgument.Of(encoded),
-                                                PgArgument.Typed(expires, NpgsqlDbType.TimestampTz)
-                                            ),
-                                        ],
-                                        token
-                                    )
-                                    .ConfigureAwait(false);
-
-                                return wasAbsent;
+                                return rows[0];
                             },
-                            runToken
+                            token
                         )
                         .ConfigureAwait(false),
                 cancellationToken
             )
             .ConfigureAwait(false);
+
+        if (!written)
+        {
+            throw new CoordinationException(
+                CoordinationErrorCodes.LimitExceeded,
+                outcomeUnknown: false,
+                $"A set holds at most {CoordinationLimits.MaxSetMembers} live members."
+            );
+        }
+
+        return !present;
     }
 
     /// <inheritdoc />
     /// <remarks>
-    /// The operation is one statement that deletes the row and tells whether the row was unexpired.
+    /// The operation is one batch, which the server runs as one transaction: it takes the row lock of the set when the
+    /// set has a row, so it waits for an add that holds it and the two never interleave, then deletes the member,
+    /// lowers the set's bound when a row was deleted, and tells whether the member was unexpired.
     /// </remarks>
     public async ValueTask<bool> RemoveAsync(
         CoordinationKey key,
@@ -267,10 +270,15 @@ internal sealed class PgSetService(PgServer server, PgKeyspaces keyspaces, PgSch
             .RunAsync(
                 key.Keyspace,
                 async (id, token) =>
-                {
-                    var rows = await Server
+                    await Server
                         .ExecuteAsync(
                             [
+                                new PgStatement(
+                                    LockExisting,
+                                    PgArgument.Of(id),
+                                    PgArgument.Of(index),
+                                    PgArgument.Of(depth)
+                                ),
                                 new PgStatement(
                                     Remove,
                                     PgArgument.Of(id),
@@ -280,15 +288,19 @@ internal sealed class PgSetService(PgServer server, PgKeyspaces keyspaces, PgSch
                                 ),
                             ],
                             async (results, readToken) =>
+                            {
                                 await results
+                                    .ReadAsync(reader => reader.GetInt32(0), readToken)
+                                    .ConfigureAwait(false);
+                                var rows = await results
                                     .ReadAsync(reader => reader.GetBoolean(0), readToken)
-                                    .ConfigureAwait(false),
+                                    .ConfigureAwait(false);
+
+                                return rows[0];
+                            },
                             token
                         )
-                        .ConfigureAwait(false);
-
-                    return rows[0];
-                },
+                        .ConfigureAwait(false),
                 cancellationToken
             )
             .ConfigureAwait(false);

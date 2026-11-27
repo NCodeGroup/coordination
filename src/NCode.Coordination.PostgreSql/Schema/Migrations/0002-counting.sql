@@ -30,6 +30,7 @@ CREATE TABLE {schema}.sets (
     idx bytea NOT NULL,
     depth smallint NOT NULL,
     key text NOT NULL,
+    members integer NOT NULL DEFAULT 0,
     PRIMARY KEY (keyspace_id, idx, depth)
 );
 CREATE TABLE {schema}.set_members (

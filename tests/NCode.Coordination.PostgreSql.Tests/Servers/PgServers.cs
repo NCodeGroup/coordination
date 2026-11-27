@@ -107,9 +107,20 @@ public sealed class PgServers : IAsyncLifetime
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
+    /// <summary>
+    /// Creates a server whose data directory is in memory: it still runs with <c>fsync</c> on when
+    /// <paramref name="durable"/> is true, which the probe checks, but each commit's flush costs a memory write instead
+    /// of a disk write, so the suites' long runs of single commits fit their times to live. A test that restarts or
+    /// fails a server over needs its data on disk and starts a server of its own.
+    /// </summary>
+    /// <param name="image">The image of the server.</param>
+    /// <param name="durable">Whether the server runs with <see cref="DurableCommand"/>.</param>
+    /// <returns>The container, not yet started.</returns>
     private static PostgreSqlContainer CreateContainer(string image, bool durable)
     {
-        var builder = new PostgreSqlBuilder(image).WithDatabase(Database);
+        var builder = new PostgreSqlBuilder(image)
+            .WithDatabase(Database)
+            .WithTmpfsMount("/var/lib/postgresql");
         if (durable)
         {
             builder = builder.WithCommand([.. DurableCommand]);
