@@ -79,11 +79,12 @@ internal class RespSubscriptions(
         var multiplexer = await Connection.GetAsync(cancellationToken).ConfigureAwait(false);
         cancellationToken.ThrowIfCancellationRequested();
 
+        var channel = Channel(name);
         RespChannelFeed feed;
         try
         {
             feed = await RespChannelFeed
-                .OpenAsync(multiplexer, Channel(name), CheckInterval, Time)
+                .OpenAsync(multiplexer, channel, CheckInterval, Time)
                 .ConfigureAwait(false);
         }
         catch (Exception e) when (RespFailures.IsClientFailure(e))

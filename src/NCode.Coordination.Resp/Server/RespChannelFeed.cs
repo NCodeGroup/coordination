@@ -55,7 +55,8 @@ internal sealed class RespChannelFeed : IAsyncDisposable
 
         queue.OnMessage(message =>
         {
-            _ = writer.TryWrite(RespSignal.ForMessage(message.Message));
+            var signal = RespSignal.ForMessage(message.Message);
+            _ = writer.TryWrite(signal);
         });
 
         var timer = time.CreateTimer(

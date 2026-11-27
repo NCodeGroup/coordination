@@ -130,8 +130,9 @@ internal class RespNotificationService(
     )
     {
         var key = RespKeys.ForKey(topic, Kind);
+        var name = key.ToString();
         var reader = await Subscriptions
-            .OpenAsync(key.ToString(), token => ReadSequenceAsync(key, token), cancellationToken)
+            .OpenAsync(name, token => ReadSequenceAsync(key, token), cancellationToken)
             .ConfigureAwait(false);
 
         try

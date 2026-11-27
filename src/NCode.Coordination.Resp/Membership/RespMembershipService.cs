@@ -221,6 +221,7 @@ internal class RespMembershipService(RespRecordTable table, RespSubscriptions su
         try
         {
             var name = RespKeys.Member(group);
+            var changed = new RespWatchLine('m', name);
             MembershipView? last = null;
             await foreach (var item in reader.ReadAsync(cancellationToken).ConfigureAwait(false))
             {
@@ -232,7 +233,7 @@ internal class RespMembershipService(RespRecordTable table, RespSubscriptions su
                         continue;
                     }
 
-                    if (!lines.Contains(new RespWatchLine('m', name)))
+                    if (!lines.Contains(changed))
                     {
                         continue;
                     }

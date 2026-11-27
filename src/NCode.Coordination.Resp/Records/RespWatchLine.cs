@@ -40,7 +40,8 @@ internal readonly record struct RespWatchLine(char Kind, string Name)
                 return false;
             }
 
-            builder.Add(new RespWatchLine(part[0], part[1..]));
+            var line = new RespWatchLine(part[0], part[1..]);
+            builder.Add(line);
         }
 
         lines = builder.MoveToImmutable();
