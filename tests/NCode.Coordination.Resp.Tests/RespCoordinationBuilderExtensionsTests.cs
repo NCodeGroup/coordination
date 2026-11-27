@@ -69,6 +69,27 @@ public sealed class RespCoordinationBuilderExtensionsTests : IDisposable
         Assert.Equal("configure", exception.ParamName);
     }
 
+    [Theory]
+    [InlineData(10_000L)]
+    [InlineData(35_999_999_999L)]
+    public void AddRespProvider_CheckIntervalInRange_AddsTheProvider(long ticks)
+    {
+        var builder = Mocks.Create<ICoordinationBuilder>();
+        builder
+            .Setup(x => x.AddProvider(It.IsAny<Func<IServiceProvider, ICoordinationProvider>>()))
+            .Returns(builder.Object)
+            .Verifiable();
+        var checkInterval = TimeSpan.FromTicks(ticks);
+
+        var result = builder.Object.AddRespProvider(options =>
+        {
+            options.Configuration = "localhost:1";
+            options.CheckInterval = checkInterval;
+        });
+
+        Assert.Same(builder.Object, result);
+    }
+
     [Fact]
     public async Task AddRespProvider_Configuration_AddsProviderWithProfile()
     {
