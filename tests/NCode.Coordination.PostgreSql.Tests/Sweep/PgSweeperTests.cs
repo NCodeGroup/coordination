@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using Microsoft.Extensions.Time.Testing;
+using NCode.Coordination.PostgreSql.Keys;
+using NCode.Coordination.PostgreSql.Records;
 using NCode.Coordination.PostgreSql.Server;
 
 namespace NCode.Coordination.PostgreSql.Sweep.Tests;
@@ -41,7 +43,9 @@ public sealed class PgSweeperTests
             "Host=127.0.0.1;Port=1;Database=coordination;Username=u;Password=p;Timeout=1"
         );
         var server = new PgServer(source, PgSettings.Default);
-        var sweeps = new PgSweeps(server, PgSettings.Default);
+        var keyspaces = new PgKeyspaces(server, PgSettings.Default.Schema);
+        var table = new PgRecordTable(server, keyspaces, PgSettings.Default);
+        var sweeps = new PgSweeps(server, PgSettings.Default, table);
         var time = new CountingTimeProvider();
 
         await using var sweeper = new PgSweeper(sweeps, Interval, time);

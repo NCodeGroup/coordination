@@ -6,6 +6,7 @@ using System.Collections.Immutable;
 using NCode.Coordination.PostgreSql.Counters;
 using NCode.Coordination.PostgreSql.Keys;
 using NCode.Coordination.PostgreSql.Occurrences;
+using NCode.Coordination.PostgreSql.Records;
 using NCode.Coordination.PostgreSql.Schema;
 using NCode.Coordination.PostgreSql.Sequences;
 using NCode.Coordination.PostgreSql.Server;
@@ -80,6 +81,7 @@ internal sealed class PostgreSqlProvider : ICoordinationProvider, IAsyncDisposab
         Settings = settings;
         Server = new PgServer(source, settings);
         Keyspaces = new PgKeyspaces(Server, settings.Schema);
+        RecordTable = new PgRecordTable(Server, Keyspaces, settings);
         Declaration = new ProviderDeclaration(
             PostgreSqlCoordinationBuilderExtensions.ProviderName,
             Declare(profile)
@@ -88,7 +90,7 @@ internal sealed class PostgreSqlProvider : ICoordinationProvider, IAsyncDisposab
             Profile = profile.Name,
         };
         Sweeper = new PgSweeper(
-            new PgSweeps(Server, settings),
+            new PgSweeps(Server, settings, RecordTable),
             settings.SweepInterval,
             TimeProvider.System
         );
@@ -129,6 +131,11 @@ internal sealed class PostgreSqlProvider : ICoordinationProvider, IAsyncDisposab
     /// Gets the cache of the keyspaces' row ids.
     /// </summary>
     private PgKeyspaces Keyspaces { get; }
+
+    /// <summary>
+    /// Gets the reads and commits of the records that the record and transaction services and the sweep share.
+    /// </summary>
+    private PgRecordTable RecordTable { get; }
 
     /// <summary>
     /// Gets the loop that deletes the expired rows.
