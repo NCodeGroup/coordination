@@ -26,7 +26,7 @@ public sealed class RespChannelReaderTests
         RespChannelReader Reader,
         Channel<RespSignal> Signals,
         FakeTimeProvider Time
-    ) Create(params Func<ValueTask<long>>[] reads)
+    ) Create(params IEnumerable<Func<ValueTask<long>>> reads)
     {
         var signals = Channel.CreateUnbounded<RespSignal>();
         var time = new FakeTimeProvider();
