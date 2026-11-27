@@ -50,6 +50,7 @@ internal static partial class PgMigrations
         (1, "keyspaces", 1),
         (2, "counting", 1),
         (3, "records", 1),
+        (4, "ownership", 1),
     ];
 
     /// <summary>
@@ -76,6 +77,11 @@ internal static partial class PgMigrations
         "records",
         "changes",
         "change_items",
+        "sessions",
+        "members",
+        "grants",
+        "fencing",
+        "claims",
     ];
 
     /// <summary>
