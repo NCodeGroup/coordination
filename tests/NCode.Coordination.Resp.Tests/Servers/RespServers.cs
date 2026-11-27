@@ -57,7 +57,8 @@ public sealed class RespServers : IAsyncLifetime
     private static string ClusterScript(IReadOnlyList<int> ports)
     {
         var list = string.Join(" ", ports);
-        var nodes = string.Join(" ", ports.Select(port => $"127.0.0.1:{port}"));
+        var addresses = ports.Select(port => $"127.0.0.1:{port}");
+        var nodes = string.Join(" ", addresses);
         return "i=0; "
             + $"for p in {list}; do i=$((i+1)); "
             + "valkey-server --port $p --cluster-enabled yes --cluster-port $((16379+i)) "
@@ -102,10 +103,12 @@ public sealed class RespServers : IAsyncLifetime
         var garnetWithoutLua = CreateContainer(GarnetImage);
 
         var ports = RespPorts.Reserve(3);
+        var script = ClusterScript(ports);
+        var clusterWaitStrategy = Wait.ForUnixContainer().UntilMessageIsLogged(ClusterReadyMessage);
         var clusterBuilder = new ContainerBuilder(ValkeyImage)
             .WithEntrypoint("sh", "-c")
-            .WithCommand(ClusterScript(ports))
-            .WithWaitStrategy(Wait.ForUnixContainer().UntilMessageIsLogged(ClusterReadyMessage));
+            .WithCommand(script)
+            .WithWaitStrategy(clusterWaitStrategy);
         foreach (var port in ports)
         {
             clusterBuilder = clusterBuilder.WithPortBinding(port, port);
@@ -126,7 +129,8 @@ public sealed class RespServers : IAsyncLifetime
         Valkey = GetEndpoint(valkey);
         Garnet = GetEndpoint(garnet);
         GarnetWithoutLua = GetEndpoint(garnetWithoutLua);
-        ValkeyCluster = string.Join(",", ports.Select(port => $"127.0.0.1:{port}"));
+        var addresses = ports.Select(port => $"127.0.0.1:{port}");
+        ValkeyCluster = string.Join(",", addresses);
     }
 
     /// <inheritdoc />

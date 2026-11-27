@@ -14,19 +14,6 @@ internal sealed class RespRestartableServer : IAsyncDisposable
 {
     private const ushort Port = 6379;
 
-    private RespRestartableServer(IContainer container, int hostPort)
-    {
-        Container = container;
-        HostPort = hostPort;
-    }
-
-    private IContainer Container { get; }
-
-    private int HostPort { get; }
-
-    /// <summary>Gets the <c>host:port</c> of the server, which a stop and a start keep.</summary>
-    public string Endpoint => $"{Container.Hostname}:{HostPort}";
-
     /// <summary>Starts a server from an image.</summary>
     /// <param name="image">The image to run.</param>
     /// <param name="command">The arguments of the server's command, empty to run the image's default.</param>
@@ -39,11 +26,10 @@ internal sealed class RespRestartableServer : IAsyncDisposable
     )
     {
         var hostPort = RespPorts.Reserve(1)[0];
+        var waitStrategy = Wait.ForUnixContainer().UntilMessageIsLogged(RespServers.ReadyMessage);
         var builder = new ContainerBuilder(image)
             .WithPortBinding(hostPort, Port)
-            .WithWaitStrategy(
-                Wait.ForUnixContainer().UntilMessageIsLogged(RespServers.ReadyMessage)
-            );
+            .WithWaitStrategy(waitStrategy);
 
         if (command.Count > 0)
         {
@@ -54,6 +40,19 @@ internal sealed class RespRestartableServer : IAsyncDisposable
         await container.StartAsync(cancellationToken);
         return new RespRestartableServer(container, hostPort);
     }
+
+    private RespRestartableServer(IContainer container, int hostPort)
+    {
+        Container = container;
+        HostPort = hostPort;
+    }
+
+    private IContainer Container { get; }
+
+    private int HostPort { get; }
+
+    /// <summary>Gets the <c>host:port</c> of the server, which a stop and a start keep.</summary>
+    public string Endpoint => $"{Container.Hostname}:{HostPort}";
 
     /// <summary>Stops the server.</summary>
     /// <param name="cancellationToken">The token that cancels the stop.</param>
