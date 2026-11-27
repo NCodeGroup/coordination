@@ -1,0 +1,66 @@
+// Copyright © NCode Group
+// SPDX-License-Identifier: Apache-2.0
+
+using NCode.Coordination.PostgreSql.Schema;
+using NCode.Coordination.PostgreSql.Server;
+
+namespace NCode.Coordination.PostgreSql.Subscriptions.Tests;
+
+public sealed class PgLogHubTests
+{
+    private const long KeyspaceId = 42;
+
+    private static readonly string Channel = PgChannels.ForKeyspace(
+        PgSchemaName.Default,
+        KeyspaceId
+    );
+
+    private static readonly Dictionary<string, long> Channels = new() { [Channel] = KeyspaceId };
+
+    #region TryRoute Tests
+
+    [Fact]
+    public void TryRoute_ChangePayload_RoutesToTheChangeLog()
+    {
+        var routed = PgLogHub.TryRoute(Channels, Channel, PgChannels.ChangePayload(7), out var id);
+
+        Assert.True(routed);
+        Assert.Equal(new PgLogId(KeyspaceId, null), id);
+    }
+
+    [Fact]
+    public void TryRoute_TopicPayload_RoutesToTheTopic()
+    {
+        var routed = PgLogHub.TryRoute(
+            Channels,
+            Channel,
+            PgChannels.TopicPayload("abc", 3),
+            out var id
+        );
+
+        Assert.True(routed);
+        Assert.Equal(new PgLogId(KeyspaceId, "abc"), id);
+    }
+
+    [Fact]
+    public void TryRoute_UnknownChannel_ReturnsFalse()
+    {
+        var other = PgChannels.ForKeyspace(PgSchemaName.Default, KeyspaceId + 1);
+
+        var routed = PgLogHub.TryRoute(Channels, other, PgChannels.ChangePayload(7), out var id);
+
+        Assert.False(routed);
+        Assert.Equal(default, id);
+    }
+
+    [Fact]
+    public void TryRoute_MalformedPayload_ReturnsFalse()
+    {
+        var routed = PgLogHub.TryRoute(Channels, Channel, "x:1", out var id);
+
+        Assert.False(routed);
+        Assert.Equal(default, id);
+    }
+
+    #endregion
+}
