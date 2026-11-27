@@ -14,6 +14,8 @@ NCode.Coordination.RespProfile.ShardedChannels.get -> bool
 NCode.Coordination.RespProfile.VersionField.get -> string!
 NCode.Coordination.RespProfiles
 NCode.Coordination.RespProviderOptions
+NCode.Coordination.RespProviderOptions.CheckInterval.get -> System.TimeSpan
+NCode.Coordination.RespProviderOptions.CheckInterval.set -> void
 NCode.Coordination.RespProviderOptions.Configuration.get -> string?
 NCode.Coordination.RespProviderOptions.Configuration.set -> void
 NCode.Coordination.RespProviderOptions.Connection.get -> System.Func<System.IServiceProvider!, StackExchange.Redis.IConnectionMultiplexer!>?

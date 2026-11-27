@@ -1,6 +1,7 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using NCode.Coordination.Resp.Server;
 using StackExchange.Redis;
 
 namespace NCode.Coordination;
@@ -35,4 +36,11 @@ public sealed class RespProviderOptions
     /// <see cref="RespProfiles.Valkey"/> by default.
     /// </summary>
     public RespProfile Profile { get; set; } = RespProfiles.Valkey;
+
+    /// <summary>
+    /// Gets or sets the time between two periodic checks of each notification subscription and watch, which reads its
+    /// channel's number and, for a watch, removes and announces the keyspace's expired state. It is more than zero and
+    /// less than one hour, and 5 seconds by default.
+    /// </summary>
+    public TimeSpan CheckInterval { get; set; } = RespSubscriptions.DefaultCheckInterval;
 }

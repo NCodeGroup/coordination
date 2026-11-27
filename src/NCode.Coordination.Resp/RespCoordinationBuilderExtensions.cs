@@ -24,12 +24,14 @@ public static class RespCoordinationBuilderExtensions
         /// <see cref="ProviderName"/>. The provider connects on first use.
         /// </summary>
         /// <param name="configure">Sets exactly one of <see cref="RespProviderOptions.Configuration"/> and
-        /// <see cref="RespProviderOptions.Connection"/>, and optionally the profile.</param>
+        /// <see cref="RespProviderOptions.Connection"/>, and optionally the profile and the check interval.</param>
         /// <returns>The builder, for chaining.</returns>
         /// <exception cref="ArgumentNullException">The builder or <paramref name="configure"/> is null, or the
         /// profile is null.</exception>
         /// <exception cref="ArgumentException">Not exactly one of the configuration and the connection is
         /// set.</exception>
+        /// <exception cref="ArgumentOutOfRangeException">The check interval is not more than zero and less than one
+        /// hour.</exception>
         public ICoordinationBuilder AddRespProvider(Action<RespProviderOptions> configure)
         {
             ArgumentNullException.ThrowIfNull(builder);
@@ -84,10 +86,20 @@ public static class RespCoordinationBuilderExtensions
 
             ArgumentNullException.ThrowIfNull(profile);
 
+            var checkInterval = options.CheckInterval;
+            if (checkInterval <= TimeSpan.Zero || checkInterval >= TimeSpan.FromHours(1))
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(configure),
+                    checkInterval,
+                    "RespProviderOptions.CheckInterval is more than zero and less than one hour."
+                );
+            }
+
             return builder.AddProvider(services =>
             {
                 var connection = createConnection(services);
-                return new RespProvider(connection, profile);
+                return new RespProvider(connection, profile, checkInterval);
             });
         }
     }
