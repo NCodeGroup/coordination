@@ -20,8 +20,10 @@ providers and checks requirements when the host starts ([D16](#d16-composition))
 suites ([D17](#d17-conformance-kit)), the holder's local deadline ([D18](#d18-holder-deadline)), the history checker
 that verifies concurrent runs of every primitive ([D19](#d19-history-checker)), the recipes built on the primitives'
 contracts ([D20](#d20-recipes)), the hosting that ties a node's session to its host's lifetime ([D21](#d21-hosting)),
-and the RESP provider's client, atomic scripts, cluster slots, numbered notifications, largest count and record table
-([D22](#d22-resp-client) to [D27](#d27-resp-records)).
+and the RESP provider's client, atomic scripts, cluster slots, numbered notifications, largest count, record table,
+ownership state, subscriptions and proof ([D22](#d22-resp-client) to [D30](#d30-resp-proof)), and the PostgreSQL
+provider's client, operations, tables and numbered notifications ([D31](#d31-postgresql-client) to
+[D34](#d34-postgresql-notifications)).
 
 ## Goals and Non-Goals
 
@@ -383,6 +385,32 @@ that slot's node, and its Garnet plain channel delivering from any node. The rec
 dropped-connection run too, which the in-process provider's test decorator runs, and a notification run publishes
 further closing messages while a resync might have covered the last one.
 [ADR-1030](../decisions/1030-the-resp-providers-runs-drop-its-own-connections-restart-and-fail-over-servers-of-their-own-and-repeat-every-suite-on-clusters.md)
+
+### D31. PostgreSQL client
+
+The PostgreSQL provider speaks through Npgsql, used only through its public API, and can share the host's
+`NpgsqlDataSource`: a host gives it a connection string and it owns its data source, or hands it the host's.
+[ADR-1031](../decisions/1031-the-postgresql-provider-speaks-through-npgsql-and-can-share-the-hosts-data-source.md)
+
+### D32. PostgreSQL operations
+
+An operation that one statement does runs as that statement; every other operation runs as one short transaction at read
+committed, of constant SQL sent in at most two round trips, and a change a watch can see first locks its keyspace's row.
+[ADR-1032](../decisions/1032-the-postgresql-provider-runs-each-operation-as-one-statement-or-one-short-transaction-of-constant-sql.md)
+
+### D33. PostgreSQL tables
+
+The provider keeps its state in a fixed set of tables in one schema it migrates, shared by every keyspace, where a
+keyspace is a row that holds its revision and keys are indexed by digests of their segments; every deadline is on the
+server's clock, honored by reads at once and removed by a sweep in bounded batches.
+[ADR-1033](../decisions/1033-postgresql-state-lives-in-tables-the-provider-migrates-shared-by-every-keyspace-with-each-keyspaces-revision-on-its-row.md)
+
+### D34. PostgreSQL notifications
+
+The transaction that makes a change numbers it, writes it to a bounded log beside the state and calls `pg_notify`, and
+listeners read the log after the last number they delivered; a subscriber resyncs on a reconnect and when the log no
+longer holds what it needs or its numbers went backwards.
+[ADR-1034](../decisions/1034-postgresql-notifications-and-watches-are-numbered-in-the-writing-transaction-kept-in-a-bounded-log-and-woken-by-notify.md)
 
 ## Open Questions
 
