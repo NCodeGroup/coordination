@@ -32,13 +32,20 @@ internal sealed class PgProbe(
                current_setting('synchronous_standby_names')
         """;
 
-    /// <summary>The statement that finds whether the role may use the schema.</summary>
-    private const string SchemaPrivilegeSql = "SELECT has_schema_privilege($1, 'USAGE')";
+    /// <summary>
+    /// The statement that finds whether the role may use the schema: it returns no row when the schema doesn't
+    /// exist yet, which the version check refuses.
+    /// </summary>
+    private const string SchemaPrivilegeSql =
+        "SELECT has_schema_privilege(n.oid, 'USAGE') FROM pg_catalog.pg_namespace n WHERE n.nspname = $1";
 
-    /// <summary>The statement that lists the tables the role may not read and write.</summary>
+    /// <summary>
+    /// The statement that lists the tables of the schema that the role lacks a privilege on: each of SELECT, INSERT,
+    /// UPDATE and DELETE on the tables named by <c>$2</c>, and SELECT on <c>schema_version</c>. Each privilege is
+    /// checked on its own, because a list of privileges is true when the role holds any one of them.
+    /// </summary>
     private const string TablePrivilegesSql = """
-        SELECT t FROM unnest($2::text[]) AS t
-        WHERE NOT has_table_privilege(format('%I.%I', $1::text, t), 'SELECT, INSERT, UPDATE, DELETE')
+        SELECT c.relname FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = $1 AND c.relkind IN ('r', 'p') AND ((c.relname = ANY($2::text[]) AND NOT (has_table_privilege(c.oid, 'SELECT') AND has_table_privilege(c.oid, 'INSERT') AND has_table_privilege(c.oid, 'UPDATE') AND has_table_privilege(c.oid, 'DELETE'))) OR (c.relname = 'schema_version' AND NOT has_table_privilege(c.oid, 'SELECT'))) ORDER BY c.relname
         """;
 
     /// <summary>
@@ -67,8 +74,8 @@ internal sealed class PgProbe(
                 .ConfigureAwait(false);
         }
 
-        await CheckVersionAsync(cancellationToken).ConfigureAwait(false);
         await CheckPrivilegesAsync(cancellationToken).ConfigureAwait(false);
+        await CheckVersionAsync(cancellationToken).ConfigureAwait(false);
     }
 
     private static CoordinationException Unsupported(string message) =>
@@ -195,22 +202,25 @@ internal sealed class PgProbe(
                     var deniedRows = await results
                         .ReadAsync(reader => reader.GetString(0), token)
                         .ConfigureAwait(false);
-                    return (usageRows[0], deniedRows);
+                    return (usageRows, deniedRows);
                 },
                 cancellationToken
             )
             .ConfigureAwait(false);
 
-        if (usage && denied.IsEmpty)
+        var usageDenied = usage.Contains(false);
+        if (!usageDenied && denied.IsEmpty)
         {
             return;
         }
 
-        var list = string.Join(", ", denied.IsEmpty ? tables : denied);
+        var message = usageDenied
+            ? $"The provider's role lacks USAGE on schema '{name}'."
+            : $"The provider's role lacks privileges on {string.Join(", ", denied)} in schema '{name}': it needs SELECT on schema_version and SELECT, INSERT, UPDATE and DELETE on every other table.";
         throw new CoordinationException(
             CoordinationErrorCodes.AccessDenied,
             outcomeUnknown: false,
-            $"The provider's role may not use schema '{name}' and read and write {list}."
+            message
         );
     }
 }
