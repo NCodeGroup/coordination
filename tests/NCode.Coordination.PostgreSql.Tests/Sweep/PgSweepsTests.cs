@@ -8,6 +8,7 @@ using NCode.Coordination.PostgreSql.Occurrences;
 using NCode.Coordination.PostgreSql.Records;
 using NCode.Coordination.PostgreSql.Schema;
 using NCode.Coordination.PostgreSql.Server;
+using NCode.Coordination.PostgreSql.Sessions;
 using NCode.Coordination.PostgreSql.Sets;
 using NCode.Coordination.PostgreSql.Tests.Servers;
 using Npgsql;
@@ -26,7 +27,8 @@ public sealed class PgSweepsTests(PgServers servers)
         PgSweeps Sweeps,
         PgOccurrenceService Occurrences,
         PgSetService Sets,
-        PgRecordService Records
+        PgRecordService Records,
+        PgSessionService Sessions
     )
     {
         public Keyspace Keyspace { get; } = new("sweep");
@@ -107,7 +109,8 @@ public sealed class PgSweepsTests(PgServers servers)
                         new PgSweeps(server, settings, table),
                         new PgOccurrenceService(server, keyspaces, schema),
                         new PgSetService(server, keyspaces, schema),
-                        new PgRecordService(table)
+                        new PgRecordService(table),
+                        new PgSessionService(table, new PgRandomTokens())
                     )
                 );
             }
@@ -289,6 +292,113 @@ public sealed class PgSweepsTests(PgServers servers)
                     3,
                     await context.ScalarAsync("log_removed", "keyspaces", cancellationToken)
                 );
+            },
+            cancellationToken,
+            TimeSpan.FromSeconds(1)
+        );
+    }
+
+    [PgServerFact]
+    public async Task SweepAsync_ExpiredSession_EndsItAsOneChange()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await WithSweepsAsync(
+            async context =>
+            {
+                await context.Sessions.OpenAsync(
+                    context.Keyspace,
+                    new TimeToLive(Expired),
+                    null,
+                    cancellationToken
+                );
+                await Task.Delay(TimeSpan.FromMilliseconds(50), cancellationToken);
+                Assert.Equal(1, await context.CountAsync("sessions", cancellationToken));
+
+                await context.Sweeps.SweepAsync(cancellationToken);
+
+                Assert.Equal(0, await context.CountAsync("sessions", cancellationToken));
+                Assert.Equal(1, await context.CountAsync("changes", cancellationToken));
+                Assert.Equal(
+                    1,
+                    await context.CountAsync(
+                        "changes WHERE ended_session IS NOT NULL",
+                        cancellationToken
+                    )
+                );
+                Assert.Equal(
+                    2,
+                    await context.ScalarAsync("revision", "keyspaces", cancellationToken)
+                );
+            },
+            cancellationToken
+        );
+    }
+
+    [PgServerFact]
+    public async Task SweepAsync_BoundRecordOfEndedSession_KeepsItWhileTheEntryIsLogged()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await WithSweepsAsync(
+            async context =>
+            {
+                var grant = await context.Sessions.OpenAsync(
+                    context.Keyspace,
+                    new TimeToLive(TimeSpan.FromMilliseconds(300)),
+                    null,
+                    cancellationToken
+                );
+                var result = await context.Records.CreateAsync(
+                    context.KeyOf(0),
+                    new byte[] { 1 },
+                    RecordLifetime.ForSession(grant.Id),
+                    null,
+                    cancellationToken
+                );
+                Assert.True(result.IsWritten);
+                await Task.Delay(TimeSpan.FromMilliseconds(500), cancellationToken);
+
+                await context.Sweeps.SweepAsync(cancellationToken);
+                await context.Sweeps.SweepAsync(cancellationToken);
+
+                Assert.Equal(0, await context.CountAsync("sessions", cancellationToken));
+                Assert.Equal(1, await context.CountAsync("records", cancellationToken));
+            },
+            cancellationToken
+        );
+    }
+
+    [PgServerFact]
+    public async Task SweepAsync_BoundRecordAfterTheEntryLeftTheLog_RemovesIt()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await WithSweepsAsync(
+            async context =>
+            {
+                var grant = await context.Sessions.OpenAsync(
+                    context.Keyspace,
+                    new TimeToLive(TimeSpan.FromMilliseconds(300)),
+                    null,
+                    cancellationToken
+                );
+                var result = await context.Records.CreateAsync(
+                    context.KeyOf(0),
+                    new byte[] { 1 },
+                    RecordLifetime.ForSession(grant.Id),
+                    null,
+                    cancellationToken
+                );
+                Assert.True(result.IsWritten);
+                await Task.Delay(TimeSpan.FromMilliseconds(500), cancellationToken);
+
+                await context.Sweeps.SweepAsync(cancellationToken);
+                Assert.Equal(1, await context.CountAsync("records", cancellationToken));
+
+                await Task.Delay(TimeSpan.FromMilliseconds(1200), cancellationToken);
+                await context.Sweeps.SweepAsync(cancellationToken);
+                await context.Sweeps.SweepAsync(cancellationToken);
+
+                Assert.Equal(0, await context.CountAsync("changes", cancellationToken));
+                Assert.Equal(0, await context.CountAsync("records", cancellationToken));
             },
             cancellationToken,
             TimeSpan.FromSeconds(1)
