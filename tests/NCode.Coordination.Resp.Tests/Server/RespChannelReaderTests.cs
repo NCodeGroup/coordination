@@ -184,6 +184,21 @@ public sealed class RespChannelReaderTests
     }
 
     [Fact]
+    public async Task ReadAsync_WhenAMessageHasNoNumber_Resyncs()
+    {
+        var seven = Number(7);
+        var eight = Number(8);
+        var (reader, signals, _) = Create(seven, eight);
+        await using var items = Open(reader);
+        await NextAsync(items);
+
+        await WriteAsync(signals, "x\npayload");
+        var item = await NextAsync(items);
+
+        AssertResync(item, 8);
+    }
+
+    [Fact]
     public async Task ReadAsync_WhenTheNumberGoesBackwardsAfterAMessage_Resyncs()
     {
         var seven = Number(7);
@@ -230,6 +245,23 @@ public sealed class RespChannelReaderTests
         var item = await FinishAsync(moving, items);
 
         AssertResync(item, 9);
+    }
+
+    [Fact]
+    public async Task ReadAsync_WhenACheckFindsTheChannelBehind_ResyncsAtTheChannelsNumber()
+    {
+        var seven = Number(7);
+        var five = Number(5);
+        var (reader, signals, _) = Create(seven, five, five);
+        await using var items = Open(reader);
+        await NextAsync(items);
+        await WriteAsync(signals, "8");
+        await NextAsync(items);
+
+        await signals.Writer.WriteAsync(RespSignal.Check, TestContext.Current.CancellationToken);
+        var item = await NextAsync(items);
+
+        AssertResync(item, 5);
     }
 
     [Fact]
@@ -316,6 +348,23 @@ public sealed class RespChannelReaderTests
         var item = await NextAsync(items);
 
         AssertResync(item, 7);
+    }
+
+    [Fact]
+    public async Task ReadAsync_WhenAResyncsReadFails_ResyncsAtTheNextCheck()
+    {
+        var seven = Number(7);
+        var failure = Fails();
+        var nine = Number(9);
+        var (reader, signals, _) = Create(seven, failure, nine, nine);
+        await using var items = Open(reader);
+        await NextAsync(items);
+
+        await signals.Writer.WriteAsync(RespSignal.Restored, TestContext.Current.CancellationToken);
+        await signals.Writer.WriteAsync(RespSignal.Check, TestContext.Current.CancellationToken);
+        var item = await NextAsync(items);
+
+        AssertResync(item, 9);
     }
 
     #endregion
