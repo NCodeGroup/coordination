@@ -10,8 +10,8 @@ using StackExchange.Redis;
 namespace NCode.Coordination.Resp.Tests;
 
 /// <summary>
-/// Proves that each keyspace of the RESP provider stays in one slot of the Valkey cluster and that its sharded channel
-/// lives on the node that owns that slot.
+/// Proves that each keyspace of the RESP provider stays in one slot of the Valkey and Garnet clusters, and that its
+/// channel reaches its subscribers there.
 /// </summary>
 public sealed class RespProviderClusterTests(RespServers servers)
 {
@@ -19,6 +19,12 @@ public sealed class RespProviderClusterTests(RespServers servers)
     /// The name of the notification topic that the tests publish to and subscribe on.
     /// </summary>
     private const string TopicName = "topic";
+
+    /// <summary>
+    /// The most keyspaces a test creates while it looks for one on another node; each lands on a given node one time in
+    /// three.
+    /// </summary>
+    private const int KeyspaceAttempts = 64;
 
     /// <summary>
     /// Creates a keyspace with a unique id, so that the keys of one test are its own and no other test's keys match
@@ -124,32 +130,20 @@ public sealed class RespProviderClusterTests(RespServers servers)
     }
 
     /// <summary>
-    /// Connects to the cluster with admin commands allowed, so a test can read each node's configuration and channels.
+    /// Writes every kind of state in one keyspace through a provider on a cluster and checks that every key of the
+    /// keyspace lies in the keyspace's slot on one node.
     /// </summary>
-    /// <param name="cancellationToken">The token that cancels the connection.</param>
-    /// <returns>The connection, which the caller disposes.</returns>
-    private async ValueTask<ConnectionMultiplexer> ConnectAdminAsync(
+    /// <param name="endpoint">The <c>host:port</c> list of the cluster's nodes.</param>
+    /// <param name="profile">The profile of the provider that writes.</param>
+    /// <param name="cancellationToken">The token that cancels the run.</param>
+    /// <returns>A task that completes when the checks pass.</returns>
+    private static async ValueTask AssertKeysInTheirSlotAsync(
+        string endpoint,
+        RespProfile profile,
         CancellationToken cancellationToken
     )
     {
-        var options = ConfigurationOptions.Parse(servers.ValkeyCluster);
-        options.AllowAdmin = true;
-        var connecting = ConnectionMultiplexer.ConnectAsync(options);
-
-        return await connecting.WaitAsync(cancellationToken);
-    }
-
-    #region Operations Tests
-
-    [RespServerFact]
-    public async Task Operations_WhenEveryKindOfStateIsWritten_KeepEveryKeyOfTheKeyspaceInItsSlot()
-    {
-        var cancellationToken = TestContext.Current.CancellationToken;
-        var target = await RespConformance.CreateTargetAsync(
-            servers.ValkeyCluster,
-            RespProfiles.Valkey,
-            cancellationToken
-        );
+        var target = await RespConformance.CreateTargetAsync(endpoint, profile, cancellationToken);
         await using var disposal = Assert.IsType<RespProvider>(target.Provider);
         var provider = target.Provider;
         var keyspace = CreateKeyspace();
@@ -185,7 +179,7 @@ public sealed class RespProviderClusterTests(RespServers servers)
         await sequences.NextAsync(sequenceKey, null, cancellationToken);
         await notifications.PublishAsync(topic, payload, null, cancellationToken);
 
-        await using var admin = await ConnectAdminAsync(cancellationToken);
+        await using var admin = await RespNodes.ConnectAdminAsync(endpoint, cancellationToken);
         var clusterServers = admin.GetServers();
         var tag = RespKeys.KeyspaceTag(keyspace);
         var expectedSlot = admin.HashSlot(tag);
@@ -211,6 +205,24 @@ public sealed class RespProviderClusterTests(RespServers servers)
         }
     }
 
+    #region Operations Tests
+
+    [RespServerFact]
+    public async Task Operations_WhenEveryKindOfStateIsWrittenToValkey_KeepEveryKeyOfTheKeyspaceInItsSlot() =>
+        await AssertKeysInTheirSlotAsync(
+            servers.ValkeyCluster,
+            RespProfiles.Valkey,
+            TestContext.Current.CancellationToken
+        );
+
+    [RespServerFact]
+    public async Task Operations_WhenEveryKindOfStateIsWrittenToGarnet_KeepEveryKeyOfTheKeyspaceInItsSlot() =>
+        await AssertKeysInTheirSlotAsync(
+            servers.GarnetCluster,
+            RespProfiles.Garnet,
+            TestContext.Current.CancellationToken
+        );
+
     #endregion
 
     #region SubscribeAsync Tests
@@ -226,7 +238,10 @@ public sealed class RespProviderClusterTests(RespServers servers)
         );
         await using var disposal = Assert.IsType<RespProvider>(target.Provider);
         var notifications = GetService<INotificationService>(target.Provider);
-        await using var admin = await ConnectAdminAsync(cancellationToken);
+        await using var admin = await RespNodes.ConnectAdminAsync(
+            servers.ValkeyCluster,
+            cancellationToken
+        );
         var clusterServers = admin.GetServers();
         var configuration = clusterServers[0].ClusterConfiguration;
         Assert.NotNull(configuration);
@@ -237,7 +252,7 @@ public sealed class RespProviderClusterTests(RespServers servers)
         var firstNode = configuration.GetBySlot(firstSlot)?.NodeId;
         Assert.NotNull(firstNode);
         Keyspace? second = null;
-        for (var attempt = 0; attempt < 64 && second is null; attempt++)
+        for (var attempt = 0; attempt < KeyspaceAttempts && second is null; attempt++)
         {
             var candidate = CreateKeyspace();
             var candidateTag = RespKeys.KeyspaceTag(candidate);
