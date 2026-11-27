@@ -31,6 +31,50 @@ public sealed class RespMembershipServiceTests(RespServers servers)
         return new Keyspace("resp-tests", segment);
     }
 
+    private static (
+        RespSessionService Sessions,
+        RespMembershipService Membership,
+        RespSubscriptions Subscriptions
+    ) CreateServices(IConnectionMultiplexer multiplexer, RespProfile profile)
+    {
+        var connection = new RespConnection(_ => ValueTask.FromResult(multiplexer), owned: false);
+        var server = new RespServer(connection);
+        var table = new RespRecordTable(server, profile);
+        var checkInterval = TimeSpan.FromMilliseconds(200);
+        var schedule = new RespCheckSchedule(checkInterval, TimeProvider.System);
+        var subscriptions = new RespSubscriptions(connection, profile, schedule);
+        var tokens = new RespRandomTokens();
+        var sessions = new RespSessionService(table, tokens);
+        var membership = new RespMembershipService(table, subscriptions);
+
+        return (sessions, membership, subscriptions);
+    }
+
+    private static async Task<SessionGrant> OpenSessionAsync(
+        RespSessionService sessions,
+        Keyspace keyspace,
+        CancellationToken cancellationToken
+    )
+    {
+        var minute = TimeSpan.FromMinutes(1);
+        var timeToLive = new TimeToLive(minute);
+
+        return await sessions.OpenAsync(keyspace, timeToLive, null, cancellationToken);
+    }
+
+    private static async Task<ChannelMessageQueue> SubscribeAsync(
+        ConnectionMultiplexer multiplexer,
+        RespSubscriptions subscriptions,
+        Keyspace keyspace
+    )
+    {
+        var watchChannel = RespRecordTable.WatchChannel(keyspace);
+        var channel = subscriptions.Channel(watchChannel);
+        var subscriber = multiplexer.GetSubscriber();
+
+        return await subscriber.SubscribeAsync(channel);
+    }
+
     private static async Task<string> ReadMessageAsync(
         ChannelMessageQueue queue,
         CancellationToken cancellationToken
@@ -46,58 +90,79 @@ public sealed class RespMembershipServiceTests(RespServers servers)
         return text;
     }
 
-    private static async Task AssertJoinAndLeavePublishTheGroupAsync(
+    private static long ReadRevision(string message)
+    {
+        var digits = message.Split('\n')[0];
+
+        return long.Parse(digits, CultureInfo.InvariantCulture);
+    }
+
+    private static async Task AssertJoinPublishesTheGroupAsync(string endpoint, RespProfile profile)
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var multiplexer = await ConnectAsync(endpoint, cancellationToken);
+        var (sessions, membership, subscriptions) = CreateServices(multiplexer, profile);
+        var keyspace = CreateKeyspace();
+        var grant = await OpenSessionAsync(sessions, keyspace, cancellationToken);
+        var group = keyspace.CreateKey("group");
+        var queue = await SubscribeAsync(multiplexer, subscriptions, keyspace);
+        var member = new Member(grant.Id, "node-1", "address-1");
+
+        await membership.JoinAsync(group, member, null, cancellationToken);
+        var joined = await ReadMessageAsync(queue, cancellationToken);
+        await queue.UnsubscribeAsync();
+
+        var revision = ReadRevision(joined);
+        var name = RespKeys.Member(group);
+        Assert.Equal($"{revision}\nm{name}", joined);
+    }
+
+    private static async Task AssertLeavePublishesTheGroupAsync(
         string endpoint,
         RespProfile profile
     )
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var multiplexer = await ConnectAsync(endpoint, cancellationToken);
-        var connection = new RespConnection(
-            _ => ValueTask.FromResult<IConnectionMultiplexer>(multiplexer),
-            owned: false
-        );
-        var server = new RespServer(connection);
-        var table = new RespRecordTable(server, profile);
-        var checkInterval = RespSubscriptions.DefaultCheckInterval;
-        var schedule = new RespCheckSchedule(checkInterval, TimeProvider.System);
-        var subscriptions = new RespSubscriptions(connection, profile, schedule);
-        var tokens = new RespRandomTokens();
-        var sessions = new RespSessionService(table, tokens);
-        var membership = new RespMembershipService(table, subscriptions);
+        var (sessions, membership, subscriptions) = CreateServices(multiplexer, profile);
         var keyspace = CreateKeyspace();
-        var minute = TimeSpan.FromMinutes(1);
-        var timeToLive = new TimeToLive(minute);
-        var grant = await sessions.OpenAsync(keyspace, timeToLive, null, cancellationToken);
+        var grant = await OpenSessionAsync(sessions, keyspace, cancellationToken);
         var group = keyspace.CreateKey("group");
-        var watchChannel = RespRecordTable.WatchChannel(keyspace);
-        var channel = subscriptions.Channel(watchChannel);
-        var subscriber = multiplexer.GetSubscriber();
-        var queue = await subscriber.SubscribeAsync(channel);
+        var queue = await SubscribeAsync(multiplexer, subscriptions, keyspace);
         var member = new Member(grant.Id, "node-1", "address-1");
-
         await membership.JoinAsync(group, member, null, cancellationToken);
         var joined = await ReadMessageAsync(queue, cancellationToken);
+
         await membership.LeaveAsync(group, grant.Id, null, cancellationToken);
         var left = await ReadMessageAsync(queue, cancellationToken);
         await queue.UnsubscribeAsync();
 
-        var digits = joined.Split('\n')[0];
-        var revision = long.Parse(digits, CultureInfo.InvariantCulture);
+        var revision = ReadRevision(joined);
         var name = RespKeys.Member(group);
-        Assert.Equal($"{revision}\nm{name}", joined);
         Assert.Equal($"{revision + 1}\nm{name}", left);
     }
 
     #region JoinAsync Tests
 
     [RespServerFact]
-    public Task JoinAsync_Valkey_PublishesTheGroupAndLeaveAsyncPublishesItAgain() =>
-        AssertJoinAndLeavePublishTheGroupAsync(servers.Valkey, RespProfiles.Valkey);
+    public Task JoinAsync_Valkey_WhenTheMemberJoins_PublishesTheGroup() =>
+        AssertJoinPublishesTheGroupAsync(servers.Valkey, RespProfiles.Valkey);
 
     [RespServerFact]
-    public Task JoinAsync_Garnet_PublishesTheGroupAndLeaveAsyncPublishesItAgain() =>
-        AssertJoinAndLeavePublishTheGroupAsync(servers.Garnet, RespProfiles.Garnet);
+    public Task JoinAsync_Garnet_WhenTheMemberJoins_PublishesTheGroup() =>
+        AssertJoinPublishesTheGroupAsync(servers.Garnet, RespProfiles.Garnet);
+
+    #endregion
+
+    #region LeaveAsync Tests
+
+    [RespServerFact]
+    public Task LeaveAsync_Valkey_WhenTheMemberLeaves_PublishesTheGroup() =>
+        AssertLeavePublishesTheGroupAsync(servers.Valkey, RespProfiles.Valkey);
+
+    [RespServerFact]
+    public Task LeaveAsync_Garnet_WhenTheMemberLeaves_PublishesTheGroup() =>
+        AssertLeavePublishesTheGroupAsync(servers.Garnet, RespProfiles.Garnet);
 
     #endregion
 }
