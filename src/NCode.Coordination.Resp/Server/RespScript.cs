@@ -21,9 +21,9 @@ internal sealed class RespScript(string name, string text)
     private const string ResourceSuffix = ".lua";
 
     /// <summary>
-    /// The name of the start that every record script shares.
+    /// The name of the start that every keyspace script shares.
     /// </summary>
-    private const string RecordPrelude = "record-prelude";
+    private const string KeyspacePrelude = "keyspace-prelude";
 
     /// <summary>
     /// Gets the startup probe: it proves the server runs Lua and lets the user run scripts,
@@ -61,37 +61,117 @@ internal sealed class RespScript(string name, string text)
     /// <summary>
     /// Gets the record-create script: it creates a record when its key is absent.
     /// </summary>
-    public static RespScript RecordCreate { get; } = LoadRecord("record-create");
+    public static RespScript RecordCreate { get; } = LoadKeyspace("record-create");
 
     /// <summary>
     /// Gets the record-read script: it reads a live record.
     /// </summary>
-    public static RespScript RecordRead { get; } = LoadRecord("record-read");
+    public static RespScript RecordRead { get; } = LoadKeyspace("record-read");
 
     /// <summary>
     /// Gets the record-swap script: it replaces a record's value when its revision matches.
     /// </summary>
-    public static RespScript RecordSwap { get; } = LoadRecord("record-swap");
+    public static RespScript RecordSwap { get; } = LoadKeyspace("record-swap");
 
     /// <summary>
     /// Gets the record-delete script: it deletes a record when its revision matches.
     /// </summary>
-    public static RespScript RecordDelete { get; } = LoadRecord("record-delete");
+    public static RespScript RecordDelete { get; } = LoadKeyspace("record-delete");
 
     /// <summary>
     /// Gets the record-take script: it reads a record and deletes it.
     /// </summary>
-    public static RespScript RecordTake { get; } = LoadRecord("record-take");
+    public static RespScript RecordTake { get; } = LoadKeyspace("record-take");
 
     /// <summary>
     /// Gets the record-list script: it lists a page of the live records under a prefix.
     /// </summary>
-    public static RespScript RecordList { get; } = LoadRecord("record-list");
+    public static RespScript RecordList { get; } = LoadKeyspace("record-list");
 
     /// <summary>
     /// Gets the record-transaction script: it checks conditions and runs one of two branches of writes.
     /// </summary>
-    public static RespScript RecordTransaction { get; } = LoadRecord("record-transaction");
+    public static RespScript RecordTransaction { get; } = LoadKeyspace("record-transaction");
+
+    /// <summary>
+    /// Gets the session-open script: it opens a session with its time to live.
+    /// </summary>
+    public static RespScript SessionOpen { get; } = LoadKeyspace("session-open");
+
+    /// <summary>
+    /// Gets the session-keep-alive script: it renews a live session for its time to live.
+    /// </summary>
+    public static RespScript SessionKeepAlive { get; } = LoadKeyspace("session-keep-alive");
+
+    /// <summary>
+    /// Gets the session-close script: it ends a session and removes what is bound to it, up to a budget.
+    /// </summary>
+    public static RespScript SessionClose { get; } = LoadKeyspace("session-close");
+
+    /// <summary>
+    /// Gets the session-check script: it reports whether a session is live.
+    /// </summary>
+    public static RespScript SessionCheck { get; } = LoadKeyspace("session-check");
+
+    /// <summary>
+    /// Gets the lease-acquire script: it grants a lease when no other holder has it.
+    /// </summary>
+    public static RespScript LeaseAcquire { get; } = LoadKeyspace("lease-acquire");
+
+    /// <summary>
+    /// Gets the grant-renew script: it renews a grant that has a time to live for its owner.
+    /// </summary>
+    public static RespScript GrantRenew { get; } = LoadKeyspace("grant-renew");
+
+    /// <summary>
+    /// Gets the grant-release script: it releases a grant for its owner.
+    /// </summary>
+    public static RespScript GrantRelease { get; } = LoadKeyspace("grant-release");
+
+    /// <summary>
+    /// Gets the grant-check script: it reports whether a grant is held.
+    /// </summary>
+    public static RespScript GrantCheck { get; } = LoadKeyspace("grant-check");
+
+    /// <summary>
+    /// Gets the semaphore-acquire script: it grants a semaphore slot when one is free.
+    /// </summary>
+    public static RespScript SemaphoreAcquire { get; } = LoadKeyspace("semaphore-acquire");
+
+    /// <summary>
+    /// Gets the semaphore-check script: it reports whether every slot of a semaphore is held.
+    /// </summary>
+    public static RespScript SemaphoreCheck { get; } = LoadKeyspace("semaphore-check");
+
+    /// <summary>
+    /// Gets the election-lead script: it grants a role's leadership when no other holder has it.
+    /// </summary>
+    public static RespScript ElectionLead { get; } = LoadKeyspace("election-lead");
+
+    /// <summary>
+    /// Gets the election-read script: it reads a role's leader.
+    /// </summary>
+    public static RespScript ElectionRead { get; } = LoadKeyspace("election-read");
+
+    /// <summary>
+    /// Gets the member-join script: it joins a node to a group for a session.
+    /// </summary>
+    public static RespScript MemberJoin { get; } = LoadKeyspace("member-join");
+
+    /// <summary>
+    /// Gets the member-leave script: it removes a session's member from a group.
+    /// </summary>
+    public static RespScript MemberLeave { get; } = LoadKeyspace("member-leave");
+
+    /// <summary>
+    /// Gets the member-list script: it lists the members of a group whose session is live.
+    /// </summary>
+    public static RespScript MemberList { get; } = LoadKeyspace("member-list");
+
+    /// <summary>
+    /// Gets the keyspace-revision script: it reads the keyspace's revision.
+    /// </summary>
+    public static RespScript KeyspaceRevision { get; } = LoadKeyspace("keyspace-revision");
 
     /// <summary>
     /// Loads a script from the embedded resource <c>NCode.Coordination.Resp.Scripts.&lt;name&gt;.lua</c>.
@@ -111,18 +191,18 @@ internal sealed class RespScript(string name, string text)
     }
 
     /// <summary>
-    /// Loads a record script: the start that every record script shares, a line feed and the named script's text.
+    /// Loads a keyspace script: the start that every keyspace script shares, a line feed and the named script's text.
     /// </summary>
     /// <param name="name">The name of the script, without its folder and extension.</param>
     /// <returns>The script.</returns>
     /// <exception cref="ArgumentNullException">The name is null.</exception>
     /// <exception cref="ArgumentException">The name is empty or white space.</exception>
     /// <exception cref="InvalidOperationException">The assembly has no such resource.</exception>
-    public static RespScript LoadRecord(string name)
+    public static RespScript LoadKeyspace(string name)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
 
-        var prelude = ReadResource(RecordPrelude);
+        var prelude = ReadResource(KeyspacePrelude);
         var body = ReadResource(name);
 
         return new RespScript(name, prelude + "\n" + body);

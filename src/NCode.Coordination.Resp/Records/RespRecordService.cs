@@ -184,7 +184,10 @@ internal class RespRecordService(RespRecordTable table) : IRecordService
         var timeToLive = RespRecordTable.TimeToLiveOf(lifetime);
         var member = RespKeys.Member(key);
         var name = RespKeys.Name(key);
-        RedisValue[] arguments = [member, name, value, timeToLive];
+
+        var session = RespRecordTable.SessionOf(lifetime);
+
+        RedisValue[] arguments = [member, name, value, timeToLive, session];
         var reply = await Table
             .EvaluateAsync(RespScript.RecordCreate, key.Keyspace, arguments, cancellationToken)
             .ConfigureAwait(false);
@@ -198,6 +201,9 @@ internal class RespRecordService(RespRecordTable table) : IRecordService
 
             case 1 when fields.Length == 0:
                 return RecordWriteResult.Conflict;
+
+            case 2 when fields.Length == 0:
+                return RecordWriteResult.SessionEnded;
 
             default:
                 throw RespReplies.Unexpected(reply);
@@ -242,7 +248,10 @@ internal class RespRecordService(RespRecordTable table) : IRecordService
         var timeToLive = RespRecordTable.TimeToLiveOf(lifetime);
         var member = RespKeys.Member(key);
         var name = RespKeys.Name(key);
-        RedisValue[] arguments = [member, name, expected.Value, value, timeToLive];
+
+        var session = RespRecordTable.SessionOf(lifetime);
+
+        RedisValue[] arguments = [member, name, expected.Value, value, timeToLive, session];
         var reply = await Table
             .EvaluateAsync(RespScript.RecordSwap, key.Keyspace, arguments, cancellationToken)
             .ConfigureAwait(false);
@@ -259,6 +268,9 @@ internal class RespRecordService(RespRecordTable table) : IRecordService
 
             case 2 when fields.Length == 0:
                 return RecordWriteResult.NotFound;
+
+            case 3 when fields.Length == 0:
+                return RecordWriteResult.SessionEnded;
 
             default:
                 throw RespReplies.Unexpected(reply);

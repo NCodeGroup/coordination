@@ -149,6 +149,78 @@ public sealed partial class RespProviderTests(RespServers servers) : IDisposable
                     [Guarantees.LinearizableUntilFailover, Guarantees.Volatile],
                     support.Guarantees
                 );
+            },
+            support =>
+            {
+                Assert.Equal(Primitives.Session, support.Primitive);
+                Assert.Equal<Guarantee>(
+                    [
+                        Guarantees.LinearizableUntilFailover,
+                        Guarantees.Volatile,
+                        Guarantees.ServerClock,
+                    ],
+                    support.Guarantees
+                );
+            },
+            support =>
+            {
+                Assert.Equal(Primitives.Membership, support.Primitive);
+                Assert.Equal<Guarantee>(
+                    [
+                        Guarantees.LinearizableUntilFailover,
+                        Guarantees.Volatile,
+                        Guarantees.ServerClock,
+                    ],
+                    support.Guarantees
+                );
+            },
+            support =>
+            {
+                Assert.Equal(Primitives.Lease, support.Primitive);
+                Assert.Equal<Guarantee>(
+                    [
+                        Guarantees.LinearizableUntilFailover,
+                        Guarantees.Volatile,
+                        Guarantees.ServerClock,
+                    ],
+                    support.Guarantees
+                );
+            },
+            support =>
+            {
+                Assert.Equal(Primitives.Semaphore, support.Primitive);
+                Assert.Equal<Guarantee>(
+                    [
+                        Guarantees.LinearizableUntilFailover,
+                        Guarantees.Volatile,
+                        Guarantees.ServerClock,
+                    ],
+                    support.Guarantees
+                );
+            },
+            support =>
+            {
+                Assert.Equal(Primitives.Election, support.Primitive);
+                Assert.Equal<Guarantee>(
+                    [
+                        Guarantees.LinearizableUntilFailover,
+                        Guarantees.Volatile,
+                        Guarantees.ServerClock,
+                    ],
+                    support.Guarantees
+                );
+            },
+            support =>
+            {
+                Assert.Equal(Primitives.Claim, support.Primitive);
+                Assert.Equal<Guarantee>(
+                    [
+                        Guarantees.LinearizableUntilFailover,
+                        Guarantees.Volatile,
+                        Guarantees.ServerClock,
+                    ],
+                    support.Guarantees
+                );
             }
         );
     }
@@ -162,7 +234,7 @@ public sealed partial class RespProviderTests(RespServers servers) : IDisposable
     {
         await using var provider = CreateProvider();
 
-        var service = provider.GetPrimitiveService(typeof(ILeaseService));
+        var service = provider.GetPrimitiveService(typeof(INotificationService));
 
         Assert.Null(service);
     }
@@ -174,6 +246,12 @@ public sealed partial class RespProviderTests(RespServers servers) : IDisposable
     [InlineData(typeof(ISetService))]
     [InlineData(typeof(ICounterService))]
     [InlineData(typeof(ISequenceService))]
+    [InlineData(typeof(ISessionService))]
+    [InlineData(typeof(IMembershipService))]
+    [InlineData(typeof(ILeaseService))]
+    [InlineData(typeof(ISemaphoreService))]
+    [InlineData(typeof(IElectionService))]
+    [InlineData(typeof(IClaimService))]
     public async Task GetPrimitiveService_ServedPrimitive_ReturnsItsService(Type serviceType)
     {
         await using var provider = CreateProvider();

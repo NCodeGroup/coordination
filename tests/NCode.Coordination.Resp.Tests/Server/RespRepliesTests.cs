@@ -103,4 +103,38 @@ public sealed class RespRepliesTests
     }
 
     #endregion
+
+    #region Text Tests
+
+    [Fact]
+    public void Text_BulkString_ReturnsIt()
+    {
+        var reply = RedisResult.Create((RedisValue)"o-1");
+
+        var result = RespReplies.Text(reply);
+
+        Assert.Equal("o-1", result);
+    }
+
+    [Fact]
+    public void Text_Null_ThrowsUnavailable()
+    {
+        var reply = RedisResult.Create(RedisValue.Null);
+
+        var exception = Assert.Throws<CoordinationException>(() => RespReplies.Text(reply));
+
+        Assert.Equal(CoordinationErrorCodes.Unavailable, exception.Code);
+    }
+
+    [Fact]
+    public void Text_Integer_ThrowsUnavailable()
+    {
+        var reply = RedisResult.Create((RedisValue)7, ResultType.Integer);
+
+        var exception = Assert.Throws<CoordinationException>(() => RespReplies.Text(reply));
+
+        Assert.Equal(CoordinationErrorCodes.Unavailable, exception.Code);
+    }
+
+    #endregion
 }

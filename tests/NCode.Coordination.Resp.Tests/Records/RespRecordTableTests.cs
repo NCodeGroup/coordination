@@ -65,7 +65,20 @@ public sealed class RespRecordTableTests : IDisposable
         Assert.NotNull(keys);
         var names = keys.Select(key => key.ToString());
         Assert.Equal(
-            ["{prod}:revision", "{prod}:records", "{prod}:record-index", "{prod}:record-deadlines"],
+            [
+                "{prod}:revision",
+                "{prod}:records",
+                "{prod}:record-index",
+                "{prod}:record-deadlines",
+                "{prod}:sessions",
+                "{prod}:session-deadlines",
+                "{prod}:session-bindings",
+                "{prod}:grants",
+                "{prod}:grant-deadlines",
+                "{prod}:fencing",
+                "{prod}:members",
+                "{prod}:member-fields",
+            ],
             names
         );
         Assert.NotNull(values);
@@ -129,18 +142,39 @@ public sealed class RespRecordTableTests : IDisposable
     }
 
     [Fact]
-    public void TimeToLiveOf_Session_ThrowsUnsupported()
+    public void TimeToLiveOf_Session_ReturnsZero()
     {
         var keyspace = new Keyspace("prod");
         var sessionId = new SessionId(keyspace, "s1");
         var lifetime = RecordLifetime.ForSession(sessionId);
 
-        var exception = Assert.Throws<CoordinationException>(() =>
-            RespRecordTable.TimeToLiveOf(lifetime)
-        );
+        var milliseconds = RespRecordTable.TimeToLiveOf(lifetime);
 
-        Assert.Equal(CoordinationErrorCodes.Unsupported, exception.Code);
-        Assert.False(exception.OutcomeUnknown);
+        Assert.Equal(0, milliseconds);
+    }
+
+    #endregion
+
+    #region SessionOf Tests
+
+    [Fact]
+    public void SessionOf_Session_ReturnsItsToken()
+    {
+        var keyspace = new Keyspace("prod");
+        var sessionId = new SessionId(keyspace, "s1");
+        var lifetime = RecordLifetime.ForSession(sessionId);
+
+        var token = RespRecordTable.SessionOf(lifetime);
+
+        Assert.Equal("s1", token);
+    }
+
+    [Fact]
+    public void SessionOf_Persistent_ReturnsEmpty()
+    {
+        var token = RespRecordTable.SessionOf(RecordLifetime.Persistent);
+
+        Assert.Equal("", token);
     }
 
     #endregion

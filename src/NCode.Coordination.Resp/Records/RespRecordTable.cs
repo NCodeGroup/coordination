@@ -8,12 +8,21 @@ using StackExchange.Redis;
 namespace NCode.Coordination.Resp.Records;
 
 /// <summary>
-/// The record table of a keyspace: three server keys beside the keyspace's revision. <c>{tag}:records</c> is a hash
-/// whose fields <c>r:&lt;member&gt;</c>, <c>n:&lt;member&gt;</c> and <c>v:&lt;member&gt;</c> hold a record's revision,
-/// name and value; <c>{tag}:record-index</c> is a sorted set of every member scored 0, read with
-/// <c>ZRANGEBYLEX</c>; and <c>{tag}:record-deadlines</c> is a sorted set of the members of records with a time to live,
-/// scored with their deadline in milliseconds on the server's clock. Every record script receives exactly these four
-/// keys, in this order, and runs through <see cref="EvaluateAsync" />.
+/// The table of a keyspace: its records and its ownership state, in twelve server keys beside its revision, which every
+/// keyspace script receives in this order. <c>{tag}:revision</c> holds the keyspace's revision.
+/// <c>{tag}:records</c> is a hash whose fields <c>r:&lt;member&gt;</c>, <c>n:&lt;member&gt;</c> and
+/// <c>v:&lt;member&gt;</c> hold a record's revision, name and value, and whose field <c>s:&lt;member&gt;</c> holds the
+/// session a record is bound to. <c>{tag}:record-index</c> is a sorted set of every member scored 0, read with
+/// <c>ZRANGEBYLEX</c>. <c>{tag}:record-deadlines</c> is a sorted set of the members of records with a time to live,
+/// scored with their deadline in milliseconds on the server's clock. <c>{tag}:sessions</c> is a hash from each session
+/// to its time to live in milliseconds. <c>{tag}:session-deadlines</c> is a sorted set of the sessions scored with
+/// their deadline, where 0 marks a session that has ended but is not yet cleaned up. <c>{tag}:session-bindings</c> is a
+/// sorted set, all scored 0, of what is bound to each session: a grant field, a record member or a group member.
+/// <c>{tag}:grants</c> is a hash of the holders of leases, leaderships and semaphore slots. <c>{tag}:grant-deadlines</c>
+/// is a sorted set of the grant fields bound to a time to live, scored with their deadline. <c>{tag}:fencing</c> is a
+/// hash of the fencing counters, which never expire. <c>{tag}:members</c> is a sorted set, all scored 0, of the members
+/// of groups. <c>{tag}:member-fields</c> is a hash of each member's session, address and metadata. Every keyspace script
+/// runs through <see cref="EvaluateAsync" />.
 /// </summary>
 /// <param name="server">The seam between the provider and its server.</param>
 /// <param name="profile">The vendor the provider expects, which says how the server carries channel messages.</param>
@@ -47,15 +56,58 @@ internal class RespRecordTable(RespServer server, RespProfile profile)
     private const string DeadlinesKind = "record-deadlines";
 
     /// <summary>
+    /// The kind of server key that holds the hash of the sessions and their times to live.
+    /// </summary>
+    private const string SessionsKind = "sessions";
+
+    /// <summary>
+    /// The kind of server key that holds the sorted set of the sessions' deadlines.
+    /// </summary>
+    private const string SessionDeadlinesKind = "session-deadlines";
+
+    /// <summary>
+    /// The kind of server key that holds the sorted set of what is bound to each session.
+    /// </summary>
+    private const string BindingsKind = "session-bindings";
+
+    /// <summary>
+    /// The kind of server key that holds the hash of the grants.
+    /// </summary>
+    private const string GrantsKind = "grants";
+
+    /// <summary>
+    /// The kind of server key that holds the sorted set of the grants' deadlines.
+    /// </summary>
+    private const string GrantDeadlinesKind = "grant-deadlines";
+
+    /// <summary>
+    /// The kind of server key that holds the hash of the fencing counters.
+    /// </summary>
+    private const string FencingKind = "fencing";
+
+    /// <summary>
+    /// The kind of server key that holds the sorted set of the members of groups.
+    /// </summary>
+    private const string MembersKind = "members";
+
+    /// <summary>
+    /// The kind of server key that holds the hash of the members' fields.
+    /// </summary>
+    private const string MemberFieldsKind = "member-fields";
+
+    /// <summary>
     /// The kind of server key whose name is the keyspace's watch channel.
     /// </summary>
     private const string WatchKind = "watch";
 
     /// <summary>
-    /// Returns the keys every record script receives.
+    /// Returns the keys every keyspace script receives.
     /// </summary>
     /// <param name="keyspace">The keyspace.</param>
-    /// <returns>The revision, records, index and deadlines keys, in that order.</returns>
+    /// <returns>
+    /// The revision, records, record index, record deadlines, sessions, session deadlines, session bindings, grants,
+    /// grant deadlines, fencing, members and member fields keys, in that order.
+    /// </returns>
     /// <exception cref="ArgumentNullException">The keyspace is null.</exception>
     public static RedisKey[] Keys(Keyspace keyspace)
     {
@@ -67,6 +119,14 @@ internal class RespRecordTable(RespServer server, RespProfile profile)
             RespKeys.ForKeyspace(keyspace, RecordsKind),
             RespKeys.ForKeyspace(keyspace, IndexKind),
             RespKeys.ForKeyspace(keyspace, DeadlinesKind),
+            RespKeys.ForKeyspace(keyspace, SessionsKind),
+            RespKeys.ForKeyspace(keyspace, SessionDeadlinesKind),
+            RespKeys.ForKeyspace(keyspace, BindingsKind),
+            RespKeys.ForKeyspace(keyspace, GrantsKind),
+            RespKeys.ForKeyspace(keyspace, GrantDeadlinesKind),
+            RespKeys.ForKeyspace(keyspace, FencingKind),
+            RespKeys.ForKeyspace(keyspace, MembersKind),
+            RespKeys.ForKeyspace(keyspace, MemberFieldsKind),
         ];
     }
 
@@ -87,23 +147,31 @@ internal class RespRecordTable(RespServer server, RespProfile profile)
     /// Converts a record's lifetime to the time to live a record script takes.
     /// </summary>
     /// <param name="lifetime">The lifetime.</param>
-    /// <returns>The time to live in whole milliseconds, rounded up, or 0 for a persistent record.</returns>
+    /// <returns>The time to live in whole milliseconds, rounded up, or 0 for a persistent or session-bound lifetime.</returns>
     /// <exception cref="ArgumentNullException">The lifetime is null.</exception>
-    /// <exception cref="CoordinationException">The lifetime is bound to a session, which the provider doesn't support.</exception>
     public static long TimeToLiveOf(RecordLifetime lifetime)
     {
         ArgumentNullException.ThrowIfNull(lifetime);
 
         if (lifetime.Session is not null)
         {
-            throw new CoordinationException(
-                CoordinationErrorCodes.Unsupported,
-                outcomeUnknown: false,
-                "The RESP provider binds no record to a session."
-            );
+            return 0;
         }
 
         return lifetime.TimeToLive is { } timeToLive ? RespCall.ToMilliseconds(timeToLive) : 0;
+    }
+
+    /// <summary>
+    /// Converts a record's lifetime to the session token a record script takes.
+    /// </summary>
+    /// <param name="lifetime">The lifetime.</param>
+    /// <returns>The token of the session the record is bound to, or empty.</returns>
+    /// <exception cref="ArgumentNullException">The lifetime is null.</exception>
+    public static string SessionOf(RecordLifetime lifetime)
+    {
+        ArgumentNullException.ThrowIfNull(lifetime);
+
+        return lifetime.Session?.Value ?? "";
     }
 
     /// <summary>
@@ -154,9 +222,9 @@ internal class RespRecordTable(RespServer server, RespProfile profile)
         profile ?? throw new ArgumentNullException(nameof(profile));
 
     /// <summary>
-    /// Runs a record script over a keyspace's table.
+    /// Runs a keyspace script over a keyspace's table.
     /// </summary>
-    /// <param name="script">The record script.</param>
+    /// <param name="script">The keyspace script.</param>
     /// <param name="keyspace">The keyspace whose table the script works on.</param>
     /// <param name="arguments">The operation's own arguments, which follow the three common ones.</param>
     /// <param name="cancellationToken">The token that cancels the wait for the server.</param>

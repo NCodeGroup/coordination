@@ -3,11 +3,16 @@
 
 using System.Collections.Frozen;
 using System.Collections.Immutable;
+using NCode.Coordination.Resp.Claims;
 using NCode.Coordination.Resp.Counters;
+using NCode.Coordination.Resp.Elections;
+using NCode.Coordination.Resp.Leases;
+using NCode.Coordination.Resp.Membership;
 using NCode.Coordination.Resp.Occurrences;
 using NCode.Coordination.Resp.Records;
 using NCode.Coordination.Resp.Sequences;
 using NCode.Coordination.Resp.Server;
+using NCode.Coordination.Resp.Sessions;
 using NCode.Coordination.Resp.Sets;
 using NCode.Coordination.Resp.Transactions;
 using StackExchange.Redis;
@@ -65,6 +70,42 @@ internal sealed class RespProvider : ICoordinationProvider, IAsyncDisposable, ID
             Guarantees.LinearizableUntilFailover,
             Guarantees.Volatile
         ),
+        PrimitiveSupport.Supported(
+            Primitives.Session,
+            Guarantees.LinearizableUntilFailover,
+            Guarantees.Volatile,
+            Guarantees.ServerClock
+        ),
+        PrimitiveSupport.Supported(
+            Primitives.Membership,
+            Guarantees.LinearizableUntilFailover,
+            Guarantees.Volatile,
+            Guarantees.ServerClock
+        ),
+        PrimitiveSupport.Supported(
+            Primitives.Lease,
+            Guarantees.LinearizableUntilFailover,
+            Guarantees.Volatile,
+            Guarantees.ServerClock
+        ),
+        PrimitiveSupport.Supported(
+            Primitives.Semaphore,
+            Guarantees.LinearizableUntilFailover,
+            Guarantees.Volatile,
+            Guarantees.ServerClock
+        ),
+        PrimitiveSupport.Supported(
+            Primitives.Election,
+            Guarantees.LinearizableUntilFailover,
+            Guarantees.Volatile,
+            Guarantees.ServerClock
+        ),
+        PrimitiveSupport.Supported(
+            Primitives.Claim,
+            Guarantees.LinearizableUntilFailover,
+            Guarantees.Volatile,
+            Guarantees.ServerClock
+        ),
     ];
 
     /// <summary>
@@ -97,6 +138,7 @@ internal sealed class RespProvider : ICoordinationProvider, IAsyncDisposable, ID
             RespCommands.Get,
             "HDEL",
             "HGET",
+            "HINCRBY",
             "HMGET",
             "HSET",
             RespCommands.Increment,
@@ -141,6 +183,7 @@ internal sealed class RespProvider : ICoordinationProvider, IAsyncDisposable, ID
             Profile = profile.Name,
         };
         var records = new RespRecordTable(Server, profile);
+        var tokens = new RespRandomTokens();
         var services = new Dictionary<Type, object>
         {
             [typeof(IRecordService)] = new RespRecordService(records),
@@ -149,6 +192,12 @@ internal sealed class RespProvider : ICoordinationProvider, IAsyncDisposable, ID
             [typeof(ISetService)] = new RespSetService(Server),
             [typeof(ICounterService)] = new RespCounterService(Server),
             [typeof(ISequenceService)] = new RespSequenceService(Server),
+            [typeof(ISessionService)] = new RespSessionService(records, tokens),
+            [typeof(IMembershipService)] = new RespMembershipService(records),
+            [typeof(ILeaseService)] = new RespLeaseService(records, tokens),
+            [typeof(ISemaphoreService)] = new RespSemaphoreService(records, tokens),
+            [typeof(IElectionService)] = new RespElectionService(records, tokens),
+            [typeof(IClaimService)] = new RespClaimService(Server),
         };
         Services = services.ToFrozenDictionary();
     }

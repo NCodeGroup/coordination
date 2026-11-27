@@ -31,9 +31,9 @@ command the provider sends, and fails the start otherwise.
 
 ## Primitives
 
-The provider keeps records, transactions, occurrences, sets, counters and sequences. Each operation is one server
-command or one Lua script, and every time to live is measured on the server's clock, in whole milliseconds rounded
-up.
+The provider keeps records, transactions, occurrences, sets, counters, sequences, sessions, membership, leases,
+semaphores, elections and claims. Each operation is one server command or one Lua script, and every time to live is
+measured on the server's clock, in whole milliseconds rounded up.
 
 - **Records**: a keyspace keeps its records in one hash, beside an index that lists them under a prefix and the
   deadlines of those with a time to live. Every change is one script that takes the keyspace's next revision and
@@ -41,9 +41,11 @@ up.
   passed is absent at once, and the next script on its keyspace deletes it and announces the delete; a keyspace
   whose records all have a time to live leaves the server an hour after the last of them ends. A page of a listing
   examines at most its limit plus 64 entries of the index, so expired records not yet deleted can leave a page short, or
-  empty, with a continuation token; page on until a page has none. Binding a record to a session fails as `unsupported`.
+  empty, with a continuation token; page on until a page has none. A record bound to a session is absent once the
+  session ends, and a script on its keyspace deletes it and announces the delete.
 - **Transactions**: up to 64 conditions and two branches of up to 64 writes, run as one script on one keyspace's
-  records.
+  records. A put that binds a record to a session that has ended ends the transaction as session ended, with nothing
+  written.
 - **Occurrences**: `SET` with `NX` and a time to live. A call the server doesn't answer throws, so a replay guard
   refuses rather than accepts.
 - **Sets**: one sorted set per key, each member scored with its own deadline; at most 10,000 live members.
@@ -52,6 +54,19 @@ up.
   largest integer a Lua number holds exactly; an increment past it fails as `limit-exceeded`.
 - **Sequences**: `INCR` and `INCRBY` on a key with no time to live, so a sequence never resets while the server keeps
   its data.
+- **Sessions**: a session stores its time to live, so every keep-alive renews it in full. A close or the session's
+  expiry ends it at once with the memberships, leases, semaphore slots, leaderships and records bound to it, which
+  are absent from then on; each script on the keyspace removes up to 64 of them. A session's id is 128 random bits.
+- **Membership**: a group is read at the keyspace's revision, which a join takes, and a leave or a session's end
+  takes when it removes a member or a record, and each member's address and metadata come back as written.
+- **Leases, semaphores and elections**: each grant carries a fencing token from a counter per resource that never
+  expires and an owner token of 128 random bits, and is bound to a session or to a time to live. A semaphore has up
+  to 1,024 slots, and a leader's value up to 65,536 bytes.
+- **Claims**: `SET` with `NX` and the time to live the caller gives, on the claim's name followed by its window's
+  segment, so the skew allowance is the caller's, from `TimeWindow.TryCreateTimeToLive`.
+- **Waits and watches**: waiting for a session's end or a release, and watching a role or a group, read the server
+  every 100 milliseconds until the condition holds or the caller cancels. A group's watch reads only the keyspace's
+  revision on each poll, and lists the group again only once the revision has moved.
 
 The provider declares each of them linearizable until the server fails over, and volatile, since it can't tell
 whether the server persists or replicates its writes; transactions and counter batches are atomic across

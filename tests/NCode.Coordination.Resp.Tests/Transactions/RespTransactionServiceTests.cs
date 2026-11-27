@@ -45,31 +45,6 @@ public sealed class RespTransactionServiceTests : IDisposable
     #region ExecuteAsync Tests
 
     [Fact]
-    public async Task ExecuteAsync_SessionInTheFailureBranch_ThrowsUnsupported()
-    {
-        var cancellationToken = TestContext.Current.CancellationToken;
-        var keyspace = new Keyspace("prod");
-        var server = CreateUnreachableServer();
-        var table = new RespRecordTable(server, RespProfiles.Garnet);
-        var service = new RespTransactionService(table);
-        var key = keyspace.CreateKey("k");
-        var other = keyspace.CreateKey("other");
-        var value = "v"u8.ToArray();
-        var sessionId = new SessionId(keyspace, "s1");
-        var lifetime = RecordLifetime.ForSession(sessionId);
-        var put = RecordWrite.Put(other, value, lifetime);
-        var delete = RecordWrite.Delete(key);
-        var transaction = new RecordTransaction([], [delete]) { OnFailure = [put] };
-
-        var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
-            await service.ExecuteAsync(transaction, null, cancellationToken)
-        );
-
-        Assert.Equal(CoordinationErrorCodes.Unsupported, exception.Code);
-        Assert.False(exception.OutcomeUnknown);
-    }
-
-    [Fact]
     public async Task ExecuteAsync_Transaction_PassesItsConditionsThenBothBranches()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
@@ -138,10 +113,12 @@ public sealed class RespTransactionServiceTests : IDisposable
             nameA,
             "one",
             "2000",
+            "",
             "1",
             "d",
             memberB,
             nameB,
+            "",
             "",
             "",
         ];

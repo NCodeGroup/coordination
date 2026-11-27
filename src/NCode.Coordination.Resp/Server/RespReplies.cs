@@ -79,6 +79,34 @@ internal static class RespReplies
     }
 
     /// <summary>
+    /// Reads a reply as text.
+    /// </summary>
+    /// <param name="reply">The reply.</param>
+    /// <returns>The text, which the server sent as a bulk string or a simple string.</returns>
+    /// <exception cref="ArgumentNullException">The reply is null.</exception>
+    /// <exception cref="CoordinationException">The reply is null or not text.</exception>
+    public static string Text(RedisResult reply)
+    {
+        ArgumentNullException.ThrowIfNull(reply);
+
+        if (
+            reply.IsNull
+            || reply.Resp2Type is not (ResultType.BulkString or ResultType.SimpleString)
+        )
+        {
+            throw Unexpected(reply);
+        }
+
+        var text = (string?)reply;
+        if (text is null)
+        {
+            throw Unexpected(reply);
+        }
+
+        return text;
+    }
+
+    /// <summary>
     /// Creates the exception for a reply the provider does not expect.
     /// </summary>
     /// <param name="reply">The reply.</param>
