@@ -18,6 +18,14 @@ public sealed class RespProviderRestartTests
 
     private static TimeSpan WaitLimit { get; } = TimeSpan.FromSeconds(30);
 
+    private static Keyspace CreateKeyspace()
+    {
+        var id = Guid.NewGuid();
+        var segment = KeySegment.FromGuid(id);
+
+        return new Keyspace("restart", segment);
+    }
+
     private static TService GetService<TService>(ICoordinationProvider provider)
         where TService : class
     {
@@ -33,6 +41,7 @@ public sealed class RespProviderRestartTests
     )
     {
         var stopwatch = Stopwatch.StartNew();
+        var pause = TimeSpan.FromMilliseconds(200);
         while (true)
         {
             try
@@ -47,7 +56,7 @@ public sealed class RespProviderRestartTests
                         $"The server did not answer within {WaitLimit}: {exception.Message}"
                     );
 
-                await Task.Delay(TimeSpan.FromMilliseconds(200), cancellationToken);
+                await Task.Delay(pause, cancellationToken);
             }
         }
     }
@@ -84,7 +93,8 @@ public sealed class RespProviderRestartTests
         );
         await using var disposal = Assert.IsType<RespProvider>(target.Provider);
         var records = GetService<IRecordService>(target.Provider);
-        var keyspace = new Keyspace("restart", KeySegment.FromGuid(Guid.NewGuid()));
+        var keyspace = CreateKeyspace();
+        var value = "v"u8.ToArray();
         var halfway = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var stopped = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var failed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -117,7 +127,7 @@ public sealed class RespProviderRestartTests
                 {
                     await records.CreateAsync(
                         key,
-                        "v"u8.ToArray(),
+                        value,
                         RecordLifetime.Persistent,
                         null,
                         cancellationToken
@@ -139,13 +149,7 @@ public sealed class RespProviderRestartTests
         await WaitUntilAnsweredAsync(
             async ct =>
             {
-                await records.CreateAsync(
-                    afterKey,
-                    "v"u8.ToArray(),
-                    RecordLifetime.Persistent,
-                    null,
-                    ct
-                );
+                await records.CreateAsync(afterKey, value, RecordLifetime.Persistent, null, ct);
             },
             cancellationToken
         );
@@ -186,7 +190,8 @@ public sealed class RespProviderRestartTests
         var notifications = GetService<INotificationService>(target.Provider);
         var records = GetService<IRecordService>(target.Provider);
         var watches = GetService<IRecordWatchService>(target.Provider);
-        var keyspace = new Keyspace("restart", KeySegment.FromGuid(Guid.NewGuid()));
+        var keyspace = CreateKeyspace();
+        var value = "v"u8.ToArray();
         var topic = keyspace.CreateKey("topic");
         var prefix = keyspace.CreateKey("watched");
 
@@ -205,7 +210,7 @@ public sealed class RespProviderRestartTests
         var beforeKey = keyspace.CreateKey("watched", "before");
         await records.CreateAsync(
             beforeKey,
-            "v"u8.ToArray(),
+            value,
             RecordLifetime.Persistent,
             null,
             cancellationToken
@@ -213,7 +218,8 @@ public sealed class RespProviderRestartTests
 
         var beforeMessage = await NextAsync(messageEnumerator, cancellationToken);
         Assert.Equal(NotificationKind.Message, beforeMessage.Kind);
-        Assert.Equal(beforePayload, beforeMessage.Payload.ToArray());
+        var beforeReceived = beforeMessage.Payload.ToArray();
+        Assert.Equal(beforePayload, beforeReceived);
         var beforeChange = await NextAsync(changeEnumerator, cancellationToken);
         Assert.Equal(RecordChangeKind.Written, beforeChange.Kind);
         Assert.Equal(beforeKey, beforeChange.Key);
@@ -249,13 +255,7 @@ public sealed class RespProviderRestartTests
             await WaitUntilAnsweredAsync(
                 async ct =>
                 {
-                    await records.CreateAsync(
-                        key,
-                        "v"u8.ToArray(),
-                        RecordLifetime.Persistent,
-                        null,
-                        ct
-                    );
+                    await records.CreateAsync(key, value, RecordLifetime.Persistent, null, ct);
                 },
                 cancellationToken
             );

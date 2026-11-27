@@ -11,7 +11,13 @@ namespace NCode.Coordination.Resp.Tests;
 
 public sealed class RespProviderClusterTests(RespServers servers)
 {
-    private static Keyspace CreateKeyspace() => new("cluster", KeySegment.FromGuid(Guid.NewGuid()));
+    private static Keyspace CreateKeyspace()
+    {
+        var id = Guid.NewGuid();
+        var segment = KeySegment.FromGuid(id);
+
+        return new Keyspace("cluster", segment);
+    }
 
     private static TService GetService<TService>(ICoordinationProvider provider)
         where TService : class
@@ -35,15 +41,6 @@ public sealed class RespProviderClusterTests(RespServers servers)
         return enumerator.Current;
     }
 
-    private async Task<ConnectionMultiplexer> ConnectAdminAsync(CancellationToken cancellationToken)
-    {
-        var options = ConfigurationOptions.Parse(servers.ValkeyCluster);
-        options.AllowAdmin = true;
-        var connecting = ConnectionMultiplexer.ConnectAsync(options);
-
-        return await connecting.WaitAsync(cancellationToken);
-    }
-
     private static async Task<IAsyncEnumerator<Notification>> SubscribeAndPublishAsync(
         INotificationService notifications,
         CoordinationKey topic,
@@ -59,7 +56,8 @@ public sealed class RespProviderClusterTests(RespServers servers)
         await notifications.PublishAsync(topic, payload, null, cancellationToken);
         var message = await NextAsync(enumerator, cancellationToken);
         Assert.Equal(NotificationKind.Message, message.Kind);
-        Assert.Equal(payload, message.Payload.ToArray());
+        var received = message.Payload.ToArray();
+        Assert.Equal(payload, received);
 
         return enumerator;
     }
@@ -84,6 +82,15 @@ public sealed class RespProviderClusterTests(RespServers servers)
         return holders;
     }
 
+    private async Task<ConnectionMultiplexer> ConnectAdminAsync(CancellationToken cancellationToken)
+    {
+        var options = ConfigurationOptions.Parse(servers.ValkeyCluster);
+        options.AllowAdmin = true;
+        var connecting = ConnectionMultiplexer.ConnectAsync(options);
+
+        return await connecting.WaitAsync(cancellationToken);
+    }
+
     #region Operations Tests
 
     [RespServerFact]
@@ -98,7 +105,8 @@ public sealed class RespProviderClusterTests(RespServers servers)
         await using var disposal = Assert.IsType<RespProvider>(target.Provider);
         var provider = target.Provider;
         var keyspace = CreateKeyspace();
-        var timeToLive = new TimeToLive(TimeSpan.FromSeconds(30));
+        var lifetime = TimeSpan.FromSeconds(30);
+        var timeToLive = new TimeToLive(lifetime);
 
         var records = GetService<IRecordService>(provider);
         var sessions = GetService<ISessionService>(provider);
@@ -107,35 +115,27 @@ public sealed class RespProviderClusterTests(RespServers servers)
         var sets = GetService<ISetService>(provider);
         var sequences = GetService<ISequenceService>(provider);
         var notifications = GetService<INotificationService>(provider);
+        var recordKey = keyspace.CreateKey("record");
+        var counterKey = keyspace.CreateKey("counter");
+        var occurrenceKey = keyspace.CreateKey("occurrence");
+        var setKey = keyspace.CreateKey("set");
+        var sequenceKey = keyspace.CreateKey("sequence");
+        var topic = keyspace.CreateKey("topic");
+        var value = "v"u8.ToArray();
+        var payload = "p"u8.ToArray();
         await records.CreateAsync(
-            keyspace.CreateKey("record"),
-            "v"u8.ToArray(),
+            recordKey,
+            value,
             RecordLifetime.Persistent,
             null,
             cancellationToken
         );
         await sessions.OpenAsync(keyspace, timeToLive, null, cancellationToken);
-        await counters.IncrementAsync(
-            keyspace.CreateKey("counter"),
-            1,
-            timeToLive,
-            null,
-            cancellationToken
-        );
-        await occurrences.TryRecordAsync(
-            keyspace.CreateKey("occurrence"),
-            timeToLive,
-            null,
-            cancellationToken
-        );
-        await sets.AddAsync(keyspace.CreateKey("set"), "m", timeToLive, null, cancellationToken);
-        await sequences.NextAsync(keyspace.CreateKey("sequence"), null, cancellationToken);
-        await notifications.PublishAsync(
-            keyspace.CreateKey("topic"),
-            "p"u8.ToArray(),
-            null,
-            cancellationToken
-        );
+        await counters.IncrementAsync(counterKey, 1, timeToLive, null, cancellationToken);
+        await occurrences.TryRecordAsync(occurrenceKey, timeToLive, null, cancellationToken);
+        await sets.AddAsync(setKey, "m", timeToLive, null, cancellationToken);
+        await sequences.NextAsync(sequenceKey, null, cancellationToken);
+        await notifications.PublishAsync(topic, payload, null, cancellationToken);
 
         await using var admin = await ConnectAdminAsync(cancellationToken);
         var clusterServers = admin.GetServers();
@@ -155,7 +155,11 @@ public sealed class RespProviderClusterTests(RespServers servers)
         Assert.Equal(3, clusterServers.Length);
         var holder = Assert.Single(holders);
         Assert.True(holder.Count >= 7);
-        Assert.All(holder, key => Assert.Equal(expectedSlot, admin.HashSlot(key)));
+        foreach (var key in holder)
+        {
+            var slot = admin.HashSlot(key);
+            Assert.Equal(expectedSlot, slot);
+        }
     }
 
     #endregion
@@ -179,14 +183,16 @@ public sealed class RespProviderClusterTests(RespServers servers)
         Assert.NotNull(configuration);
 
         var first = CreateKeyspace();
-        var firstSlot = admin.HashSlot(RespKeys.KeyspaceTag(first));
+        var firstTag = RespKeys.KeyspaceTag(first);
+        var firstSlot = admin.HashSlot(firstTag);
         var firstNode = configuration.GetBySlot(firstSlot)?.NodeId;
         Assert.NotNull(firstNode);
         Keyspace? second = null;
         for (var attempt = 0; attempt < 64 && second is null; attempt++)
         {
             var candidate = CreateKeyspace();
-            var slot = admin.HashSlot(RespKeys.KeyspaceTag(candidate));
+            var candidateTag = RespKeys.KeyspaceTag(candidate);
+            var slot = admin.HashSlot(candidateTag);
             if (configuration.GetBySlot(slot)?.NodeId != firstNode)
                 second = candidate;
         }
