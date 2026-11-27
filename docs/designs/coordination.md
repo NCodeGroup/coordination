@@ -411,7 +411,13 @@ further closing messages while a resync might have covered the last one.
    ([#12](https://github.com/NCodeGroup/coordination/issues/12)) and hosting
    ([#13](https://github.com/NCodeGroup/coordination/issues/13)).
 3. **RESP.** The RESP provider with Valkey and Garnet profiles, covering every NCode.Identity need, with gap-detecting
-   notifications.
+   notifications, in six plans: the provider foundation with the Valkey and Garnet profiles and a server test harness
+   ([#24](https://github.com/NCodeGroup/coordination/issues/24)), occurrences, counters, sequences and sets
+   ([#25](https://github.com/NCodeGroup/coordination/issues/25)), records and transactions
+   ([#26](https://github.com/NCodeGroup/coordination/issues/26)), sessions, membership, leases, semaphores, elections
+   and claims ([#27](https://github.com/NCodeGroup/coordination/issues/27)), notifications and watches with gap
+   detection and resync ([#28](https://github.com/NCodeGroup/coordination/issues/28)), and concurrent conformance
+   runs, injected faults and cluster mode ([#29](https://github.com/NCodeGroup/coordination/issues/29)).
 4. **PostgreSQL.** A provider that needs no infrastructure beyond the database a service already runs. NCode.Identity's
    hosted platform runs PostgreSQL as a managed three-node service in the cluster's datacenter
    ([hosting analysis](https://github.com/NCodeGroup/identity/blob/main/docs/hosting-analysis.md)), so the provider's
