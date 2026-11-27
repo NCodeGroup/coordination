@@ -13,6 +13,7 @@ namespace NCode.Coordination.PostgreSql.Records;
 /// <param name="Revision">The keyspace's revision at which the record was written.</param>
 /// <param name="Deadline">The instant on the server's clock at which the record expires, or null when it doesn't.</param>
 /// <param name="Session">The id of the session the record is bound to, or null when it is bound to none.</param>
+/// <param name="SessionDeadline">The deadline of the session's row, or null when it is bound to none or the row is gone.</param>
 internal sealed record PgRecordRow(
     byte[] Index,
     short Depth,
@@ -20,15 +21,15 @@ internal sealed record PgRecordRow(
     byte[] Value,
     long Revision,
     DateTime? Deadline,
-    string? Session
+    string? Session,
+    DateTime? SessionDeadline = null
 )
 {
     /// <summary>
     /// Tells whether the record still holds at an instant.
     /// </summary>
     /// <param name="now">The instant, on the server's clock.</param>
-    /// <returns><see cref="PgRecordState.Expired"/> when the deadline is at or before the instant; otherwise
-    /// <see cref="PgRecordState.Live"/>.</returns>
+    /// <returns>The state that <see cref="PgLiveness.StateOf"/> decides.</returns>
     public PgRecordState StateAt(DateTime now) =>
-        Deadline is { } deadline && deadline <= now ? PgRecordState.Expired : PgRecordState.Live;
+        PgLiveness.StateOf(Deadline, Session, SessionDeadline, now);
 }

@@ -47,6 +47,11 @@ internal sealed class PgKeyspaceChange(
         DELETE FROM {schema}.records WHERE keyspace_id = $1 AND idx = $2 AND depth = $3
         """;
 
+    /// <summary>The template of the statement that deletes a session's row.</summary>
+    private const string DeleteSession = """
+        DELETE FROM {schema}.sessions WHERE keyspace_id = $1 AND id = $2
+        """;
+
     /// <summary>The template of the statement that logs one entry of the change log.</summary>
     private const string InsertChange = """
         INSERT INTO {schema}.changes (keyspace_id, revision, deadline, ended_session, group_idx, group_depth)
@@ -78,6 +83,9 @@ internal sealed class PgKeyspaceChange(
     /// <summary>Gets the statement that deletes a record.</summary>
     private string DeleteRecordSql { get; } = schema.Apply(DeleteRecord);
 
+    /// <summary>Gets the statement that deletes a session's row.</summary>
+    private string DeleteSessionSql { get; } = schema.Apply(DeleteSession);
+
     /// <summary>Gets the statement that logs one entry.</summary>
     private string InsertChangeSql { get; } = schema.Apply(InsertChange);
 
@@ -93,15 +101,22 @@ internal sealed class PgKeyspaceChange(
     /// <summary>Gets the entries the transaction has taken, in order.</summary>
     private List<Entry> Entries { get; } = [];
 
+    /// <summary>Gets the sessions that this change has ended.</summary>
+    private HashSet<string> EndedSessions { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>Gets the writes that take no revision, and the deletions of ended sessions, in order.</summary>
+    private List<PgStatement> Extras { get; } = [];
+
     /// <summary>
     /// Gets the keyspace's revision so far: the revision read, then the last one taken.
     /// </summary>
     public long Revision { get; private set; } = revision;
 
     /// <summary>
-    /// Gets a value that tells whether the transaction has taken no revision, so it has nothing to commit.
+    /// Gets a value that tells whether the transaction has taken no revision and made no write, so it has nothing to
+    /// commit.
     /// </summary>
-    public bool IsEmpty => Entries.Count == 0;
+    public bool IsEmpty => Entries.Count == 0 && Extras.Count == 0;
 
     /// <summary>
     /// Gets the instant the transaction read on the server's clock.
@@ -142,6 +157,55 @@ internal sealed class PgKeyspaceChange(
     }
 
     /// <summary>
+    /// Ends a session: takes the next revision for an entry that names the session as ended, and deletes the
+    /// session's row. A session ends once in a change.
+    /// </summary>
+    /// <param name="session">The session's id.</param>
+    /// <returns>True when the session was ended; false when this change has ended it already.</returns>
+    /// <exception cref="ArgumentNullException">The session is null.</exception>
+    public bool EndSession(string session)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+
+        if (!EndedSessions.Add(session))
+        {
+            return false;
+        }
+
+        Begin();
+        Entries[^1].EndedSession = session;
+        Extras.Add(
+            new PgStatement(DeleteSessionSql, PgArgument.Of(keyspaceId), PgArgument.Of(session))
+        );
+        return true;
+    }
+
+    /// <summary>
+    /// Names the group that the current entry changed.
+    /// </summary>
+    /// <param name="index">The group's index value.</param>
+    /// <param name="depth">The group's partition depth.</param>
+    /// <exception cref="ArgumentNullException">The index is null.</exception>
+    /// <exception cref="InvalidOperationException"><see cref="Begin"/> was not called.</exception>
+    public void NameGroup(byte[] index, short depth)
+    {
+        ArgumentNullException.ThrowIfNull(index);
+
+        var entry = Current();
+        entry.GroupIndex = index;
+        entry.GroupDepth = depth;
+    }
+
+    /// <summary>
+    /// Appends a write that takes no revision and logs nothing.
+    /// </summary>
+    /// <param name="statement">The statement that makes the write.</param>
+    public void Write(PgStatement statement)
+    {
+        Extras.Add(statement);
+    }
+
+    /// <summary>
     /// Writes a record in the current entry and logs it as written.
     /// </summary>
     /// <param name="key">The record's key.</param>
@@ -163,7 +227,7 @@ internal sealed class PgKeyspaceChange(
 
         var entry = Current();
         entry.Writes.Add(
-            new Write(
+            new RecordWrite(
                 WrittenKind,
                 PgKeys.Index(key),
                 (short)key.PartitionDepth,
@@ -188,7 +252,7 @@ internal sealed class PgKeyspaceChange(
 
         var entry = Current();
         entry.Writes.Add(
-            new Write(DeletedKind, row.Index, row.Depth, row.Key, null, null, null, null)
+            new RecordWrite(DeletedKind, row.Index, row.Depth, row.Key, null, null, null, null)
         );
     }
 
@@ -209,6 +273,13 @@ internal sealed class PgKeyspaceChange(
         }
 
         var statements = ImmutableArray.CreateBuilder<PgStatement>();
+        statements.AddRange(Extras);
+
+        if (Entries.Count == 0)
+        {
+            return statements.ToImmutable();
+        }
+
         var logDeadline = Now + retention;
 
         foreach (var entry in Entries)
@@ -243,9 +314,9 @@ internal sealed class PgKeyspaceChange(
                     PgArgument.Of(keyspaceId),
                     PgArgument.Of(entry.Revision),
                     PgArgument.Typed(logDeadline, NpgsqlDbType.TimestampTz),
-                    PgArgument.Typed(null, NpgsqlDbType.Text),
-                    PgArgument.Typed(null, NpgsqlDbType.Bytea),
-                    PgArgument.Typed(null, NpgsqlDbType.Smallint)
+                    PgArgument.Typed(entry.EndedSession, NpgsqlDbType.Text),
+                    PgArgument.Typed(entry.GroupIndex, NpgsqlDbType.Bytea),
+                    PgArgument.Typed(entry.GroupDepth, NpgsqlDbType.Smallint)
                 )
             );
 
@@ -343,7 +414,16 @@ internal sealed class PgKeyspaceChange(
     private sealed record Entry(long Revision)
     {
         /// <summary>Gets the entry's record writes, in order.</summary>
-        public List<Write> Writes { get; } = [];
+        public List<RecordWrite> Writes { get; } = [];
+
+        /// <summary>Gets or sets the id of the session the entry ended, or null.</summary>
+        public string? EndedSession { get; set; }
+
+        /// <summary>Gets or sets the index value of the group the entry names, or null.</summary>
+        public byte[]? GroupIndex { get; set; }
+
+        /// <summary>Gets or sets the partition depth of the group the entry names, or null.</summary>
+        public short? GroupDepth { get; set; }
     }
 
     /// <summary>
@@ -357,7 +437,7 @@ internal sealed class PgKeyspaceChange(
     /// <param name="Deadline">The instant the record written expires, or null.</param>
     /// <param name="Session">The session the record written is bound to, or null.</param>
     /// <param name="ReplacedSession">The ended session whose row the write replaced, or null.</param>
-    private sealed record Write(
+    private sealed record RecordWrite(
         short Kind,
         byte[] Index,
         short Depth,

@@ -19,9 +19,12 @@ internal sealed class PgRecordService(PgRecordTable table) : IRecordService
     /// <summary>The template of the statement that lists the rows under a prefix after a position.</summary>
     private const string ListRows = """
         WITH now AS (SELECT clock_timestamp() AS t)
-        SELECT k.revision, now.t, r.idx, r.depth, r.key, r.value, r.revision, r.deadline, r.session_id
+        SELECT k.revision, now.t, r.idx, r.depth, r.key, r.value, r.revision, r.deadline, r.session_id,
+          r.session_deadline
         FROM now CROSS JOIN {schema}.keyspaces k
-        LEFT JOIN LATERAL (SELECT * FROM {schema}.records x WHERE x.keyspace_id = k.id AND x.idx >= $2
+        LEFT JOIN LATERAL (SELECT x.*, s.deadline AS session_deadline FROM {schema}.records x
+          LEFT JOIN {schema}.sessions s ON s.keyspace_id = x.keyspace_id AND s.id = x.session_id
+          WHERE x.keyspace_id = k.id AND x.idx >= $2
           AND ($3::bytea IS NULL OR x.idx < $3) AND (x.idx, x.depth) > ($4, $5)
           ORDER BY x.idx, x.depth LIMIT $6) r ON true
         WHERE k.id = $1
@@ -105,7 +108,7 @@ internal sealed class PgRecordService(PgRecordTable table) : IRecordService
                             async (transaction, transactionToken) =>
                             {
                                 var start = await Table
-                                    .BeginAsync(transaction, id, [key], transactionToken)
+                                    .BeginAsync(transaction, id, [key], [], transactionToken)
                                     .ConfigureAwait(false);
 
                                 var change = start.Change;
@@ -185,7 +188,7 @@ internal sealed class PgRecordService(PgRecordTable table) : IRecordService
                             async (transaction, transactionToken) =>
                             {
                                 var start = await Table
-                                    .BeginAsync(transaction, id, [key], transactionToken)
+                                    .BeginAsync(transaction, id, [key], [], transactionToken)
                                     .ConfigureAwait(false);
 
                                 var change = start.Change;
@@ -260,7 +263,7 @@ internal sealed class PgRecordService(PgRecordTable table) : IRecordService
                             async (transaction, transactionToken) =>
                             {
                                 var start = await Table
-                                    .BeginAsync(transaction, id, [key], transactionToken)
+                                    .BeginAsync(transaction, id, [key], [], transactionToken)
                                     .ConfigureAwait(false);
 
                                 var change = start.Change;
@@ -319,7 +322,7 @@ internal sealed class PgRecordService(PgRecordTable table) : IRecordService
                             async (transaction, transactionToken) =>
                             {
                                 var start = await Table
-                                    .BeginAsync(transaction, id, [key], transactionToken)
+                                    .BeginAsync(transaction, id, [key], [], transactionToken)
                                     .ConfigureAwait(false);
 
                                 var change = start.Change;
@@ -429,7 +432,11 @@ internal sealed class PgRecordService(PgRecordTable table) : IRecordService
                         first
                             .Where(item => item.Row is not null)
                             .Take(limit)
-                            .Any(item => item.StateAt() == PgRecordState.Expired)
+                            .Any(item =>
+                                item.StateAt()
+                                    is PgRecordState.Expired
+                                        or PgRecordState.SessionExpired
+                            )
                     )
                     {
                         read = await Table
@@ -523,7 +530,10 @@ internal sealed class PgRecordService(PgRecordTable table) : IRecordService
                             reader.IsDBNull(7)
                                 ? null
                                 : DateTime.SpecifyKind(reader.GetDateTime(7), DateTimeKind.Utc),
-                            reader.IsDBNull(8) ? null : reader.GetString(8)
+                            reader.IsDBNull(8) ? null : reader.GetString(8),
+                            reader.IsDBNull(9)
+                                ? null
+                                : DateTime.SpecifyKind(reader.GetDateTime(9), DateTimeKind.Utc)
                         )
                 ),
                 cancellationToken
@@ -539,7 +549,8 @@ internal sealed class PgRecordService(PgRecordTable table) : IRecordService
     private sealed record ListItem(long KeyspaceRevision, DateTime Now, PgRecordRow? Row)
     {
         /// <summary>Tells whether the record holds at the instant that it was read.</summary>
-        /// <returns><see cref="PgRecordState.Expired"/> when the row's deadline is at or before the instant.</returns>
+        /// <returns>The state that <see cref="PgLiveness.StateOf"/> decides for the row; <see cref="PgRecordState.Live"/>
+        /// when there is none.</returns>
         public PgRecordState StateAt() => Row?.StateAt(Now) ?? PgRecordState.Live;
     }
 }

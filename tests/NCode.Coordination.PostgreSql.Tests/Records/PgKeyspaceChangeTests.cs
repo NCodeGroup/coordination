@@ -3,6 +3,7 @@
 
 using NCode.Coordination.PostgreSql.Keys;
 using NCode.Coordination.PostgreSql.Schema;
+using NCode.Coordination.PostgreSql.Server;
 
 namespace NCode.Coordination.PostgreSql.Records.Tests;
 
@@ -130,4 +131,102 @@ public sealed class PgKeyspaceChangeTests
     }
 
     #endregion
+
+    #region EndSession Tests
+
+    [Fact]
+    public void EndSession_Twice_TakesOneRevision()
+    {
+        var change = CreateChange(5);
+
+        var first = change.EndSession("s-1");
+        var second = change.EndSession("s-1");
+
+        Assert.True(first);
+        Assert.False(second);
+        Assert.Equal(6, change.Revision);
+
+        var statements = change.Statements("channel");
+
+        Assert.Equal(4, statements.Length);
+        Assert.Contains("DELETE FROM \"coordination\".sessions", statements[0].Sql);
+        Assert.Equal("s-1", statements[0].Arguments[1].Value);
+        Assert.Contains("INSERT INTO \"coordination\".changes", statements[1].Sql);
+        Assert.Equal(6L, statements[1].Arguments[1].Value);
+        Assert.Equal("s-1", statements[1].Arguments[3].Value);
+        Assert.Equal("c:6", statements[3].Arguments[1].Value);
+    }
+
+    #endregion
+
+    #region Write Tests
+
+    [Fact]
+    public void Write_Alone_TakesNoRevisionAndNotifiesNot()
+    {
+        var change = CreateChange(5);
+
+        change.Write(new PgStatement("SELECT 1"));
+
+        Assert.Equal(5, change.Revision);
+        Assert.False(change.IsEmpty);
+
+        var statements = change.Statements("channel");
+
+        Assert.Single(statements);
+        Assert.Equal("SELECT 1", statements[0].Sql);
+    }
+
+    #endregion
+
+    #region NameGroup Tests
+
+    [Fact]
+    public void NameGroup_CurrentEntry_LogsTheGroup()
+    {
+        var change = CreateChange(5);
+        change.Begin();
+
+        change.NameGroup([1, 2], 3);
+
+        var statements = change.Statements("channel");
+
+        Assert.Contains("INSERT INTO \"coordination\".changes", statements[0].Sql);
+        Assert.Equal(new byte[] { 1, 2 }, statements[0].Arguments[4].Value);
+        Assert.Equal((short)3, statements[0].Arguments[5].Value);
+    }
+
+    #endregion
+}
+
+public sealed class PgLivenessTests
+{
+    private static readonly DateTime Now = new(2026, 11, 27, 12, 0, 0, DateTimeKind.Utc);
+
+    [Theory]
+    [InlineData(-1, null, null, "Expired")]
+    [InlineData(1, "s-1", null, "SessionEnded")]
+    [InlineData(1, "s-1", -1, "SessionExpired")]
+    [InlineData(1, "s-1", 1, "Live")]
+    [InlineData(1, null, null, "Live")]
+    public void StateOf_Deadlines_ReturnsTheState(
+        int deadlineSeconds,
+        string? session,
+        int? sessionDeadlineSeconds,
+        string expected
+    )
+    {
+        DateTime? sessionDeadline = sessionDeadlineSeconds is { } seconds
+            ? Now.AddSeconds(seconds)
+            : null;
+
+        var state = PgLiveness.StateOf(
+            Now.AddSeconds(deadlineSeconds),
+            session,
+            sessionDeadline,
+            Now
+        );
+
+        Assert.Equal(expected, state.ToString());
+    }
 }

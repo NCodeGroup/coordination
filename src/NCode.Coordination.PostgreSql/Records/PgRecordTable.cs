@@ -25,18 +25,25 @@ internal sealed class PgRecordTable(PgServer server, PgKeyspaces keyspaces, PgSe
     /// <summary>The template of the statement that reads the server's instant.</summary>
     private const string SelectClock = "SELECT clock_timestamp()";
 
-    /// <summary>The template of the statement that reads the rows of keys.</summary>
+    /// <summary>The template of the statement that reads the rows of keys, beside the deadlines of their sessions.</summary>
     private const string SelectRows = """
-        SELECT r.idx, r.depth, r.key, r.value, r.revision, r.deadline, r.session_id
+        SELECT r.idx, r.depth, r.key, r.value, r.revision, r.deadline, r.session_id, s.deadline
         FROM {schema}.records r
+        LEFT JOIN {schema}.sessions s ON s.keyspace_id = r.keyspace_id AND s.id = r.session_id
         WHERE r.keyspace_id = $1 AND (r.idx, r.depth) IN (SELECT * FROM unnest($2::bytea[], $3::smallint[]))
+        """;
+
+    /// <summary>The template of the statement that reads the deadlines of the sessions that the writes bind to.</summary>
+    private const string SelectSessions = """
+        SELECT id, deadline FROM {schema}.sessions WHERE keyspace_id = $1 AND id = ANY($2::text[])
         """;
 
     /// <summary>The template of the statement that reads the server's instant and one record's row, if it has one.</summary>
     private const string SelectOne = """
-        SELECT now.t, r.value, r.revision, r.deadline, r.session_id
+        SELECT now.t, r.value, r.revision, r.deadline, r.session_id, s.deadline
         FROM (SELECT clock_timestamp() AS t) now
         LEFT JOIN {schema}.records r ON r.keyspace_id = $1 AND r.idx = $2 AND r.depth = $3
+        LEFT JOIN {schema}.sessions s ON s.keyspace_id = r.keyspace_id AND s.id = r.session_id
         """;
 
     /// <summary>The template of the statement that waits for the writers of a keyspace's row.</summary>
@@ -56,14 +63,45 @@ internal sealed class PgRecordTable(PgServer server, PgKeyspaces keyspaces, PgSe
     /// <summary>Gets the statement that locks the keyspace's row and reads its revision.</summary>
     private string SelectRevisionSql { get; } = settings.Schema.Apply(SelectRevision);
 
+    /// <summary>Gets the statement that reads the server's instant.</summary>
+    private string SelectClockSql { get; } = settings.Schema.Apply(SelectClock);
+
     /// <summary>Gets the statement that reads the rows of keys.</summary>
     private string SelectRowsSql { get; } = settings.Schema.Apply(SelectRows);
+
+    /// <summary>Gets the statement that reads the deadlines of the sessions that the writes bind to.</summary>
+    private string SelectSessionsSql { get; } = settings.Schema.Apply(SelectSessions);
 
     /// <summary>Gets the statement that reads the server's instant and one record's row.</summary>
     private string SelectOneSql { get; } = settings.Schema.Apply(SelectOne);
 
     /// <summary>Gets the statement that waits for the writers of a keyspace's row.</summary>
     private string LockShareSql { get; } = settings.Schema.Apply(LockShare);
+
+    /// <summary>
+    /// Builds the statement that locks a keyspace's row and reads its revision, for services whose transactions read
+    /// tables of their own.
+    /// </summary>
+    /// <param name="keyspaceId">The keyspace's id.</param>
+    /// <returns>The statement, whose result holds the revision, or no row when the keyspace's row does not exist.</returns>
+    public PgStatement LockKeyspace(long keyspaceId) =>
+        new(SelectRevisionSql, PgArgument.Of(keyspaceId));
+
+    /// <summary>
+    /// Builds the statement that reads the server's instant.
+    /// </summary>
+    /// <returns>The statement, whose result holds the instant.</returns>
+    public PgStatement Clock() => new(SelectClockSql);
+
+    /// <summary>
+    /// Builds the change of a keyspace that a transaction of a service with tables of its own makes.
+    /// </summary>
+    /// <param name="keyspaceId">The keyspace's id.</param>
+    /// <param name="revision">The keyspace's revision that the transaction read.</param>
+    /// <param name="now">The instant the transaction read on the server's clock.</param>
+    /// <returns>The change.</returns>
+    public PgKeyspaceChange NewChange(long keyspaceId, long revision, DateTime now) =>
+        new(Settings.Schema, keyspaceId, revision, now, Settings.LogRetention);
 
     /// <summary>
     /// Reads one record. A record that is live in the single statement is returned; one that is expired is read again
@@ -102,9 +140,15 @@ internal sealed class PgRecordTable(PgServer server, PgKeyspaces keyspaces, PgSe
                         return null;
                     }
 
-                    if (first.StateAt() == PgRecordState.Live)
+                    var firstState = first.StateAt();
+                    if (firstState == PgRecordState.Live)
                     {
                         return ToRecord(key, first);
+                    }
+
+                    if (firstState == PgRecordState.SessionEnded)
+                    {
+                        return null;
                     }
 
                     var second = await Server
@@ -173,7 +217,11 @@ internal sealed class PgRecordTable(PgServer server, PgKeyspaces keyspaces, PgSe
                             reader.GetInt64(2),
                             reader.IsDBNull(3)
                                 ? null
-                                : DateTime.SpecifyKind(reader.GetDateTime(3), DateTimeKind.Utc)
+                                : DateTime.SpecifyKind(reader.GetDateTime(3), DateTimeKind.Utc),
+                            reader.IsDBNull(4) ? null : reader.GetString(4),
+                            reader.IsDBNull(5)
+                                ? null
+                                : DateTime.SpecifyKind(reader.GetDateTime(5), DateTimeKind.Utc)
                         ),
                 cancellationToken
             )
@@ -198,14 +246,21 @@ internal sealed class PgRecordTable(PgServer server, PgKeyspaces keyspaces, PgSe
     /// <param name="Value">The record's value.</param>
     /// <param name="Revision">The keyspace's revision at which the record was written.</param>
     /// <param name="Deadline">The instant the record expires, or null when it doesn't.</param>
-    private sealed record OneRead(DateTime Now, byte[] Value, long Revision, DateTime? Deadline)
+    /// <param name="Session">The id of the session the record is bound to, or null.</param>
+    /// <param name="SessionDeadline">The deadline of the session's row, or null when it is bound to none or the row is gone.</param>
+    private sealed record OneRead(
+        DateTime Now,
+        byte[] Value,
+        long Revision,
+        DateTime? Deadline,
+        string? Session,
+        DateTime? SessionDeadline
+    )
     {
         /// <summary>Tells whether the record holds at the instant that it was read.</summary>
-        /// <returns><see cref="PgRecordState.Expired"/> when the deadline is at or before the instant.</returns>
+        /// <returns>The state that <see cref="PgLiveness.StateOf"/> decides.</returns>
         public PgRecordState StateAt() =>
-            Deadline is { } deadline && deadline <= Now
-                ? PgRecordState.Expired
-                : PgRecordState.Live;
+            PgLiveness.StateOf(Deadline, Session, SessionDeadline, Now);
     }
 
     /// <summary>
@@ -237,25 +292,29 @@ internal sealed class PgRecordTable(PgServer server, PgKeyspaces keyspaces, PgSe
     /// <param name="transaction">The transaction, which has not run a batch.</param>
     /// <param name="keyspaceId">The keyspace's id.</param>
     /// <param name="keys">The keys whose rows to read; a key that is listed twice is read once.</param>
+    /// <param name="sessions">The ids of the sessions that the writes bind to, whose rows to read.</param>
     /// <param name="cancellationToken">The token that cancels the call.</param>
-    /// <returns>The change, and the rows of the keys that exist.</returns>
-    /// <exception cref="ArgumentNullException">The transaction or the keys are null.</exception>
+    /// <returns>The change, the rows of the keys that exist, and the deadlines of the sessions that exist.</returns>
+    /// <exception cref="ArgumentNullException">The transaction, the keys or the sessions are null.</exception>
     /// <exception cref="PgKeyspaceMissingException">The keyspace's row does not exist.</exception>
     public async ValueTask<PgChangeStart> BeginAsync(
         PgTransaction transaction,
         long keyspaceId,
         IReadOnlyList<CoordinationKey> keys,
+        IReadOnlyCollection<string> sessions,
         CancellationToken cancellationToken
     )
     {
         ArgumentNullException.ThrowIfNull(transaction);
         ArgumentNullException.ThrowIfNull(keys);
+        ArgumentNullException.ThrowIfNull(sessions);
 
         var distinct = keys.Distinct().ToArray();
         var indexes = distinct.Select(PgKeys.Index).ToArray();
         var depths = distinct.Select(key => (short)key.PartitionDepth).ToArray();
+        var sessionIds = sessions.Distinct(StringComparer.Ordinal).ToArray();
 
-        var (revisions, clocks, rows) = await transaction
+        var (revisions, clocks, rows, sessionRows) = await transaction
             .FirstAsync(
                 [
                     new PgStatement(SelectRevisionSql, PgArgument.Of(keyspaceId)),
@@ -265,6 +324,11 @@ internal sealed class PgRecordTable(PgServer server, PgKeyspaces keyspaces, PgSe
                         PgArgument.Of(keyspaceId),
                         PgArgument.Typed(indexes, NpgsqlDbType.Array | NpgsqlDbType.Bytea),
                         PgArgument.Typed(depths, NpgsqlDbType.Array | NpgsqlDbType.Smallint)
+                    ),
+                    new PgStatement(
+                        SelectSessionsSql,
+                        PgArgument.Of(keyspaceId),
+                        PgArgument.Typed(sessionIds, NpgsqlDbType.Array | NpgsqlDbType.Text)
                     ),
                 ],
                 async (results, token) =>
@@ -286,13 +350,29 @@ internal sealed class PgRecordTable(PgServer server, PgKeyspaces keyspaces, PgSe
                                 reader.IsDBNull(5)
                                     ? null
                                     : DateTime.SpecifyKind(reader.GetDateTime(5), DateTimeKind.Utc),
-                                reader.IsDBNull(6) ? null : reader.GetString(6)
+                                reader.IsDBNull(6) ? null : reader.GetString(6),
+                                reader.IsDBNull(7)
+                                    ? null
+                                    : DateTime.SpecifyKind(reader.GetDateTime(7), DateTimeKind.Utc)
                             ),
                             token
                         )
                         .ConfigureAwait(false);
+                    var sessionDeadlines = await results
+                        .ReadAsync(
+                            reader =>
+                                (
+                                    Id: reader.GetString(0),
+                                    Deadline: DateTime.SpecifyKind(
+                                        reader.GetDateTime(1),
+                                        DateTimeKind.Utc
+                                    )
+                                ),
+                            token
+                        )
+                        .ConfigureAwait(false);
 
-                    return (revisionRows, clockRows, recordRows);
+                    return (revisionRows, clockRows, recordRows, sessionDeadlines);
                 },
                 cancellationToken
             )
@@ -328,7 +408,15 @@ internal sealed class PgRecordTable(PgServer server, PgKeyspaces keyspaces, PgSe
             }
         }
 
-        return new PgChangeStart(change, found.ToImmutable());
+        return new PgChangeStart(
+            change,
+            found.ToImmutable(),
+            sessionRows.ToImmutableDictionary(
+                row => row.Id,
+                row => row.Deadline,
+                StringComparer.Ordinal
+            )
+        );
     }
 
     /// <summary>

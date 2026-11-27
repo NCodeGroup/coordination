@@ -50,7 +50,7 @@ internal sealed class PgTransactionService(PgRecordTable table) : ITransactionSe
                             async (pgTransaction, transactionToken) =>
                             {
                                 var start = await Table
-                                    .BeginAsync(pgTransaction, id, keys, transactionToken)
+                                    .BeginAsync(pgTransaction, id, keys, [], transactionToken)
                                     .ConfigureAwait(false);
 
                                 var change = start.Change;
