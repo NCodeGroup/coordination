@@ -89,6 +89,52 @@ public sealed class RespSessionServiceTests(RespServers servers)
         Assert.True(after > before);
     }
 
+    private static async Task AssertCloseLeavesBindingsPast64Async(
+        string endpoint,
+        RespProfile profile
+    )
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var multiplexer = await ConnectAsync(endpoint, cancellationToken);
+        var connection = new RespConnection(
+            _ => ValueTask.FromResult<IConnectionMultiplexer>(multiplexer),
+            owned: false
+        );
+        var table = new RespRecordTable(new RespServer(connection), profile);
+        var tokens = new RespRandomTokens();
+        var sessions = new RespSessionService(table, tokens);
+        var records = new RespRecordService(table);
+        var keyspace = CreateKeyspace();
+        var timeToLive = new TimeToLive(TimeSpan.FromMinutes(1));
+        var grant = await sessions.OpenAsync(keyspace, timeToLive, null, cancellationToken);
+        var value = "v"u8.ToArray();
+        var lifetime = RecordLifetime.ForSession(grant.Id);
+        for (var index = 0; index < 65; index++)
+        {
+            var key = keyspace.CreateKey("r", index);
+            var created = await records.CreateAsync(key, value, lifetime, null, cancellationToken);
+            Assert.True(created.IsWritten);
+        }
+        var keys = RespRecordTable.Keys(keyspace);
+        var database = multiplexer.GetDatabase();
+        var bound = await database.SortedSetLengthAsync(keys[6]);
+        Assert.Equal(65, bound);
+
+        await sessions.CloseAsync(grant.Id, null, cancellationToken);
+
+        var bindingsAfterClose = await database.SortedSetLengthAsync(keys[6]);
+        var indexAfterClose = await database.SortedSetLengthAsync(keys[2]);
+        Assert.Equal(1, bindingsAfterClose);
+        Assert.Equal(1, indexAfterClose);
+
+        await records.ReadAsync(keyspace.CreateKey("other"), null, cancellationToken);
+
+        var bindingsAfterRead = await database.SortedSetLengthAsync(keys[6]);
+        var indexAfterRead = await database.SortedSetLengthAsync(keys[2]);
+        Assert.Equal(0, bindingsAfterRead);
+        Assert.Equal(0, indexAfterRead);
+    }
+
     #region CloseAsync Tests
 
     [RespServerFact]
@@ -98,6 +144,14 @@ public sealed class RespSessionServiceTests(RespServers servers)
     [RespServerFact]
     public Task CloseAsync_Garnet_RemovesTheLeaseTheRecordAndTheMemberBoundToTheSession() =>
         AssertCloseRemovesWhatIsBoundAsync(servers.Garnet, RespProfiles.Garnet);
+
+    [RespServerFact]
+    public Task CloseAsync_Valkey_LeavesBindingsPast64ForTheNextScript() =>
+        AssertCloseLeavesBindingsPast64Async(servers.Valkey, RespProfiles.Valkey);
+
+    [RespServerFact]
+    public Task CloseAsync_Garnet_LeavesBindingsPast64ForTheNextScript() =>
+        AssertCloseLeavesBindingsPast64Async(servers.Garnet, RespProfiles.Garnet);
 
     #endregion
 }
