@@ -9,8 +9,8 @@ using DotNet.Testcontainers.Containers;
 namespace NCode.Coordination.Resp.Tests.Servers;
 
 /// <summary>
-/// Starts one Valkey server, two Garnet servers and a three-node Valkey cluster in Docker for the whole test run, when
-/// <see cref="EnvironmentVariable"/> is <c>docker</c>.
+/// Starts one Valkey server, two Garnet servers, a three-node Valkey cluster and a three-node Garnet cluster in Docker
+/// for the whole test run, when <see cref="EnvironmentVariable"/> is <c>docker</c>.
 /// </summary>
 public sealed class RespServers : IAsyncLifetime
 {
@@ -42,6 +42,11 @@ public sealed class RespServers : IAsyncLifetime
     /// once and can reach it from the host.
     /// </summary>
     private const string ClusterHost = "127.0.0.1";
+
+    /// <summary>
+    /// The number of nodes of each cluster the tests start.
+    /// </summary>
+    private const int ClusterNodes = 3;
 
     private const ushort Port = 6379;
 
@@ -123,12 +128,22 @@ public sealed class RespServers : IAsyncLifetime
     /// </summary>
     public string ValkeyCluster { get; private set; } = "";
 
+    /// <summary>
+    /// Gets the <c>host:port</c> list of the Garnet cluster's three nodes, empty until it is started.
+    /// </summary>
+    public string GarnetCluster { get; private set; } = "";
+
     private IContainer? ValkeyContainer { get; set; }
 
     /// <summary>
     /// Gets the container that runs the three nodes of the Valkey cluster, so that disposing it stops them all.
     /// </summary>
     private IContainer? ValkeyClusterContainer { get; set; }
+
+    /// <summary>
+    /// Gets the container that runs the three nodes of the Garnet cluster, so that disposing it stops them all.
+    /// </summary>
+    private IContainer? GarnetClusterContainer { get; set; }
 
     private IContainer? GarnetContainer { get; set; }
 
@@ -146,7 +161,7 @@ public sealed class RespServers : IAsyncLifetime
         var garnet = CreateContainer(GarnetImage, GarnetCommand);
         var garnetWithoutLua = CreateContainer(GarnetImage);
 
-        var ports = RespPorts.Reserve(3);
+        var ports = RespPorts.Reserve(ClusterNodes);
         var script = ClusterScript(ports);
         var clusterWaitStrategy = Wait.ForUnixContainer().UntilMessageIsLogged(ClusterReadyMessage);
         var clusterBuilder = new ContainerBuilder(ValkeyImage)
@@ -159,22 +174,34 @@ public sealed class RespServers : IAsyncLifetime
         }
 
         var valkeyCluster = clusterBuilder.Build();
+        var garnetPorts = RespPorts.Reserve(ClusterNodes);
+        var garnetCluster = RespGarnetCluster.CreateContainer(garnetPorts, []);
         ValkeyContainer = valkey;
         GarnetContainer = garnet;
         GarnetWithoutLuaContainer = garnetWithoutLua;
         ValkeyClusterContainer = valkeyCluster;
+        GarnetClusterContainer = garnetCluster;
 
         var startValkey = valkey.StartAsync(CancellationToken.None);
         var startGarnet = garnet.StartAsync(CancellationToken.None);
         var startGarnetWithoutLua = garnetWithoutLua.StartAsync(CancellationToken.None);
         var startValkeyCluster = valkeyCluster.StartAsync(CancellationToken.None);
-        await Task.WhenAll(startValkey, startGarnet, startGarnetWithoutLua, startValkeyCluster);
+        var startGarnetCluster = garnetCluster.StartAsync(CancellationToken.None);
+        await Task.WhenAll(
+            startValkey,
+            startGarnet,
+            startGarnetWithoutLua,
+            startValkeyCluster,
+            startGarnetCluster
+        );
+        await RespGarnetCluster.JoinAsync(garnetPorts, ClusterNodes, CancellationToken.None);
 
         Valkey = GetEndpoint(valkey);
         Garnet = GetEndpoint(garnet);
         GarnetWithoutLua = GetEndpoint(garnetWithoutLua);
         var addresses = GetClusterAddresses(ports);
         ValkeyCluster = string.Join(",", addresses);
+        GarnetCluster = RespGarnetCluster.GetEndpoint(garnetPorts);
     }
 
     /// <inheritdoc />
@@ -198,6 +225,11 @@ public sealed class RespServers : IAsyncLifetime
         if (ValkeyClusterContainer is { } valkeyCluster)
         {
             await valkeyCluster.DisposeAsync();
+        }
+
+        if (GarnetClusterContainer is { } garnetCluster)
+        {
+            await garnetCluster.DisposeAsync();
         }
     }
 }
