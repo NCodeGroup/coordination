@@ -37,12 +37,8 @@ public sealed class RespRecordWatchServiceTests(RespServers servers)
         var server = new RespServer(connection);
         var table = new RespRecordTable(server, profile);
         var checkInterval = TimeSpan.FromMilliseconds(200);
-        var subscriptions = new RespSubscriptions(
-            connection,
-            profile,
-            checkInterval,
-            TimeProvider.System
-        );
+        var schedule = new RespCheckSchedule(checkInterval, TimeProvider.System);
+        var subscriptions = new RespSubscriptions(connection, profile, schedule);
         var records = new RespRecordService(table);
 
         return (records, new RespRecordWatchService(table, records, subscriptions));

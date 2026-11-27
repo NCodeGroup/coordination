@@ -38,12 +38,8 @@ public sealed class RespNotificationServiceTests(RespServers servers) : IDisposa
 
         var server = new RespServer(connection);
         var checkInterval = TimeSpan.FromMilliseconds(200);
-        var subscriptions = new RespSubscriptions(
-            connection,
-            profile,
-            checkInterval,
-            TimeProvider.System
-        );
+        var schedule = new RespCheckSchedule(checkInterval, TimeProvider.System);
+        var subscriptions = new RespSubscriptions(connection, profile, schedule);
 
         return (new RespNotificationService(server, profile, subscriptions), subscriptions);
     }

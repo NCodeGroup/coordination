@@ -59,12 +59,9 @@ public sealed class RespMembershipServiceTests(RespServers servers)
         );
         var server = new RespServer(connection);
         var table = new RespRecordTable(server, profile);
-        var subscriptions = new RespSubscriptions(
-            connection,
-            profile,
-            RespSubscriptions.DefaultCheckInterval,
-            TimeProvider.System
-        );
+        var checkInterval = RespSubscriptions.DefaultCheckInterval;
+        var schedule = new RespCheckSchedule(checkInterval, TimeProvider.System);
+        var subscriptions = new RespSubscriptions(connection, profile, schedule);
         var tokens = new RespRandomTokens();
         var sessions = new RespSessionService(table, tokens);
         var membership = new RespMembershipService(table, subscriptions);

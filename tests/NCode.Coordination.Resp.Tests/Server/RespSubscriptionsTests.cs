@@ -59,12 +59,9 @@ public sealed class RespSubscriptionsTests : IDisposable
             _ => ValueTask.FromResult(multiplexer.Object),
             owned: false
         );
-        var subscriptions = new RespSubscriptions(
-            connection,
-            RespProfiles.Valkey,
-            RespSubscriptions.DefaultCheckInterval,
-            TimeProvider.System
-        );
+        var checkInterval = RespSubscriptions.DefaultCheckInterval;
+        var schedule = new RespCheckSchedule(checkInterval, TimeProvider.System);
+        var subscriptions = new RespSubscriptions(connection, RespProfiles.Valkey, schedule);
         Func<CancellationToken, ValueTask<long>> readNumber = _ => ValueTask.FromResult(0L);
 
         var exception = await Assert.ThrowsAsync<CoordinationException>(() =>

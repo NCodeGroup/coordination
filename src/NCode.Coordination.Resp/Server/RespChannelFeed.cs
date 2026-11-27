@@ -22,19 +22,24 @@ internal sealed class RespChannelFeed : IAsyncDisposable
     /// </summary>
     /// <param name="multiplexer">The client.</param>
     /// <param name="channel">The channel to subscribe to.</param>
-    /// <param name="checkInterval">The interval of the periodic check.</param>
-    /// <param name="time">The time provider of the periodic check.</param>
+    /// <param name="schedule">The schedule of the periodic check.</param>
+    /// <param name="cancellationToken">A token that cancels the open before it subscribes.</param>
     /// <returns>The feed, which the caller disposes.</returns>
-    /// <exception cref="ArgumentNullException">The client or the time provider is null.</exception>
+    /// <exception cref="ArgumentNullException">The client or the schedule is null.</exception>
+    /// <exception cref="OperationCanceledException">The token was canceled before the subscribe.</exception>
     public static async ValueTask<RespChannelFeed> OpenAsync(
         IConnectionMultiplexer multiplexer,
         RedisChannel channel,
-        TimeSpan checkInterval,
-        TimeProvider time
+        RespCheckSchedule schedule,
+        CancellationToken cancellationToken
     )
     {
         ArgumentNullException.ThrowIfNull(multiplexer);
-        ArgumentNullException.ThrowIfNull(time);
+        ArgumentNullException.ThrowIfNull(schedule);
+
+        // The token isn't passed to the subscribe: a subscribe abandoned in flight would leave a subscription and its
+        // handlers that nobody disposes.
+        cancellationToken.ThrowIfCancellationRequested();
 
         var options = new BoundedChannelOptions(Capacity) { SingleReader = true };
         var signals = Channel.CreateBounded<RespSignal>(options);
@@ -59,11 +64,13 @@ internal sealed class RespChannelFeed : IAsyncDisposable
             _ = writer.TryWrite(signal);
         });
 
+        var time = schedule.Time;
+        var interval = schedule.Interval;
         var timer = time.CreateTimer(
             _ => writer.TryWrite(RespSignal.Check),
             null,
-            checkInterval,
-            checkInterval
+            interval,
+            interval
         );
 
         return new RespChannelFeed(signals, queue, events, timer);

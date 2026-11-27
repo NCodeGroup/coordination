@@ -11,14 +11,12 @@ namespace NCode.Coordination.Resp.Server;
 /// </summary>
 /// <param name="connection">The connection of the provider to its server.</param>
 /// <param name="profile">The profile of the server.</param>
-/// <param name="checkInterval">The interval of the periodic check of each subscription.</param>
-/// <param name="time">The time provider of the periodic check and the grace.</param>
-/// <exception cref="ArgumentNullException">The connection, the profile or the time provider is null.</exception>
+/// <param name="schedule">The schedule of each subscription's periodic check.</param>
+/// <exception cref="ArgumentNullException">The connection, the profile or the schedule is null.</exception>
 internal class RespSubscriptions(
     RespConnection connection,
     RespProfile profile,
-    TimeSpan checkInterval,
-    TimeProvider time
+    RespCheckSchedule schedule
 )
 {
     /// <summary>
@@ -39,14 +37,10 @@ internal class RespSubscriptions(
         profile ?? throw new ArgumentNullException(nameof(profile));
 
     /// <summary>
-    /// Gets the time provider of the periodic check and the grace.
+    /// Gets the schedule of each subscription's periodic check.
     /// </summary>
-    private TimeProvider Time { get; } = time ?? throw new ArgumentNullException(nameof(time));
-
-    /// <summary>
-    /// Gets the interval of the periodic check of each subscription.
-    /// </summary>
-    private TimeSpan CheckInterval { get; } = checkInterval;
+    private RespCheckSchedule Schedule { get; } =
+        schedule ?? throw new ArgumentNullException(nameof(schedule));
 
     /// <summary>
     /// Gets the channel with a name: a sharded channel on a profile that carries them, a plain channel otherwise.
@@ -62,7 +56,9 @@ internal class RespSubscriptions(
     /// </summary>
     /// <param name="name">The name of the channel.</param>
     /// <param name="readNumber">Reads the channel's current number from the server.</param>
-    /// <param name="cancellationToken">A token that cancels the wait for the connection.</param>
+    /// <param name="cancellationToken">
+    /// A token that cancels the wait for the connection and the open before it subscribes.
+    /// </param>
     /// <returns>The reader.</returns>
     /// <exception cref="ArgumentNullException">The name or the function is null.</exception>
     /// <exception cref="CoordinationException">The subscription failed.</exception>
@@ -84,7 +80,7 @@ internal class RespSubscriptions(
         try
         {
             feed = await RespChannelFeed
-                .OpenAsync(multiplexer, channel, CheckInterval, Time)
+                .OpenAsync(multiplexer, channel, Schedule, cancellationToken)
                 .ConfigureAwait(false);
         }
         catch (Exception e) when (RespFailures.IsClientFailure(e))
@@ -92,6 +88,7 @@ internal class RespSubscriptions(
             throw RespFailures.Translate(e, isScript: false);
         }
 
-        return new RespChannelReader(feed.Signals, readNumber, Time, feed);
+        var time = Schedule.Time;
+        return new RespChannelReader(feed.Signals, readNumber, time, feed);
     }
 }

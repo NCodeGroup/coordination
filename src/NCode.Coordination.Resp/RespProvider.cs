@@ -207,12 +207,8 @@ internal sealed class RespProvider : ICoordinationProvider, IAsyncDisposable, ID
         };
         var records = new RespRecordTable(Server, profile);
         var tokens = new RespRandomTokens();
-        var subscriptions = new RespSubscriptions(
-            connection,
-            profile,
-            checkInterval,
-            TimeProvider.System
-        );
+        var schedule = new RespCheckSchedule(checkInterval, TimeProvider.System);
+        var subscriptions = new RespSubscriptions(connection, profile, schedule);
         var recordService = new RespRecordService(records);
         var services = new Dictionary<Type, object>
         {
