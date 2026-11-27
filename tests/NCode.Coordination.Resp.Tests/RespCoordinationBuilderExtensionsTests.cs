@@ -49,13 +49,14 @@ public sealed class RespCoordinationBuilderExtensionsTests : IDisposable
     }
 
     [Theory]
-    [InlineData(0)]
-    [InlineData(-1)]
-    [InlineData(3_600_000)]
-    public void AddRespProvider_CheckIntervalOutOfRange_Throws(int milliseconds)
+    [InlineData(0L)]
+    [InlineData(-10_000L)]
+    [InlineData(9_999L)]
+    [InlineData(36_000_000_000L)]
+    public void AddRespProvider_CheckIntervalOutOfRange_Throws(long ticks)
     {
         var builder = Mocks.Create<ICoordinationBuilder>();
-        var checkInterval = TimeSpan.FromMilliseconds(milliseconds);
+        var checkInterval = TimeSpan.FromTicks(ticks);
 
         var exception = Assert.Throws<ArgumentOutOfRangeException>(() =>
             builder.Object.AddRespProvider(options =>

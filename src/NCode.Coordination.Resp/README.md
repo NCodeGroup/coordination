@@ -20,8 +20,8 @@ and works with any backlog policy, reporting a call that times out as possibly a
 `EVAL` and `EVALSHA`, or the host's start fails.
 
 `CheckInterval`, 5 seconds by default, sets how often each notification subscription and watch checks its channel's
-number, which notices a lost message and, for a watch, deletes and announces the keyspace's expired state. It is more
-than zero and less than an hour.
+number, which notices a lost message and, for a watch, deletes and announces the keyspace's expired state. It is at
+least a millisecond and less than an hour.
 
 ## Profiles
 
@@ -36,8 +36,8 @@ command the provider sends, and fails the start otherwise.
 ## Primitives
 
 The provider keeps records, record watches, transactions, occurrences, sets, counters, sequences, sessions,
-membership, leases, semaphores, elections, claims and notifications. Each operation is one server command or one Lua script, and every time to live is
-measured on the server's clock, in whole milliseconds rounded up.
+membership, leases, semaphores, elections, claims and notifications. Each operation is one server command or one Lua
+script, and every time to live is measured on the server's clock, in whole milliseconds rounded up.
 
 - **Records**: a keyspace keeps its records in one hash, beside an index that lists them under a prefix and the
   deadlines of those with a time to live. Every change is one script that takes the keyspace's next revision and

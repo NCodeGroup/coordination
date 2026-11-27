@@ -39,8 +39,8 @@ public sealed class RespProviderOptions
 
     /// <summary>
     /// Gets or sets the time between two periodic checks of each notification subscription and watch, which reads its
-    /// channel's number and, for a watch, removes and announces the keyspace's expired state. It is more than zero and
-    /// less than one hour, and 5 seconds by default.
+    /// channel's number and, for a watch, removes and announces the keyspace's expired state. It is at least one
+    /// millisecond and less than one hour, and 5 seconds by default.
     /// </summary>
     public TimeSpan CheckInterval { get; set; } = RespSubscriptions.DefaultCheckInterval;
 }

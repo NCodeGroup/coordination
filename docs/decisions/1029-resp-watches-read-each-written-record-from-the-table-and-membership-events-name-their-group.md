@@ -47,9 +47,9 @@ the keyspace's event, and a membership watch lists its group only when an event 
    and a restored connection. A failed connection, a failed read of the number and a failed read of what a message
    names put it in doubt, and the next check resyncs it. A failure to subscribe or to read the first number fails
    the subscription; after that, the stream ends only when its caller cancels.
-3. **The check.** Every `RespProviderOptions.CheckInterval`, 5 seconds by default, more than zero and less than the
-   hour of ADR-1027 rule 6's backstop, a subscription reads its channel's number. A number below the last delivered,
-   or any number while in doubt, resyncs. A number above it waits a grace of 1 second, handles what arrived
+3. **The check.** Every `RespProviderOptions.CheckInterval`, 5 seconds by default, at least a millisecond, the
+   shortest period a timer takes, and less than the hour of ADR-1027 rule 6's backstop, a subscription reads its
+   channel's number. A number below the last delivered, or any number while in doubt, resyncs. A number above it waits a grace of 1 second, handles what arrived
    meanwhile, and resyncs unless the messages reached it; a check during the grace is skipped. Reading a keyspace's
    revision runs its expiry removal, so an expiry reaches a watch within the interval.
 4. **Notifications.** A topic's sequence is the key `{keyspace}:topic:<name>`, which never expires, and its channel

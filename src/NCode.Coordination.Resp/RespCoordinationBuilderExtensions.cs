@@ -30,8 +30,8 @@ public static class RespCoordinationBuilderExtensions
         /// profile is null.</exception>
         /// <exception cref="ArgumentException">Not exactly one of the configuration and the connection is
         /// set.</exception>
-        /// <exception cref="ArgumentOutOfRangeException">The check interval is not more than zero and less than one
-        /// hour.</exception>
+        /// <exception cref="ArgumentOutOfRangeException">The check interval is less than one millisecond, or one
+        /// hour or more.</exception>
         public ICoordinationBuilder AddRespProvider(Action<RespProviderOptions> configure)
         {
             ArgumentNullException.ThrowIfNull(builder);
@@ -87,12 +87,15 @@ public static class RespCoordinationBuilderExtensions
             ArgumentNullException.ThrowIfNull(profile);
 
             var checkInterval = options.CheckInterval;
-            if (checkInterval <= TimeSpan.Zero || checkInterval >= TimeSpan.FromHours(1))
+            if (
+                checkInterval < TimeSpan.FromMilliseconds(1)
+                || checkInterval >= TimeSpan.FromHours(1)
+            )
             {
                 throw new ArgumentOutOfRangeException(
                     nameof(configure),
                     checkInterval,
-                    "RespProviderOptions.CheckInterval is more than zero and less than one hour."
+                    "RespProviderOptions.CheckInterval is at least one millisecond and less than one hour."
                 );
             }
 
