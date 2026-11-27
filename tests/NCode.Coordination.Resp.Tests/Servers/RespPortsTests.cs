@@ -10,6 +10,8 @@ public sealed class RespPortsTests
     [Fact]
     public async Task StartOnFreePortsAsync_WhenTheFirstStartFails_StartsAgainWithTheRequestedNumberOfPorts()
     {
+        const int requestedPorts = 2;
+        const string started = "started";
         var cancellationToken = TestContext.Current.CancellationToken;
         var attempts = 0;
         List<int> portCounts = [];
@@ -21,14 +23,18 @@ public sealed class RespPortsTests
                 ? ValueTask.FromException<string>(
                     new InvalidOperationException("The port is taken.")
                 )
-                : ValueTask.FromResult("started");
+                : ValueTask.FromResult(started);
         };
 
-        var result = await RespPorts.StartOnFreePortsAsync(2, start, cancellationToken);
+        var result = await RespPorts.StartOnFreePortsAsync(
+            requestedPorts,
+            start,
+            cancellationToken
+        );
 
-        Assert.Equal("started", result);
+        Assert.Equal(started, result);
         Assert.Equal(2, attempts);
-        Assert.All(portCounts, count => Assert.Equal(2, count));
+        Assert.All(portCounts, count => Assert.Equal(requestedPorts, count));
     }
 
     [Fact]
@@ -78,9 +84,12 @@ public sealed class RespPortsTests
     [Fact]
     public void Reserve_WhenThreePortsAreAsked_ReturnsThreeDistinctPorts()
     {
-        var ports = RespPorts.Reserve(3);
+        const int count = 3;
 
-        Assert.Equal(3, ports.Distinct().Count());
+        var ports = RespPorts.Reserve(count);
+        var distinctCount = ports.Distinct().Count();
+
+        Assert.Equal(count, distinctCount);
     }
 
     #endregion
