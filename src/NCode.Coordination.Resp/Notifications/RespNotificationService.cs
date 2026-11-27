@@ -28,23 +28,6 @@ internal class RespNotificationService(
     internal const string Kind = "topic";
 
     /// <summary>
-    /// Gets the seam between the provider and its server.
-    /// </summary>
-    private RespServer Server { get; } = server ?? throw new ArgumentNullException(nameof(server));
-
-    /// <summary>
-    /// Gets the profile of the server.
-    /// </summary>
-    private RespProfile Profile { get; } =
-        profile ?? throw new ArgumentNullException(nameof(profile));
-
-    /// <summary>
-    /// Gets the object that opens the provider's subscriptions to numbered channels.
-    /// </summary>
-    private RespSubscriptions Subscriptions { get; } =
-        subscriptions ?? throw new ArgumentNullException(nameof(subscriptions));
-
-    /// <summary>
     /// Reads the payload of a message: the bytes after its first line feed.
     /// </summary>
     /// <param name="message">The message that a channel delivered.</param>
@@ -69,6 +52,23 @@ internal class RespNotificationService(
         payload = bytes[(end + 1)..];
         return true;
     }
+
+    /// <summary>
+    /// Gets the seam between the provider and its server.
+    /// </summary>
+    private RespServer Server { get; } = server ?? throw new ArgumentNullException(nameof(server));
+
+    /// <summary>
+    /// Gets the profile of the server.
+    /// </summary>
+    private RespProfile Profile { get; } =
+        profile ?? throw new ArgumentNullException(nameof(profile));
+
+    /// <summary>
+    /// Gets the object that opens the provider's subscriptions to numbered channels.
+    /// </summary>
+    private RespSubscriptions Subscriptions { get; } =
+        subscriptions ?? throw new ArgumentNullException(nameof(subscriptions));
 
     /// <inheritdoc />
     /// <exception cref="ArgumentException">The payload is longer than the limit.</exception>

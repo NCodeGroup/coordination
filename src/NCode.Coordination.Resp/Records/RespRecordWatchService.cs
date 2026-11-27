@@ -23,6 +23,24 @@ internal class RespRecordWatchService(
 ) : IRecordWatchService
 {
     /// <summary>
+    /// Decodes the name of a record on a watch line to its key.
+    /// </summary>
+    /// <param name="keyspace">The keyspace of the record.</param>
+    /// <param name="name">The name on the line.</param>
+    /// <returns>The key, or null when the name is not one the provider wrote.</returns>
+    private static CoordinationKey? TryDecode(Keyspace keyspace, string name)
+    {
+        try
+        {
+            return RespKeys.DecodeName(keyspace, name);
+        }
+        catch (FormatException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
     /// Gets the record table that reads the keyspace's revision.
     /// </summary>
     private RespRecordTable Table { get; } =
@@ -66,24 +84,6 @@ internal class RespRecordWatchService(
         RespCall.Check(options, cancellationToken);
 
         return WatchCoreAsync(prefix.Keyspace, prefix.IsPrefixOf, cancellationToken);
-    }
-
-    /// <summary>
-    /// Decodes the name of a record on a watch line to its key.
-    /// </summary>
-    /// <param name="keyspace">The keyspace of the record.</param>
-    /// <param name="name">The name on the line.</param>
-    /// <returns>The key, or null when the name is not one the provider wrote.</returns>
-    private static CoordinationKey? TryDecode(Keyspace keyspace, string name)
-    {
-        try
-        {
-            return RespKeys.DecodeName(keyspace, name);
-        }
-        catch (FormatException)
-        {
-            return null;
-        }
     }
 
     /// <summary>
