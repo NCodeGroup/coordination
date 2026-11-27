@@ -109,7 +109,8 @@ internal sealed class RespValkeyFailoverServer(
     {
         await using var admin = await RespNodes.ConnectAdminAsync(Endpoint, cancellationToken);
         var replica = admin.GetServer(RespNodes.Host, ReplicaPort);
-        await replica.ExecuteAsync(RespNodes.ReplicaOfCommand, "NO", "ONE");
+        var promoting = replica.ExecuteAsync(RespNodes.ReplicaOfCommand, "NO", "ONE");
+        await promoting.WaitAsync(cancellationToken);
     }
 
     /// <inheritdoc />
@@ -117,7 +118,12 @@ internal sealed class RespValkeyFailoverServer(
     {
         await using var admin = await RespNodes.ConnectAdminAsync(Endpoint, cancellationToken);
         var primary = admin.GetServer(RespNodes.Host, PrimaryPort);
-        await primary.ExecuteAsync(RespNodes.ReplicaOfCommand, RespNodes.Host, ReplicaPort);
+        var demoting = primary.ExecuteAsync(
+            RespNodes.ReplicaOfCommand,
+            RespNodes.Host,
+            ReplicaPort
+        );
+        await demoting.WaitAsync(cancellationToken);
         await RespNodes.WaitForReplicationAsync(
             primary,
             reply => reply.Contains(RespNodes.LinkUp, StringComparison.Ordinal),

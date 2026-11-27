@@ -99,7 +99,8 @@ internal sealed class RespGarnetFailoverServer(
     {
         await using var admin = await RespNodes.ConnectAdminAsync(Endpoint, cancellationToken);
         var replica = admin.GetServer(RespNodes.Host, ReplicaPort);
-        await replica.ExecuteAsync(RespNodes.ClusterCommand, "FAILOVER", "FORCE");
+        var failing = replica.ExecuteAsync(RespNodes.ClusterCommand, "FAILOVER", "FORCE");
+        await failing.WaitAsync(cancellationToken);
         await RespNodes.WaitForReplicationAsync(
             replica,
             reply => reply.Contains("role:master", StringComparison.Ordinal),

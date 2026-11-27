@@ -295,7 +295,10 @@ public sealed class RespProviderClusterTests(RespServers servers)
             var slot = admin.HashSlot(tag);
             var node = configuration.GetBySlot(slot)?.NodeId;
             if (node is not null && nodes.Add(node))
-                topics.Add(keyspace.CreateKey(RespTestSupport.TopicName));
+            {
+                var candidate = keyspace.CreateKey(RespTestSupport.TopicName);
+                topics.Add(candidate);
+            }
         }
 
         Assert.Equal(clusterServers.Length, topics.Count);
@@ -348,7 +351,8 @@ public sealed class RespProviderClusterTests(RespServers servers)
         {
             var text = $"from-{index}";
             expected.Add(text);
-            await clusterServers[index].ExecuteAsync("PUBLISH", name, text);
+            var publishing = clusterServers[index].ExecuteAsync("PUBLISH", name, text);
+            await publishing.WaitAsync(cancellationToken);
         }
 
         var timeout = TimeSpan.FromSeconds(15);

@@ -26,14 +26,16 @@ public sealed class RespServersTests(RespServers servers)
     [RespServerFact]
     public async Task ValkeyCluster_Started_ServesEverySlotFromThreeNodes()
     {
+        var cancellationToken = TestContext.Current.CancellationToken;
         var options = ConfigurationOptions.Parse(servers.ValkeyCluster);
         options.AllowAdmin = true;
         await using var connection = await ConnectionMultiplexer
             .ConnectAsync(options)
-            .WaitAsync(TestContext.Current.CancellationToken);
+            .WaitAsync(cancellationToken);
 
         var clusterServers = connection.GetServers();
-        var result = await clusterServers[0].ExecuteAsync("CLUSTER", "INFO");
+        var executing = clusterServers[0].ExecuteAsync("CLUSTER", "INFO");
+        var result = await executing.WaitAsync(cancellationToken);
         var info = result.ToString();
 
         Assert.Equal(3, clusterServers.Length);
@@ -48,14 +50,16 @@ public sealed class RespServersTests(RespServers servers)
     [RespServerFact]
     public async Task GarnetCluster_Started_ServesEverySlotFromThreeNodes()
     {
+        var cancellationToken = TestContext.Current.CancellationToken;
         var options = ConfigurationOptions.Parse(servers.GarnetCluster);
         options.AllowAdmin = true;
         await using var connection = await ConnectionMultiplexer
             .ConnectAsync(options)
-            .WaitAsync(TestContext.Current.CancellationToken);
+            .WaitAsync(cancellationToken);
 
         var clusterServers = connection.GetServers();
-        var result = await clusterServers[0].ExecuteAsync("CLUSTER", "INFO");
+        var executing = clusterServers[0].ExecuteAsync("CLUSTER", "INFO");
+        var result = await executing.WaitAsync(cancellationToken);
         var info = result.ToString();
 
         Assert.Equal(3, clusterServers.Length);
