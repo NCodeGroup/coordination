@@ -48,6 +48,26 @@ public sealed class RespCoordinationBuilderExtensionsTests : IDisposable
         Assert.Equal("configure", exception.ParamName);
     }
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    [InlineData(3_600_000)]
+    public void AddRespProvider_CheckIntervalOutOfRange_Throws(int milliseconds)
+    {
+        var builder = Mocks.Create<ICoordinationBuilder>();
+        var checkInterval = TimeSpan.FromMilliseconds(milliseconds);
+
+        var exception = Assert.Throws<ArgumentOutOfRangeException>(() =>
+            builder.Object.AddRespProvider(options =>
+            {
+                options.Configuration = "localhost:1";
+                options.CheckInterval = checkInterval;
+            })
+        );
+
+        Assert.Equal("configure", exception.ParamName);
+    }
+
     [Fact]
     public async Task AddRespProvider_Configuration_AddsProviderWithProfile()
     {
