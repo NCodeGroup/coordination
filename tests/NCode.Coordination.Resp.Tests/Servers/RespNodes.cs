@@ -94,7 +94,8 @@ internal static class RespNodes
         object[] arguments = [.. command.Skip(1)];
         while (true)
         {
-            var result = await node.ExecuteAsync(command[0], arguments);
+            var executing = node.ExecuteAsync(command[0], arguments);
+            var result = await executing.WaitAsync(cancellationToken);
             var reply = result.ToString();
             if (holds(reply))
             {
@@ -146,8 +147,8 @@ internal static class RespNodes
         var stopwatch = Stopwatch.StartNew();
         while (true)
         {
-            var primaryOffset = await ReadOffsetAsync(primary);
-            var replicaOffset = await ReadOffsetAsync(replica);
+            var primaryOffset = await ReadOffsetAsync(primary, cancellationToken);
+            var replicaOffset = await ReadOffsetAsync(replica, cancellationToken);
             if (string.Equals(primaryOffset, replicaOffset, StringComparison.Ordinal))
             {
                 return;
@@ -168,10 +169,15 @@ internal static class RespNodes
     /// Reads the line of a node's <c>INFO replication</c> reply that gives its replication offset.
     /// </summary>
     /// <param name="node">The node to ask.</param>
+    /// <param name="cancellationToken">The token that cancels the read.</param>
     /// <returns>The trimmed line.</returns>
-    private static async ValueTask<string> ReadOffsetAsync(IServer node)
+    private static async ValueTask<string> ReadOffsetAsync(
+        IServer node,
+        CancellationToken cancellationToken
+    )
     {
-        var result = await node.ExecuteAsync(InfoCommand, ReplicationSection);
+        var executing = node.ExecuteAsync(InfoCommand, ReplicationSection);
+        var result = await executing.WaitAsync(cancellationToken);
         var reply = result.ToString();
         var lines = reply.Split('\n');
         var line = lines.First(text => text.StartsWith(OffsetField, StringComparison.Ordinal));

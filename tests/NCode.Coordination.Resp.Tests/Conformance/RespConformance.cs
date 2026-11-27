@@ -85,12 +85,14 @@ internal static class RespConformance
         long killed = 0;
         foreach (var server in admin.GetServers())
         {
-            foreach (var client in await server.ClientListAsync())
+            var clients = await server.ClientListAsync();
+            foreach (var client in clients)
             {
                 if (!string.Equals(client.Name, clientName, StringComparison.Ordinal))
                     continue;
 
-                killed += await server.ClientKillAsync(client.Id, null, null, true);
+                var count = await server.ClientKillAsync(client.Id, null, null, true);
+                killed += count;
             }
         }
 

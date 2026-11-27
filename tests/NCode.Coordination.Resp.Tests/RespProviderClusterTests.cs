@@ -77,18 +77,21 @@ public sealed class RespProviderClusterTests(RespServers servers)
     /// <param name="clusterServers">The nodes of the cluster.</param>
     /// <param name="listing">The <c>PUBSUB</c> subcommand that lists the kind of channel: sharded or plain.</param>
     /// <param name="channel">The name of the channel.</param>
+    /// <param name="cancellationToken">The token that cancels the queries.</param>
     /// <returns>The indexes in <paramref name="clusterServers"/> of the nodes that hold the channel.</returns>
     private static async ValueTask<IReadOnlyList<int>> FindChannelAsync(
         IReadOnlyList<IServer> clusterServers,
         string listing,
-        string channel
+        string channel,
+        CancellationToken cancellationToken
     )
     {
         var holders = new List<int>();
 
         for (var index = 0; index < clusterServers.Count; index++)
         {
-            var result = await clusterServers[index].ExecuteAsync("PUBSUB", listing);
+            var executing = clusterServers[index].ExecuteAsync("PUBSUB", listing);
+            var result = await executing.WaitAsync(cancellationToken);
             var channels = (string[]?)result;
             Assert.NotNull(channels);
 
@@ -247,8 +250,18 @@ public sealed class RespProviderClusterTests(RespServers servers)
 
         var firstChannel = RespKeys.ForKey(firstTopic, RespNotificationService.Kind).ToString();
         var secondChannel = RespKeys.ForKey(secondTopic, RespNotificationService.Kind).ToString();
-        var firstHolders = await FindChannelAsync(clusterServers, ShardChannels, firstChannel);
-        var secondHolders = await FindChannelAsync(clusterServers, ShardChannels, secondChannel);
+        var firstHolders = await FindChannelAsync(
+            clusterServers,
+            ShardChannels,
+            firstChannel,
+            cancellationToken
+        );
+        var secondHolders = await FindChannelAsync(
+            clusterServers,
+            ShardChannels,
+            secondChannel,
+            cancellationToken
+        );
 
         var firstHolder = Assert.Single(firstHolders);
         var secondHolder = Assert.Single(secondHolders);
@@ -300,7 +313,12 @@ public sealed class RespProviderClusterTests(RespServers servers)
             );
 
             var channel = RespKeys.ForKey(topic, RespNotificationService.Kind).ToString();
-            var holders = await FindChannelAsync(clusterServers, PlainChannels, channel);
+            var holders = await FindChannelAsync(
+                clusterServers,
+                PlainChannels,
+                channel,
+                cancellationToken
+            );
             Assert.Single(holders);
         }
     }
@@ -347,7 +365,12 @@ public sealed class RespProviderClusterTests(RespServers servers)
             received.Add(text);
         }
 
-        var holders = await FindChannelAsync(clusterServers, PlainChannels, name);
+        var holders = await FindChannelAsync(
+            clusterServers,
+            PlainChannels,
+            name,
+            cancellationToken
+        );
         await queue.UnsubscribeAsync();
         received.Sort(StringComparer.Ordinal);
 

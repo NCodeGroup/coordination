@@ -33,7 +33,8 @@ public sealed class RespServersTests(RespServers servers)
             .WaitAsync(TestContext.Current.CancellationToken);
 
         var clusterServers = connection.GetServers();
-        var info = (await clusterServers[0].ExecuteAsync("CLUSTER", "INFO")).ToString();
+        var result = await clusterServers[0].ExecuteAsync("CLUSTER", "INFO");
+        var info = result.ToString();
 
         Assert.Equal(3, clusterServers.Length);
         Assert.Contains("cluster_state:ok", info);
