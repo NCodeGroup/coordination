@@ -422,10 +422,27 @@ further closing messages while a resync might have covered the last one.
    hosted platform runs PostgreSQL as a managed three-node service in the cluster's datacenter
    ([hosting analysis](https://github.com/NCodeGroup/identity/blob/main/docs/hosting-analysis.md)), so the provider's
    declaration for a managed service follows how that service replicates and fails over, read from its documentation
-   and verified by the conformance kit.
+   and verified by the conformance kit. It is built on four records, its client
+   ([ADR-1031](../decisions/1031-the-postgresql-provider-speaks-through-npgsql-and-can-share-the-hosts-data-source.md)),
+   its operations
+   ([ADR-1032](../decisions/1032-the-postgresql-provider-runs-each-operation-as-one-statement-or-one-short-transaction-of-constant-sql.md)),
+   its tables
+   ([ADR-1033](../decisions/1033-postgresql-state-lives-in-tables-the-provider-migrates-shared-by-every-keyspace-with-each-keyspaces-revision-on-its-row.md))
+   and its notifications and watches
+   ([ADR-1034](../decisions/1034-postgresql-notifications-and-watches-are-numbered-in-the-writing-transaction-kept-in-a-bounded-log-and-woken-by-notify.md)),
+   in six plans: the provider foundation with the profiles, the schema's migrations and a server test harness
+   ([#41](https://github.com/NCodeGroup/coordination/issues/41)), occurrences, counters, sequences and sets
+   ([#42](https://github.com/NCodeGroup/coordination/issues/42)), records and transactions with the keyspace revision,
+   the change log and expiry ([#43](https://github.com/NCodeGroup/coordination/issues/43)), sessions, membership,
+   leases, semaphores, elections and claims ([#44](https://github.com/NCodeGroup/coordination/issues/44)),
+   notifications and watches with replay from the log, gap detection and resync
+   ([#45](https://github.com/NCodeGroup/coordination/issues/45)), and concurrent conformance runs, injected faults and
+   failover ([#46](https://github.com/NCodeGroup/coordination/issues/46)). Moving the provider to Npgsql 11 follows once
+   its hosts can ([#47](https://github.com/NCodeGroup/coordination/issues/47)).
 5. **First-consumer adoption.** NCode.Identity depends on NCode.Coordination and retires its shared-state packages;
    its interval passes and refresh lease become claims and fenced leases. This phase is planned and landed in
-   NCode.Identity, and the first stable release follows it ([D8](#d8-first-stable-release)).
+   NCode.Identity, and the first stable release follows it ([D8](#d8-first-stable-release)). Its stories span both
+   repositories, so its epic is [NCodeGroup/.github#4](https://github.com/NCodeGroup/.github/issues/4).
 6. **etcd and Consul.** Providers whose servers keep sessions, leases and watches natively, linearizable across
    failover. On the first consumer's hosting, at least three small Kubernetes nodes in one datacenter whose first limit
    is memory, an etcd cluster adds three members, nodes with room for them and storage with a low sync latency,

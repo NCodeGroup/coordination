@@ -18,8 +18,15 @@ maintainers say whether it fits.
   ([design](docs/designs/coordination.md#rollout-and-phases)).
 - **RESP.** The RESP provider with Valkey and Garnet profiles, covering every need of NCode.Identity, the first
   consumer.
-- **PostgreSQL.** A provider that needs no infrastructure beyond the database a service already runs.
-- **First-consumer adoption.** NCode.Identity moves its shared state onto NCode.Coordination.
+- **PostgreSQL.** A provider that needs no infrastructure beyond the database a service already runs, in six plans,
+  [#41](https://github.com/NCodeGroup/coordination/issues/41) to
+  [#46](https://github.com/NCodeGroup/coordination/issues/46), built on
+  [ADR-1031](docs/decisions/1031-the-postgresql-provider-speaks-through-npgsql-and-can-share-the-hosts-data-source.md)
+  to
+  [ADR-1034](docs/decisions/1034-postgresql-notifications-and-watches-are-numbered-in-the-writing-transaction-kept-in-a-bounded-log-and-woken-by-notify.md)
+  ([design](docs/designs/coordination.md#rollout-and-phases)).
+- **First-consumer adoption.** NCode.Identity moves its shared state onto NCode.Coordination, tracked in the
+  cross-repository epic [NCodeGroup/.github#4](https://github.com/NCodeGroup/.github/issues/4).
 - **etcd and Consul.** Providers that keep sessions, leases and watches linearizable across failover.
 - **Supply chain.** Keep external inputs pinned and current
   ([ADR-0008](docs/decisions/project-template/0008-external-inputs-are-pinned-and-kept-current.md)),
