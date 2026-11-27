@@ -1,6 +1,7 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using System.Threading.Channels;
 using NCode.Coordination.Resp.Keys;
 using NCode.Coordination.Resp.Notifications;
 using NCode.Coordination.Resp.Tests.Conformance;
@@ -19,6 +20,16 @@ public sealed class RespProviderClusterTests(RespServers servers)
     /// The name of the notification topic that the tests publish to and subscribe on.
     /// </summary>
     private const string TopicName = "topic";
+
+    /// <summary>
+    /// The <c>PUBSUB</c> subcommand that lists the sharded channels of a node.
+    /// </summary>
+    private const string ShardChannels = "SHARDCHANNELS";
+
+    /// <summary>
+    /// The <c>PUBSUB</c> subcommand that lists the plain channels of a node.
+    /// </summary>
+    private const string PlainChannels = "CHANNELS";
 
     /// <summary>
     /// The most keyspaces a test creates while it looks for one on another node; each lands on a given node one time in
@@ -104,13 +115,15 @@ public sealed class RespProviderClusterTests(RespServers servers)
     }
 
     /// <summary>
-    /// Finds the nodes of the cluster on which a sharded channel exists.
+    /// Finds the nodes of the cluster on which a channel exists.
     /// </summary>
     /// <param name="clusterServers">The nodes of the cluster.</param>
-    /// <param name="channel">The name of the sharded channel.</param>
+    /// <param name="listing">The <c>PUBSUB</c> subcommand that lists the kind of channel: sharded or plain.</param>
+    /// <param name="channel">The name of the channel.</param>
     /// <returns>The indexes in <paramref name="clusterServers"/> of the nodes that hold the channel.</returns>
-    private static async ValueTask<IReadOnlyList<int>> FindShardChannelAsync(
+    private static async ValueTask<IReadOnlyList<int>> FindChannelAsync(
         IReadOnlyList<IServer> clusterServers,
+        string listing,
         string channel
     )
     {
@@ -118,7 +131,7 @@ public sealed class RespProviderClusterTests(RespServers servers)
 
         for (var index = 0; index < clusterServers.Count; index++)
         {
-            var result = await clusterServers[index].ExecuteAsync("PUBSUB", "SHARDCHANNELS");
+            var result = await clusterServers[index].ExecuteAsync("PUBSUB", listing);
             var channels = (string[]?)result;
             Assert.NotNull(channels);
 
@@ -277,12 +290,112 @@ public sealed class RespProviderClusterTests(RespServers servers)
 
         var firstChannel = RespKeys.ForKey(firstTopic, RespNotificationService.Kind).ToString();
         var secondChannel = RespKeys.ForKey(secondTopic, RespNotificationService.Kind).ToString();
-        var firstHolders = await FindShardChannelAsync(clusterServers, firstChannel);
-        var secondHolders = await FindShardChannelAsync(clusterServers, secondChannel);
+        var firstHolders = await FindChannelAsync(clusterServers, ShardChannels, firstChannel);
+        var secondHolders = await FindChannelAsync(clusterServers, ShardChannels, secondChannel);
 
         var firstHolder = Assert.Single(firstHolders);
         var secondHolder = Assert.Single(secondHolders);
         Assert.NotEqual(firstHolder, secondHolder);
+    }
+
+    [RespServerFact]
+    public async Task SubscribeAsync_WhenGarnetKeyspacesLiveOnEveryNode_DeliversEachTopicThroughOneNode()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var target = await RespConformance.CreateTargetAsync(
+            servers.GarnetCluster,
+            RespProfiles.Garnet,
+            cancellationToken
+        );
+        await using var disposal = Assert.IsType<RespProvider>(target.Provider);
+        var notifications = GetService<INotificationService>(target.Provider);
+        await using var admin = await RespNodes.ConnectAdminAsync(
+            servers.GarnetCluster,
+            cancellationToken
+        );
+        var clusterServers = admin.GetServers();
+        var configuration = clusterServers[0].ClusterConfiguration;
+        Assert.NotNull(configuration);
+
+        var nodes = new HashSet<string>(StringComparer.Ordinal);
+        var topics = new List<CoordinationKey>();
+        for (
+            var attempt = 0;
+            attempt < KeyspaceAttempts && topics.Count < clusterServers.Length;
+            attempt++
+        )
+        {
+            var keyspace = CreateKeyspace();
+            var tag = RespKeys.KeyspaceTag(keyspace);
+            var slot = admin.HashSlot(tag);
+            var node = configuration.GetBySlot(slot)?.NodeId;
+            if (node is not null && nodes.Add(node))
+                topics.Add(keyspace.CreateKey(TopicName));
+        }
+
+        Assert.Equal(clusterServers.Length, topics.Count);
+        foreach (var topic in topics)
+        {
+            await using var subscription = await SubscribeAndPublishAsync(
+                notifications,
+                topic,
+                cancellationToken
+            );
+
+            var channel = RespKeys.ForKey(topic, RespNotificationService.Kind).ToString();
+            var holders = await FindChannelAsync(clusterServers, PlainChannels, channel);
+            Assert.Single(holders);
+        }
+    }
+
+    #endregion
+
+    #region Publish Tests
+
+    [RespServerFact]
+    public async Task Publish_WhenEveryGarnetNodePublishesAPlainMessage_ReachesASubscriberOnOneNode()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var admin = await RespNodes.ConnectAdminAsync(
+            servers.GarnetCluster,
+            cancellationToken
+        );
+        var clusterServers = admin.GetServers();
+        var id = Guid.NewGuid();
+        var name = $"plain-{id:N}";
+        var channel = RedisChannel.Literal(name);
+        var messages = Channel.CreateUnbounded<string>();
+        var subscriber = admin.GetSubscriber();
+        var queue = await subscriber.SubscribeAsync(channel);
+        queue.OnMessage(message =>
+        {
+            var text = message.Message.ToString();
+            messages.Writer.TryWrite(text);
+        });
+
+        var expected = new List<string>();
+        for (var index = 0; index < clusterServers.Length; index++)
+        {
+            var text = $"from-{index}";
+            expected.Add(text);
+            await clusterServers[index].ExecuteAsync("PUBLISH", name, text);
+        }
+
+        var timeout = TimeSpan.FromSeconds(15);
+        var received = new List<string>();
+        for (var index = 0; index < clusterServers.Length; index++)
+        {
+            var reading = messages.Reader.ReadAsync(cancellationToken).AsTask();
+            var text = await reading.WaitAsync(timeout, cancellationToken);
+            received.Add(text);
+        }
+
+        var holders = await FindChannelAsync(clusterServers, PlainChannels, name);
+        await queue.UnsubscribeAsync();
+        received.Sort(StringComparer.Ordinal);
+
+        Assert.Equal(expected, received);
+        Assert.Single(holders);
     }
 
     #endregion
