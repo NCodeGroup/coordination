@@ -218,52 +218,47 @@ internal class RespMembershipService(RespRecordTable table, RespSubscriptions su
             .OpenAsync(channel, token => ReadNumberAsync(group.Keyspace, token), cancellationToken)
             .ConfigureAwait(false);
 
-        try
+        await using var disposal = reader.ConfigureAwait(false);
+
+        var name = RespKeys.Member(group);
+        var changed = new RespWatchLine('m', name);
+        MembershipView? last = null;
+        await foreach (var item in reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
-            var name = RespKeys.Member(group);
-            var changed = new RespWatchLine('m', name);
-            MembershipView? last = null;
-            await foreach (var item in reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            if (!item.IsResync)
             {
-                if (!item.IsResync)
+                if (!RespWatchLine.TryParse(item.Message, out var lines))
                 {
-                    if (!RespWatchLine.TryParse(item.Message, out var lines))
-                    {
-                        reader.MarkInDoubt();
-                        continue;
-                    }
-
-                    if (!lines.Contains(changed))
-                    {
-                        continue;
-                    }
+                    reader.MarkInDoubt();
+                    continue;
                 }
 
-                MembershipView? view;
-                if (last is null)
+                if (!lines.Contains(changed))
                 {
-                    view = await ReadAsync(group, null, cancellationToken).ConfigureAwait(false);
-                }
-                else
-                {
-                    view = await TryReadAsync(group, cancellationToken).ConfigureAwait(false);
-                    if (view is null)
-                    {
-                        reader.MarkInDoubt();
-                        continue;
-                    }
-                }
-
-                if (last is null || view.Revision > last.Revision)
-                {
-                    last = view;
-                    yield return view;
+                    continue;
                 }
             }
-        }
-        finally
-        {
-            await reader.DisposeAsync().ConfigureAwait(false);
+
+            MembershipView? view;
+            if (last is null)
+            {
+                view = await ReadAsync(group, null, cancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                view = await TryReadAsync(group, cancellationToken).ConfigureAwait(false);
+                if (view is null)
+                {
+                    reader.MarkInDoubt();
+                    continue;
+                }
+            }
+
+            if (last is null || view.Revision > last.Revision)
+            {
+                last = view;
+                yield return view;
+            }
         }
     }
 }

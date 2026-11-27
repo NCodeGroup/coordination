@@ -135,30 +135,25 @@ internal class RespNotificationService(
             .OpenAsync(name, token => ReadSequenceAsync(key, token), cancellationToken)
             .ConfigureAwait(false);
 
-        try
+        await using var disposal = reader.ConfigureAwait(false);
+
+        long delivered = 0;
+        await foreach (var item in reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
-            long delivered = 0;
-            await foreach (var item in reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            if (item.IsResync)
             {
-                if (item.IsResync)
-                {
-                    yield return Notification.Resync(topic, delivered);
-                    continue;
-                }
-
-                if (!TryReadPayload(item.Message, out var payload))
-                {
-                    reader.MarkInDoubt();
-                    continue;
-                }
-
-                delivered = item.Number;
-                yield return Notification.Message(topic, item.Number, payload);
+                yield return Notification.Resync(topic, delivered);
+                continue;
             }
-        }
-        finally
-        {
-            await reader.DisposeAsync().ConfigureAwait(false);
+
+            if (!TryReadPayload(item.Message, out var payload))
+            {
+                reader.MarkInDoubt();
+                continue;
+            }
+
+            delivered = item.Number;
+            yield return Notification.Message(topic, item.Number, payload);
         }
     }
 

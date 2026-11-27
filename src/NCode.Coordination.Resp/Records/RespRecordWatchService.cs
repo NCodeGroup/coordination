@@ -147,64 +147,59 @@ internal class RespRecordWatchService(
             .OpenAsync(channel, token => ReadNumberAsync(keyspace, token), cancellationToken)
             .ConfigureAwait(false);
 
-        try
+        await using var disposal = reader.ConfigureAwait(false);
+
+        await foreach (var item in reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
-            await foreach (var item in reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            var revision = new Revision(item.Number);
+            if (item.IsResync)
             {
-                var revision = new Revision(item.Number);
-                if (item.IsResync)
+                yield return RecordChange.Resync(revision);
+                continue;
+            }
+
+            if (!RespWatchLine.TryParse(item.Message, out var lines))
+            {
+                reader.MarkInDoubt();
+                continue;
+            }
+
+            foreach (var line in lines)
+            {
+                if (line.Kind is not ('w' or 'd'))
                 {
-                    yield return RecordChange.Resync(revision);
                     continue;
                 }
 
-                if (!RespWatchLine.TryParse(item.Message, out var lines))
+                var key = TryDecode(keyspace, line.Name);
+                if (key is null)
                 {
                     reader.MarkInDoubt();
                     continue;
                 }
 
-                foreach (var line in lines)
+                if (!matches(key))
                 {
-                    if (line.Kind is not ('w' or 'd'))
-                    {
-                        continue;
-                    }
+                    continue;
+                }
 
-                    var key = TryDecode(keyspace, line.Name);
-                    if (key is null)
-                    {
-                        reader.MarkInDoubt();
-                        continue;
-                    }
+                if (line.Kind == 'd')
+                {
+                    yield return RecordChange.Deleted(key, revision);
+                    continue;
+                }
 
-                    if (!matches(key))
-                    {
-                        continue;
-                    }
-
-                    if (line.Kind == 'd')
-                    {
-                        yield return RecordChange.Deleted(key, revision);
-                        continue;
-                    }
-
-                    var (read, record) = await TryReadAsync(key, cancellationToken)
-                        .ConfigureAwait(false);
-                    if (!read)
-                    {
-                        reader.MarkInDoubt();
-                    }
-                    else if (record is not null && record.Revision == revision)
-                    {
-                        yield return RecordChange.Written(record);
-                    }
+                var (read, record) = await TryReadAsync(key, cancellationToken)
+                    .ConfigureAwait(false);
+                if (!read)
+                {
+                    reader.MarkInDoubt();
+                }
+                else if (record is not null && record.Revision == revision)
+                {
+                    yield return RecordChange.Written(record);
                 }
             }
-        }
-        finally
-        {
-            await reader.DisposeAsync().ConfigureAwait(false);
         }
     }
 }
