@@ -1,5 +1,7 @@
 #nullable enable
+const NCode.Coordination.PostgreSqlCoordinationBuilderExtensions.ProviderName = "postgresql" -> string!
 const NCode.Coordination.PostgreSqlSchema.DefaultName = "coordination" -> string!
+NCode.Coordination.PostgreSqlCoordinationBuilderExtensions
 NCode.Coordination.PostgreSqlMigration
 NCode.Coordination.PostgreSqlMigration.<Clone>$() -> NCode.Coordination.PostgreSqlMigration!
 NCode.Coordination.PostgreSqlMigration.CompatibleFrom.get -> int
