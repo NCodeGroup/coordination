@@ -30,17 +30,22 @@ internal readonly record struct RespWatchLine(char Kind, string Name)
             return false;
         }
 
-        var parts = text.Split('\n');
-        var builder = ImmutableArray.CreateBuilder<RespWatchLine>(parts.Length - 1);
-        for (var index = 1; index < parts.Length; index++)
+        var rest = text.AsSpan();
+        var count = rest.Count('\n');
+        var builder = ImmutableArray.CreateBuilder<RespWatchLine>(count);
+        var feed = rest.IndexOf('\n');
+        while (feed >= 0)
         {
-            var part = parts[index];
+            rest = rest[(feed + 1)..];
+            feed = rest.IndexOf('\n');
+            var part = feed < 0 ? rest : rest[..feed];
             if (part.Length < 2)
             {
                 return false;
             }
 
-            var line = new RespWatchLine(part[0], part[1..]);
+            var name = part[1..].ToString();
+            var line = new RespWatchLine(part[0], name);
             builder.Add(line);
         }
 
