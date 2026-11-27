@@ -70,4 +70,38 @@ public sealed class PgCounterServiceTests
     }
 
     #endregion
+
+    #region IncrementBatchAsync Tests
+
+    [Fact]
+    public async Task IncrementBatchAsync_Empty_Throws()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await WithServiceAsync(async service =>
+        {
+            await Assert.ThrowsAsync<ArgumentException>(async () =>
+                await service.IncrementBatchAsync([], null, cancellationToken)
+            );
+        });
+    }
+
+    [Fact]
+    public async Task IncrementBatchAsync_KeyspacesDiffer_Throws()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var timeToLive = new TimeToLive(TimeSpan.FromSeconds(5));
+        var increments = new[]
+        {
+            new CounterIncrement(new Keyspace("prod").CreateKey("a"), 1, 10, timeToLive),
+            new CounterIncrement(new Keyspace("staging").CreateKey("b"), 1, 10, timeToLive),
+        };
+        await WithServiceAsync(async service =>
+        {
+            await Assert.ThrowsAsync<ArgumentException>(async () =>
+                await service.IncrementBatchAsync(increments, null, cancellationToken)
+            );
+        });
+    }
+
+    #endregion
 }
