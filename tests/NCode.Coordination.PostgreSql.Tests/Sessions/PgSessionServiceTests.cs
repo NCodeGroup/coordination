@@ -27,13 +27,11 @@ public sealed class PgSessionServiceTests
         var service = CreateService(offline);
         var cancellationToken = TestContext.Current.CancellationToken;
 
+        var duration = TimeSpan.FromSeconds(5);
+        var timeToLive = new TimeToLive(duration);
+
         await Assert.ThrowsAsync<ArgumentNullException>(async () =>
-            await service.OpenAsync(
-                null!,
-                new TimeToLive(TimeSpan.FromSeconds(5)),
-                null,
-                cancellationToken
-            )
+            await service.OpenAsync(null!, timeToLive, null, cancellationToken)
         );
     }
 
@@ -47,11 +45,10 @@ public sealed class PgSessionServiceTests
         await using var offline = new PgOfflineServer();
         var service = CreateService(offline);
         var cancellationToken = TestContext.Current.CancellationToken;
-        var session = new SessionId(new Keyspace("prod"), "s-1");
-        var options = new OperationOptions
-        {
-            Extensions = ImmutableDictionary<string, string>.Empty.Add("consul.lock-delay", "15s"),
-        };
+        var keyspace = new Keyspace("prod");
+        var session = new SessionId(keyspace, "s-1");
+        var extensions = ImmutableDictionary<string, string>.Empty.Add("consul.lock-delay", "15s");
+        var options = new OperationOptions { Extensions = extensions };
 
         var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
             await service.KeepAliveAsync(session, options, cancellationToken)

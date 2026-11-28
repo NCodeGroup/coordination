@@ -27,11 +27,11 @@ public sealed class PgLeaseServiceTests
         var service = CreateService(offline);
         var cancellationToken = TestContext.Current.CancellationToken;
         var resource = new Keyspace("prod").CreateKey("r");
-        var terms = LeaseTerms.ForTimeToLive(new TimeToLive(TimeSpan.FromSeconds(5)));
-        var options = new OperationOptions
-        {
-            Extensions = ImmutableDictionary<string, string>.Empty.Add("consul.lock-delay", "15s"),
-        };
+        var duration = TimeSpan.FromSeconds(5);
+        var timeToLive = new TimeToLive(duration);
+        var terms = LeaseTerms.ForTimeToLive(timeToLive);
+        var extensions = ImmutableDictionary<string, string>.Empty.Add("consul.lock-delay", "15s");
+        var options = new OperationOptions { Extensions = extensions };
 
         var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
             await service.TryAcquireAsync(resource, terms, options, cancellationToken)
@@ -52,20 +52,17 @@ public sealed class PgLeaseServiceTests
         var service = CreateService(offline);
         var cancellationToken = TestContext.Current.CancellationToken;
         var keyspace = new Keyspace("prod");
-        var grant = new LeaseGrant(
-            keyspace.CreateKey("r"),
-            new FencingToken(1),
-            new OwnerToken("o-1"),
-            LeaseTerms.ForSession(new SessionId(keyspace, "s-1"))
-        );
+        var resource = keyspace.CreateKey("r");
+        var fencingToken = new FencingToken(1);
+        var owner = new OwnerToken("o-1");
+        var sessionId = new SessionId(keyspace, "s-1");
+        var terms = LeaseTerms.ForSession(sessionId);
+        var grant = new LeaseGrant(resource, fencingToken, owner, terms);
+        var duration = TimeSpan.FromSeconds(5);
+        var timeToLive = new TimeToLive(duration);
 
         var exception = await Assert.ThrowsAsync<ArgumentException>(async () =>
-            await service.RenewAsync(
-                grant,
-                new TimeToLive(TimeSpan.FromSeconds(5)),
-                null,
-                cancellationToken
-            )
+            await service.RenewAsync(grant, timeToLive, null, cancellationToken)
         );
 
         Assert.Equal("grant", exception.ParamName);

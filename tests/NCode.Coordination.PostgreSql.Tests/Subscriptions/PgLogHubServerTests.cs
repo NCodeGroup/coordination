@@ -23,11 +23,8 @@ public sealed class PgLogHubServerTests(PgServers servers)
         var cancellationToken = TestContext.Current.CancellationToken;
         var schemaName = "hub_" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
         var schema = PgSchemaName.Create(schemaName);
-        var settings = PgSettings.Default with
-        {
-            Schema = schema,
-            CheckInterval = TimeSpan.FromSeconds(1),
-        };
+        var checkInterval = TimeSpan.FromSeconds(1);
+        var settings = PgSettings.Default with { Schema = schema, CheckInterval = checkInterval };
         var calls = 0;
         var id = new PgLogId(1, null);
 
@@ -36,17 +33,19 @@ public sealed class PgLogHubServerTests(PgServers servers)
             var call = Interlocked.Increment(ref calls);
             if (call == 1)
             {
-                return ValueTask.FromResult(new PgLogRead<TestEntry>(0, 0, []));
+                var empty = new PgLogRead<TestEntry>(0, 0, []);
+                return ValueTask.FromResult(empty);
             }
 
             if (call == 2)
             {
-                return ValueTask.FromException<PgLogRead<TestEntry>>(
-                    new InvalidOperationException("The read failed unexpectedly.")
-                );
+                var failure = new InvalidOperationException("The read failed unexpectedly.");
+                return ValueTask.FromException<PgLogRead<TestEntry>>(failure);
             }
 
-            return ValueTask.FromResult(new PgLogRead<TestEntry>(0, 1, [new TestEntry(1)]));
+            var entry = new TestEntry(1);
+            var read = new PgLogRead<TestEntry>(0, 1, [entry]);
+            return ValueTask.FromResult(read);
         }
 
         try
@@ -56,7 +55,8 @@ public sealed class PgLogHubServerTests(PgServers servers)
             var probe = new PgProbe(server, source, PostgreSqlProfiles.Standalone, settings);
             await probe.RunAsync(cancellationToken);
 
-            var keyspaces = new PgKeyspaces(server, schema, new PgRandomTokens());
+            var tokens = new PgRandomTokens();
+            var keyspaces = new PgKeyspaces(server, schema, tokens);
             await using var hub = new PgLogHub(source, keyspaces, settings, TimeProvider.System);
 
             var subscriber = await hub.SubscribeAsync(

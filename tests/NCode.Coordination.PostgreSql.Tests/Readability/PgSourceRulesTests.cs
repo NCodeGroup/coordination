@@ -37,6 +37,9 @@ public sealed class PgSourceRulesTests
         "Counters",
         "Elections",
         "Occurrences",
+        "Leases",
+        "Sessions",
+        "Subscriptions",
     ];
 
     private static List<string> FindPackageFolders()

@@ -31,7 +31,8 @@ public sealed class PgLogFanoutTests
                 .Select(x => new TestEntry(x))
                 .ToImmutableArray();
 
-            return ValueTask.FromResult(new PgLogRead<TestEntry>(removed, current, entries));
+            var read = new PgLogRead<TestEntry>(removed, current, entries);
+            return ValueTask.FromResult(read);
         }
     }
 
@@ -46,8 +47,11 @@ public sealed class PgLogFanoutTests
         return events;
     }
 
-    private static PgLogEvent<TestEntry> Delivered(long number) =>
-        PgLogEvent<TestEntry>.ForEntry(new TestEntry(number), number);
+    private static PgLogEvent<TestEntry> Delivered(long number)
+    {
+        var entry = new TestEntry(number);
+        return PgLogEvent<TestEntry>.ForEntry(entry, number);
+    }
 
     #region PumpAsync Tests
 
@@ -223,7 +227,8 @@ public sealed class PgLogFanoutTests
     [Fact]
     public void TryMarkWake_Twice_ReturnsTrueThenFalse()
     {
-        var fanout = new PgLogFanout<TestEntry>(new FakeLog(0, 0).ReadAsync);
+        var log = new FakeLog(0, 0);
+        var fanout = new PgLogFanout<TestEntry>(log.ReadAsync);
 
         var first = fanout.TryMarkWake();
         var second = fanout.TryMarkWake();
@@ -235,7 +240,8 @@ public sealed class PgLogFanoutTests
     [Fact]
     public async Task TryMarkWake_AfterAPumpBeganItsRead_ReturnsTrueAgain()
     {
-        var fanout = new PgLogFanout<TestEntry>(new FakeLog(0, 0).ReadAsync);
+        var log = new FakeLog(0, 0);
+        var fanout = new PgLogFanout<TestEntry>(log.ReadAsync);
         fanout.AddAfter(0);
 
         var first = fanout.TryMarkWake();
@@ -256,7 +262,8 @@ public sealed class PgLogFanoutTests
     [Fact]
     public void Remove_LastSubscriber_ReturnsTrue()
     {
-        var fanout = new PgLogFanout<TestEntry>(new FakeLog(0, 0).ReadAsync);
+        var log = new FakeLog(0, 0);
+        var fanout = new PgLogFanout<TestEntry>(log.ReadAsync);
         var first = fanout.AddAfter(0);
         var second = fanout.AddAfter(0);
 

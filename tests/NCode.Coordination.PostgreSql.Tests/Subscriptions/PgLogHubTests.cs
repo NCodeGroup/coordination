@@ -22,7 +22,9 @@ public sealed class PgLogHubTests
     [Fact]
     public void TryRoute_ChangePayload_RoutesToTheChangeLog()
     {
-        var routed = PgLogHub.TryRoute(Channels, Channel, PgChannels.ChangePayload(7), out var id);
+        var payload = PgChannels.ChangePayload(7);
+
+        var routed = PgLogHub.TryRoute(Channels, Channel, payload, out var id);
 
         Assert.True(routed);
         var expected = new PgLogId(KeyspaceId, null);
@@ -32,12 +34,9 @@ public sealed class PgLogHubTests
     [Fact]
     public void TryRoute_TopicPayload_RoutesToTheTopic()
     {
-        var routed = PgLogHub.TryRoute(
-            Channels,
-            Channel,
-            PgChannels.TopicPayload("abc", 3),
-            out var id
-        );
+        var payload = PgChannels.TopicPayload("abc", 3);
+
+        var routed = PgLogHub.TryRoute(Channels, Channel, payload, out var id);
 
         Assert.True(routed);
         var expected = new PgLogId(KeyspaceId, "abc");
@@ -48,8 +47,9 @@ public sealed class PgLogHubTests
     public void TryRoute_UnknownChannel_ReturnsFalse()
     {
         var other = PgChannels.ForKeyspace(PgSchemaName.Default, KeyspaceId + 1);
+        var payload = PgChannels.ChangePayload(7);
 
-        var routed = PgLogHub.TryRoute(Channels, other, PgChannels.ChangePayload(7), out var id);
+        var routed = PgLogHub.TryRoute(Channels, other, payload, out var id);
 
         Assert.False(routed);
         Assert.Equal(default, id);

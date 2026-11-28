@@ -15,7 +15,9 @@ namespace NCode.Coordination.PostgreSql.Leases.Tests;
 
 public sealed class PgGrantsServerTests(PgServers servers)
 {
-    private static readonly TimeToLive OneMinute = new(TimeSpan.FromMinutes(1));
+    private static readonly TimeSpan OneMinuteSpan = TimeSpan.FromMinutes(1);
+
+    private static readonly TimeToLive OneMinute = new(OneMinuteSpan);
 
     private static LeaseGrant GrantOf(LeaseAcquireResult result)
     {
@@ -33,8 +35,11 @@ public sealed class PgGrantsServerTests(PgServers servers)
     {
         public Keyspace Keyspace { get; } = new("grants-server");
 
-        public CoordinationKey KeyOf(string name) =>
-            Keyspace.CreateKey(KeySegment.FromString(name));
+        public CoordinationKey KeyOf(string name)
+        {
+            var segment = KeySegment.FromString(name);
+            return Keyspace.CreateKey(segment);
+        }
 
         public async Task<List<T>> QueryAsync<T>(
             string sql,
@@ -45,16 +50,15 @@ public sealed class PgGrantsServerTests(PgServers servers)
             await using var connection = new NpgsqlConnection(AdminConnectionString);
             await connection.OpenAsync(cancellationToken);
 
-            await using var command = new NpgsqlCommand(
-                sql.Replace("{schema}", $"\"{SchemaName}\"", StringComparison.Ordinal),
-                connection
-            );
+            var text = sql.Replace("{schema}", $"\"{SchemaName}\"", StringComparison.Ordinal);
+            await using var command = new NpgsqlCommand(text, connection);
             await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
             var rows = new List<T>();
             while (await reader.ReadAsync(cancellationToken))
             {
-                rows.Add(read(reader));
+                var row = read(reader);
+                rows.Add(row);
             }
 
             return rows;
@@ -112,15 +116,13 @@ public sealed class PgGrantsServerTests(PgServers servers)
             var table = new PgRecordTable(server, keyspaces, settings);
             var polling = new PgPolling(TimeProvider.System);
 
-            await test(
-                new Context(
-                    servers.Admin19,
-                    schemaName,
-                    new PgLeaseService(new PgGrants(table), tokens, polling),
-                    new PgSessionService(table, tokens, polling),
-                    new PgSweeps(server, settings, table)
-                )
-            );
+            var grants = new PgGrants(table);
+            var leases = new PgLeaseService(grants, tokens, polling);
+            var sessions = new PgSessionService(table, tokens, polling);
+            var sweeps = new PgSweeps(server, settings, table);
+            var context = new Context(servers.Admin19, schemaName, leases, sessions, sweeps);
+
+            await test(context);
         }
         finally
         {
@@ -191,10 +193,11 @@ public sealed class PgGrantsServerTests(PgServers servers)
             async context =>
             {
                 var resource = context.KeyOf("no-revision");
+                var terms = LeaseTerms.ForTimeToLive(OneMinute);
 
                 var first = await context.Leases.TryAcquireAsync(
                     resource,
-                    LeaseTerms.ForTimeToLive(OneMinute),
+                    terms,
                     null,
                     cancellationToken
                 );
@@ -220,7 +223,7 @@ public sealed class PgGrantsServerTests(PgServers servers)
 
                 var second = await context.Leases.TryAcquireAsync(
                     resource,
-                    LeaseTerms.ForTimeToLive(OneMinute),
+                    terms,
                     null,
                     cancellationToken
                 );
@@ -248,15 +251,17 @@ public sealed class PgGrantsServerTests(PgServers servers)
                     cancellationToken
                 );
 
+                var sessionTerms = LeaseTerms.ForSession(session.Id);
+                var terms = LeaseTerms.ForTimeToLive(OneMinute);
+
                 var first = await context.Leases.TryAcquireAsync(
                     resource,
-                    LeaseTerms.ForSession(session.Id),
+                    sessionTerms,
                     null,
                     cancellationToken
                 );
                 var firstToken = GrantOf(first).FencingToken.Value;
 
-                var terms = LeaseTerms.ForTimeToLive(OneMinute);
                 var blocked = await context.Leases.TryAcquireAsync(
                     resource,
                     terms,

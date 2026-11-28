@@ -26,7 +26,9 @@ public sealed class PgSemaphoreServiceTests
         var service = CreateService(offline);
         var cancellationToken = TestContext.Current.CancellationToken;
         var resource = new Keyspace("prod").CreateKey("r");
-        var terms = LeaseTerms.ForTimeToLive(new TimeToLive(TimeSpan.FromSeconds(5)));
+        var duration = TimeSpan.FromSeconds(5);
+        var timeToLive = new TimeToLive(duration);
+        var terms = LeaseTerms.ForTimeToLive(timeToLive);
 
         var exception = await Assert.ThrowsAsync<ArgumentOutOfRangeException>(async () =>
             await service.TryAcquireAsync(resource, 0, terms, null, cancellationToken)
@@ -42,7 +44,9 @@ public sealed class PgSemaphoreServiceTests
         var service = CreateService(offline);
         var cancellationToken = TestContext.Current.CancellationToken;
         var resource = new Keyspace("prod").CreateKey("r");
-        var terms = LeaseTerms.ForTimeToLive(new TimeToLive(TimeSpan.FromSeconds(5)));
+        var duration = TimeSpan.FromSeconds(5);
+        var timeToLive = new TimeToLive(duration);
+        var terms = LeaseTerms.ForTimeToLive(timeToLive);
 
         var exception = await Assert.ThrowsAsync<ArgumentOutOfRangeException>(async () =>
             await service.TryAcquireAsync(
