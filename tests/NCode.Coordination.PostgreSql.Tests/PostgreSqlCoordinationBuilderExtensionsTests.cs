@@ -37,11 +37,18 @@ public sealed class PostgreSqlCoordinationBuilderExtensionsTests : IDisposable
             case "CheckInterval":
                 options.CheckInterval = value;
                 break;
-            default:
+            case "LogRetention":
                 options.LogRetention = value;
                 break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(option), option, "No such option.");
         }
     }
+
+    private static string RangeOf(string option) =>
+        option == "LogRetention"
+            ? "PostgreSqlProviderOptions.LogRetention is from one second to one day."
+            : $"PostgreSqlProviderOptions.{option} is at least one millisecond and less than one hour.";
 
     private MockRepository Mocks { get; } = new(MockBehavior.Strict);
 
@@ -175,8 +182,10 @@ public sealed class PostgreSqlCoordinationBuilderExtensionsTests : IDisposable
             })
         );
 
+        var range = RangeOf(option);
+
         Assert.Equal("configure", exception.ParamName);
-        Assert.Contains(option, exception.Message);
+        Assert.StartsWith(range, exception.Message);
     }
 
     [Theory]

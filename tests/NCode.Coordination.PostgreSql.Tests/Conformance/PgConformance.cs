@@ -39,6 +39,16 @@ internal static class PgConformance
     internal static PgSettings Settings { get; } = CreateSettings();
 
     /// <summary>
+    /// Gets how long a drop waits for the ended backends to exit.
+    /// </summary>
+    private static TimeSpan DropLimit { get; } = TimeSpan.FromSeconds(10);
+
+    /// <summary>
+    /// Gets the time between the checks that the ended backends have exited.
+    /// </summary>
+    private static TimeSpan DropPollInterval { get; } = TimeSpan.FromMilliseconds(50);
+
+    /// <summary>
     /// Builds the settings of the provider under test.
     /// </summary>
     /// <returns>The module's defaults with a sweep and a log check every second.</returns>
@@ -137,8 +147,7 @@ internal static class PgConformance
         await terminate.ExecuteScalarAsync(cancellationToken);
 
         var deadline = Stopwatch.StartNew();
-        var pollInterval = TimeSpan.FromMilliseconds(50);
-        while (deadline.Elapsed < TimeSpan.FromSeconds(10))
+        while (deadline.Elapsed < DropLimit)
         {
             await using var count = new NpgsqlCommand(CountSql, connection);
             var countParameter = new NpgsqlParameter { Value = pids };
@@ -149,11 +158,12 @@ internal static class PgConformance
                 return;
             }
 
-            await Task.Delay(pollInterval, cancellationToken);
+            await Task.Delay(DropPollInterval, cancellationToken);
         }
 
+        var seconds = DropLimit.TotalSeconds.ToString(CultureInfo.InvariantCulture);
         Assert.Fail(
-            "The backends of the provider were still running 10 seconds after they were ended."
+            $"The backends of the provider were still running {seconds} seconds after they were ended."
         );
     }
 

@@ -86,6 +86,7 @@ public sealed class PgCounterServiceTests
         );
 
         Assert.Equal("increments", exception.ParamName);
+        Assert.StartsWith("A batch has 1 to 16 increments.", exception.Message);
     }
 
     [Fact]
@@ -111,6 +112,7 @@ public sealed class PgCounterServiceTests
         );
 
         Assert.Equal("increments", exception.ParamName);
+        Assert.StartsWith("Every increment of a batch is in one keyspace.", exception.Message);
     }
 
     [Fact]

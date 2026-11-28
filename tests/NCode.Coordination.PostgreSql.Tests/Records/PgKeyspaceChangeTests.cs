@@ -152,7 +152,9 @@ public sealed class PgKeyspaceChangeTests
         var put = CreatePut(key, null);
         var change = CreateChange();
 
-        Assert.Throws<InvalidOperationException>(() => change.Put(put));
+        var exception = Assert.Throws<InvalidOperationException>(() => change.Put(put));
+
+        Assert.Equal("Begin must be called before a write.", exception.Message);
     }
 
     #endregion

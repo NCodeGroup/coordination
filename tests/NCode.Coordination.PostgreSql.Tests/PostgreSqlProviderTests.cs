@@ -260,6 +260,20 @@ public sealed class PostgreSqlProviderTests
 
         Assert.Equal(CoordinationErrorCodes.Unsupported, exception.Code);
         Assert.False(exception.OutcomeUnknown);
+        Assert.Contains("Multiplexing", exception.Message);
+    }
+
+    [Fact]
+    public async Task ProbeAsync_DataSourceWithoutMultiplexing_ReachesTheServer()
+    {
+        const string connectionString = UnreachableConnectionString + ";Timeout=1";
+        await using var provider = CreateProvider(connectionString);
+
+        var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
+            await provider.ProbeAsync(CancellationToken.None)
+        );
+
+        Assert.Equal(CoordinationErrorCodes.Unavailable, exception.Code);
     }
 
     #endregion
