@@ -17,13 +17,19 @@ namespace NCode.Coordination;
 /// </remarks>
 public sealed partial record PostgreSqlProfile
 {
-    /// <summary>The longest profile name, in characters.</summary>
+    /// <summary>
+    /// The longest profile name, in characters.
+    /// </summary>
     private const int MaxNameLength = 128;
 
-    /// <summary>The prefix of the name of every durability guarantee.</summary>
+    /// <summary>
+    /// The prefix of the name of every durability guarantee.
+    /// </summary>
     private const string DurabilityPrefix = "durability.";
 
-    /// <summary>Matches a name: lowercase letters and digits, with a single '.' or '-' between them.</summary>
+    /// <summary>
+    /// Matches a name: lowercase letters and digits, with a single '.' or '-' between them.
+    /// </summary>
     [GeneratedRegex(@"^[a-z0-9]+(?:[.-][a-z0-9]+)*\z", RegexOptions.CultureInvariant)]
     private static partial Regex NamePattern();
 

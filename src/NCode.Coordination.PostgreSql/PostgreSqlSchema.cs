@@ -34,18 +34,18 @@ public static class PostgreSqlSchema
         var migrations = new List<PostgreSqlMigration>();
         foreach (var migration in PgMigrations.All)
         {
-            var script = string.Concat(
-                migration.Statements.Select(statement => name.Apply(statement) + ";\n")
+            var statements = migration.Statements.Select(statement =>
+                name.Apply(statement) + ";\n"
+            );
+            var script = string.Concat(statements);
+            var published = new PostgreSqlMigration(
+                migration.Version,
+                migration.Name,
+                migration.CompatibleFrom,
+                script
             );
 
-            migrations.Add(
-                new PostgreSqlMigration(
-                    migration.Version,
-                    migration.Name,
-                    migration.CompatibleFrom,
-                    script
-                )
-            );
+            migrations.Add(published);
         }
 
         return migrations;

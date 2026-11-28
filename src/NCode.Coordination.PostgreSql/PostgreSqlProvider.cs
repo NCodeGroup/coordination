@@ -46,79 +46,22 @@ internal sealed class PostgreSqlProvider : ICoordinationProvider, IAsyncDisposab
 
         return
         [
-            PrimitiveSupport.Supported(
-                Primitives.Record,
-                Guarantees.LinearizableUntilFailover,
-                profile.Durability,
-                Guarantees.ServerClock
-            ),
-            PrimitiveSupport.Supported(
-                Primitives.Transaction,
-                Guarantees.LinearizableUntilFailover,
-                profile.Durability,
-                Guarantees.ServerClock,
-                Guarantees.AtomicAcrossPartitions
-            ),
-            PrimitiveSupport.Supported(
-                Primitives.Occurrence,
-                Guarantees.LinearizableUntilFailover,
-                profile.Durability,
-                Guarantees.ServerClock
-            ),
-            PrimitiveSupport.Supported(
-                Primitives.Set,
-                Guarantees.LinearizableUntilFailover,
-                profile.Durability,
-                Guarantees.ServerClock
-            ),
-            PrimitiveSupport.Supported(
-                Primitives.Counter,
-                Guarantees.LinearizableUntilFailover,
-                profile.Durability,
-                Guarantees.ServerClock,
-                Guarantees.AtomicAcrossPartitions
-            ),
+            ServerClocked(Primitives.Record, profile),
+            AtomicServerClocked(Primitives.Transaction, profile),
+            ServerClocked(Primitives.Occurrence, profile),
+            ServerClocked(Primitives.Set, profile),
+            AtomicServerClocked(Primitives.Counter, profile),
             PrimitiveSupport.Supported(
                 Primitives.Sequence,
                 Guarantees.LinearizableUntilFailover,
                 profile.Durability
             ),
-            PrimitiveSupport.Supported(
-                Primitives.Session,
-                Guarantees.LinearizableUntilFailover,
-                profile.Durability,
-                Guarantees.ServerClock
-            ),
-            PrimitiveSupport.Supported(
-                Primitives.Membership,
-                Guarantees.LinearizableUntilFailover,
-                profile.Durability,
-                Guarantees.ServerClock
-            ),
-            PrimitiveSupport.Supported(
-                Primitives.Lease,
-                Guarantees.LinearizableUntilFailover,
-                profile.Durability,
-                Guarantees.ServerClock
-            ),
-            PrimitiveSupport.Supported(
-                Primitives.Semaphore,
-                Guarantees.LinearizableUntilFailover,
-                profile.Durability,
-                Guarantees.ServerClock
-            ),
-            PrimitiveSupport.Supported(
-                Primitives.Election,
-                Guarantees.LinearizableUntilFailover,
-                profile.Durability,
-                Guarantees.ServerClock
-            ),
-            PrimitiveSupport.Supported(
-                Primitives.Claim,
-                Guarantees.LinearizableUntilFailover,
-                profile.Durability,
-                Guarantees.ServerClock
-            ),
+            ServerClocked(Primitives.Session, profile),
+            ServerClocked(Primitives.Membership, profile),
+            ServerClocked(Primitives.Lease, profile),
+            ServerClocked(Primitives.Semaphore, profile),
+            ServerClocked(Primitives.Election, profile),
+            ServerClocked(Primitives.Claim, profile),
             // A record watch and a notification read a log that the server numbers and bounds (ADR-1034 rule 9).
             PrimitiveSupport.Supported(
                 Primitives.RecordWatch,
@@ -131,6 +74,39 @@ internal sealed class PostgreSqlProvider : ICoordinationProvider, IAsyncDisposab
             ),
         ];
     }
+
+    /// <summary>
+    /// Describes a primitive that the server keeps in tables and whose expiry the server's clock measures.
+    /// </summary>
+    /// <param name="primitive">The primitive.</param>
+    /// <param name="profile">The profile whose durability the provider declares.</param>
+    /// <returns>The support: linearizable until a failover, the profile's durability and the server's clock.</returns>
+    private static PrimitiveSupport ServerClocked(Primitive primitive, PostgreSqlProfile profile) =>
+        PrimitiveSupport.Supported(
+            primitive,
+            Guarantees.LinearizableUntilFailover,
+            profile.Durability,
+            Guarantees.ServerClock
+        );
+
+    /// <summary>
+    /// Describes a primitive that the server keeps in tables, whose expiry the server's clock measures and whose
+    /// changes are atomic across partitions.
+    /// </summary>
+    /// <param name="primitive">The primitive.</param>
+    /// <param name="profile">The profile whose durability the provider declares.</param>
+    /// <returns>The support: the guarantees of <see cref="ServerClocked"/> and atomicity across partitions.</returns>
+    private static PrimitiveSupport AtomicServerClocked(
+        Primitive primitive,
+        PostgreSqlProfile profile
+    ) =>
+        PrimitiveSupport.Supported(
+            primitive,
+            Guarantees.LinearizableUntilFailover,
+            profile.Durability,
+            Guarantees.ServerClock,
+            Guarantees.AtomicAcrossPartitions
+        );
 
     /// <summary>
     /// Creates the provider and the services that share its data source.
@@ -153,46 +129,17 @@ internal sealed class PostgreSqlProvider : ICoordinationProvider, IAsyncDisposab
         RecordTable = new PgRecordTable(Server, Keyspaces, settings);
         Hub = new PgLogHub(source, Keyspaces, settings, TimeProvider.System);
         ChangeLog = new PgChangeLog(Server, settings.Schema);
+        var declared = Declare(profile);
         Declaration = new ProviderDeclaration(
             PostgreSqlCoordinationBuilderExtensions.ProviderName,
-            Declare(profile)
+            declared
         )
         {
             Profile = profile.Name,
         };
-        Sweeper = new PgSweeper(
-            new PgSweeps(Server, settings, RecordTable),
-            settings.SweepInterval,
-            TimeProvider.System
-        );
-        var tokens = new PgRandomTokens();
-        var grants = new PgGrants(RecordTable);
-        Services = new Dictionary<Type, object>
-        {
-            [typeof(IRecordService)] = new PgRecordService(RecordTable),
-            [typeof(ITransactionService)] = new PgTransactionService(RecordTable),
-            [typeof(IOccurrenceService)] = new PgOccurrenceService(
-                Server,
-                Keyspaces,
-                settings.Schema
-            ),
-            [typeof(ISetService)] = new PgSetService(Server, Keyspaces, settings.Schema),
-            [typeof(ICounterService)] = new PgCounterService(Server, Keyspaces, settings.Schema),
-            [typeof(ISequenceService)] = new PgSequenceService(Server, Keyspaces, settings.Schema),
-            [typeof(ISessionService)] = new PgSessionService(RecordTable, tokens),
-            [typeof(IMembershipService)] = new PgMembershipService(RecordTable, ChangeLog, Hub),
-            [typeof(ILeaseService)] = new PgLeaseService(grants, tokens),
-            [typeof(ISemaphoreService)] = new PgSemaphoreService(grants, tokens),
-            [typeof(IElectionService)] = new PgElectionService(grants, tokens),
-            [typeof(IClaimService)] = new PgClaimService(Server, Keyspaces, settings.Schema),
-            [typeof(IRecordWatchService)] = new PgRecordWatchService(Keyspaces, ChangeLog, Hub),
-            [typeof(INotificationService)] = new PgNotificationService(
-                Server,
-                Keyspaces,
-                settings,
-                Hub
-            ),
-        }.ToFrozenDictionary();
+        var sweeps = new PgSweeps(Server, settings, RecordTable);
+        Sweeper = new PgSweeper(sweeps, settings.SweepInterval, TimeProvider.System);
+        Services = CreateServices();
     }
 
     /// <summary>
@@ -279,5 +226,41 @@ internal sealed class PostgreSqlProvider : ICoordinationProvider, IAsyncDisposab
         Sweeper.Dispose();
         Hub.Dispose();
         Source.Dispose();
+    }
+
+    /// <summary>
+    /// Creates the primitive services over the provider's server, keyspaces, record table, change log and hub.
+    /// </summary>
+    /// <returns>The services by the interface that each implements.</returns>
+    private FrozenDictionary<Type, object> CreateServices()
+    {
+        var schema = Settings.Schema;
+        var tokens = new PgRandomTokens();
+        var grants = new PgGrants(RecordTable);
+
+        var services = new Dictionary<Type, object>
+        {
+            [typeof(IRecordService)] = new PgRecordService(RecordTable),
+            [typeof(ITransactionService)] = new PgTransactionService(RecordTable),
+            [typeof(IOccurrenceService)] = new PgOccurrenceService(Server, Keyspaces, schema),
+            [typeof(ISetService)] = new PgSetService(Server, Keyspaces, schema),
+            [typeof(ICounterService)] = new PgCounterService(Server, Keyspaces, schema),
+            [typeof(ISequenceService)] = new PgSequenceService(Server, Keyspaces, schema),
+            [typeof(ISessionService)] = new PgSessionService(RecordTable, tokens),
+            [typeof(IMembershipService)] = new PgMembershipService(RecordTable, ChangeLog, Hub),
+            [typeof(ILeaseService)] = new PgLeaseService(grants, tokens),
+            [typeof(ISemaphoreService)] = new PgSemaphoreService(grants, tokens),
+            [typeof(IElectionService)] = new PgElectionService(grants, tokens),
+            [typeof(IClaimService)] = new PgClaimService(Server, Keyspaces, schema),
+            [typeof(IRecordWatchService)] = new PgRecordWatchService(Keyspaces, ChangeLog, Hub),
+            [typeof(INotificationService)] = new PgNotificationService(
+                Server,
+                Keyspaces,
+                Settings,
+                Hub
+            ),
+        };
+
+        return services.ToFrozenDictionary();
     }
 }

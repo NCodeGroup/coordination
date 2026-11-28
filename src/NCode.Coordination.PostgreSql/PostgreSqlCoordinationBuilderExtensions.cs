@@ -60,46 +60,115 @@ public static class PostgreSqlCoordinationBuilderExtensions
 
             var schema = PgSchemaName.Create(options.Schema);
 
-            var settings = new PgSettings(
-                schema,
-                options.ApplyMigrations,
-                CheckShortDuration(
-                    options.StatementTimeout,
-                    nameof(options.StatementTimeout),
-                    nameof(configure)
-                ),
-                CheckShortDuration(
-                    options.LockTimeout,
-                    nameof(options.LockTimeout),
-                    nameof(configure)
-                ),
-                CheckShortDuration(
-                    options.IdleInTransactionTimeout,
-                    nameof(options.IdleInTransactionTimeout),
-                    nameof(configure)
-                ),
-                CheckShortDuration(
-                    options.SweepInterval,
-                    nameof(options.SweepInterval),
-                    nameof(configure)
-                ),
-                CheckBatchSize(options.SweepBatchSize, nameof(configure)),
-                CheckLogRetention(options.LogRetention, nameof(configure)),
-                CheckShortDuration(
-                    options.CheckInterval,
-                    nameof(options.CheckInterval),
-                    nameof(configure)
-                )
+            var settings = CreateSettings(options, schema, nameof(configure));
+            var factory = new PgProviderFactory(
+                connectionString,
+                dataSourceFactory,
+                profile,
+                settings
             );
 
-            return builder.AddProvider(services =>
-            {
-                var source = dataSourceFactory is null
-                    ? PgSource.FromConnectionString(connectionString ?? string.Empty)
-                    : PgSource.FromDataSource(dataSourceFactory(services));
-                return new PostgreSqlProvider(source, profile, settings);
-            });
+            return builder.AddProvider(factory.Create);
         }
+    }
+
+    /// <summary>
+    /// Creates the settings from the options, checking each of the options' ranges.
+    /// </summary>
+    /// <param name="options">The options that the host configured.</param>
+    /// <param name="schema">The schema's name, already checked.</param>
+    /// <param name="paramName">The name of the argument to report.</param>
+    /// <returns>The settings.</returns>
+    /// <exception cref="ArgumentOutOfRangeException">An option is out of range.</exception>
+    private static PgSettings CreateSettings(
+        PostgreSqlProviderOptions options,
+        PgSchemaName schema,
+        string paramName
+    )
+    {
+        var named = PgSettings.Default with
+        {
+            Schema = schema,
+            ApplyMigrations = options.ApplyMigrations,
+        };
+        var withTimeouts = WithServerTimeouts(named, options, paramName);
+
+        return WithBackgroundIntervals(withTimeouts, options, paramName);
+    }
+
+    /// <summary>
+    /// Sets the timeouts that bound a statement, a lock wait and an idle transaction, each checked against its range.
+    /// </summary>
+    /// <param name="settings">The settings to start from.</param>
+    /// <param name="options">The options that the host configured.</param>
+    /// <param name="paramName">The name of the argument to report.</param>
+    /// <returns>The settings with the three timeouts.</returns>
+    /// <exception cref="ArgumentOutOfRangeException">A timeout is out of range.</exception>
+    private static PgSettings WithServerTimeouts(
+        PgSettings settings,
+        PostgreSqlProviderOptions options,
+        string paramName
+    )
+    {
+        var statementTimeout = CheckShortDuration(
+            options.StatementTimeout,
+            nameof(options.StatementTimeout),
+            paramName
+        );
+        var lockTimeout = CheckShortDuration(
+            options.LockTimeout,
+            nameof(options.LockTimeout),
+            paramName
+        );
+        var idleInTransactionTimeout = CheckShortDuration(
+            options.IdleInTransactionTimeout,
+            nameof(options.IdleInTransactionTimeout),
+            paramName
+        );
+
+        return settings with
+        {
+            StatementTimeout = statementTimeout,
+            LockTimeout = lockTimeout,
+            IdleInTransactionTimeout = idleInTransactionTimeout,
+        };
+    }
+
+    /// <summary>
+    /// Sets the sweep's interval and batch size, the log's retention and the check interval, each checked against its
+    /// range.
+    /// </summary>
+    /// <param name="settings">The settings to start from.</param>
+    /// <param name="options">The options that the host configured.</param>
+    /// <param name="paramName">The name of the argument to report.</param>
+    /// <returns>The settings with the four values.</returns>
+    /// <exception cref="ArgumentOutOfRangeException">A value is out of range.</exception>
+    private static PgSettings WithBackgroundIntervals(
+        PgSettings settings,
+        PostgreSqlProviderOptions options,
+        string paramName
+    )
+    {
+        var sweepInterval = CheckShortDuration(
+            options.SweepInterval,
+            nameof(options.SweepInterval),
+            paramName
+        );
+        var sweepBatchSize = CheckBatchSize(options.SweepBatchSize, paramName);
+        var logRetention = CheckLogRetention(options.LogRetention, paramName);
+        var checkInterval = CheckShortDuration(
+            options.CheckInterval,
+            nameof(options.CheckInterval),
+            paramName
+        );
+
+        return settings with
+        {
+            SweepInterval = sweepInterval,
+            SweepBatchSize = sweepBatchSize,
+            LogRetention = logRetention,
+            CheckInterval = checkInterval,
+        };
     }
 
     /// <summary>
