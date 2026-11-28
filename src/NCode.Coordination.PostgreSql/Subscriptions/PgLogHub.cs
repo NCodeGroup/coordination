@@ -13,14 +13,6 @@ namespace NCode.Coordination.PostgreSql.Subscriptions;
 /// </summary>
 internal sealed class PgLogHub : IAsyncDisposable, IDisposable
 {
-    private readonly ConcurrentDictionary<PgLogId, IPgLogPump> _fanouts = new();
-    private readonly ConcurrentDictionary<string, long> _channels = new(StringComparer.Ordinal);
-    private readonly SemaphoreSlim _sync = new(1, 1);
-    private readonly CancellationTokenSource _stop = new();
-    private readonly Lock _gate = new();
-    private Task? _checks;
-    private bool _disposed;
-
     /// <summary>
     /// Initializes a new instance of the <see cref="PgLogHub"/> class.
     /// </summary>
@@ -60,6 +52,41 @@ internal sealed class PgLogHub : IAsyncDisposable, IDisposable
     private PgListener Listener { get; }
 
     /// <summary>
+    /// Gets the fanout of each log.
+    /// </summary>
+    private ConcurrentDictionary<PgLogId, IPgLogPump> Fanouts { get; } = new();
+
+    /// <summary>
+    /// Gets the id of the keyspace that each listened channel belongs to.
+    /// </summary>
+    private ConcurrentDictionary<string, long> Channels { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Gets the gate that serializes subscribing and unsubscribing.
+    /// </summary>
+    private SemaphoreSlim Sync { get; } = new(1, 1);
+
+    /// <summary>
+    /// Gets the source of the token that ends the checks and the pumps.
+    /// </summary>
+    private CancellationTokenSource Cancellation { get; } = new();
+
+    /// <summary>
+    /// Gets the lock that guards <see cref="Disposed" /> and <see cref="Checks" />.
+    /// </summary>
+    private Lock Gate { get; } = new();
+
+    /// <summary>
+    /// Gets or sets the task of the loop that checks every fanout, or null when it hasn't started.
+    /// </summary>
+    private Task? Checks { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value that says whether the hub is disposed.
+    /// </summary>
+    private bool Disposed { get; set; }
+
+    /// <summary>
     /// Subscribes to a log: listens on its keyspace's channel, adds a subscriber and pumps the log once.
     /// </summary>
     /// <typeparam name="TEntry">The type of the log's entries.</typeparam>
@@ -89,24 +116,24 @@ internal sealed class PgLogHub : IAsyncDisposable, IDisposable
         PgLogFanout<TEntry> fanout;
         PgLogSubscriber<TEntry> subscriber;
 
-        await _sync.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await Sync.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             var channel = PgChannels.ForKeyspace(Settings.Schema, id.KeyspaceId);
-            if (!_channels.ContainsKey(channel))
+            if (!Channels.ContainsKey(channel))
             {
                 await Listener.ListenAsync(channel, cancellationToken).ConfigureAwait(false);
-                _channels[channel] = id.KeyspaceId;
+                Channels[channel] = id.KeyspaceId;
             }
 
-            if (_fanouts.TryGetValue(id, out var existing))
+            if (Fanouts.TryGetValue(id, out var existing))
             {
                 fanout = (PgLogFanout<TEntry>)existing;
             }
             else
             {
                 fanout = create();
-                _fanouts[id] = fanout;
+                Fanouts[id] = fanout;
             }
 
             subscriber =
@@ -116,7 +143,7 @@ internal sealed class PgLogHub : IAsyncDisposable, IDisposable
         }
         finally
         {
-            _sync.Release();
+            Sync.Release();
         }
 
         StartChecks();
@@ -148,11 +175,11 @@ internal sealed class PgLogHub : IAsyncDisposable, IDisposable
     {
         ArgumentNullException.ThrowIfNull(subscriber);
 
-        await _sync.WaitAsync(CancellationToken.None).ConfigureAwait(false);
+        await Sync.WaitAsync(CancellationToken.None).ConfigureAwait(false);
         try
         {
             if (
-                !_fanouts.TryGetValue(id, out var existing)
+                !Fanouts.TryGetValue(id, out var existing)
                 || existing is not PgLogFanout<TEntry> fanout
                 || !fanout.Remove(subscriber)
             )
@@ -160,9 +187,9 @@ internal sealed class PgLogHub : IAsyncDisposable, IDisposable
                 return;
             }
 
-            _fanouts.TryRemove(id, out _);
+            Fanouts.TryRemove(id, out _);
 
-            foreach (var other in _fanouts.Keys)
+            foreach (var other in Fanouts.Keys)
             {
                 if (other.KeyspaceId == id.KeyspaceId)
                 {
@@ -171,12 +198,12 @@ internal sealed class PgLogHub : IAsyncDisposable, IDisposable
             }
 
             var channel = PgChannels.ForKeyspace(Settings.Schema, id.KeyspaceId);
-            _channels.TryRemove(channel, out _);
+            Channels.TryRemove(channel, out _);
             Listener.Unlisten(channel);
         }
         finally
         {
-            _sync.Release();
+            Sync.Release();
         }
     }
 
@@ -249,9 +276,9 @@ internal sealed class PgLogHub : IAsyncDisposable, IDisposable
     {
         get
         {
-            lock (_gate)
+            lock (Gate)
             {
-                return _disposed;
+                return Disposed;
             }
         }
     }
@@ -262,20 +289,20 @@ internal sealed class PgLogHub : IAsyncDisposable, IDisposable
     /// <returns>The checks' task, or null when they never started or the hub was disposed before.</returns>
     private Task? Stop()
     {
-        lock (_gate)
+        lock (Gate)
         {
-            if (_disposed)
+            if (Disposed)
             {
                 return null;
             }
 
-            _disposed = true;
+            Disposed = true;
         }
 
         // The token source is never disposed: it holds nothing to free, and a background pump may still be using its
         // token.
-        _stop.Cancel();
-        return _checks;
+        Cancellation.Cancel();
+        return Checks;
     }
 
     /// <summary>
@@ -283,14 +310,14 @@ internal sealed class PgLogHub : IAsyncDisposable, IDisposable
     /// </summary>
     private void StartChecks()
     {
-        lock (_gate)
+        lock (Gate)
         {
-            if (_disposed)
+            if (Disposed)
             {
                 return;
             }
 
-            _checks ??= Task.Run(() => CheckAsync(_stop.Token), CancellationToken.None);
+            Checks ??= Task.Run(() => CheckAsync(Cancellation.Token), CancellationToken.None);
         }
     }
 
@@ -323,7 +350,7 @@ internal sealed class PgLogHub : IAsyncDisposable, IDisposable
     private Task PumpAllAsync(CancellationToken stop)
     {
         var pumps = new List<Task>();
-        foreach (var pump in _fanouts.Values)
+        foreach (var pump in Fanouts.Values)
         {
             pumps.Add(PumpQuietlyAsync(pump, stop));
         }
@@ -361,14 +388,14 @@ internal sealed class PgLogHub : IAsyncDisposable, IDisposable
     private void OnNotified(string channel, string payload)
     {
         if (
-            !TryRoute(_channels, channel, payload, out var id)
-            || !_fanouts.TryGetValue(id, out var pump)
+            !TryRoute(Channels, channel, payload, out var id)
+            || !Fanouts.TryGetValue(id, out var pump)
         )
         {
             return;
         }
 
-        var stop = _stop.Token;
+        var stop = Cancellation.Token;
         _ = Task.Run(() => PumpQuietlyAsync(pump, stop), CancellationToken.None);
     }
 
@@ -377,12 +404,12 @@ internal sealed class PgLogHub : IAsyncDisposable, IDisposable
     /// </summary>
     private void OnReconnected()
     {
-        foreach (var pump in _fanouts.Values)
+        foreach (var pump in Fanouts.Values)
         {
             pump.ResyncAll();
         }
 
-        var stop = _stop.Token;
+        var stop = Cancellation.Token;
         _ = Task.Run(() => PumpAllAsync(stop), CancellationToken.None);
     }
 

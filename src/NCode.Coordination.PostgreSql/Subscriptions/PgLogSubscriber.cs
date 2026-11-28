@@ -9,39 +9,34 @@ namespace NCode.Coordination.PostgreSql.Subscriptions;
 /// One subscriber of a log: the number it has been handed up to and the bounded queue of what it was handed.
 /// </summary>
 /// <typeparam name="TEntry">The type of the log's entries.</typeparam>
-internal sealed class PgLogSubscriber<TEntry>
+/// <param name="cursor">The number of the last entry the subscriber has been handed.</param>
+/// <param name="resyncFirst">True when the subscriber starts with a resync.</param>
+internal sealed class PgLogSubscriber<TEntry>(long cursor, bool resyncFirst)
 {
     /// <summary>
     /// The capacity of a subscriber's queue.
     /// </summary>
     public const int Capacity = 1_024;
 
-    private readonly Channel<PgLogEvent<TEntry>> _queue = Channel.CreateBounded<PgLogEvent<TEntry>>(
-        new BoundedChannelOptions(Capacity)
-        {
-            SingleReader = true,
-            SingleWriter = true,
-            FullMode = BoundedChannelFullMode.Wait,
-        }
-    );
-
-    private volatile bool _needsResync;
+    private volatile bool _needsResync = resyncFirst;
 
     /// <summary>
-    /// Initializes a new instance of the <see cref="PgLogSubscriber{TEntry}"/> class.
+    /// Gets the bounded queue of what the subscriber was handed.
     /// </summary>
-    /// <param name="cursor">The number of the last entry the subscriber has been handed.</param>
-    /// <param name="resyncFirst">True when the subscriber starts with a resync.</param>
-    public PgLogSubscriber(long cursor, bool resyncFirst)
-    {
-        Cursor = cursor;
-        _needsResync = resyncFirst;
-    }
+    private Channel<PgLogEvent<TEntry>> Queue { get; } =
+        Channel.CreateBounded<PgLogEvent<TEntry>>(
+            new BoundedChannelOptions(Capacity)
+            {
+                SingleReader = true,
+                SingleWriter = true,
+                FullMode = BoundedChannelFullMode.Wait,
+            }
+        );
 
     /// <summary>
     /// Gets or sets the number of the last entry or resync the subscriber has been handed.
     /// </summary>
-    public long Cursor { get; set; }
+    public long Cursor { get; set; } = cursor;
 
     /// <summary>
     /// Gets or sets whether the subscriber's next event must be a resync: it was asked for, or an event didn't fit in
@@ -56,7 +51,7 @@ internal sealed class PgLogSubscriber<TEntry>
     /// <summary>
     /// Gets the reader of the subscriber's queue.
     /// </summary>
-    public ChannelReader<PgLogEvent<TEntry>> Reader => _queue.Reader;
+    public ChannelReader<PgLogEvent<TEntry>> Reader => Queue.Reader;
 
     /// <summary>
     /// Adds an event to the subscriber's queue, or marks the subscriber as needing a resync when the queue is full.
@@ -65,7 +60,7 @@ internal sealed class PgLogSubscriber<TEntry>
     /// <returns>True when the event was added; otherwise, false.</returns>
     public bool TryWrite(PgLogEvent<TEntry> item)
     {
-        if (_queue.Writer.TryWrite(item))
+        if (Queue.Writer.TryWrite(item))
         {
             return true;
         }

@@ -20,9 +20,20 @@ internal sealed class PgTransaction
         "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY"
     );
 
-    private readonly PgServer _server;
-    private readonly NpgsqlConnection _connection;
-    private readonly PgIsolation _isolation;
+    /// <summary>
+    /// Gets the server that created the transaction.
+    /// </summary>
+    private PgServer Server { get; }
+
+    /// <summary>
+    /// Gets the open connection that the transaction runs on.
+    /// </summary>
+    private NpgsqlConnection Connection { get; }
+
+    /// <summary>
+    /// Gets the isolation of the transaction.
+    /// </summary>
+    private PgIsolation Isolation { get; }
 
     /// <summary>
     /// Creates a transaction on an open connection, which the server disposes.
@@ -35,9 +46,9 @@ internal sealed class PgTransaction
         ArgumentNullException.ThrowIfNull(server);
         ArgumentNullException.ThrowIfNull(connection);
 
-        _server = server;
-        _connection = connection;
-        _isolation = isolation;
+        Server = server;
+        Connection = connection;
+        Isolation = isolation;
     }
 
     /// <summary>
@@ -68,20 +79,20 @@ internal sealed class PgTransaction
         ArgumentNullException.ThrowIfNull(read);
 
         var begin =
-            _isolation == PgIsolation.RepeatableReadReadOnly
+            Isolation == PgIsolation.RepeatableReadReadOnly
                 ? BeginRepeatableReadReadOnly
                 : BeginReadCommitted;
 
         var result = await PgServer
             .RunBatchAsync(
-                _connection,
-                [begin, _server.Timeouts, .. statements],
+                Connection,
+                [begin, Server.Timeouts, .. statements],
                 PgServer.SkipTimeouts(read),
                 cancellationToken
             )
             .ConfigureAwait(false);
 
-        if (_server.AfterFirstBatch is { } afterFirstBatch)
+        if (Server.AfterFirstBatch is { } afterFirstBatch)
         {
             await afterFirstBatch(cancellationToken).ConfigureAwait(false);
         }
@@ -106,7 +117,7 @@ internal sealed class PgTransaction
         ArgumentNullException.ThrowIfNull(statements);
         ArgumentNullException.ThrowIfNull(read);
 
-        return PgServer.RunBatchAsync(_connection, statements, read, cancellationToken);
+        return PgServer.RunBatchAsync(Connection, statements, read, cancellationToken);
     }
 
     /// <summary>
@@ -147,7 +158,7 @@ internal sealed class PgTransaction
 
         CommitSent = true;
         var result = await PgServer
-            .RunBatchAsync(_connection, [.. statements, Commit], read, cancellationToken)
+            .RunBatchAsync(Connection, [.. statements, Commit], read, cancellationToken)
             .ConfigureAwait(false);
 
         Completed = true;
@@ -163,7 +174,7 @@ internal sealed class PgTransaction
     {
         await PgServer
             .RunBatchAsync(
-                _connection,
+                Connection,
                 [Rollback],
                 static (_, _) => ValueTask.FromResult(true),
                 cancellationToken

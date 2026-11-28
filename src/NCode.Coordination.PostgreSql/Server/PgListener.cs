@@ -38,14 +38,6 @@ internal sealed class PgListener(
     /// <summary>How long the loop waits before it connects again.</summary>
     private static readonly TimeSpan ReconnectDelay = TimeSpan.FromSeconds(1);
 
-    private readonly Lock _gate = new();
-    private readonly Dictionary<string, int> _references = new(StringComparer.Ordinal);
-    private readonly Queue<PgListenerRequest> _requests = new();
-    private readonly CancellationTokenSource _stop = new();
-    private Task? _loop;
-    private bool _disposed;
-    private bool _connectedOnce;
-    private DateTime? _lastStartTime;
     private long _lastTraffic;
     private volatile bool _hasSeenAnotherServer;
 
@@ -61,6 +53,30 @@ internal sealed class PgListener(
         identityChanged ?? throw new ArgumentNullException(nameof(identityChanged));
 
     private TimeProvider Time { get; } = time ?? throw new ArgumentNullException(nameof(time));
+
+    /// <summary>Gets the lock that guards the references, the requests, the loop and the disposed flag.</summary>
+    private Lock Gate { get; } = new();
+
+    /// <summary>Gets the number of references to each listened channel.</summary>
+    private Dictionary<string, int> References { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>Gets the requests that the loop has yet to send.</summary>
+    private Queue<PgListenerRequest> Requests { get; } = new();
+
+    /// <summary>Gets the source of the token that ends the loop.</summary>
+    private CancellationTokenSource Cancellation { get; } = new();
+
+    /// <summary>Gets or sets the task of the loop, or null when it hasn't started.</summary>
+    private Task? Loop { get; set; }
+
+    /// <summary>Gets or sets a value that says whether the listener is disposed.</summary>
+    private bool Disposed { get; set; }
+
+    /// <summary>Gets or sets a value that says whether a connection has listened before.</summary>
+    private bool ConnectedOnce { get; set; }
+
+    /// <summary>Gets or sets the start time that the last connection's server reported.</summary>
+    private DateTime? LastStartTime { get; set; }
 
     /// <summary>
     /// Gets a value that says whether a connection has reached a server that started at another time than the
@@ -91,13 +107,13 @@ internal sealed class PgListener(
         cancellationToken.ThrowIfCancellationRequested();
 
         var waiter = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        lock (_gate)
+        lock (Gate)
         {
-            ObjectDisposedException.ThrowIf(_disposed, this);
+            ObjectDisposedException.ThrowIf(Disposed, this);
 
-            _references[channel] = _references.GetValueOrDefault(channel) + 1;
-            _requests.Enqueue(new PgListenerRequest($"LISTEN \"{channel}\"", waiter));
-            _loop ??= Task.Run(() => RunAsync(_stop.Token), CancellationToken.None);
+            References[channel] = References.GetValueOrDefault(channel) + 1;
+            Requests.Enqueue(new PgListenerRequest($"LISTEN \"{channel}\"", waiter));
+            Loop ??= Task.Run(() => RunAsync(Cancellation.Token), CancellationToken.None);
         }
 
         try
@@ -119,21 +135,21 @@ internal sealed class PgListener(
     {
         ArgumentNullException.ThrowIfNull(channel);
 
-        lock (_gate)
+        lock (Gate)
         {
-            if (_disposed || !_references.TryGetValue(channel, out var count))
+            if (Disposed || !References.TryGetValue(channel, out var count))
             {
                 return;
             }
 
             if (count > 1)
             {
-                _references[channel] = count - 1;
+                References[channel] = count - 1;
                 return;
             }
 
-            _references.Remove(channel);
-            _requests.Enqueue(new PgListenerRequest($"UNLISTEN \"{channel}\"", null));
+            References.Remove(channel);
+            Requests.Enqueue(new PgListenerRequest($"UNLISTEN \"{channel}\"", null));
         }
     }
 
@@ -146,7 +162,7 @@ internal sealed class PgListener(
             await loop.ConfigureAwait(false);
         }
 
-        _stop.Dispose();
+        Cancellation.Dispose();
     }
 
     /// <inheritdoc />
@@ -163,19 +179,19 @@ internal sealed class PgListener(
     /// <returns>The loop's task, or null when it never started or the listener was disposed before.</returns>
     private Task? Stop()
     {
-        lock (_gate)
+        lock (Gate)
         {
-            if (_disposed)
+            if (Disposed)
             {
                 return null;
             }
 
-            _disposed = true;
+            Disposed = true;
         }
 
-        _stop.Cancel();
+        Cancellation.Cancel();
         FailWaiters(new ObjectDisposedException(nameof(PgListener)));
-        return _loop;
+        return Loop;
     }
 
     /// <summary>
@@ -204,7 +220,7 @@ internal sealed class PgListener(
                     Source.ClearPool();
                 }
 
-                if (!_connectedOnce)
+                if (!ConnectedOnce)
                 {
                     FailWaiters(Unavailable(e));
                 }
@@ -251,8 +267,8 @@ internal sealed class PgListener(
             var result = await command.ExecuteScalarAsync(stop).ConfigureAwait(false);
             if (result is DateTime startTime)
             {
-                var changed = _lastStartTime is { } last && last != startTime;
-                _lastStartTime = startTime;
+                var changed = LastStartTime is { } last && last != startTime;
+                LastStartTime = startTime;
                 if (changed)
                 {
                     _hasSeenAnotherServer = true;
@@ -262,9 +278,9 @@ internal sealed class PgListener(
         }
 
         string[] channels;
-        lock (_gate)
+        lock (Gate)
         {
-            channels = [.. _references.Keys];
+            channels = [.. References.Keys];
         }
 
         foreach (var channel in channels)
@@ -272,8 +288,8 @@ internal sealed class PgListener(
             await ExecuteAsync(connection, $"LISTEN \"{channel}\"", stop).ConfigureAwait(false);
         }
 
-        var wasConnected = _connectedOnce;
-        _connectedOnce = true;
+        var wasConnected = ConnectedOnce;
+        ConnectedOnce = true;
         if (wasConnected)
         {
             Reconnected();
@@ -313,9 +329,9 @@ internal sealed class PgListener(
         while (true)
         {
             PgListenerRequest? request;
-            lock (_gate)
+            lock (Gate)
             {
-                if (!_requests.TryPeek(out request))
+                if (!Requests.TryPeek(out request))
                 {
                     return;
                 }
@@ -323,9 +339,9 @@ internal sealed class PgListener(
 
             await ExecuteAsync(connection, request.Sql, stop).ConfigureAwait(false);
 
-            lock (_gate)
+            lock (Gate)
             {
-                _requests.Dequeue();
+                Requests.Dequeue();
             }
 
             request.Waiter?.TrySetResult();
@@ -355,10 +371,10 @@ internal sealed class PgListener(
     private void FailWaiters(Exception exception)
     {
         PgListenerRequest[] requests;
-        lock (_gate)
+        lock (Gate)
         {
-            requests = [.. _requests];
-            _requests.Clear();
+            requests = [.. Requests];
+            Requests.Clear();
         }
 
         foreach (var request in requests)

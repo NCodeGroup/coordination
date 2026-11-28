@@ -23,8 +23,15 @@ internal sealed class PgLogFanout<TEntry>(
     /// </summary>
     public const int PageSize = 256;
 
-    private readonly Lock _gate = new();
-    private readonly List<PgLogSubscriber<TEntry>> _subscribers = [];
+    /// <summary>
+    /// Gets the lock that guards the subscribers.
+    /// </summary>
+    private Lock Gate { get; } = new();
+
+    /// <summary>
+    /// Gets the subscribers, guarded by <see cref="Gate" />.
+    /// </summary>
+    private List<PgLogSubscriber<TEntry>> Subscribers { get; } = [];
 
     // Never disposed: a SemaphoreSlim whose AvailableWaitHandle is never read holds nothing to free, and a pump may
     // still be releasing it when the log's last subscriber leaves.
@@ -44,9 +51,9 @@ internal sealed class PgLogFanout<TEntry>(
     {
         get
         {
-            lock (_gate)
+            lock (Gate)
             {
-                return _subscribers.Count;
+                return Subscribers.Count;
             }
         }
     }
@@ -61,9 +68,9 @@ internal sealed class PgLogFanout<TEntry>(
     {
         var subscriber = new PgLogSubscriber<TEntry>(cursor, resyncFirst);
 
-        lock (_gate)
+        lock (Gate)
         {
-            _subscribers.Add(subscriber);
+            Subscribers.Add(subscriber);
         }
 
         return subscriber;
@@ -78,9 +85,9 @@ internal sealed class PgLogFanout<TEntry>(
     {
         ArgumentNullException.ThrowIfNull(subscriber);
 
-        lock (_gate)
+        lock (Gate)
         {
-            return _subscribers.Remove(subscriber) && _subscribers.Count == 0;
+            return Subscribers.Remove(subscriber) && Subscribers.Count == 0;
         }
     }
 
@@ -139,9 +146,9 @@ internal sealed class PgLogFanout<TEntry>(
     /// <returns>The subscribers.</returns>
     private PgLogSubscriber<TEntry>[] Snapshot()
     {
-        lock (_gate)
+        lock (Gate)
         {
-            return [.. _subscribers];
+            return [.. Subscribers];
         }
     }
 

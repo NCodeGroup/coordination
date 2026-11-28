@@ -29,7 +29,10 @@ internal sealed class PgKeyspaces(PgServer server, PgSchemaName schema)
         SELECT id FROM {schema}.keyspaces WHERE name = $1
         """;
 
-    private readonly ConcurrentDictionary<Keyspace, long> _ids = new();
+    /// <summary>
+    /// Gets the cached id of each keyspace's row.
+    /// </summary>
+    private ConcurrentDictionary<Keyspace, long> Ids { get; } = new();
 
     /// <summary>
     /// Gets the statement that inserts a keyspace's row unless its id or its name is taken.
@@ -58,7 +61,7 @@ internal sealed class PgKeyspaces(PgServer server, PgSchemaName schema)
     {
         ArgumentNullException.ThrowIfNull(keyspace);
 
-        if (_ids.TryGetValue(keyspace, out var cached))
+        if (Ids.TryGetValue(keyspace, out var cached))
         {
             return cached;
         }
@@ -85,7 +88,7 @@ internal sealed class PgKeyspaces(PgServer server, PgSchemaName schema)
             if (ids.Length > 0)
             {
                 var id = ids[0];
-                _ids[keyspace] = id;
+                Ids[keyspace] = id;
                 return id;
             }
         }
@@ -106,7 +109,7 @@ internal sealed class PgKeyspaces(PgServer server, PgSchemaName schema)
     {
         ArgumentNullException.ThrowIfNull(keyspace);
 
-        _ids.TryRemove(keyspace, out _);
+        Ids.TryRemove(keyspace, out _);
     }
 
     /// <summary>
@@ -114,7 +117,7 @@ internal sealed class PgKeyspaces(PgServer server, PgSchemaName schema)
     /// </summary>
     public void Clear()
     {
-        _ids.Clear();
+        Ids.Clear();
     }
 
     /// <summary>

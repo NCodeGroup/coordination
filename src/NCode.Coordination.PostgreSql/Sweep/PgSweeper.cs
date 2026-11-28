@@ -14,10 +14,18 @@ internal sealed class PgSweeper(PgSweeps sweeps, TimeSpan interval, TimeProvider
     : IAsyncDisposable,
         IDisposable
 {
-    private readonly CancellationTokenSource _cancellation = new();
     private int _started;
     private int _cancelled;
-    private Task _loop = Task.CompletedTask;
+
+    /// <summary>
+    /// Gets the source of the token that ends the loop.
+    /// </summary>
+    private CancellationTokenSource Cancellation { get; } = new();
+
+    /// <summary>
+    /// Gets or sets the task of the loop.
+    /// </summary>
+    private Task Loop { get; set; } = Task.CompletedTask;
 
     /// <summary>
     /// Gets the passes to run.
@@ -39,8 +47,8 @@ internal sealed class PgSweeper(PgSweeps sweeps, TimeSpan interval, TimeProvider
             return;
         }
 
-        var token = _cancellation.Token;
-        _loop = Task.Run(() => RunAsync(token), CancellationToken.None);
+        var token = Cancellation.Token;
+        Loop = Task.Run(() => RunAsync(token), CancellationToken.None);
     }
 
     /// <inheritdoc />
@@ -50,11 +58,11 @@ internal sealed class PgSweeper(PgSweeps sweeps, TimeSpan interval, TimeProvider
 
         try
         {
-            await _loop.ConfigureAwait(false);
+            await Loop.ConfigureAwait(false);
         }
         catch (OperationCanceledException) { }
 
-        _cancellation.Dispose();
+        Cancellation.Dispose();
     }
 
     /// <inheritdoc />
@@ -67,7 +75,7 @@ internal sealed class PgSweeper(PgSweeps sweeps, TimeSpan interval, TimeProvider
     {
         if (Interlocked.Exchange(ref _cancelled, 1) == 0)
         {
-            _cancellation.Cancel();
+            Cancellation.Cancel();
         }
     }
 

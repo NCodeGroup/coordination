@@ -11,17 +11,29 @@ namespace NCode.Coordination.PostgreSql.Server;
 /// </summary>
 internal sealed class PgSource : IAsyncDisposable, IDisposable
 {
-    private readonly NpgsqlDataSource _root;
-    private readonly NpgsqlDataSource _primary;
-    private readonly bool _owned;
     private int _disposed;
 
     private PgSource(NpgsqlDataSource root, NpgsqlDataSource primary, bool owned)
     {
-        _root = root;
-        _primary = primary;
-        _owned = owned;
+        Root = root;
+        Primary = primary;
+        Owned = owned;
     }
+
+    /// <summary>
+    /// Gets the data source that holds the connection string and the pool.
+    /// </summary>
+    private NpgsqlDataSource Root { get; }
+
+    /// <summary>
+    /// Gets the data source that opens connections to the primary.
+    /// </summary>
+    private NpgsqlDataSource Primary { get; }
+
+    /// <summary>
+    /// Gets whether the source disposes its data source.
+    /// </summary>
+    private bool Owned { get; }
 
     /// <summary>
     /// Builds a data source that the source owns, from a connection string.
@@ -71,7 +83,7 @@ internal sealed class PgSource : IAsyncDisposable, IDisposable
     /// <summary>
     /// Gets the connection string of the data source.
     /// </summary>
-    public string ConnectionString => _root.ConnectionString;
+    public string ConnectionString => Root.ConnectionString;
 
     /// <summary>
     /// Opens a connection to the primary, outside any ambient transaction.
@@ -85,7 +97,7 @@ internal sealed class PgSource : IAsyncDisposable, IDisposable
             TransactionScopeAsyncFlowOption.Enabled
         );
 
-        return await _primary.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        return await Primary.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -95,24 +107,24 @@ internal sealed class PgSource : IAsyncDisposable, IDisposable
     /// </summary>
     public void ClearPool()
     {
-        _root.Clear();
+        Root.Clear();
     }
 
     /// <inheritdoc />
     public async ValueTask DisposeAsync()
     {
-        if (Interlocked.Exchange(ref _disposed, 1) == 0 && _owned)
+        if (Interlocked.Exchange(ref _disposed, 1) == 0 && Owned)
         {
-            await _root.DisposeAsync().ConfigureAwait(false);
+            await Root.DisposeAsync().ConfigureAwait(false);
         }
     }
 
     /// <inheritdoc />
     public void Dispose()
     {
-        if (Interlocked.Exchange(ref _disposed, 1) == 0 && _owned)
+        if (Interlocked.Exchange(ref _disposed, 1) == 0 && Owned)
         {
-            _root.Dispose();
+            Root.Dispose();
         }
     }
 }

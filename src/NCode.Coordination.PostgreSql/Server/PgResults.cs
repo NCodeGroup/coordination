@@ -12,7 +12,10 @@ namespace NCode.Coordination.PostgreSql.Server;
 /// <param name="reader">The reader of the batch.</param>
 internal sealed class PgResults(NpgsqlDataReader reader)
 {
-    private bool _started;
+    /// <summary>
+    /// Gets or sets whether the current result of the reader was handed out.
+    /// </summary>
+    private bool Started { get; set; }
 
     /// <summary>
     /// Reads every row of the next result: the current one on the first call, then each after it.
@@ -58,9 +61,9 @@ internal sealed class PgResults(NpgsqlDataReader reader)
 
     private async ValueTask<bool> MoveNextAsync(CancellationToken cancellationToken)
     {
-        if (!_started)
+        if (!Started)
         {
-            _started = true;
+            Started = true;
             return true;
         }
 
