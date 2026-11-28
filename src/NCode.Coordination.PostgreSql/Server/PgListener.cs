@@ -86,6 +86,22 @@ internal sealed class PgListener(
     }
 
     /// <summary>
+    /// Reads when the server started.
+    /// </summary>
+    /// <param name="connection">The open connection.</param>
+    /// <param name="stop">The token that ends the loop.</param>
+    /// <returns>The server's start time, or null when the server returned none.</returns>
+    private static async ValueTask<DateTime?> ReadStartTimeAsync(
+        NpgsqlConnection connection,
+        CancellationToken stop
+    )
+    {
+        await using var command = new NpgsqlCommand(StartTimeSql, connection);
+        var result = await command.ExecuteScalarAsync(stop).ConfigureAwait(false);
+        return result is DateTime startTime ? startTime : null;
+    }
+
+    /// <summary>
     /// Builds the failure that a waiter receives when the listener could not reach the server.
     /// </summary>
     /// <param name="exception">The failure of the connection.</param>
@@ -419,18 +435,15 @@ internal sealed class PgListener(
     /// <param name="stop">The token that ends the loop.</param>
     private async ValueTask ConnectAsync(NpgsqlConnection connection, CancellationToken stop)
     {
-        await using (var command = new NpgsqlCommand(StartTimeSql, connection))
+        var startTime = await ReadStartTimeAsync(connection, stop).ConfigureAwait(false);
+        if (startTime is { } start)
         {
-            var result = await command.ExecuteScalarAsync(stop).ConfigureAwait(false);
-            if (result is DateTime startTime)
+            var changed = LastStartTime is { } last && last != start;
+            LastStartTime = start;
+            if (changed)
             {
-                var changed = LastStartTime is { } last && last != startTime;
-                LastStartTime = startTime;
-                if (changed)
-                {
-                    Volatile.Write(ref _hasSeenAnotherServer, true);
-                    Events.IdentityChanged();
-                }
+                Volatile.Write(ref _hasSeenAnotherServer, true);
+                Events.IdentityChanged();
             }
         }
 

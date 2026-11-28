@@ -125,6 +125,8 @@ internal sealed class PgSweeper(
         {
             Cancel();
             Timer?.Dispose();
+            // The loop's token is already cancelled, and a cancelled token still reads as cancelled once its
+            // source is disposed, so the loop's catch ends it quietly.
             Cancellation.Dispose();
         }
     }
