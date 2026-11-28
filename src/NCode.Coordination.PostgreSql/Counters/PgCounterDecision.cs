@@ -10,7 +10,7 @@ namespace NCode.Coordination.PostgreSql.Counters;
 /// </summary>
 /// <param name="Result">The result of the batch, or null when a sum would pass the largest count.</param>
 /// <param name="Writes">The counters to write, which are empty when <paramref name="Result"/> is null.</param>
-internal sealed record PgCounterDecision(
+internal readonly record struct PgCounterDecision(
     CounterBatchResult? Result,
     ImmutableArray<PgCounterWrite> Writes
 )

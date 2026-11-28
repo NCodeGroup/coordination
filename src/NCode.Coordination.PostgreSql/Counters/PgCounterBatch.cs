@@ -10,7 +10,7 @@ namespace NCode.Coordination.PostgreSql.Counters;
 /// </summary>
 /// <param name="Increments">The increments, in the order the caller gave them.</param>
 /// <param name="Entries">The entry of each distinct key, in key order, which is the order the rows are locked in.</param>
-internal sealed record PgCounterBatch(
+internal readonly record struct PgCounterBatch(
     ImmutableArray<CounterIncrement> Increments,
     ImmutableArray<PgCounterEntry> Entries
 );

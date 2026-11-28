@@ -170,8 +170,8 @@ internal sealed class PgTransactionService(PgRecordTable table) : ITransactionSe
     private static PgTransactionRows ClassifyRows(PgChangeStart start)
     {
         var live = new Dictionary<CoordinationKey, PgRecordRow>(start.Rows.Count);
-        var replaceable = new Dictionary<CoordinationKey, PgRecordRow>(start.Rows.Count);
-        var expired = new List<PgRecordRow>(start.Rows.Count);
+        var replaceable = new Dictionary<CoordinationKey, PgRecordRow>();
+        var expired = new List<PgRecordRow>();
 
         foreach (var (key, row) in start.Rows)
         {
