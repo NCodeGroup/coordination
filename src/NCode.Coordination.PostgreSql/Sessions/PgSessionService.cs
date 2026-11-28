@@ -300,8 +300,9 @@ internal sealed class PgSessionService(PgRecordTable table, IPgTokens tokens) : 
         CancellationToken cancellationToken
     )
     {
+        var scope = new PgRecordScope(id, [], [session.Value]);
         var start = await Table
-            .BeginAsync(transaction, id, [], [session.Value], cancellationToken)
+            .BeginAsync(transaction, scope, cancellationToken)
             .ConfigureAwait(false);
 
         var change = start.Change;

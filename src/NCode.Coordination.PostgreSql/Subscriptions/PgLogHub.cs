@@ -87,7 +87,8 @@ internal sealed class PgLogHub : IAsyncDisposable, IDisposable
         Keyspaces = keyspaces ?? throw new ArgumentNullException(nameof(keyspaces));
         Settings = settings ?? throw new ArgumentNullException(nameof(settings));
         Time = time ?? throw new ArgumentNullException(nameof(time));
-        Listener = new PgListener(source, OnNotified, OnReconnected, OnIdentityChanged, time);
+        var events = new PgListenerEvents(OnNotified, OnReconnected, OnIdentityChanged);
+        Listener = new PgListener(source, events, time);
     }
 
     /// <summary>

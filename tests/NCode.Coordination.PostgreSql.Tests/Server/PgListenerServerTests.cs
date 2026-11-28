@@ -86,16 +86,16 @@ public sealed class PgListenerServerTests(PgServers servers)
         var channel = NewChannel();
         var received = Channel.CreateUnbounded<(string Channel, string Payload)>();
 
+        var events = new PgListenerEvents(
+            (c, p) => received.Writer.TryWrite((c, p)),
+            () => { },
+            () => { }
+        );
+
         await using var source = PgSource.FromConnectionString(
             NewListenerConnectionString("listener-" + Guid.NewGuid().ToString("N"))
         );
-        await using var listener = new PgListener(
-            source,
-            (c, p) => received.Writer.TryWrite((c, p)),
-            () => { },
-            () => { },
-            TimeProvider.System
-        );
+        await using var listener = new PgListener(source, events, TimeProvider.System);
 
         await listener.ListenAsync(channel, cancellationToken);
         await NotifyAsync(channel, "c:7", cancellationToken);
@@ -117,16 +117,16 @@ public sealed class PgListenerServerTests(PgServers servers)
         var sentinel = NewChannel();
         var received = Channel.CreateUnbounded<(string Channel, string Payload)>();
 
+        var events = new PgListenerEvents(
+            (c, p) => received.Writer.TryWrite((c, p)),
+            () => { },
+            () => { }
+        );
+
         await using var source = PgSource.FromConnectionString(
             NewListenerConnectionString("listener-" + Guid.NewGuid().ToString("N"))
         );
-        await using var listener = new PgListener(
-            source,
-            (c, p) => received.Writer.TryWrite((c, p)),
-            () => { },
-            () => { },
-            TimeProvider.System
-        );
+        await using var listener = new PgListener(source, events, TimeProvider.System);
 
         await listener.ListenAsync(channel, cancellationToken);
         await NotifyAsync(channel, "c:1", cancellationToken);
@@ -162,16 +162,16 @@ public sealed class PgListenerServerTests(PgServers servers)
         );
         var identityChanges = 0;
 
+        var events = new PgListenerEvents(
+            (c, p) => received.Writer.TryWrite((c, p)),
+            () => reconnected.TrySetResult(),
+            () => Interlocked.Increment(ref identityChanges)
+        );
+
         await using var source = PgSource.FromConnectionString(
             NewListenerConnectionString(applicationName)
         );
-        await using var listener = new PgListener(
-            source,
-            (c, p) => received.Writer.TryWrite((c, p)),
-            () => reconnected.TrySetResult(),
-            () => Interlocked.Increment(ref identityChanges),
-            TimeProvider.System
-        );
+        await using var listener = new PgListener(source, events, TimeProvider.System);
 
         await listener.ListenAsync(channel, cancellationToken);
         await TerminateAsync(applicationName, cancellationToken);

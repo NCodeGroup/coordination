@@ -57,4 +57,19 @@ internal sealed record PgChangeStart(
 
         return ended.ToImmutable();
     }
+
+    /// <summary>
+    /// Tells whether a lifetime binds a record to a session that has ended or was never opened in the keyspace.
+    /// </summary>
+    /// <param name="lifetime">The lifetime.</param>
+    /// <param name="session">The id of the lifetime's session in the keyspace, or null when it has none there.</param>
+    /// <param name="ended">The sessions that the transaction ended because they had expired.</param>
+    /// <returns>True when the lifetime binds to a session that is not live.</returns>
+    public bool BindsToEndedSession(
+        RecordLifetime lifetime,
+        string? session,
+        ImmutableHashSet<string> ended
+    ) =>
+        lifetime.Session is not null
+        && (session is null || ended.Contains(session) || !Sessions.ContainsKey(session));
 }

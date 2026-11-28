@@ -527,29 +527,25 @@ internal sealed class PgRecordTable(PgServer server, PgKeyspaces keyspaces, PgSe
     /// its revision, reads the server's instant, and reads the rows that the keys hold.
     /// </summary>
     /// <param name="transaction">The transaction, which has not run a batch.</param>
-    /// <param name="keyspaceId">The keyspace's id.</param>
-    /// <param name="keys">The keys whose rows to read; a key that is listed twice is read once.</param>
-    /// <param name="sessions">The ids of the sessions that the writes bind to, whose rows to read.</param>
+    /// <param name="scope">The keyspace, the keys whose rows to read and the sessions whose rows to read.</param>
     /// <param name="cancellationToken">The token that cancels the call.</param>
     /// <returns>The change, the rows of the keys that exist, and the deadlines of the sessions that exist.</returns>
-    /// <exception cref="ArgumentNullException">The transaction, the keys or the sessions are null.</exception>
+    /// <exception cref="ArgumentNullException">The transaction or the scope is null.</exception>
     /// <exception cref="PgKeyspaceMissingException">The keyspace's row does not exist.</exception>
     public async ValueTask<PgChangeStart> BeginAsync(
         PgTransaction transaction,
-        long keyspaceId,
-        IReadOnlyList<CoordinationKey> keys,
-        IReadOnlyCollection<string> sessions,
+        PgRecordScope scope,
         CancellationToken cancellationToken
     )
     {
         ArgumentNullException.ThrowIfNull(transaction);
-        ArgumentNullException.ThrowIfNull(keys);
-        ArgumentNullException.ThrowIfNull(sessions);
+        ArgumentNullException.ThrowIfNull(scope);
 
-        var distinct = keys.Distinct().ToArray();
+        var keyspaceId = scope.KeyspaceId;
+        var distinct = scope.Keys.Distinct().ToArray();
         var indexes = distinct.Select(PgKeys.Index).ToArray();
         var depths = distinct.Select(key => (short)key.PartitionDepth).ToArray();
-        var sessionIds = sessions.Distinct(StringComparer.Ordinal).ToArray();
+        var sessionIds = scope.Sessions.Distinct(StringComparer.Ordinal).ToArray();
         var statements = StartStatements(keyspaceId, indexes, depths, sessionIds);
 
         var read = await transaction

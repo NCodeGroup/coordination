@@ -10,7 +10,8 @@ public sealed class PgListenerTests
 
     private static PgListener CreateListener(PgSource source)
     {
-        return new PgListener(source, (_, _) => { }, () => { }, () => { }, TimeProvider.System);
+        var events = new PgListenerEvents((_, _) => { }, () => { }, () => { });
+        return new PgListener(source, events, TimeProvider.System);
     }
 
     #region ListenAsync Tests

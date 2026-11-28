@@ -61,23 +61,6 @@ internal sealed class PgRecordService(PgRecordTable table) : IRecordService
         lifetime.Session is { } session && session.Keyspace == key.Keyspace ? session.Value : null;
 
     /// <summary>
-    /// Tells whether a lifetime binds a record to a session that has ended or was never opened in the keyspace.
-    /// </summary>
-    /// <param name="start">What the transaction's first batch read.</param>
-    /// <param name="ended">The sessions that the transaction ended because they had expired.</param>
-    /// <param name="lifetime">The lifetime.</param>
-    /// <param name="session">The id that <see cref="SessionOf"/> returned for the lifetime.</param>
-    /// <returns>True when the lifetime binds to a session that is not live.</returns>
-    private static bool BindsToEndedSession(
-        PgChangeStart start,
-        ImmutableHashSet<string> ended,
-        RecordLifetime lifetime,
-        string? session
-    ) =>
-        lifetime.Session is not null
-        && (session is null || ended.Contains(session) || !start.Sessions.ContainsKey(session));
-
-    /// <summary>
     /// Gets the session that a row that is about to be replaced was bound to, when that session has ended.
     /// </summary>
     /// <param name="row">The row, or null when the key has none.</param>
@@ -473,19 +456,19 @@ internal sealed class PgRecordService(PgRecordTable table) : IRecordService
         CancellationToken cancellationToken
     )
     {
+        var scope = new PgRecordScope(id, [request.Key], request.Sessions);
         var start = await Table
-            .BeginAsync(transaction, id, [request.Key], request.Sessions, cancellationToken)
+            .BeginAsync(transaction, scope, cancellationToken)
             .ConfigureAwait(false);
 
         var change = start.Change;
         var ended = start.EndExpiredSessions();
         start.Rows.TryGetValue(request.Key, out var row);
         var liveRow = TakeLiveRow(change, row);
-        var bindsToEndedSession = BindsToEndedSession(
-            start,
-            ended,
+        var bindsToEndedSession = start.BindsToEndedSession(
             request.Lifetime,
-            request.Session
+            request.Session,
+            ended
         );
 
         var result = DecideCreate(request, change, row, liveRow, bindsToEndedSession);
@@ -585,19 +568,19 @@ internal sealed class PgRecordService(PgRecordTable table) : IRecordService
         CancellationToken cancellationToken
     )
     {
+        var scope = new PgRecordScope(id, [request.Key], request.Sessions);
         var start = await Table
-            .BeginAsync(transaction, id, [request.Key], request.Sessions, cancellationToken)
+            .BeginAsync(transaction, scope, cancellationToken)
             .ConfigureAwait(false);
 
         var change = start.Change;
         var ended = start.EndExpiredSessions();
         start.Rows.TryGetValue(request.Key, out var row);
         var liveRow = TakeLiveRow(change, row);
-        var bindsToEndedSession = BindsToEndedSession(
-            start,
-            ended,
+        var bindsToEndedSession = start.BindsToEndedSession(
             request.Lifetime,
-            request.Session
+            request.Session,
+            ended
         );
 
         var result = DecideSwap(request, change, liveRow, expectedRevision, bindsToEndedSession);
@@ -677,8 +660,9 @@ internal sealed class PgRecordService(PgRecordTable table) : IRecordService
         CancellationToken cancellationToken
     )
     {
+        var scope = new PgRecordScope(id, [key], []);
         var start = await Table
-            .BeginAsync(transaction, id, [key], [], cancellationToken)
+            .BeginAsync(transaction, scope, cancellationToken)
             .ConfigureAwait(false);
 
         var change = start.Change;
@@ -748,8 +732,9 @@ internal sealed class PgRecordService(PgRecordTable table) : IRecordService
         CancellationToken cancellationToken
     )
     {
+        var scope = new PgRecordScope(id, [key], []);
         var start = await Table
-            .BeginAsync(transaction, id, [key], [], cancellationToken)
+            .BeginAsync(transaction, scope, cancellationToken)
             .ConfigureAwait(false);
 
         var change = start.Change;

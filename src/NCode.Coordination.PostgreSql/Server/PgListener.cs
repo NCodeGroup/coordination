@@ -11,17 +11,11 @@ namespace NCode.Coordination.PostgreSql.Server;
 /// and says so.
 /// </summary>
 /// <param name="source">The source of the connection.</param>
-/// <param name="notified">Called with the channel and the payload of every notification.</param>
-/// <param name="reconnected">Called after every connection but the first has listened to every referenced channel.</param>
-/// <param name="identityChanged">Called when a connection reaches a server that started at another time.</param>
+/// <param name="events">What the listener calls with each notification, after each reconnect and when the server's start time changed.</param>
 /// <param name="time">The clock that times the pings and the waits before a new connection.</param>
-internal sealed class PgListener(
-    PgSource source,
-    Action<string, string> notified,
-    Action reconnected,
-    Action identityChanged,
-    TimeProvider time
-) : IAsyncDisposable, IDisposable
+internal sealed class PgListener(PgSource source, PgListenerEvents events, TimeProvider time)
+    : IAsyncDisposable,
+        IDisposable
 {
     /// <summary>
     /// The statement that reads when the server started.
@@ -102,14 +96,8 @@ internal sealed class PgListener(
 
     private PgSource Source { get; } = source ?? throw new ArgumentNullException(nameof(source));
 
-    private Action<string, string> Notified { get; } =
-        notified ?? throw new ArgumentNullException(nameof(notified));
-
-    private Action Reconnected { get; } =
-        reconnected ?? throw new ArgumentNullException(nameof(reconnected));
-
-    private Action IdentityChanged { get; } =
-        identityChanged ?? throw new ArgumentNullException(nameof(identityChanged));
+    private PgListenerEvents Events { get; } =
+        events ?? throw new ArgumentNullException(nameof(events));
 
     private TimeProvider Time { get; } = time ?? throw new ArgumentNullException(nameof(time));
 
@@ -385,7 +373,7 @@ internal sealed class PgListener(
                 if (changed)
                 {
                     _hasSeenAnotherServer = true;
-                    IdentityChanged();
+                    Events.IdentityChanged();
                 }
             }
         }
@@ -405,7 +393,7 @@ internal sealed class PgListener(
         ConnectedOnce = true;
         if (wasConnected)
         {
-            Reconnected();
+            Events.Reconnected();
         }
     }
 
@@ -488,7 +476,7 @@ internal sealed class PgListener(
     private void OnNotification(object sender, NpgsqlNotificationEventArgs e)
     {
         Touch();
-        Notified(e.Channel, e.Payload);
+        Events.Notified(e.Channel, e.Payload);
     }
 
     /// <summary>

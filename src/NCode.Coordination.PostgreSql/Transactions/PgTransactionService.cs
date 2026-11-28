@@ -302,8 +302,9 @@ internal sealed class PgTransactionService(PgRecordTable table) : ITransactionSe
     )
     {
         var transaction = request.Transaction;
+        var scope = new PgRecordScope(id, request.Keys, request.Sessions);
         var start = await Table
-            .BeginAsync(pgTransaction, id, request.Keys, request.Sessions, cancellationToken)
+            .BeginAsync(pgTransaction, scope, cancellationToken)
             .ConfigureAwait(false);
 
         var change = start.Change;
