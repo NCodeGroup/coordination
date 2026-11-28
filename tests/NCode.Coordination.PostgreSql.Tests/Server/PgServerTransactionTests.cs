@@ -12,9 +12,9 @@ public sealed class PgServerTransactionTests(PgServers servers)
     private static string NewName(string prefix) =>
         prefix + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
 
-    private static async Task WithTableAsync(
+    private static async ValueTask WithTableAsync(
         string adminConnectionString,
-        Func<string, Task> test,
+        Func<string, ValueTask> test,
         CancellationToken cancellationToken
     )
     {
@@ -39,7 +39,7 @@ public sealed class PgServerTransactionTests(PgServers servers)
         }
     }
 
-    private static async Task<long> CountAsync(
+    private static async ValueTask<long> CountAsync(
         string connectionString,
         string schema,
         CancellationToken cancellationToken
@@ -53,7 +53,7 @@ public sealed class PgServerTransactionTests(PgServers servers)
         return Convert.ToInt64(scalar, CultureInfo.InvariantCulture);
     }
 
-    private static async Task TerminateAsync(
+    private static async ValueTask TerminateAsync(
         string adminConnectionString,
         string applicationName,
         CancellationToken cancellationToken

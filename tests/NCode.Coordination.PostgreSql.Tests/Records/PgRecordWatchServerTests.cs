@@ -21,7 +21,7 @@ public sealed class PgRecordWatchServerTests(PgServers servers)
 
     private static TimeToLive OneMinute { get; } = new(OneMinuteSpan);
 
-    private static async Task<T> NextAsync<T>(
+    private static async ValueTask<T> NextAsync<T>(
         IAsyncEnumerator<T> enumerator,
         TimeSpan timeout,
         CancellationToken cancellationToken
@@ -32,12 +32,12 @@ public sealed class PgRecordWatchServerTests(PgServers servers)
         return enumerator.Current;
     }
 
-    private static Task<RecordChange> NextAsync(
+    private static ValueTask<RecordChange> NextAsync(
         IAsyncEnumerator<RecordChange> enumerator,
         CancellationToken cancellationToken
     ) => NextAsync(enumerator, Patience, cancellationToken);
 
-    private static async Task<Revision> CreateAsync(
+    private static async ValueTask<Revision> CreateAsync(
         Context context,
         CoordinationKey key,
         byte value,
@@ -57,7 +57,7 @@ public sealed class PgRecordWatchServerTests(PgServers servers)
         return result.Revision;
     }
 
-    private static async Task<Revision> SwapAsync(
+    private static async ValueTask<Revision> SwapAsync(
         Context context,
         CoordinationKey key,
         Revision expected,
@@ -101,7 +101,7 @@ public sealed class PgRecordWatchServerTests(PgServers servers)
             return Assert.IsAssignableFrom<T>(service);
         }
 
-        public async Task<long> LogRemovedAsync(CancellationToken cancellationToken)
+        public async ValueTask<long> LogRemovedAsync(CancellationToken cancellationToken)
         {
             await using var connection = new NpgsqlConnection(AdminConnectionString);
             await connection.OpenAsync(cancellationToken);
@@ -115,7 +115,7 @@ public sealed class PgRecordWatchServerTests(PgServers servers)
             return Assert.IsType<long>(scalar);
         }
 
-        public async Task InsertMessageWithoutWakeUpAsync(
+        public async ValueTask InsertMessageWithoutWakeUpAsync(
             CoordinationKey topic,
             byte[] payload,
             CancellationToken cancellationToken
@@ -178,8 +178,8 @@ public sealed class PgRecordWatchServerTests(PgServers servers)
         }
     }
 
-    private async Task WithProviderAsync(
-        Func<Context, Task> test,
+    private async ValueTask WithProviderAsync(
+        Func<Context, ValueTask> test,
         CancellationToken cancellationToken,
         TimeSpan? logRetention = null
     )

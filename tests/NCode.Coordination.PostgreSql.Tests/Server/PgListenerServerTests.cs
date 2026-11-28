@@ -19,7 +19,7 @@ public sealed class PgListenerServerTests(PgServers servers)
         return $"ncode.{hex[..8]}.{hex[8..24]}";
     }
 
-    private static async Task<(string Channel, string Payload)> ReadAsync(
+    private static async ValueTask<(string Channel, string Payload)> ReadAsync(
         ChannelReader<(string Channel, string Payload)> reader,
         CancellationToken cancellationToken
     )
@@ -38,7 +38,7 @@ public sealed class PgListenerServerTests(PgServers servers)
         return builder.ConnectionString;
     }
 
-    private async Task NotifyAsync(
+    private async ValueTask NotifyAsync(
         string channel,
         string payload,
         CancellationToken cancellationToken
@@ -58,7 +58,10 @@ public sealed class PgListenerServerTests(PgServers servers)
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
-    private async Task TerminateAsync(string applicationName, CancellationToken cancellationToken)
+    private async ValueTask TerminateAsync(
+        string applicationName,
+        CancellationToken cancellationToken
+    )
     {
         await using var connection = new NpgsqlConnection(servers.Admin19);
         await connection.OpenAsync(cancellationToken);

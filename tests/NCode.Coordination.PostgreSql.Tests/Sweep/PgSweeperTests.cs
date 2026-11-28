@@ -67,19 +67,19 @@ public sealed class PgSweeperTests
         }
     }
 
-    private static Task WithSweeperAsync(
+    private static ValueTask WithSweeperAsync(
         bool failFirst,
-        Func<PgSweeper, CountingTimeProvider, CountingSweep, Task> test
+        Func<PgSweeper, CountingTimeProvider, CountingSweep, ValueTask> test
     )
     {
         var logger = NullLogger<PgSweeper>.Instance;
         return WithSweeperAsync(failFirst, logger, test);
     }
 
-    private static async Task WithSweeperAsync(
+    private static async ValueTask WithSweeperAsync(
         bool failFirst,
         ILogger<PgSweeper> logger,
-        Func<PgSweeper, CountingTimeProvider, CountingSweep, Task> test
+        Func<PgSweeper, CountingTimeProvider, CountingSweep, ValueTask> test
     )
     {
         var sweep = new CountingSweep(failFirst);
@@ -100,7 +100,7 @@ public sealed class PgSweeperTests
             sweeper.Start();
 
             Assert.Equal(1, time.Timers);
-            return Task.CompletedTask;
+            return ValueTask.CompletedTask;
         });
     }
 

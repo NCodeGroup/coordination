@@ -7,7 +7,7 @@ namespace NCode.Coordination.PostgreSql.Tests.Servers;
 
 public sealed class PgRestartableServerTests
 {
-    private static async Task<string> ReadAsync(
+    private static async ValueTask<string> ReadAsync(
         string connectionString,
         CancellationToken cancellationToken
     )

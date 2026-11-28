@@ -19,7 +19,7 @@ public sealed class PgLogHubServerTests(PgServers servers)
 
     private sealed record TestEntry(long Number) : IPgLogEntry;
 
-    private async Task<IReadOnlyList<FakeLogRecord>> DeliverAfterFailedReadAsync(
+    private async ValueTask<IReadOnlyList<FakeLogRecord>> DeliverAfterFailedReadAsync(
         Exception failure,
         CancellationToken cancellationToken
     )

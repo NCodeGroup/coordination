@@ -24,7 +24,7 @@ internal static class PgActivity
     /// <param name="wait">What to wait for.</param>
     /// <param name="cancellationToken">A token that cancels the wait.</param>
     /// <returns>A task that completes when the wait is over.</returns>
-    public static async Task WaitForBackendsAsync(
+    public static async ValueTask WaitForBackendsAsync(
         string adminConnectionString,
         PgBackendWait wait,
         CancellationToken cancellationToken
@@ -55,7 +55,7 @@ internal static class PgActivity
     /// <param name="applicationName">The <c>Application Name</c> of the backends.</param>
     /// <param name="cancellationToken">A token that cancels the wait.</param>
     /// <returns>A task that completes when no backend is left.</returns>
-    public static Task WaitForNoBackendAsync(
+    public static ValueTask WaitForNoBackendAsync(
         string adminConnectionString,
         string applicationName,
         CancellationToken cancellationToken
@@ -78,7 +78,7 @@ internal static class PgActivity
     /// <param name="applicationName">The <c>Application Name</c> of the backends.</param>
     /// <param name="cancellationToken">A token that cancels the wait.</param>
     /// <returns>A task that completes when a backend is sleeping.</returns>
-    public static Task WaitForSleepingBackendAsync(
+    public static ValueTask WaitForSleepingBackendAsync(
         string adminConnectionString,
         string applicationName,
         CancellationToken cancellationToken
@@ -101,7 +101,7 @@ internal static class PgActivity
     /// <param name="schemaName">The name of the schema that the waiting statement's text contains.</param>
     /// <param name="cancellationToken">A token that cancels the wait.</param>
     /// <returns>A task that completes when a statement waits for a lock.</returns>
-    public static Task WaitForLockWaitAsync(
+    public static ValueTask WaitForLockWaitAsync(
         string adminConnectionString,
         string schemaName,
         CancellationToken cancellationToken
@@ -117,7 +117,7 @@ internal static class PgActivity
         return WaitForBackendsAsync(adminConnectionString, wait, cancellationToken);
     }
 
-    private static async Task<long> CountAsync(
+    private static async ValueTask<long> CountAsync(
         NpgsqlConnection connection,
         PgBackendWait wait,
         CancellationToken cancellationToken

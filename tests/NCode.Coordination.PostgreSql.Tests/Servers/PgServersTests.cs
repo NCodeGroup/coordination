@@ -8,7 +8,7 @@ namespace NCode.Coordination.PostgreSql.Tests.Servers;
 
 public sealed class PgServersTests(PgServers servers)
 {
-    private static async Task<object?> ScalarAsync(
+    private static async ValueTask<object?> ScalarAsync(
         string connectionString,
         string sql,
         CancellationToken cancellationToken
@@ -21,7 +21,7 @@ public sealed class PgServersTests(PgServers servers)
         return await command.ExecuteScalarAsync(cancellationToken);
     }
 
-    private static async Task<string> ShowAsync(
+    private static async ValueTask<string> ShowAsync(
         string connectionString,
         string setting,
         CancellationToken cancellationToken
@@ -32,7 +32,7 @@ public sealed class PgServersTests(PgServers servers)
         return Assert.IsType<string>(value);
     }
 
-    private static async Task<int> MajorVersionAsync(
+    private static async ValueTask<int> MajorVersionAsync(
         string connectionString,
         CancellationToken cancellationToken
     )

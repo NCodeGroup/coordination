@@ -51,15 +51,13 @@ public sealed class PgSweepsTests(PgServers servers)
             return Keyspace.CreateKey(name);
         }
 
-        public Task ExpireAsync(string table, CancellationToken cancellationToken) =>
-            PgServers
-                .ExpireRowsAsync(AdminConnectionString, Schema, table, cancellationToken)
-                .AsTask();
+        public ValueTask ExpireAsync(string table, CancellationToken cancellationToken) =>
+            PgServers.ExpireRowsAsync(AdminConnectionString, Schema, table, cancellationToken);
 
-        public Task<long> CountAsync(string table, CancellationToken cancellationToken) =>
+        public ValueTask<long> CountAsync(string table, CancellationToken cancellationToken) =>
             ScalarAsync("count(*)", table, cancellationToken);
 
-        public async Task<long> ScalarAsync(
+        public async ValueTask<long> ScalarAsync(
             string select,
             string from,
             CancellationToken cancellationToken
@@ -77,7 +75,7 @@ public sealed class PgSweepsTests(PgServers servers)
             return Assert.IsType<long>(scalar);
         }
 
-        public async Task RecordAsync(
+        public async ValueTask RecordAsync(
             int count,
             TimeSpan timeToLive,
             CancellationToken cancellationToken
@@ -110,7 +108,7 @@ public sealed class PgSweepsTests(PgServers servers)
         return ValueTask.FromException(failure);
     }
 
-    private static async Task RunMissingKeyspacePassAsync(
+    private static async ValueTask RunMissingKeyspacePassAsync(
         string connectionString,
         PgSchemaName schema,
         FakeLogger<PgSweeps> logger,
@@ -133,10 +131,10 @@ public sealed class PgSweepsTests(PgServers servers)
         await sweeps.RunPassAsync(pass, cancellationToken);
     }
 
-    private static async Task WithSweepsAsync(
+    private static async ValueTask WithSweepsAsync(
         string adminConnectionString,
         string connectionString,
-        Func<Context, Task> test,
+        Func<Context, ValueTask> test,
         CancellationToken cancellationToken
     )
     {
@@ -191,8 +189,10 @@ public sealed class PgSweepsTests(PgServers servers)
         }
     }
 
-    private Task WithSweepsAsync(Func<Context, Task> test, CancellationToken cancellationToken) =>
-        WithSweepsAsync(servers.Admin19, servers.PostgreSql19, test, cancellationToken);
+    private ValueTask WithSweepsAsync(
+        Func<Context, ValueTask> test,
+        CancellationToken cancellationToken
+    ) => WithSweepsAsync(servers.Admin19, servers.PostgreSql19, test, cancellationToken);
 
     #region SweepAsync Tests
 

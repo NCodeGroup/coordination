@@ -10,8 +10,8 @@ namespace NCode.Coordination.PostgreSql.Sequences.Tests;
 
 public sealed class PgSequenceServiceServerTests(PgServers servers)
 {
-    private async Task WithSequenceNearTheLargestValueAsync(
-        Func<ISequenceService, CoordinationKey, Task> test,
+    private async ValueTask WithSequenceNearTheLargestValueAsync(
+        Func<ISequenceService, CoordinationKey, ValueTask> test,
         CancellationToken cancellationToken
     )
     {

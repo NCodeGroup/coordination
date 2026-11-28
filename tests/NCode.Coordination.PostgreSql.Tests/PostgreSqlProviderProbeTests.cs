@@ -33,7 +33,7 @@ public sealed class PostgreSqlProviderProbeTests(PgServers servers)
         return new PostgreSqlProvider(source, profile, settings);
     }
 
-    private static async Task ProbeAsync(
+    private static async ValueTask ProbeAsync(
         string connectionString,
         PostgreSqlProfile profile,
         string schema,
@@ -51,7 +51,7 @@ public sealed class PostgreSqlProviderProbeTests(PgServers servers)
         await provider.ProbeAsync(cancellationToken);
     }
 
-    private static async Task<CoordinationException> ProbeFailsAsync(
+    private static async ValueTask<CoordinationException> ProbeFailsAsync(
         string connectionString,
         PostgreSqlProfile profile,
         string schema,
@@ -71,7 +71,10 @@ public sealed class PostgreSqlProviderProbeTests(PgServers servers)
         );
     }
 
-    private static async Task WithSchemaAsync(string adminConnectionString, Func<string, Task> test)
+    private static async ValueTask WithSchemaAsync(
+        string adminConnectionString,
+        Func<string, ValueTask> test
+    )
     {
         var schema = NewSchemaName();
         try
@@ -88,9 +91,9 @@ public sealed class PostgreSqlProviderProbeTests(PgServers servers)
         }
     }
 
-    private static async Task WithRoleAsync(
+    private static async ValueTask WithRoleAsync(
         string adminConnectionString,
-        Func<string, string, Task> test,
+        Func<string, string, ValueTask> test,
         CancellationToken cancellationToken
     )
     {
@@ -116,7 +119,7 @@ public sealed class PostgreSqlProviderProbeTests(PgServers servers)
         }
     }
 
-    private static async Task<CoordinationException?> ProbeFailsOrNullAsync(
+    private static async ValueTask<CoordinationException?> ProbeFailsOrNullAsync(
         string connectionString,
         string schema,
         CancellationToken cancellationToken
@@ -405,7 +408,7 @@ public sealed class PostgreSqlProviderProbeTests(PgServers servers)
 
     #endregion
 
-    private async Task<CoordinationException?> ProbeAsRoleWithGrantsAsync(
+    private async ValueTask<CoordinationException?> ProbeAsRoleWithGrantsAsync(
         string[] grants,
         CancellationToken cancellationToken
     )

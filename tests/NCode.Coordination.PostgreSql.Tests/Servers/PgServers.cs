@@ -137,7 +137,7 @@ public sealed class PgServers : IAsyncLifetime
     /// <param name="sql">The text of the command.</param>
     /// <param name="cancellationToken">A token that cancels the command.</param>
     /// <returns>The first column of the first row, or <see langword="null"/>.</returns>
-    internal static async Task<object?> ScalarAsync(
+    internal static async ValueTask<object?> ScalarAsync(
         string connectionString,
         string sql,
         CancellationToken cancellationToken

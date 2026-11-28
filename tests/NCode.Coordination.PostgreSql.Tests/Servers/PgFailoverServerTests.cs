@@ -7,7 +7,7 @@ namespace NCode.Coordination.PostgreSql.Tests.Servers;
 
 public sealed class PgFailoverServerTests
 {
-    private static async Task<string> ReadSyncStateAsync(
+    private static async ValueTask<string> ReadSyncStateAsync(
         string connectionString,
         string expected,
         CancellationToken cancellationToken

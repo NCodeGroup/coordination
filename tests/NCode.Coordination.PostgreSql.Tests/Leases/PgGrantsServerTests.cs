@@ -65,7 +65,7 @@ public sealed class PgGrantsServerTests(PgServers servers)
             return rows;
         }
 
-        public async Task<long> RevisionAsync(CancellationToken cancellationToken)
+        public async ValueTask<long> RevisionAsync(CancellationToken cancellationToken)
         {
             var revisions = await QueryAsync(
                 "SELECT revision FROM {schema}.keyspaces",
@@ -75,7 +75,7 @@ public sealed class PgGrantsServerTests(PgServers servers)
             return Assert.Single(revisions);
         }
 
-        public async Task<long> LastFencingAsync(CancellationToken cancellationToken)
+        public async ValueTask<long> LastFencingAsync(CancellationToken cancellationToken)
         {
             var lasts = await QueryAsync(
                 "SELECT last FROM {schema}.fencing",
@@ -85,7 +85,7 @@ public sealed class PgGrantsServerTests(PgServers servers)
             return Assert.Single(lasts);
         }
 
-        public async Task<int> GrantCountAsync(CancellationToken cancellationToken)
+        public async ValueTask<int> GrantCountAsync(CancellationToken cancellationToken)
         {
             var counts = await QueryAsync(
                 "SELECT count(*)::int FROM {schema}.grants",
@@ -96,8 +96,8 @@ public sealed class PgGrantsServerTests(PgServers servers)
         }
     }
 
-    private async Task WithServicesAsync(
-        Func<Context, Task> test,
+    private async ValueTask WithServicesAsync(
+        Func<Context, ValueTask> test,
         CancellationToken cancellationToken
     )
     {

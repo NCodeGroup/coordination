@@ -12,10 +12,10 @@ namespace NCode.Coordination.PostgreSql.Keys.Tests;
 
 public sealed class PgKeyspacesTests(PgServers servers) : IDisposable
 {
-    private static async Task WithKeyspacesAsync(
+    private static async ValueTask WithKeyspacesAsync(
         string connectionString,
         IPgTokens tokens,
-        Func<string, PgKeyspaces, Task> test,
+        Func<string, PgKeyspaces, ValueTask> test,
         CancellationToken cancellationToken
     )
     {
@@ -41,7 +41,7 @@ public sealed class PgKeyspacesTests(PgServers servers) : IDisposable
         }
     }
 
-    private static async Task<List<long>> ReadIdsAsync(
+    private static async ValueTask<List<long>> ReadIdsAsync(
         string connectionString,
         string schema,
         string name,

@@ -89,7 +89,7 @@ public sealed class PgRecordServiceServerTests(PgServers servers)
             return rows;
         }
 
-        public async Task<long> KeyspaceIdAsync(CancellationToken cancellationToken)
+        public async ValueTask<long> KeyspaceIdAsync(CancellationToken cancellationToken)
         {
             var ids = await QueryAsync(
                 "SELECT id FROM {schema}.keyspaces",
@@ -100,8 +100,8 @@ public sealed class PgRecordServiceServerTests(PgServers servers)
         }
     }
 
-    private async Task WithRecordsAsync(
-        Func<Context, Task> test,
+    private async ValueTask WithRecordsAsync(
+        Func<Context, ValueTask> test,
         CancellationToken cancellationToken
     )
     {

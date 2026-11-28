@@ -13,7 +13,10 @@ public sealed class PgMigrationsServerTests(PgServers servers)
     private static string NewSchemaName() =>
         "mig_" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
 
-    private static async Task WithSchemaAsync(string adminConnectionString, Func<string, Task> test)
+    private static async ValueTask WithSchemaAsync(
+        string adminConnectionString,
+        Func<string, ValueTask> test
+    )
     {
         var schema = NewSchemaName();
         try
@@ -30,7 +33,7 @@ public sealed class PgMigrationsServerTests(PgServers servers)
         }
     }
 
-    private static async Task<List<(int Version, int CompatibleFrom)>> ReadRowsAsync(
+    private static async ValueTask<List<(int Version, int CompatibleFrom)>> ReadRowsAsync(
         string connectionString,
         string schema,
         CancellationToken cancellationToken
@@ -56,7 +59,7 @@ public sealed class PgMigrationsServerTests(PgServers servers)
         return rows;
     }
 
-    private static async Task AssertEachVersionOnceAsync(
+    private static async ValueTask AssertEachVersionOnceAsync(
         string connectionString,
         string schema,
         CancellationToken cancellationToken
@@ -70,7 +73,7 @@ public sealed class PgMigrationsServerTests(PgServers servers)
         Assert.Equal(expectedVersions, actualVersions);
     }
 
-    private static async Task ApplyAsAsync(
+    private static async ValueTask ApplyAsAsync(
         string connectionString,
         string schema,
         CancellationToken cancellationToken
@@ -84,7 +87,7 @@ public sealed class PgMigrationsServerTests(PgServers servers)
         await PgMigrations.ApplyAsync(server, schemaName, cancellationToken);
     }
 
-    private static async Task<(int Version, int CompatibleFrom)> ReadVersionAsAsync(
+    private static async ValueTask<(int Version, int CompatibleFrom)> ReadVersionAsAsync(
         string connectionString,
         string schema,
         CancellationToken cancellationToken
@@ -149,7 +152,7 @@ public sealed class PgMigrationsServerTests(PgServers servers)
         {
             var range = Enumerable.Range(0, 4);
             var applies = range.Select(_ =>
-                ApplyAsAsync(servers.PostgreSql19, schema, cancellationToken)
+                ApplyAsAsync(servers.PostgreSql19, schema, cancellationToken).AsTask()
             );
             await Task.WhenAll(applies);
 

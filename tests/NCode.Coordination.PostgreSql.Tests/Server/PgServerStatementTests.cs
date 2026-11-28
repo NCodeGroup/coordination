@@ -13,9 +13,9 @@ public sealed class PgServerStatementTests(PgServers servers)
     private static string NewSchemaName() =>
         "seam_" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
 
-    private static async Task WithSchemaAsync(
+    private static async ValueTask WithSchemaAsync(
         string adminConnectionString,
-        Func<string, Task> test,
+        Func<string, ValueTask> test,
         CancellationToken cancellationToken
     )
     {
@@ -65,7 +65,7 @@ public sealed class PgServerStatementTests(PgServers servers)
         return true;
     }
 
-    private static async Task TerminateAsync(
+    private static async ValueTask TerminateAsync(
         string adminConnectionString,
         string applicationName,
         CancellationToken cancellationToken

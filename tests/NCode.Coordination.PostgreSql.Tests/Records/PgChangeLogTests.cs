@@ -32,15 +32,15 @@ public sealed class PgChangeLogTests(PgServers servers)
             return Keyspace.CreateKey(segment);
         }
 
-        public async Task<PgLogRead<PgChange>> ReadAsync(CancellationToken cancellationToken)
+        public async ValueTask<PgLogRead<PgChange>> ReadAsync(CancellationToken cancellationToken)
         {
             var id = await Keyspaces.ResolveAsync(Keyspace, cancellationToken);
             return await Log.ReadAsync(id, 0, 2_000, cancellationToken);
         }
     }
 
-    private async Task WithServicesAsync(
-        Func<Context, Task> test,
+    private async ValueTask WithServicesAsync(
+        Func<Context, ValueTask> test,
         CancellationToken cancellationToken
     )
     {
@@ -333,7 +333,7 @@ public sealed class PgChangeLogTests(PgServers servers)
         );
     }
 
-    private async Task AssertSessionEndListsEachKeyOnceInOrderAsync(
+    private async ValueTask AssertSessionEndListsEachKeyOnceInOrderAsync(
         int count,
         CancellationToken cancellationToken
     )

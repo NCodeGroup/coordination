@@ -55,7 +55,7 @@ public sealed class PgSessionServerTests(PgServers servers)
             return rows;
         }
 
-        public async Task<long> RevisionAsync(CancellationToken cancellationToken)
+        public async ValueTask<long> RevisionAsync(CancellationToken cancellationToken)
         {
             var revisions = await QueryAsync(
                 "SELECT revision FROM {schema}.keyspaces",
@@ -66,8 +66,8 @@ public sealed class PgSessionServerTests(PgServers servers)
         }
     }
 
-    private async Task WithServicesAsync(
-        Func<Context, Task> test,
+    private async ValueTask WithServicesAsync(
+        Func<Context, ValueTask> test,
         CancellationToken cancellationToken
     )
     {
