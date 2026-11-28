@@ -50,6 +50,26 @@ internal sealed class PgListener(
     private static TimeSpan ReconnectDelay { get; } = TimeSpan.FromSeconds(1);
 
     /// <summary>
+    /// Builds the statement that listens to a channel.
+    /// </summary>
+    /// <param name="channel">The channel's name.</param>
+    /// <returns>The statement's text, with the channel quoted.</returns>
+    private static string ListenSql(string channel)
+    {
+        return $"LISTEN \"{channel}\"";
+    }
+
+    /// <summary>
+    /// Builds the statement that stops listening to a channel.
+    /// </summary>
+    /// <param name="channel">The channel's name.</param>
+    /// <returns>The statement's text, with the channel quoted.</returns>
+    private static string UnlistenSql(string channel)
+    {
+        return $"UNLISTEN \"{channel}\"";
+    }
+
+    /// <summary>
     /// Runs one statement that returns no rows that matter.
     /// </summary>
     /// <param name="connection">The open connection.</param>
@@ -210,7 +230,8 @@ internal sealed class PgListener(
             ObjectDisposedException.ThrowIf(Disposed, this);
 
             References[channel] = References.GetValueOrDefault(channel) + 1;
-            var listenRequest = new PgListenerRequest($"LISTEN \"{channel}\"", waiter);
+            var listenSql = ListenSql(channel);
+            var listenRequest = new PgListenerRequest(listenSql, waiter);
             Requests.Enqueue(listenRequest);
             Loop ??= Task.Run(() => RunAsync(Cancellation.Token).AsTask(), CancellationToken.None);
         }
@@ -248,7 +269,8 @@ internal sealed class PgListener(
             }
 
             References.Remove(channel);
-            var unlistenRequest = new PgListenerRequest($"UNLISTEN \"{channel}\"", null);
+            var unlistenSql = UnlistenSql(channel);
+            var unlistenRequest = new PgListenerRequest(unlistenSql, null);
             Requests.Enqueue(unlistenRequest);
         }
     }
@@ -421,7 +443,8 @@ internal sealed class PgListener(
 
         foreach (var channel in channels)
         {
-            await ExecuteAsync(connection, $"LISTEN \"{channel}\"", stop).ConfigureAwait(false);
+            var listenSql = ListenSql(channel);
+            await ExecuteAsync(connection, listenSql, stop).ConfigureAwait(false);
         }
 
         var wasConnected = ConnectedOnce;

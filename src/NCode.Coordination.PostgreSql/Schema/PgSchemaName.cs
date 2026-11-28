@@ -18,6 +18,11 @@ internal sealed partial class PgSchemaName
     private const int MaxLength = 63;
 
     /// <summary>
+    /// The digest bytes whose 8 hex digits are <see cref="Hash"/>.
+    /// </summary>
+    private const int HashBytes = 4;
+
+    /// <summary>
     /// The placeholder that a template holds where the schema's quoted name goes.
     /// </summary>
     private const string Placeholder = "{schema}";
@@ -75,10 +80,11 @@ internal sealed partial class PgSchemaName
 
         Span<byte> digest = stackalloc byte[SHA256.HashSizeInBytes];
         SHA256.HashData(encoded, digest);
-        var prefix = digest[..4];
+        var prefix = digest[..HashBytes];
 
         Name = name;
         Quoted = "\"" + name + "\"";
+        VersionTable = $"{Quoted}.schema_version";
         Hash = Convert.ToHexStringLower(prefix);
     }
 
@@ -91,6 +97,11 @@ internal sealed partial class PgSchemaName
     /// Gets the schema's name in double quotes, as SQL text takes it.
     /// </summary>
     public string Quoted { get; }
+
+    /// <summary>
+    /// Gets the quoted name of the schema's <c>schema_version</c> table.
+    /// </summary>
+    public string VersionTable { get; }
 
     /// <summary>
     /// Gets the first 8 lowercase hex digits of the SHA-256 of the name's UTF-8 bytes.

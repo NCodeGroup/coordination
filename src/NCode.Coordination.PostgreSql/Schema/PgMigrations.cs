@@ -196,7 +196,7 @@ internal static partial class PgMigrations
         CancellationToken cancellationToken
     )
     {
-        var versionTable = schema.Quoted + ".schema_version";
+        var versionTable = schema.VersionTable;
         var existsStatement = new PgStatement(VersionTableExistsSql, versionTable);
         var exists = await transaction
             .FirstAsync([existsStatement], ReadBooleanAsync, cancellationToken)
@@ -269,7 +269,7 @@ internal static partial class PgMigrations
     )
     {
         var lockText = LockPrefix + schema.Name;
-        var versionTable = schema.Quoted + ".schema_version";
+        var versionTable = schema.VersionTable;
         var lockStatement = new PgStatement(LockSql, lockText);
         var existsStatement = new PgStatement(ExistsSql, schema.Quoted, versionTable);
 

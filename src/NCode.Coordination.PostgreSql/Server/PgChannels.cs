@@ -13,6 +13,16 @@ namespace NCode.Coordination.PostgreSql.Server;
 internal static partial class PgChannels
 {
     /// <summary>
+    /// The text that opens the payload of a change log's announcement.
+    /// </summary>
+    private const string ChangePrefix = "c:";
+
+    /// <summary>
+    /// The text that opens the payload of a topic's announcement.
+    /// </summary>
+    private const string TopicPrefix = "t:";
+
+    /// <summary>
     /// Gets the name of a keyspace's channel: <c>ncode.</c>, the schema's hash, <c>.</c> and the keyspace's id as 16
     /// lowercase hex digits, which is 31 characters.
     /// </summary>
@@ -32,7 +42,7 @@ internal static partial class PgChannels
     /// <param name="revision">The last revision the transaction took.</param>
     /// <returns>The payload: <c>c:</c> and the revision in invariant decimal.</returns>
     public static string ChangePayload(long revision) =>
-        "c:" + revision.ToString(CultureInfo.InvariantCulture);
+        ChangePrefix + revision.ToString(CultureInfo.InvariantCulture);
 
     /// <summary>
     /// Gets the payload that announces a message was published to a topic.
@@ -44,7 +54,7 @@ internal static partial class PgChannels
     {
         ArgumentNullException.ThrowIfNull(topicToken);
 
-        return "t:" + topicToken + ":" + sequence.ToString(CultureInfo.InvariantCulture);
+        return TopicPrefix + topicToken + ":" + sequence.ToString(CultureInfo.InvariantCulture);
     }
 
     /// <summary>
@@ -59,9 +69,9 @@ internal static partial class PgChannels
 
         wake = default;
 
-        if (payload.StartsWith("c:", StringComparison.Ordinal))
+        if (payload.StartsWith(ChangePrefix, StringComparison.Ordinal))
         {
-            var revisionText = payload.AsSpan(2);
+            var revisionText = payload.AsSpan(ChangePrefix.Length);
             if (!TryParseNumber(revisionText, out var revision))
             {
                 return false;
@@ -71,9 +81,9 @@ internal static partial class PgChannels
             return true;
         }
 
-        if (payload.StartsWith("t:", StringComparison.Ordinal))
+        if (payload.StartsWith(TopicPrefix, StringComparison.Ordinal))
         {
-            var rest = payload.AsSpan(2);
+            var rest = payload.AsSpan(TopicPrefix.Length);
             var colon = rest.IndexOf(':');
             if (colon <= 0 || rest[(colon + 1)..].Contains(':'))
             {

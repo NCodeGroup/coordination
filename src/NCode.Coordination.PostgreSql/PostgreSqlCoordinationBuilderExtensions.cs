@@ -27,6 +27,26 @@ public static class PostgreSqlCoordinationBuilderExtensions
     /// </summary>
     private const int MaxSweepBatchSize = 100_000;
 
+    /// <summary>
+    /// The least value of a timeout or an interval, which is included.
+    /// </summary>
+    private static TimeSpan MinShortDuration { get; } = TimeSpan.FromMilliseconds(1);
+
+    /// <summary>
+    /// The greatest value of a timeout or an interval, which is excluded.
+    /// </summary>
+    private static TimeSpan MaxShortDuration { get; } = TimeSpan.FromHours(1);
+
+    /// <summary>
+    /// The least value of <see cref="PostgreSqlProviderOptions.LogRetention"/>.
+    /// </summary>
+    private static TimeSpan MinLogRetention { get; } = TimeSpan.FromSeconds(1);
+
+    /// <summary>
+    /// The greatest value of <see cref="PostgreSqlProviderOptions.LogRetention"/>.
+    /// </summary>
+    private static TimeSpan MaxLogRetention { get; } = TimeSpan.FromDays(1);
+
     extension(ICoordinationBuilder builder)
     {
         /// <summary>
@@ -191,7 +211,7 @@ public static class PostgreSqlCoordinationBuilderExtensions
     /// <exception cref="ArgumentOutOfRangeException">The duration is out of range.</exception>
     private static TimeSpan CheckShortDuration(TimeSpan value, string option, string paramName)
     {
-        if (value < TimeSpan.FromMilliseconds(1) || value >= TimeSpan.FromHours(1))
+        if (value < MinShortDuration || value >= MaxShortDuration)
         {
             throw new ArgumentOutOfRangeException(
                 paramName,
@@ -212,7 +232,7 @@ public static class PostgreSqlCoordinationBuilderExtensions
     /// <exception cref="ArgumentOutOfRangeException">The retention is out of range.</exception>
     private static TimeSpan CheckLogRetention(TimeSpan value, string paramName)
     {
-        if (value < TimeSpan.FromSeconds(1) || value > TimeSpan.FromDays(1))
+        if (value < MinLogRetention || value > MaxLogRetention)
         {
             throw new ArgumentOutOfRangeException(
                 paramName,

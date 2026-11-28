@@ -27,6 +27,21 @@ internal static class PgFailures
     private const string ConnectionFailureDuringTransaction = "08007";
 
     /// <summary>
+    /// The state of a statement that the role has no privilege to run.
+    /// </summary>
+    private const string InsufficientPrivilege = "42501";
+
+    /// <summary>
+    /// The state of a value that doesn't fit its type.
+    /// </summary>
+    private const string NumericValueOutOfRange = "22003";
+
+    /// <summary>
+    /// The class that every state of a failed authentication or authorization starts with.
+    /// </summary>
+    private const string InvalidAuthorizationClass = "28";
+
+    /// <summary>
     /// Returns whether an exception is a failure of the client or the server, which <see cref="Translate"/> handles.
     /// </summary>
     /// <param name="exception">The exception.</param>
@@ -112,12 +127,15 @@ internal static class PgFailures
         }
 
         var state = postgres.SqlState;
-        if (state.StartsWith("28", StringComparison.Ordinal) || state == "42501")
+        if (
+            state.StartsWith(InvalidAuthorizationClass, StringComparison.Ordinal)
+            || state == InsufficientPrivilege
+        )
         {
             return CoordinationErrorCodes.AccessDenied;
         }
 
-        return state == "22003"
+        return state == NumericValueOutOfRange
             ? CoordinationErrorCodes.LimitExceeded
             : CoordinationErrorCodes.Unavailable;
     }
