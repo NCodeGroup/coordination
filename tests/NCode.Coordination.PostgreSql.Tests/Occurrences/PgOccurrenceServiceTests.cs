@@ -1,7 +1,6 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
-using System.Collections.Immutable;
 using NCode.Coordination.PostgreSql.Tests;
 
 namespace NCode.Coordination.PostgreSql.Occurrences.Tests;
@@ -44,8 +43,7 @@ public sealed class PgOccurrenceServiceTests
         var key = new Keyspace("prod").CreateKey("k");
         var duration = TimeSpan.FromSeconds(5);
         var timeToLive = new TimeToLive(duration);
-        var extensions = ImmutableDictionary<string, string>.Empty.Add("consul.lock-delay", "15s");
-        var options = new OperationOptions { Extensions = extensions };
+        var options = new OperationOptions { Extensions = PgTestSupport.UnsupportedExtensions };
 
         var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
             await service.TryRecordAsync(key, timeToLive, options, cancellationToken)

@@ -1,6 +1,7 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Text;
 using NCode.Coordination.PostgreSql.Schema;
@@ -38,6 +39,12 @@ internal static class PgTestSupport
     /// Gets how long a test waits for a server to answer again, or for a fault to take a step.
     /// </summary>
     public static TimeSpan WaitLimit { get; } = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// Gets an extension that no PostgreSQL operation takes, which a call refuses as unsupported.
+    /// </summary>
+    public static ImmutableDictionary<string, string> UnsupportedExtensions { get; } =
+        ImmutableDictionary<string, string>.Empty.Add("consul.lock-delay", "15s");
 
     /// <summary>
     /// Gets how long a test waits for the next item of a stream.

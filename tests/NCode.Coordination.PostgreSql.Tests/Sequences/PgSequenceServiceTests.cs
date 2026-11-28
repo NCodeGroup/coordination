@@ -1,7 +1,6 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
-using System.Collections.Immutable;
 using NCode.Coordination.PostgreSql.Tests;
 
 namespace NCode.Coordination.PostgreSql.Sequences.Tests;
@@ -78,8 +77,7 @@ public sealed class PgSequenceServiceTests
         var service = CreateService(offline);
         var cancellationToken = TestContext.Current.CancellationToken;
         var key = new Keyspace("prod").CreateKey("k");
-        var extensions = ImmutableDictionary<string, string>.Empty.Add("consul.lock-delay", "15s");
-        var options = new OperationOptions { Extensions = extensions };
+        var options = new OperationOptions { Extensions = PgTestSupport.UnsupportedExtensions };
 
         var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
             await service.NextAsync(key, options, cancellationToken)

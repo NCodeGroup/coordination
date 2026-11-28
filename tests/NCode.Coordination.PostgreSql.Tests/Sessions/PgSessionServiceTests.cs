@@ -1,7 +1,6 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
-using System.Collections.Immutable;
 using NCode.Coordination.PostgreSql.Server;
 using NCode.Coordination.PostgreSql.Tests;
 
@@ -47,8 +46,7 @@ public sealed class PgSessionServiceTests
         var cancellationToken = TestContext.Current.CancellationToken;
         var keyspace = new Keyspace("prod");
         var session = new SessionId(keyspace, "s-1");
-        var extensions = ImmutableDictionary<string, string>.Empty.Add("consul.lock-delay", "15s");
-        var options = new OperationOptions { Extensions = extensions };
+        var options = new OperationOptions { Extensions = PgTestSupport.UnsupportedExtensions };
 
         var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
             await service.KeepAliveAsync(session, options, cancellationToken)

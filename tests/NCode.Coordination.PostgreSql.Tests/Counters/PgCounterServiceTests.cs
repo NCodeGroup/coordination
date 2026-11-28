@@ -1,13 +1,14 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
-using System.Collections.Immutable;
 using NCode.Coordination.PostgreSql.Tests;
 
 namespace NCode.Coordination.PostgreSql.Counters.Tests;
 
 public sealed class PgCounterServiceTests
 {
+    private const string BatchSizeMessage = "A batch has 1 to 16 increments.";
+
     private static PgCounterService CreateService(PgOfflineServer offline)
     {
         var server = offline.Server;
@@ -59,8 +60,7 @@ public sealed class PgCounterServiceTests
         var key = new Keyspace("prod").CreateKey("k");
         var duration = TimeSpan.FromSeconds(5);
         var timeToLive = new TimeToLive(duration);
-        var extensions = ImmutableDictionary<string, string>.Empty.Add("consul.lock-delay", "15s");
-        var options = new OperationOptions { Extensions = extensions };
+        var options = new OperationOptions { Extensions = PgTestSupport.UnsupportedExtensions };
 
         var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
             await service.IncrementAsync(key, 1, timeToLive, options, cancellationToken)
@@ -86,7 +86,7 @@ public sealed class PgCounterServiceTests
         );
 
         Assert.Equal("increments", exception.ParamName);
-        Assert.StartsWith("A batch has 1 to 16 increments.", exception.Message);
+        Assert.StartsWith(BatchSizeMessage, exception.Message);
     }
 
     [Fact]
@@ -128,7 +128,7 @@ public sealed class PgCounterServiceTests
         );
 
         Assert.Equal("increments", exception.ParamName);
-        Assert.StartsWith("A batch has 1 to 16 increments.", exception.Message);
+        Assert.StartsWith(BatchSizeMessage, exception.Message);
     }
 
     [Fact]

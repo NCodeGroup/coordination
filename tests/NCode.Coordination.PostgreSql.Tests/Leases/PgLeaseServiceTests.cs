@@ -1,7 +1,6 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
-using System.Collections.Immutable;
 using NCode.Coordination.PostgreSql.Server;
 using NCode.Coordination.PostgreSql.Tests;
 
@@ -30,8 +29,7 @@ public sealed class PgLeaseServiceTests
         var duration = TimeSpan.FromSeconds(5);
         var timeToLive = new TimeToLive(duration);
         var terms = LeaseTerms.ForTimeToLive(timeToLive);
-        var extensions = ImmutableDictionary<string, string>.Empty.Add("consul.lock-delay", "15s");
-        var options = new OperationOptions { Extensions = extensions };
+        var options = new OperationOptions { Extensions = PgTestSupport.UnsupportedExtensions };
 
         var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
             await service.TryAcquireAsync(resource, terms, options, cancellationToken)

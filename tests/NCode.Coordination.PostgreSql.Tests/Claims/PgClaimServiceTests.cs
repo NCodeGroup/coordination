@@ -1,7 +1,6 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
-using System.Collections.Immutable;
 using NCode.Coordination.PostgreSql.Tests;
 
 namespace NCode.Coordination.PostgreSql.Claims.Tests;
@@ -75,8 +74,7 @@ public sealed class PgClaimServiceTests
         var window = CreateWindow();
         var duration = TimeSpan.FromMinutes(1);
         var timeToLive = new TimeToLive(duration);
-        var extensions = ImmutableDictionary<string, string>.Empty.Add("consul.lock-delay", "15s");
-        var options = new OperationOptions { Extensions = extensions };
+        var options = new OperationOptions { Extensions = PgTestSupport.UnsupportedExtensions };
 
         var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
             await service.TryClaimAsync(name, window, timeToLive, options, cancellationToken)

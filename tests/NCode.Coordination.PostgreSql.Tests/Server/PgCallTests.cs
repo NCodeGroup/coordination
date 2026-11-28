@@ -1,7 +1,7 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
-using System.Collections.Immutable;
+using NCode.Coordination.PostgreSql.Tests;
 
 namespace NCode.Coordination.PostgreSql.Server.Tests;
 
@@ -18,8 +18,8 @@ public sealed class PgCallTests
     [Fact]
     public void Check_Extension_ThrowsUnsupportedNotApplied()
     {
-        var extensions = ImmutableDictionary<string, string>.Empty.Add("consul.lock-delay", "15s");
-        var options = new OperationOptions { Extensions = extensions };
+        var options = new OperationOptions { Extensions = PgTestSupport.UnsupportedExtensions };
+        var extension = Assert.Single(PgTestSupport.UnsupportedExtensions.Keys);
 
         var exception = Assert.Throws<CoordinationException>(() =>
             PgCall.Check(options, CancellationToken.None)
@@ -27,7 +27,7 @@ public sealed class PgCallTests
 
         Assert.Equal(CoordinationErrorCodes.Unsupported, exception.Code);
         Assert.False(exception.OutcomeUnknown);
-        Assert.Contains("consul.lock-delay", exception.Message);
+        Assert.Contains(extension, exception.Message);
     }
 
     [Fact]

@@ -1,7 +1,6 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
-using System.Collections.Immutable;
 using NCode.Coordination.PostgreSql.Keys;
 using NCode.Coordination.PostgreSql.Tests;
 
@@ -118,8 +117,7 @@ public sealed class PgRecordServiceTests
         var cancellationToken = TestContext.Current.CancellationToken;
         var key = new Keyspace("prod").CreateKey("k");
         var revision = new Revision(1);
-        var extensions = ImmutableDictionary<string, string>.Empty.Add("consul.lock-delay", "15s");
-        var options = new OperationOptions { Extensions = extensions };
+        var options = new OperationOptions { Extensions = PgTestSupport.UnsupportedExtensions };
 
         var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
             await service.CompareAndDeleteAsync(key, revision, options, cancellationToken)
@@ -140,8 +138,7 @@ public sealed class PgRecordServiceTests
         var service = CreateService(offline);
         var cancellationToken = TestContext.Current.CancellationToken;
         var key = new Keyspace("prod").CreateKey("k");
-        var extensions = ImmutableDictionary<string, string>.Empty.Add("consul.lock-delay", "15s");
-        var options = new OperationOptions { Extensions = extensions };
+        var options = new OperationOptions { Extensions = PgTestSupport.UnsupportedExtensions };
 
         var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
             await service.ReadAsync(key, options, cancellationToken)

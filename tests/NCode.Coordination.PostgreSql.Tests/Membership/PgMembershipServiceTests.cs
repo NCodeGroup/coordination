@@ -1,7 +1,6 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
-using System.Collections.Immutable;
 using Microsoft.Extensions.Logging.Abstractions;
 using NCode.Coordination.PostgreSql.Records;
 using NCode.Coordination.PostgreSql.Subscriptions;
@@ -53,8 +52,7 @@ public sealed class PgMembershipServiceTests
         var service = CreateService(offline);
         var cancellationToken = TestContext.Current.CancellationToken;
         var group = new Keyspace("prod").CreateKey("g");
-        var extensions = ImmutableDictionary<string, string>.Empty.Add("consul.lock-delay", "15s");
-        var options = new OperationOptions { Extensions = extensions };
+        var options = new OperationOptions { Extensions = PgTestSupport.UnsupportedExtensions };
 
         var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
             await service.ReadAsync(group, options, cancellationToken)

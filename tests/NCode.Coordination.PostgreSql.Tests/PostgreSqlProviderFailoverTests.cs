@@ -48,6 +48,71 @@ public sealed class PostgreSqlProviderFailoverTests
     private const string AfterName = "after";
 
     /// <summary>
+    /// The services, keys and enumerators that a test publishes through and reads the changes back from.
+    /// </summary>
+    /// <param name="Notifications">The notification service to publish through.</param>
+    /// <param name="Records">The record service to write through.</param>
+    /// <param name="Keyspace">The keyspace that holds the watched records.</param>
+    /// <param name="Topic">The topic that the messages are published to.</param>
+    /// <param name="Messages">The enumerator of the subscription to the topic.</param>
+    /// <param name="Changes">The enumerator of the watch on the records.</param>
+    private sealed record PgFailoverStreams(
+        INotificationService Notifications,
+        IRecordService Records,
+        Keyspace Keyspace,
+        CoordinationKey Topic,
+        IAsyncEnumerator<Notification> Messages,
+        IAsyncEnumerator<RecordChange> Changes
+    );
+
+    /// <summary>
+    /// Publishes numbered messages and writes numbered records, and fails the test when the subscription and the watch
+    /// don't deliver each of them, in order.
+    /// </summary>
+    /// <param name="streams">The services, keys and enumerators to publish through and read back from.</param>
+    /// <param name="name">The prefix of the payloads and the name of the records.</param>
+    /// <param name="count">The number of messages and records to write.</param>
+    /// <param name="cancellationToken">The token that cancels the wait.</param>
+    /// <returns>A task that completes when every message and change has been delivered.</returns>
+    private static async ValueTask PublishAndAssertAsync(
+        PgFailoverStreams streams,
+        string name,
+        int count,
+        CancellationToken cancellationToken
+    )
+    {
+        var value = "v"u8.ToArray();
+        for (var index = 0; index < count; index++)
+        {
+            var payload = Encoding.UTF8.GetBytes($"{name}{index}");
+            await streams.Notifications.PublishAsync(
+                streams.Topic,
+                payload,
+                null,
+                cancellationToken
+            );
+            var key = streams.Keyspace.CreateKey(PgTestSupport.WatchedName, name, index);
+            await streams.Records.CreateAsync(
+                key,
+                value,
+                RecordLifetime.Persistent,
+                null,
+                cancellationToken
+            );
+
+            var message = await PgTestSupport.NextAsync(streams.Messages, cancellationToken);
+            Assert.False(message.IsResync);
+            Assert.Equal(NotificationKind.Message, message.Kind);
+            var received = message.Payload.ToArray();
+            Assert.Equal(payload, received);
+            var change = await PgTestSupport.NextAsync(streams.Changes, cancellationToken);
+            Assert.False(change.IsResync);
+            Assert.Equal(RecordChangeKind.Written, change.Kind);
+            Assert.Equal(key, change.Key);
+        }
+    }
+
+    /// <summary>
     /// Polls the primary until a backend waits for a synchronous standby to confirm its commit.
     /// </summary>
     /// <param name="connectionString">The connection string of the primary.</param>
@@ -319,7 +384,6 @@ public sealed class PostgreSqlProviderFailoverTests
         var records = PgTestSupport.GetService<IRecordService>(provider);
         var watches = PgTestSupport.GetService<IRecordWatchService>(provider);
         var keyspace = PgTestSupport.CreateKeyspace(KeyspaceName);
-        var value = "v"u8.ToArray();
         var topic = keyspace.CreateKey(PgTestSupport.TopicName);
         var prefix = keyspace.CreateKey(PgTestSupport.WatchedName);
 
@@ -333,56 +397,20 @@ public sealed class PostgreSqlProviderFailoverTests
         var changeStart = await PgTestSupport.NextAsync(changeEnumerator, cancellationToken);
         Assert.True(changeStart.IsResync);
 
-        for (var index = 0; index < Records; index++)
-        {
-            var payload = Encoding.UTF8.GetBytes($"{BeforeName}{index}");
-            await notifications.PublishAsync(topic, payload, null, cancellationToken);
-            var key = keyspace.CreateKey(PgTestSupport.WatchedName, BeforeName, index);
-            await records.CreateAsync(
-                key,
-                value,
-                RecordLifetime.Persistent,
-                null,
-                cancellationToken
-            );
-
-            var message = await PgTestSupport.NextAsync(messageEnumerator, cancellationToken);
-            Assert.False(message.IsResync);
-            Assert.Equal(NotificationKind.Message, message.Kind);
-            var received = message.Payload.ToArray();
-            Assert.Equal(payload, received);
-            var change = await PgTestSupport.NextAsync(changeEnumerator, cancellationToken);
-            Assert.False(change.IsResync);
-            Assert.Equal(RecordChangeKind.Written, change.Kind);
-            Assert.Equal(key, change.Key);
-        }
+        var streams = new PgFailoverStreams(
+            notifications,
+            records,
+            keyspace,
+            topic,
+            messageEnumerator,
+            changeEnumerator
+        );
+        await PublishAndAssertAsync(streams, BeforeName, Records, cancellationToken);
 
         await server.WaitForStandbyAsync(cancellationToken);
         await server.CutReplicationAsync(cancellationToken);
 
-        for (var index = 0; index < Lost; index++)
-        {
-            var payload = Encoding.UTF8.GetBytes($"{LostName}{index}");
-            await notifications.PublishAsync(topic, payload, null, cancellationToken);
-            var key = keyspace.CreateKey(PgTestSupport.WatchedName, LostName, index);
-            await records.CreateAsync(
-                key,
-                value,
-                RecordLifetime.Persistent,
-                null,
-                cancellationToken
-            );
-
-            var message = await PgTestSupport.NextAsync(messageEnumerator, cancellationToken);
-            Assert.False(message.IsResync);
-            Assert.Equal(NotificationKind.Message, message.Kind);
-            var received = message.Payload.ToArray();
-            Assert.Equal(payload, received);
-            var change = await PgTestSupport.NextAsync(changeEnumerator, cancellationToken);
-            Assert.False(change.IsResync);
-            Assert.Equal(RecordChangeKind.Written, change.Kind);
-            Assert.Equal(key, change.Key);
-        }
+        await PublishAndAssertAsync(streams, LostName, Lost, cancellationToken);
 
         await server.PromoteStandbyAsync(cancellationToken);
         await server.StopPrimaryAsync(cancellationToken);
