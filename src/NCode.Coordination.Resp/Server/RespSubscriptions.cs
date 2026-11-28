@@ -1,6 +1,7 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using Microsoft.Extensions.Logging;
 using StackExchange.Redis;
 
 namespace NCode.Coordination.Resp.Server;
@@ -12,11 +13,13 @@ namespace NCode.Coordination.Resp.Server;
 /// <param name="connection">The connection of the provider to its server.</param>
 /// <param name="profile">The profile of the server.</param>
 /// <param name="schedule">The schedule of each subscription's periodic check.</param>
-/// <exception cref="ArgumentNullException">The connection, the profile or the schedule is null.</exception>
+/// <param name="loggerFactory">The factory of the loggers that report the failures a subscription catches.</param>
+/// <exception cref="ArgumentNullException">The connection, the profile, the schedule or the logger factory is null.</exception>
 internal class RespSubscriptions(
     RespConnection connection,
     RespProfile profile,
-    RespCheckSchedule schedule
+    RespCheckSchedule schedule,
+    ILoggerFactory loggerFactory
 )
 {
     /// <summary>
@@ -41,6 +44,12 @@ internal class RespSubscriptions(
     /// </summary>
     private RespCheckSchedule Schedule { get; } =
         schedule ?? throw new ArgumentNullException(nameof(schedule));
+
+    /// <summary>
+    /// Gets the factory of the loggers that report the failures a subscription catches.
+    /// </summary>
+    private ILoggerFactory LoggerFactory { get; } =
+        loggerFactory ?? throw new ArgumentNullException(nameof(loggerFactory));
 
     /// <summary>
     /// Gets the channel with a name: a sharded channel on a profile that carries them, a plain channel otherwise.
@@ -76,11 +85,12 @@ internal class RespSubscriptions(
         cancellationToken.ThrowIfCancellationRequested();
 
         var channel = Channel(name);
+        var feedLogger = LoggerFactory.CreateLogger<RespChannelFeed>();
         RespChannelFeed feed;
         try
         {
             feed = await RespChannelFeed
-                .OpenAsync(multiplexer, channel, Schedule, cancellationToken)
+                .OpenAsync(multiplexer, channel, Schedule, feedLogger, cancellationToken)
                 .ConfigureAwait(false);
         }
         catch (Exception e) when (RespFailures.IsClientFailure(e))
@@ -89,6 +99,7 @@ internal class RespSubscriptions(
         }
 
         var time = Schedule.Time;
-        return new RespChannelReader(feed.Signals, readNumber, time, feed);
+        var readerLogger = LoggerFactory.CreateLogger<RespChannelReader>();
+        return new RespChannelReader(feed.Signals, readNumber, time, feed, readerLogger);
     }
 }

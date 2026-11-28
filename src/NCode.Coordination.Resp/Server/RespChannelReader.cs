@@ -4,6 +4,8 @@
 using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
+using Microsoft.Extensions.Logging;
+using NCode.Coordination.Resp.Logging;
 using StackExchange.Redis;
 
 namespace NCode.Coordination.Resp.Server;
@@ -17,11 +19,13 @@ namespace NCode.Coordination.Resp.Server;
 /// <param name="readNumber">Reads the channel's current number from the server.</param>
 /// <param name="time">The time provider that the grace waits on.</param>
 /// <param name="feed">What to dispose with the reader, or null.</param>
+/// <param name="logger">The logger that reports a failed read of the channel's number.</param>
 internal sealed class RespChannelReader(
     ChannelReader<RespSignal> signals,
     Func<CancellationToken, ValueTask<long>> readNumber,
     TimeProvider time,
-    IAsyncDisposable? feed
+    IAsyncDisposable? feed,
+    ILogger<RespChannelReader> logger
 ) : IAsyncDisposable
 {
     /// <summary>
@@ -74,6 +78,12 @@ internal sealed class RespChannelReader(
     private IAsyncDisposable? Feed { get; } = feed;
 
     /// <summary>
+    /// Gets the logger that reports a failed read of the channel's number.
+    /// </summary>
+    private ILogger<RespChannelReader> Logger { get; } =
+        logger ?? throw new ArgumentNullException(nameof(logger));
+
+    /// <summary>
     /// Gets or sets whether the reader may have missed messages, so that the next check resyncs.
     /// </summary>
     private bool InDoubt { get; set; }
@@ -112,8 +122,9 @@ internal sealed class RespChannelReader(
         {
             return await ReadNumber(cancellationToken).ConfigureAwait(false);
         }
-        catch (CoordinationException)
+        catch (CoordinationException exception)
         {
+            Logger.ChannelNumberReadFailed(exception);
             return null;
         }
     }

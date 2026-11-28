@@ -1,0 +1,440 @@
+// Copyright © NCode Group
+// SPDX-License-Identifier: Apache-2.0
+
+using System.Globalization;
+using NCode.Coordination.PostgreSql.Tests.Servers;
+using Npgsql;
+
+namespace NCode.Coordination.PostgreSql.Server.Tests;
+
+public sealed class PgServerTransactionTests(PgServers servers)
+{
+    private static string NewName(string prefix) =>
+        prefix + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
+
+    private static async ValueTask WithTableAsync(
+        string adminConnectionString,
+        Func<string, ValueTask> test,
+        CancellationToken cancellationToken
+    )
+    {
+        var schema = NewName("seam_");
+        await PgServers.ExecuteAsAdminAsync(
+            adminConnectionString,
+            $"CREATE SCHEMA {schema}; CREATE TABLE {schema}.t (id int PRIMARY KEY)",
+            cancellationToken
+        );
+
+        try
+        {
+            await test(schema);
+        }
+        finally
+        {
+            await PgServers.ExecuteAsAdminAsync(
+                adminConnectionString,
+                $"DROP SCHEMA IF EXISTS {schema} CASCADE",
+                CancellationToken.None
+            );
+        }
+    }
+
+    private static async ValueTask<long> CountAsync(
+        string connectionString,
+        string schema,
+        CancellationToken cancellationToken
+    )
+    {
+        var scalar = await PgServers.ScalarAsync(
+            connectionString,
+            $"SELECT count(*) FROM {schema}.t",
+            cancellationToken
+        );
+        return Convert.ToInt64(scalar, CultureInfo.InvariantCulture);
+    }
+
+    private static async ValueTask TerminateAsync(
+        string adminConnectionString,
+        string applicationName,
+        CancellationToken cancellationToken
+    )
+    {
+        await using var connection = new NpgsqlConnection(adminConnectionString);
+        await connection.OpenAsync(cancellationToken);
+
+        await using var command = new NpgsqlCommand(
+            "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE application_name = $1",
+            connection
+        );
+        var parameter = new NpgsqlParameter { Value = applicationName };
+        command.Parameters.Add(parameter);
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
+    private static string WithApplicationName(string connectionString, string applicationName) =>
+        new NpgsqlConnectionStringBuilder(connectionString)
+        {
+            ApplicationName = applicationName,
+        }.ConnectionString;
+
+    private static PgStatement Insert(string schema)
+    {
+        var argument = PgArgument.Of(1);
+        return new($"INSERT INTO {schema}.t (id) VALUES ($1)", argument);
+    }
+
+    private static ValueTask<bool> IgnoreAsync(
+        PgResults results,
+        CancellationToken cancellationToken
+    ) => ValueTask.FromResult(true);
+
+    private static async ValueTask<long> ReadCountAsync(
+        PgResults results,
+        CancellationToken cancellationToken
+    )
+    {
+        var rows = await results.ReadAsync(r => r.GetInt64(0), cancellationToken);
+        return rows[0];
+    }
+
+    #region TransactAsync Tests
+
+    [PgServerFact]
+    public async Task TransactAsync_Commit_AppliesTheWrites()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await WithTableAsync(
+            servers.Admin19,
+            async schema =>
+            {
+                await using var source = PgSource.FromConnectionString(servers.Admin19);
+                var server = new PgServer(source, PgSettings.Default);
+                PgStatement[] reads = [new PgStatement("SELECT 1")];
+                PgStatement[] writes = [Insert(schema)];
+
+                await server.TransactAsync(
+                    PgIsolation.ReadCommitted,
+                    async (transaction, token) =>
+                    {
+                        await transaction.FirstAsync(reads, IgnoreAsync, token);
+                        await transaction.CommitAsync(writes, token);
+                        return true;
+                    },
+                    cancellationToken
+                );
+
+                var count = await CountAsync(servers.Admin19, schema, cancellationToken);
+
+                Assert.Equal(1L, count);
+            },
+            cancellationToken
+        );
+    }
+
+    [PgServerFact]
+    public async Task TransactAsync_Rollback_AppliesNothing()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await WithTableAsync(
+            servers.Admin19,
+            async schema =>
+            {
+                await using var source = PgSource.FromConnectionString(servers.Admin19);
+                var server = new PgServer(source, PgSettings.Default);
+                PgStatement[] reads = [new PgStatement("SELECT 1")];
+                PgStatement[] writes = [Insert(schema)];
+
+                await server.TransactAsync(
+                    PgIsolation.ReadCommitted,
+                    async (transaction, token) =>
+                    {
+                        await transaction.FirstAsync(reads, IgnoreAsync, token);
+                        await transaction.NextAsync(writes, IgnoreAsync, token);
+                        await transaction.RollbackAsync(token);
+                        return true;
+                    },
+                    cancellationToken
+                );
+
+                var count = await CountAsync(servers.Admin19, schema, cancellationToken);
+
+                Assert.Equal(0L, count);
+            },
+            cancellationToken
+        );
+    }
+
+    [PgServerFact]
+    public async Task TransactAsync_ErrorInTheCommitBatch_ThrowsNotApplied()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await WithTableAsync(
+            servers.Admin19,
+            async schema =>
+            {
+                await using var source = PgSource.FromConnectionString(servers.Admin19);
+                var server = new PgServer(source, PgSettings.Default);
+                PgStatement[] reads = [new PgStatement("SELECT 1")];
+                PgStatement[] writes = [Insert(schema), new PgStatement("SELECT 1 / 0")];
+
+                var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
+                    await server.TransactAsync(
+                        PgIsolation.ReadCommitted,
+                        async (transaction, token) =>
+                        {
+                            await transaction.FirstAsync(reads, IgnoreAsync, token);
+                            await transaction.CommitAsync(writes, token);
+                            return true;
+                        },
+                        cancellationToken
+                    )
+                );
+
+                var count = await CountAsync(servers.Admin19, schema, cancellationToken);
+
+                Assert.Equal(CoordinationErrorCodes.Unavailable, exception.Code);
+                Assert.False(exception.OutcomeUnknown);
+                Assert.Equal(0L, count);
+            },
+            cancellationToken
+        );
+    }
+
+    [PgServerFact]
+    public async Task TransactAsync_IdleBetweenBatchesPastTimeout_ThrowsUnavailableNotApplied()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await WithTableAsync(
+            servers.Admin19,
+            async schema =>
+            {
+                await using var source = PgSource.FromConnectionString(servers.Admin19);
+                var idleTimeout = TimeSpan.FromMilliseconds(200);
+                var settings = PgSettings.Default with { IdleInTransactionTimeout = idleTimeout };
+                var delay = TimeSpan.FromMilliseconds(600);
+                var server = new PgServer(source, settings)
+                {
+                    AfterFirstBatch = async token => await Task.Delay(delay, token),
+                };
+                PgStatement[] reads = [new PgStatement("SELECT 1")];
+                PgStatement[] writes = [Insert(schema)];
+
+                var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
+                    await server.TransactAsync(
+                        PgIsolation.ReadCommitted,
+                        async (transaction, token) =>
+                        {
+                            await transaction.FirstAsync(reads, IgnoreAsync, token);
+                            await transaction.CommitAsync(writes, token);
+                            return true;
+                        },
+                        cancellationToken
+                    )
+                );
+
+                var count = await CountAsync(servers.Admin19, schema, cancellationToken);
+
+                Assert.Equal(CoordinationErrorCodes.Unavailable, exception.Code);
+                Assert.False(exception.OutcomeUnknown);
+                Assert.Equal(0L, count);
+            },
+            cancellationToken
+        );
+    }
+
+    [PgServerFact]
+    public async Task TransactAsync_TerminatedBeforeCommit_ThrowsUnavailableAndAppliesNothing()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await WithTableAsync(
+            servers.Admin19,
+            async schema =>
+            {
+                var applicationName = NewName("seam-");
+                var connectionString = WithApplicationName(servers.Admin19, applicationName);
+                await using var source = PgSource.FromConnectionString(connectionString);
+                var server = new PgServer(source, PgSettings.Default)
+                {
+                    AfterFirstBatch = async token =>
+                    {
+                        await TerminateAsync(servers.Admin19, applicationName, token);
+                        await PgActivity.WaitForNoBackendAsync(
+                            servers.Admin19,
+                            applicationName,
+                            token
+                        );
+                    },
+                };
+                PgStatement[] reads = [new PgStatement("SELECT 1")];
+                PgStatement[] writes = [Insert(schema)];
+
+                var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
+                    await server.TransactAsync(
+                        PgIsolation.ReadCommitted,
+                        async (transaction, token) =>
+                        {
+                            await transaction.FirstAsync(reads, IgnoreAsync, token);
+                            await transaction.CommitAsync(writes, token);
+                            return true;
+                        },
+                        cancellationToken
+                    )
+                );
+
+                var count = await CountAsync(servers.Admin19, schema, cancellationToken);
+
+                Assert.Equal(CoordinationErrorCodes.Unavailable, exception.Code);
+                Assert.True(exception.OutcomeUnknown);
+                Assert.Equal(0L, count);
+            },
+            cancellationToken
+        );
+    }
+
+    [PgServerFact]
+    public async Task TransactAsync_TerminatedAfterCommitSent_ThrowsOutcomeUnknown()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await WithTableAsync(
+            servers.Admin19,
+            async schema =>
+            {
+                var applicationName = NewName("seam-");
+                var connectionString = WithApplicationName(servers.Admin19, applicationName);
+                await using var source = PgSource.FromConnectionString(connectionString);
+                var statementTimeout = TimeSpan.FromSeconds(30);
+                var settings = PgSettings.Default with { StatementTimeout = statementTimeout };
+                var server = new PgServer(source, settings);
+                PgStatement[] reads = [new PgStatement("SELECT 1")];
+                PgStatement[] writes = [Insert(schema), new PgStatement("SELECT pg_sleep(5)")];
+
+                var terminate = Task.Run(
+                    async () =>
+                    {
+                        await PgActivity.WaitForSleepingBackendAsync(
+                            servers.Admin19,
+                            applicationName,
+                            cancellationToken
+                        );
+                        await TerminateAsync(servers.Admin19, applicationName, cancellationToken);
+                    },
+                    cancellationToken
+                );
+
+                var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
+                    await server.TransactAsync(
+                        PgIsolation.ReadCommitted,
+                        async (transaction, token) =>
+                        {
+                            await transaction.FirstAsync(reads, IgnoreAsync, token);
+                            await transaction.CommitAsync(writes, token);
+                            return true;
+                        },
+                        cancellationToken
+                    )
+                );
+                await terminate;
+
+                Assert.Equal(CoordinationErrorCodes.Unavailable, exception.Code);
+                Assert.True(exception.OutcomeUnknown);
+            },
+            cancellationToken
+        );
+    }
+
+    [PgServerFact]
+    public async Task TransactAsync_LockTimeout_ThrowsUnavailableNotApplied()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await WithTableAsync(
+            servers.Admin19,
+            async schema =>
+            {
+                await PgServers.ExecuteAsAdminAsync(
+                    servers.Admin19,
+                    $"INSERT INTO {schema}.t (id) VALUES (1)",
+                    cancellationToken
+                );
+
+                await using var holder = new NpgsqlConnection(servers.Admin19);
+                await holder.OpenAsync(cancellationToken);
+                await using var holderTransaction = await holder.BeginTransactionAsync(
+                    cancellationToken
+                );
+                await using var lockCommand = new NpgsqlCommand(
+                    $"SELECT id FROM {schema}.t WHERE id = 1 FOR UPDATE",
+                    holder,
+                    holderTransaction
+                );
+                await lockCommand.ExecuteScalarAsync(cancellationToken);
+
+                await using var source = PgSource.FromConnectionString(servers.Admin19);
+                var lockTimeout = TimeSpan.FromMilliseconds(100);
+                var settings = PgSettings.Default with { LockTimeout = lockTimeout };
+                var server = new PgServer(source, settings);
+                var lockRow = new PgStatement($"SELECT id FROM {schema}.t WHERE id = 1 FOR UPDATE");
+                PgStatement[] reads = [lockRow];
+                PgStatement[] writes = [Insert(schema)];
+
+                var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
+                    await server.TransactAsync(
+                        PgIsolation.ReadCommitted,
+                        async (transaction, token) =>
+                        {
+                            await transaction.FirstAsync(reads, IgnoreAsync, token);
+                            await transaction.CommitAsync(writes, token);
+                            return true;
+                        },
+                        cancellationToken
+                    )
+                );
+
+                Assert.Equal(CoordinationErrorCodes.Unavailable, exception.Code);
+                Assert.False(exception.OutcomeUnknown);
+            },
+            cancellationToken
+        );
+    }
+
+    [PgServerFact]
+    public async Task TransactAsync_RepeatableRead_ReadsOneSnapshot()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await WithTableAsync(
+            servers.Admin19,
+            async schema =>
+            {
+                await using var source = PgSource.FromConnectionString(servers.Admin19);
+                var server = new PgServer(source, PgSettings.Default);
+                var count = new PgStatement($"SELECT count(*) FROM {schema}.t");
+
+                var (first, second) = await server.TransactAsync(
+                    PgIsolation.RepeatableReadReadOnly,
+                    async (transaction, token) =>
+                    {
+                        var before = await transaction.FirstAsync([count], ReadCountAsync, token);
+
+                        await PgServers.ExecuteAsAdminAsync(
+                            servers.Admin19,
+                            $"INSERT INTO {schema}.t (id) VALUES (1)",
+                            token
+                        );
+
+                        var after = await transaction.NextAsync([count], ReadCountAsync, token);
+                        return (before, after);
+                    },
+                    cancellationToken
+                );
+
+                var rowCount = await CountAsync(servers.Admin19, schema, cancellationToken);
+
+                Assert.Equal(0L, first);
+                Assert.Equal(first, second);
+                Assert.Equal(1L, rowCount);
+            },
+            cancellationToken
+        );
+    }
+
+    #endregion
+}

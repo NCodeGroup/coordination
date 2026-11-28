@@ -3,6 +3,8 @@
 
 using System.Collections.Frozen;
 using System.Collections.Immutable;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using NCode.Coordination.Resp.Claims;
 using NCode.Coordination.Resp.Counters;
 using NCode.Coordination.Resp.Elections;
@@ -182,7 +184,12 @@ internal sealed class RespProvider : ICoordinationProvider, IAsyncDisposable, ID
     /// <param name="profile">The vendor profile that the server must match.</param>
     /// <exception cref="ArgumentNullException">The connection or the profile is null.</exception>
     public RespProvider(RespConnection connection, RespProfile profile)
-        : this(connection, profile, RespSubscriptions.DefaultCheckInterval) { }
+        : this(
+            connection,
+            profile,
+            RespSubscriptions.DefaultCheckInterval,
+            NullLoggerFactory.Instance
+        ) { }
 
     /// <summary>
     /// Creates the provider and the services that share its connection.
@@ -190,11 +197,18 @@ internal sealed class RespProvider : ICoordinationProvider, IAsyncDisposable, ID
     /// <param name="connection">The holder of the provider's connection to its server. The provider disposes the holder, which disposes the multiplexer only when it owns it.</param>
     /// <param name="profile">The vendor profile that the server must match.</param>
     /// <param name="checkInterval">The time between two periodic checks of each notification subscription and watch.</param>
-    /// <exception cref="ArgumentNullException">The connection or the profile is null.</exception>
-    public RespProvider(RespConnection connection, RespProfile profile, TimeSpan checkInterval)
+    /// <param name="loggerFactory">The factory of the loggers that report the failures the provider's subscriptions and watches catch.</param>
+    /// <exception cref="ArgumentNullException">The connection, the profile or the logger factory is null.</exception>
+    public RespProvider(
+        RespConnection connection,
+        RespProfile profile,
+        TimeSpan checkInterval,
+        ILoggerFactory loggerFactory
+    )
     {
         ArgumentNullException.ThrowIfNull(connection);
         ArgumentNullException.ThrowIfNull(profile);
+        ArgumentNullException.ThrowIfNull(loggerFactory);
 
         Connection = connection;
         Profile = profile;
@@ -209,15 +223,18 @@ internal sealed class RespProvider : ICoordinationProvider, IAsyncDisposable, ID
         var records = new RespRecordTable(Server, profile);
         var tokens = new RespRandomTokens();
         var schedule = new RespCheckSchedule(checkInterval, TimeProvider.System);
-        var subscriptions = new RespSubscriptions(connection, profile, schedule);
+        var subscriptions = new RespSubscriptions(connection, profile, schedule, loggerFactory);
         var recordService = new RespRecordService(records);
+        var recordWatchLogger = loggerFactory.CreateLogger<RespRecordWatchService>();
+        var membershipLogger = loggerFactory.CreateLogger<RespMembershipService>();
         var services = new Dictionary<Type, object>
         {
             [typeof(IRecordService)] = recordService,
             [typeof(IRecordWatchService)] = new RespRecordWatchService(
                 records,
                 recordService,
-                subscriptions
+                subscriptions,
+                recordWatchLogger
             ),
             [typeof(ITransactionService)] = new RespTransactionService(records),
             [typeof(IOccurrenceService)] = new RespOccurrenceService(Server),
@@ -225,7 +242,11 @@ internal sealed class RespProvider : ICoordinationProvider, IAsyncDisposable, ID
             [typeof(ICounterService)] = new RespCounterService(Server),
             [typeof(ISequenceService)] = new RespSequenceService(Server),
             [typeof(ISessionService)] = new RespSessionService(records, tokens),
-            [typeof(IMembershipService)] = new RespMembershipService(records, subscriptions),
+            [typeof(IMembershipService)] = new RespMembershipService(
+                records,
+                subscriptions,
+                membershipLogger
+            ),
             [typeof(ILeaseService)] = new RespLeaseService(records, tokens),
             [typeof(ISemaphoreService)] = new RespSemaphoreService(records, tokens),
             [typeof(IElectionService)] = new RespElectionService(records, tokens),

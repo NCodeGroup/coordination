@@ -1,6 +1,7 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using NCode.Coordination.Resp.Keys;
 using NCode.Coordination.Resp.Server;
@@ -39,7 +40,12 @@ public sealed class RespNotificationServiceTests(RespServers servers) : IDisposa
         var server = new RespServer(connection);
         var checkInterval = TimeSpan.FromMilliseconds(200);
         var schedule = new RespCheckSchedule(checkInterval, TimeProvider.System);
-        var subscriptions = new RespSubscriptions(connection, profile, schedule);
+        var subscriptions = new RespSubscriptions(
+            connection,
+            profile,
+            schedule,
+            NullLoggerFactory.Instance
+        );
 
         return (new RespNotificationService(server, profile, subscriptions), subscriptions);
     }

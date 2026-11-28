@@ -1,6 +1,8 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using NCode.Coordination.Resp;
 using NCode.Coordination.Resp.Server;
 using StackExchange.Redis;
@@ -102,7 +104,10 @@ public static class RespCoordinationBuilderExtensions
             return builder.AddProvider(services =>
             {
                 var connection = createConnection(services);
-                return new RespProvider(connection, profile, checkInterval);
+                var loggerFactory =
+                    services.GetService(typeof(ILoggerFactory)) as ILoggerFactory
+                    ?? NullLoggerFactory.Instance;
+                return new RespProvider(connection, profile, checkInterval, loggerFactory);
             });
         }
     }

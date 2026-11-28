@@ -1,0 +1,102 @@
+// Copyright © NCode Group
+// SPDX-License-Identifier: Apache-2.0
+
+using NpgsqlTypes;
+
+namespace NCode.Coordination.PostgreSql.Server.Tests;
+
+public sealed class PgStatementTests
+{
+    #region ToBatchCommand Tests
+
+    [Fact]
+    public void ToBatchCommand_Arguments_AddsParametersInOrder()
+    {
+        var long7 = PgArgument.Of(7L);
+        var text = PgArgument.Typed("text", NpgsqlDbType.Text);
+        byte[] value = [1, 2];
+        var bytes = PgArgument.Typed(value, NpgsqlDbType.Bytea);
+        var statement = new PgStatement("SELECT $1, $2, $3", long7, text, bytes);
+
+        var command = statement.ToBatchCommand();
+
+        Assert.Equal("SELECT $1, $2, $3", command.CommandText);
+        Assert.Equal(3, command.Parameters.Count);
+        Assert.Equal(7L, command.Parameters[0].Value);
+        Assert.Equal("text", command.Parameters[1].Value);
+        Assert.Equal(NpgsqlDbType.Text, command.Parameters[1].NpgsqlDbType);
+        Assert.Equal(new byte[] { 1, 2 }, command.Parameters[2].Value);
+        Assert.Equal(NpgsqlDbType.Bytea, command.Parameters[2].NpgsqlDbType);
+        Assert.Equal(3, statement.Arguments.Length);
+    }
+
+    #endregion
+
+    #region Typed Tests
+
+    [Fact]
+    public void Typed_Null_GivesDbNullWithItsType()
+    {
+        var argument = PgArgument.Typed(null, NpgsqlDbType.Bigint);
+
+        Assert.Equal(DBNull.Value, argument.Value);
+        Assert.Equal(NpgsqlDbType.Bigint, argument.Type);
+
+        var parameter = argument.ToParameter();
+
+        Assert.Equal(DBNull.Value, parameter.Value);
+        Assert.Equal(NpgsqlDbType.Bigint, parameter.NpgsqlDbType);
+    }
+
+    #endregion
+
+    #region Of Tests
+
+    [Fact]
+    public void Of_Null_Throws()
+    {
+        Assert.Throws<ArgumentNullException>(() => PgArgument.Of(null!));
+    }
+
+    #endregion
+
+    #region ImplicitConversion Tests
+
+    [Fact]
+    public void ImplicitConversion_Long_GivesTheArgumentOfBuilds()
+    {
+        PgArgument argument = 7L;
+
+        var expected = PgArgument.Of(7L);
+        Assert.Equal(expected, argument);
+    }
+
+    [Fact]
+    public void ImplicitConversion_String_GivesTheArgumentOfBuilds()
+    {
+        PgArgument argument = "text";
+
+        var expected = PgArgument.Of("text");
+        Assert.Equal(expected, argument);
+    }
+
+    [Fact]
+    public void ImplicitConversion_Bytes_GivesTheArgumentOfBuilds()
+    {
+        byte[] bytes = [1, 2];
+        PgArgument argument = bytes;
+
+        var expected = PgArgument.Of(bytes);
+        Assert.Equal(expected, argument);
+    }
+
+    [Fact]
+    public void ImplicitConversion_NullString_Throws()
+    {
+        string text = null!;
+
+        Assert.Throws<ArgumentNullException>(() => (PgArgument)text);
+    }
+
+    #endregion
+}

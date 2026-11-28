@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>NCode.Coordination.PostgreSql</RootNamespace>
+    <Description>The PostgreSQL provider of NCode.Coordination: coordination over PostgreSQL 15 or later through Npgsql, in tables of one schema it migrates, with a profile per replication setup that the startup probe checks against the server.</Description>
+    <PackageTags>coordination;distributed;cluster;postgresql;npgsql</PackageTags>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../NCode.Coordination.Abstractions/NCode.Coordination.Abstractions.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <PackageReference Include="Npgsql" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Schema/Migrations/*.sql" />
+  </ItemGroup>
+</Project>

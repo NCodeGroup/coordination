@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using System.Runtime.CompilerServices;
+using Microsoft.Extensions.Logging;
 using NCode.Coordination.Resp.Keys;
+using NCode.Coordination.Resp.Logging;
 using NCode.Coordination.Resp.Server;
 
 namespace NCode.Coordination.Resp.Records;
@@ -15,11 +17,13 @@ namespace NCode.Coordination.Resp.Records;
 /// <param name="table">The record table that reads the keyspace's revision.</param>
 /// <param name="records">The record service that reads a written record.</param>
 /// <param name="subscriptions">Opens the provider's subscriptions to numbered channels.</param>
-/// <exception cref="ArgumentNullException">The table, the records or the subscriptions are null.</exception>
+/// <param name="logger">The logger that reports a read the watch could not make.</param>
+/// <exception cref="ArgumentNullException">The table, the records, the subscriptions or the logger are null.</exception>
 internal class RespRecordWatchService(
     RespRecordTable table,
     IRecordService records,
-    RespSubscriptions subscriptions
+    RespSubscriptions subscriptions,
+    ILogger<RespRecordWatchService> logger
 ) : IRecordWatchService
 {
     /// <summary>
@@ -58,6 +62,12 @@ internal class RespRecordWatchService(
     private RespSubscriptions Subscriptions { get; } =
         subscriptions ?? throw new ArgumentNullException(nameof(subscriptions));
 
+    /// <summary>
+    /// Gets the logger that reports a read the watch could not make.
+    /// </summary>
+    private ILogger<RespRecordWatchService> Logger { get; } =
+        logger ?? throw new ArgumentNullException(nameof(logger));
+
     /// <inheritdoc />
     public IAsyncEnumerable<RecordChange> WatchKeyAsync(
         CoordinationKey key,
@@ -92,7 +102,7 @@ internal class RespRecordWatchService(
     /// <param name="key">The key of the record.</param>
     /// <param name="cancellationToken">The token that cancels the read.</param>
     /// <returns>Whether the read succeeded, and the record, which is null when it is absent or the read failed.</returns>
-    private async ValueTask<(bool Read, StoredRecord? Record)> TryReadAsync(
+    internal async ValueTask<(bool Read, StoredRecord? Record)> TryReadAsync(
         CoordinationKey key,
         CancellationToken cancellationToken
     )
@@ -105,8 +115,10 @@ internal class RespRecordWatchService(
 
             return (true, record);
         }
-        catch (CoordinationException)
+        catch (CoordinationException e)
         {
+            Logger.WatchRecordReadFailed(e);
+
             return (false, null);
         }
     }

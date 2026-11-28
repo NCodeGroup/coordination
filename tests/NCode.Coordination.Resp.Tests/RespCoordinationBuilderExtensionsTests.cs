@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
+using NCode.Coordination.Resp.Records;
 using NCode.Coordination.Resp.Server;
 using StackExchange.Redis;
 
@@ -175,6 +178,35 @@ public sealed class RespCoordinationBuilderExtensionsTests : IDisposable
         await provider.ProbeAsync(cancellationToken);
         await disposable.DisposeAsync();
         Assert.Same(services, received);
+    }
+
+    [Fact]
+    public async Task AddRespProvider_HostLoggerFactory_CreatesTheProviderLoggersThroughIt()
+    {
+        var builder = Mocks.Create<ICoordinationBuilder>();
+        Func<IServiceProvider, ICoordinationProvider>? factory = null;
+        builder
+            .Setup(x => x.AddProvider(It.IsAny<Func<IServiceProvider, ICoordinationProvider>>()))
+            .Callback<Func<IServiceProvider, ICoordinationProvider>>(f => factory = f)
+            .Returns(builder.Object)
+            .Verifiable();
+        List<string> categories = [];
+        var loggerFactory = Mocks.Create<ILoggerFactory>();
+        loggerFactory
+            .Setup(x => x.CreateLogger(It.IsAny<string>()))
+            .Callback<string>(categories.Add)
+            .Returns(NullLogger.Instance);
+        var collection = new ServiceCollection();
+        collection.AddSingleton(loggerFactory.Object);
+        await using var services = collection.BuildServiceProvider();
+
+        builder.Object.AddRespProvider(options => options.Configuration = "localhost:1");
+
+        Assert.NotNull(factory);
+        var provider = factory(services);
+        await using var disposable = Assert.IsAssignableFrom<IAsyncDisposable>(provider);
+        var category = typeof(RespRecordWatchService).FullName;
+        Assert.Contains(category, categories);
     }
 
     #endregion

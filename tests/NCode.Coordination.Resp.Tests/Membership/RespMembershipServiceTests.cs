@@ -2,7 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using System.Globalization;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging.Testing;
 using NCode.Coordination.Resp.Keys;
+using NCode.Coordination.Resp.Logging;
 using NCode.Coordination.Resp.Records;
 using NCode.Coordination.Resp.Server;
 using NCode.Coordination.Resp.Sessions;
@@ -42,10 +46,19 @@ public sealed class RespMembershipServiceTests(RespServers servers)
         var table = new RespRecordTable(server, profile);
         var checkInterval = TimeSpan.FromMilliseconds(200);
         var schedule = new RespCheckSchedule(checkInterval, TimeProvider.System);
-        var subscriptions = new RespSubscriptions(connection, profile, schedule);
+        var subscriptions = new RespSubscriptions(
+            connection,
+            profile,
+            schedule,
+            NullLoggerFactory.Instance
+        );
         var tokens = new RespRandomTokens();
         var sessions = new RespSessionService(table, tokens);
-        var membership = new RespMembershipService(table, subscriptions);
+        var membership = new RespMembershipService(
+            table,
+            subscriptions,
+            NullLogger<RespMembershipService>.Instance
+        );
 
         return (sessions, membership, subscriptions);
     }
@@ -327,6 +340,48 @@ public sealed class RespMembershipServiceTests(RespServers servers)
     [RespServerFact]
     public Task WatchAsync_Garnet_WhenAResyncFindsTheGroupUnchanged_YieldsNoView() =>
         AssertUnchangedResyncYieldsNoViewAsync(servers.Garnet, RespProfiles.Garnet);
+
+    #endregion
+
+    #region TryReadAsync Tests
+
+    [Fact]
+    public async Task TryReadAsync_WhenTheServerIsUnreachable_LogsTheReadFailureOnce()
+    {
+        var connection = new RespConnection(
+            _ =>
+                ValueTask.FromException<IConnectionMultiplexer>(
+                    new RedisConnectionException(
+                        ConnectionFailureType.UnableToConnect,
+                        CommandFlags.None,
+                        "unreachable",
+                        null,
+                        CommandStatus.Unknown
+                    )
+                ),
+            owned: false
+        );
+        var profile = RespProfiles.Valkey;
+        var table = new RespRecordTable(new RespServer(connection), profile);
+        var schedule = new RespCheckSchedule(TimeSpan.FromMinutes(1), TimeProvider.System);
+        var subscriptions = new RespSubscriptions(
+            connection,
+            profile,
+            schedule,
+            NullLoggerFactory.Instance
+        );
+        var logger = new FakeLogger<RespMembershipService>();
+        var membership = new RespMembershipService(table, subscriptions, logger);
+        var group = CreateKeyspace().CreateKey("group");
+
+        var view = await membership.TryReadAsync(group, TestContext.Current.CancellationToken);
+
+        Assert.Null(view);
+        var records = logger.Collector.GetSnapshot();
+        var record = Assert.Single(records);
+        Assert.Equal(EventIds.WatchGroupReadFailed, record.Id.Id);
+        Assert.Equal(LogLevel.Warning, record.Level);
+    }
 
     #endregion
 }

@@ -94,6 +94,24 @@ notifications are at most once with gap detection: a message can be lost, but ne
 Every key carries its keyspace as its cluster hash tag, so a keyspace and everything in it live in one slot. A
 cluster spreads keyspaces across its shards, not one keyspace: a keyspace per tenant is the usual unit.
 
+## Logging
+
+The provider logs through the `ILogger` its host's `ILoggerFactory` makes, with a category per class, and uses no
+logger when the host registers no `ILoggerFactory`. It registers no logging provider: the host decides where its logs go.
+It logs each failure its background work catches and goes on from, once per failed round, with an event id of its band,
+3000 to 3999:
+
+| Id | Name | Level | Meaning |
+| --- | --- | --- | --- |
+| 3001 | `ChannelNumberReadFailed` | Warning | A subscription could not read its channel's number; it stays in doubt and resyncs at a later check |
+| 3002 | `WatchRecordReadFailed` | Warning | A record watch could not read a written record; it resyncs at a later check |
+| 3003 | `WatchGroupReadFailed` | Warning | A membership watch could not read its group; it resyncs at a later check |
+| 3004 | `UnsubscribeFailed` | Debug | Unsubscribing from a channel failed as a subscription ended; the subscription ends with the connection |
+
+Each entry carries the failure as its exception. No entry carries a keyspace, key, channel or topic, since they can name
+a tenant, so an entry shows that something failed, not for whom. See
+[ADR-1035](https://github.com/NCodeGroup/coordination/blob/main/docs/decisions/1035-the-providers-log-every-failure-their-background-work-catches-with-event-ids-of-their-own.md).
+
 ## Verification
 
 The provider passes every suite of the conformance kit against Valkey and Garnet, and against a Valkey cluster and a
