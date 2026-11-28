@@ -1,6 +1,7 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using System.Diagnostics;
 using Microsoft.Extensions.Time.Testing;
 using NCode.Coordination.PostgreSql.Keys;
 using NCode.Coordination.PostgreSql.Records;
@@ -65,9 +66,21 @@ public sealed class PgSweeperTests
                 sweeper.Start();
 
                 await time.FirstTimer.WaitAsync(TimeSpan.FromSeconds(10), cancellationToken);
-                await Task.Delay(TimeSpan.FromMilliseconds(200), cancellationToken);
+                time.Advance(Interval);
 
-                Assert.Equal(1, time.Timers);
+                var elapsed = Stopwatch.StartNew();
+                while (time.Timers < 2)
+                {
+                    Assert.True(
+                        elapsed.Elapsed < TimeSpan.FromSeconds(60),
+                        "The loop did not wait for its next pass."
+                    );
+                    await Task.Delay(TimeSpan.FromMilliseconds(50), cancellationToken);
+                }
+
+                await sweeper.DisposeAsync();
+
+                Assert.Equal(2, time.Timers);
             }
         );
     }
@@ -93,7 +106,6 @@ public sealed class PgSweeperTests
 
                 var timers = time.Timers;
                 time.Advance(Interval);
-                await Task.Delay(TimeSpan.FromMilliseconds(200), cancellationToken);
 
                 Assert.Equal(timers, time.Timers);
             }
