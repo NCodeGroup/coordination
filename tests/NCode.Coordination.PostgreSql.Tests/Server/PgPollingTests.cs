@@ -25,7 +25,8 @@ public sealed class PgPollingTests
 
         time.Advance(PgPolling.Interval);
 
-        await wait.WaitAsync(TimeSpan.FromSeconds(10), cancellationToken);
+        var timeout = TimeSpan.FromSeconds(10);
+        await wait.WaitAsync(timeout, cancellationToken);
         Assert.Equal(2, calls);
     }
 

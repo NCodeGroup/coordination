@@ -37,10 +37,11 @@ public sealed class PgServerUnitTests
     {
         await using var offline = new PgOfflineServer();
         var server = offline.Server;
+        PgStatement[] statements = [new PgStatement("SELECT 1")];
 
         var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
             await server.ExecuteAsync(
-                [new PgStatement("SELECT 1")],
+                statements,
                 static (_, _) => ValueTask.FromResult(true),
                 CancellationToken.None
             )

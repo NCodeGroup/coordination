@@ -66,7 +66,8 @@ public sealed class PgServerTransactionTests(PgServers servers)
             "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE application_name = $1",
             connection
         );
-        command.Parameters.Add(new NpgsqlParameter { Value = applicationName });
+        var parameter = new NpgsqlParameter { Value = applicationName };
+        command.Parameters.Add(parameter);
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
@@ -76,8 +77,11 @@ public sealed class PgServerTransactionTests(PgServers servers)
             ApplicationName = applicationName,
         }.ConnectionString;
 
-    private static PgStatement Insert(string schema) =>
-        new($"INSERT INTO {schema}.t (id) VALUES ($1)", PgArgument.Of(1));
+    private static PgStatement Insert(string schema)
+    {
+        var argument = PgArgument.Of(1);
+        return new($"INSERT INTO {schema}.t (id) VALUES ($1)", argument);
+    }
 
     private static ValueTask<bool> Ignore(PgResults results, CancellationToken cancellationToken) =>
         ValueTask.FromResult(true);
@@ -103,13 +107,15 @@ public sealed class PgServerTransactionTests(PgServers servers)
             {
                 await using var source = PgSource.FromConnectionString(servers.Admin19);
                 var server = new PgServer(source, PgSettings.Default);
+                PgStatement[] reads = [new PgStatement("SELECT 1")];
+                PgStatement[] writes = [Insert(schema)];
 
                 await server.TransactAsync(
                     PgIsolation.ReadCommitted,
                     async (transaction, token) =>
                     {
-                        await transaction.FirstAsync([new PgStatement("SELECT 1")], Ignore, token);
-                        await transaction.CommitAsync([Insert(schema)], token);
+                        await transaction.FirstAsync(reads, Ignore, token);
+                        await transaction.CommitAsync(writes, token);
                         return true;
                     },
                     cancellationToken
@@ -133,13 +139,15 @@ public sealed class PgServerTransactionTests(PgServers servers)
             {
                 await using var source = PgSource.FromConnectionString(servers.Admin19);
                 var server = new PgServer(source, PgSettings.Default);
+                PgStatement[] reads = [new PgStatement("SELECT 1")];
+                PgStatement[] writes = [Insert(schema)];
 
                 await server.TransactAsync(
                     PgIsolation.ReadCommitted,
                     async (transaction, token) =>
                     {
-                        await transaction.FirstAsync([new PgStatement("SELECT 1")], Ignore, token);
-                        await transaction.NextAsync([Insert(schema)], Ignore, token);
+                        await transaction.FirstAsync(reads, Ignore, token);
+                        await transaction.NextAsync(writes, Ignore, token);
                         await transaction.RollbackAsync(token);
                         return true;
                     },
@@ -164,21 +172,16 @@ public sealed class PgServerTransactionTests(PgServers servers)
             {
                 await using var source = PgSource.FromConnectionString(servers.Admin19);
                 var server = new PgServer(source, PgSettings.Default);
+                PgStatement[] reads = [new PgStatement("SELECT 1")];
+                PgStatement[] writes = [Insert(schema), new PgStatement("SELECT 1 / 0")];
 
                 var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
                     await server.TransactAsync(
                         PgIsolation.ReadCommitted,
                         async (transaction, token) =>
                         {
-                            await transaction.FirstAsync(
-                                [new PgStatement("SELECT 1")],
-                                Ignore,
-                                token
-                            );
-                            await transaction.CommitAsync(
-                                [Insert(schema), new PgStatement("SELECT 1 / 0")],
-                                token
-                            );
+                            await transaction.FirstAsync(reads, Ignore, token);
+                            await transaction.CommitAsync(writes, token);
                             return true;
                         },
                         cancellationToken
@@ -204,29 +207,23 @@ public sealed class PgServerTransactionTests(PgServers servers)
             async schema =>
             {
                 await using var source = PgSource.FromConnectionString(servers.Admin19);
-                var server = new PgServer(
-                    source,
-                    PgSettings.Default with
-                    {
-                        IdleInTransactionTimeout = TimeSpan.FromMilliseconds(200),
-                    }
-                )
+                var idleTimeout = TimeSpan.FromMilliseconds(200);
+                var settings = PgSettings.Default with { IdleInTransactionTimeout = idleTimeout };
+                var delay = TimeSpan.FromMilliseconds(600);
+                var server = new PgServer(source, settings)
                 {
-                    AfterFirstBatch = async token =>
-                        await Task.Delay(TimeSpan.FromMilliseconds(600), token),
+                    AfterFirstBatch = async token => await Task.Delay(delay, token),
                 };
+                PgStatement[] reads = [new PgStatement("SELECT 1")];
+                PgStatement[] writes = [Insert(schema)];
 
                 var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
                     await server.TransactAsync(
                         PgIsolation.ReadCommitted,
                         async (transaction, token) =>
                         {
-                            await transaction.FirstAsync(
-                                [new PgStatement("SELECT 1")],
-                                Ignore,
-                                token
-                            );
-                            await transaction.CommitAsync([Insert(schema)], token);
+                            await transaction.FirstAsync(reads, Ignore, token);
+                            await transaction.CommitAsync(writes, token);
                             return true;
                         },
                         cancellationToken
@@ -252,9 +249,8 @@ public sealed class PgServerTransactionTests(PgServers servers)
             async schema =>
             {
                 var applicationName = NewName("seam-");
-                await using var source = PgSource.FromConnectionString(
-                    WithApplicationName(servers.Admin19, applicationName)
-                );
+                var connectionString = WithApplicationName(servers.Admin19, applicationName);
+                await using var source = PgSource.FromConnectionString(connectionString);
                 var server = new PgServer(source, PgSettings.Default)
                 {
                     AfterFirstBatch = async token =>
@@ -267,18 +263,16 @@ public sealed class PgServerTransactionTests(PgServers servers)
                         );
                     },
                 };
+                PgStatement[] reads = [new PgStatement("SELECT 1")];
+                PgStatement[] writes = [Insert(schema)];
 
                 var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
                     await server.TransactAsync(
                         PgIsolation.ReadCommitted,
                         async (transaction, token) =>
                         {
-                            await transaction.FirstAsync(
-                                [new PgStatement("SELECT 1")],
-                                Ignore,
-                                token
-                            );
-                            await transaction.CommitAsync([Insert(schema)], token);
+                            await transaction.FirstAsync(reads, Ignore, token);
+                            await transaction.CommitAsync(writes, token);
                             return true;
                         },
                         cancellationToken
@@ -304,16 +298,13 @@ public sealed class PgServerTransactionTests(PgServers servers)
             async schema =>
             {
                 var applicationName = NewName("seam-");
-                await using var source = PgSource.FromConnectionString(
-                    WithApplicationName(servers.Admin19, applicationName)
-                );
-                var server = new PgServer(
-                    source,
-                    PgSettings.Default with
-                    {
-                        StatementTimeout = TimeSpan.FromSeconds(30),
-                    }
-                );
+                var connectionString = WithApplicationName(servers.Admin19, applicationName);
+                await using var source = PgSource.FromConnectionString(connectionString);
+                var statementTimeout = TimeSpan.FromSeconds(30);
+                var settings = PgSettings.Default with { StatementTimeout = statementTimeout };
+                var server = new PgServer(source, settings);
+                PgStatement[] reads = [new PgStatement("SELECT 1")];
+                PgStatement[] writes = [Insert(schema), new PgStatement("SELECT pg_sleep(5)")];
 
                 var terminate = Task.Run(
                     async () =>
@@ -333,15 +324,8 @@ public sealed class PgServerTransactionTests(PgServers servers)
                         PgIsolation.ReadCommitted,
                         async (transaction, token) =>
                         {
-                            await transaction.FirstAsync(
-                                [new PgStatement("SELECT 1")],
-                                Ignore,
-                                token
-                            );
-                            await transaction.CommitAsync(
-                                [Insert(schema), new PgStatement("SELECT pg_sleep(5)")],
-                                token
-                            );
+                            await transaction.FirstAsync(reads, Ignore, token);
+                            await transaction.CommitAsync(writes, token);
                             return true;
                         },
                         cancellationToken
@@ -383,29 +367,20 @@ public sealed class PgServerTransactionTests(PgServers servers)
                 await lockCommand.ExecuteScalarAsync(cancellationToken);
 
                 await using var source = PgSource.FromConnectionString(servers.Admin19);
-                var server = new PgServer(
-                    source,
-                    PgSettings.Default with
-                    {
-                        LockTimeout = TimeSpan.FromMilliseconds(100),
-                    }
-                );
+                var lockTimeout = TimeSpan.FromMilliseconds(100);
+                var settings = PgSettings.Default with { LockTimeout = lockTimeout };
+                var server = new PgServer(source, settings);
+                var lockRow = new PgStatement($"SELECT id FROM {schema}.t WHERE id = 1 FOR UPDATE");
+                PgStatement[] reads = [lockRow];
+                PgStatement[] writes = [Insert(schema)];
 
                 var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
                     await server.TransactAsync(
                         PgIsolation.ReadCommitted,
                         async (transaction, token) =>
                         {
-                            await transaction.FirstAsync(
-                                [
-                                    new PgStatement(
-                                        $"SELECT id FROM {schema}.t WHERE id = 1 FOR UPDATE"
-                                    ),
-                                ],
-                                Ignore,
-                                token
-                            );
-                            await transaction.CommitAsync([Insert(schema)], token);
+                            await transaction.FirstAsync(reads, Ignore, token);
+                            await transaction.CommitAsync(writes, token);
                             return true;
                         },
                         cancellationToken

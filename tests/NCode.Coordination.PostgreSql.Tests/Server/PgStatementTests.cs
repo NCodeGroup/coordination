@@ -12,12 +12,10 @@ public sealed class PgStatementTests
     [Fact]
     public void ToBatchCommand_Arguments_AddsParametersInOrder()
     {
-        var statement = new PgStatement(
-            "SELECT $1, $2, $3",
-            PgArgument.Of(7L),
-            PgArgument.Typed("text", NpgsqlDbType.Text),
-            PgArgument.Typed(new byte[] { 1, 2 }, NpgsqlDbType.Bytea)
-        );
+        var long7 = PgArgument.Of(7L);
+        var text = PgArgument.Typed("text", NpgsqlDbType.Text);
+        var bytes = PgArgument.Typed(new byte[] { 1, 2 }, NpgsqlDbType.Bytea);
+        var statement = new PgStatement("SELECT $1, $2, $3", long7, text, bytes);
 
         var command = statement.ToBatchCommand();
 

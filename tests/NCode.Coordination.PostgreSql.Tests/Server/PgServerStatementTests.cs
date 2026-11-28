@@ -68,7 +68,8 @@ public sealed class PgServerStatementTests(PgServers servers)
             "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE application_name = $1",
             connection
         );
-        command.Parameters.Add(new NpgsqlParameter { Value = applicationName });
+        var parameter = new NpgsqlParameter { Value = applicationName };
+        command.Parameters.Add(parameter);
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
@@ -80,9 +81,11 @@ public sealed class PgServerStatementTests(PgServers servers)
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var source = PgSource.FromConnectionString(servers.Admin19);
         var server = NewServer(source);
+        var argument = PgArgument.Of(41);
+        PgStatement[] statements = [new PgStatement("SELECT 1 + $1", argument)];
 
         var rows = await server.ExecuteAsync(
-            [new PgStatement("SELECT 1 + $1", PgArgument.Of(41))],
+            statements,
             async (results, token) => await results.ReadAsync(r => r.GetInt32(0), token),
             cancellationToken
         );
@@ -96,9 +99,10 @@ public sealed class PgServerStatementTests(PgServers servers)
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var source = PgSource.FromConnectionString(servers.Admin19);
         var server = NewServer(source);
+        PgStatement[] statements = [new PgStatement("SELECT 1 / 0")];
 
         var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
-            await server.ExecuteAsync([new PgStatement("SELECT 1 / 0")], Ignore, cancellationToken)
+            await server.ExecuteAsync(statements, Ignore, cancellationToken)
         );
 
         Assert.Equal(CoordinationErrorCodes.Unavailable, exception.Code);
@@ -110,20 +114,13 @@ public sealed class PgServerStatementTests(PgServers servers)
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var source = PgSource.FromConnectionString(servers.Admin19);
-        var server = NewServer(
-            source,
-            PgSettings.Default with
-            {
-                StatementTimeout = TimeSpan.FromMilliseconds(100),
-            }
-        );
+        var statementTimeout = TimeSpan.FromMilliseconds(100);
+        var settings = PgSettings.Default with { StatementTimeout = statementTimeout };
+        var server = NewServer(source, settings);
+        PgStatement[] statements = [new PgStatement("SELECT pg_sleep(1)")];
 
         var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
-            await server.ExecuteAsync(
-                [new PgStatement("SELECT pg_sleep(1)")],
-                Ignore,
-                cancellationToken
-            )
+            await server.ExecuteAsync(statements, Ignore, cancellationToken)
         );
 
         Assert.Equal(CoordinationErrorCodes.Unavailable, exception.Code);
@@ -136,13 +133,10 @@ public sealed class PgServerStatementTests(PgServers servers)
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var source = PgSource.FromConnectionString(servers.Admin19);
         var server = NewServer(source);
+        PgStatement[] statements = [new PgStatement("SELECT 9223372036854775807::bigint + 1")];
 
         var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
-            await server.ExecuteAsync(
-                [new PgStatement("SELECT 9223372036854775807::bigint + 1")],
-                Ignore,
-                cancellationToken
-            )
+            await server.ExecuteAsync(statements, Ignore, cancellationToken)
         );
 
         Assert.Equal(CoordinationErrorCodes.LimitExceeded, exception.Code);
@@ -159,13 +153,10 @@ public sealed class PgServerStatementTests(PgServers servers)
             ApplicationName = applicationName,
         }.ConnectionString;
         await using var source = PgSource.FromConnectionString(connectionString);
-        var server = NewServer(
-            source,
-            PgSettings.Default with
-            {
-                StatementTimeout = TimeSpan.FromSeconds(30),
-            }
-        );
+        var statementTimeout = TimeSpan.FromSeconds(30);
+        var settings = PgSettings.Default with { StatementTimeout = statementTimeout };
+        var server = NewServer(source, settings);
+        PgStatement[] statements = [new PgStatement("SELECT pg_sleep(5)")];
 
         var terminate = Task.Run(
             async () =>
@@ -183,18 +174,15 @@ public sealed class PgServerStatementTests(PgServers servers)
                     "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE application_name = $1",
                     connection
                 );
-                command.Parameters.Add(new NpgsqlParameter { Value = applicationName });
+                var parameter = new NpgsqlParameter { Value = applicationName };
+                command.Parameters.Add(parameter);
                 await command.ExecuteNonQueryAsync(cancellationToken);
             },
             cancellationToken
         );
 
         var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
-            await server.ExecuteAsync(
-                [new PgStatement("SELECT pg_sleep(5)")],
-                Ignore,
-                cancellationToken
-            )
+            await server.ExecuteAsync(statements, Ignore, cancellationToken)
         );
         await terminate;
 
@@ -246,13 +234,10 @@ public sealed class PgServerStatementTests(PgServers servers)
                 );
                 await using var source = PgSource.FromConnectionString(servers.PostgreSql19);
                 var server = NewServer(source);
+                PgStatement[] statements = [new PgStatement($"SELECT id FROM {schema}.t")];
 
                 var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
-                    await server.ExecuteAsync(
-                        [new PgStatement($"SELECT id FROM {schema}.t")],
-                        Ignore,
-                        cancellationToken
-                    )
+                    await server.ExecuteAsync(statements, Ignore, cancellationToken)
                 );
 
                 Assert.Equal(CoordinationErrorCodes.AccessDenied, exception.Code);
@@ -278,18 +263,12 @@ public sealed class PgServerStatementTests(PgServers servers)
                 );
                 await using var source = PgSource.FromConnectionString(servers.Admin19);
                 var server = NewServer(source);
+                var argument = PgArgument.Of(1L);
+                var insert = new PgStatement($"INSERT INTO {schema}.c (p) VALUES ($1)", argument);
+                PgStatement[] statements = [insert];
 
                 await Assert.ThrowsAsync<PgKeyspaceMissingException>(async () =>
-                    await server.ExecuteAsync(
-                        [
-                            new PgStatement(
-                                $"INSERT INTO {schema}.c (p) VALUES ($1)",
-                                PgArgument.Of(1L)
-                            ),
-                        ],
-                        Ignore,
-                        cancellationToken
-                    )
+                    await server.ExecuteAsync(statements, Ignore, cancellationToken)
                 );
             },
             cancellationToken
@@ -312,6 +291,9 @@ public sealed class PgServerStatementTests(PgServers servers)
                 await using var dataSource = NpgsqlDataSource.Create(servers.Admin19);
                 await using var source = PgSource.FromDataSource(dataSource);
                 var server = NewServer(source);
+                var argument = PgArgument.Of(1);
+                var insert = new PgStatement($"INSERT INTO {schema}.t (id) VALUES ($1)", argument);
+                PgStatement[] statements = [insert];
 
                 using (
                     var scope = new TransactionScope(
@@ -320,16 +302,7 @@ public sealed class PgServerStatementTests(PgServers servers)
                     )
                 )
                 {
-                    await server.ExecuteAsync(
-                        [
-                            new PgStatement(
-                                $"INSERT INTO {schema}.t (id) VALUES ($1)",
-                                PgArgument.Of(1)
-                            ),
-                        ],
-                        Ignore,
-                        cancellationToken
-                    );
+                    await server.ExecuteAsync(statements, Ignore, cancellationToken);
                 }
 
                 var count = await PgServers.ScalarAsync(
@@ -348,13 +321,11 @@ public sealed class PgServerStatementTests(PgServers servers)
     {
         await using var source = PgSource.FromConnectionString(servers.Admin19);
         var server = NewServer(source);
+        PgStatement[] statements = [new PgStatement("SELECT 1")];
+        var canceledToken = new CancellationToken(canceled: true);
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
-            await server.ExecuteAsync(
-                [new PgStatement("SELECT 1")],
-                Ignore,
-                new CancellationToken(canceled: true)
-            )
+            await server.ExecuteAsync(statements, Ignore, canceledToken)
         );
     }
 
