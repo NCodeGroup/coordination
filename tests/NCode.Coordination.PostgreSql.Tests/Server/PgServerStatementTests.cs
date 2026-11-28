@@ -46,6 +46,32 @@ public sealed class PgServerStatementTests(PgServers servers)
     private static ValueTask<bool> Ignore(PgResults results, CancellationToken cancellationToken) =>
         ValueTask.FromResult(true);
 
+    private static async ValueTask<int> ReadFirstInt32Async(
+        PgResults results,
+        CancellationToken cancellationToken
+    )
+    {
+        var rows = await results.ReadAsync(r => r.GetInt32(0), cancellationToken);
+        return rows[0];
+    }
+
+    private static async Task TerminateAsync(
+        string adminConnectionString,
+        string applicationName,
+        CancellationToken cancellationToken
+    )
+    {
+        await using var connection = new NpgsqlConnection(adminConnectionString);
+        await connection.OpenAsync(cancellationToken);
+
+        await using var command = new NpgsqlCommand(
+            "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE application_name = $1",
+            connection
+        );
+        command.Parameters.Add(new NpgsqlParameter { Value = applicationName });
+        await command.ExecuteNonQueryAsync(cancellationToken);
+    }
+
     #region ExecuteAsync Tests
 
     [PgServerFact]
@@ -174,6 +200,35 @@ public sealed class PgServerStatementTests(PgServers servers)
 
         Assert.Equal(CoordinationErrorCodes.Unavailable, exception.Code);
         Assert.True(exception.OutcomeUnknown);
+    }
+
+    [PgServerFact]
+    public async Task ExecuteAsync_EveryPooledConnectionEnded_FailsOnceThenConnectsAfresh()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var applicationName = "seam-" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
+        var builder = new NpgsqlConnectionStringBuilder(servers.Admin19)
+        {
+            ApplicationName = applicationName,
+        };
+        var connectionString = builder.ConnectionString;
+        await using var source = PgSource.FromConnectionString(connectionString);
+        var server = NewServer(source);
+        PgStatement[] statements = [new PgStatement("SELECT 1")];
+        var first = await source.OpenAsync(cancellationToken);
+        var second = await source.OpenAsync(cancellationToken);
+        await first.DisposeAsync();
+        await second.DisposeAsync();
+        await TerminateAsync(servers.Admin19, applicationName, cancellationToken);
+        await PgActivity.WaitForNoBackendAsync(servers.Admin19, applicationName, cancellationToken);
+
+        var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
+            await server.ExecuteAsync(statements, ReadFirstInt32Async, cancellationToken)
+        );
+        var row = await server.ExecuteAsync(statements, ReadFirstInt32Async, cancellationToken);
+
+        Assert.Equal(CoordinationErrorCodes.Unavailable, exception.Code);
+        Assert.Equal(1, row);
     }
 
     [PgServerFact]

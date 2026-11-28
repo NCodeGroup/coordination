@@ -11,8 +11,10 @@ public sealed class PgLivenessTests
 
     [Theory]
     [InlineData(-1, null, null, "Expired")]
+    [InlineData(0, null, null, "Expired")]
     [InlineData(1, "s-1", null, "SessionEnded")]
     [InlineData(1, "s-1", -1, "SessionExpired")]
+    [InlineData(1, "s-1", 0, "SessionExpired")]
     [InlineData(1, "s-1", 1, "Live")]
     [InlineData(1, null, null, "Live")]
     public void StateOf_Deadlines_ReturnsTheState(
