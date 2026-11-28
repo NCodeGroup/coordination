@@ -359,7 +359,7 @@ internal sealed class PgLogHub : IAsyncDisposable, IDisposable
     }
 
     /// <summary>
-    /// Pumps a fanout and swallows a failure of the server, because the next check reads again.
+    /// Pumps a fanout and swallows any failure of the pump, so that one failed read never ends the periodic checks.
     /// </summary>
     /// <param name="pump">The fanout.</param>
     /// <param name="stop">The token that cancels the pump.</param>
@@ -370,9 +370,10 @@ internal sealed class PgLogHub : IAsyncDisposable, IDisposable
         {
             await pump.PumpAsync(stop).ConfigureAwait(false);
         }
-        catch (CoordinationException)
+        catch (Exception) when (!stop.IsCancellationRequested)
         {
-            // The next check reads again.
+            // A failed read leaves every subscriber's cursor where it was, and the next check reads again; the package
+            // has no logger to report it to.
         }
         catch (OperationCanceledException) when (stop.IsCancellationRequested)
         {
