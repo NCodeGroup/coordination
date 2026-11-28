@@ -19,7 +19,9 @@ namespace NCode.Coordination.PostgreSql.Leases;
 /// <exception cref="ArgumentNullException">The table is null.</exception>
 internal sealed class PgGrants(PgRecordTable table)
 {
-    /// <summary>The template of the statement that reads a resource's grant rows beside the deadlines of their sessions.</summary>
+    /// <summary>
+    /// The template of the statement that reads a resource's grant rows beside the deadlines of their sessions.
+    /// </summary>
     private const string SelectGrants = """
         SELECT g.slot, g.capacity, g.fencing, g.owner, g.session_id, g.deadline, g.value, s.deadline
         FROM {schema}.grants g
@@ -28,17 +30,23 @@ internal sealed class PgGrants(PgRecordTable table)
         ORDER BY g.slot
         """;
 
-    /// <summary>The template of the statement that reads the last fencing token of a resource.</summary>
+    /// <summary>
+    /// The template of the statement that reads the last fencing token of a resource.
+    /// </summary>
     private const string SelectLast = """
         SELECT last FROM {schema}.fencing WHERE keyspace_id = $1 AND kind = $2 AND idx = $3 AND depth = $4
         """;
 
-    /// <summary>The template of the statement that reads the deadline of a session's row.</summary>
+    /// <summary>
+    /// The template of the statement that reads the deadline of a session's row.
+    /// </summary>
     private const string SelectSession = """
         SELECT deadline FROM {schema}.sessions WHERE keyspace_id = $1 AND id = $2
         """;
 
-    /// <summary>The template of the statement that reads the server's instant and a resource's grant rows.</summary>
+    /// <summary>
+    /// The template of the statement that reads the server's instant and a resource's grant rows.
+    /// </summary>
     private const string SelectNow = """
         SELECT now.t, g.slot, g.capacity, g.fencing, g.owner, g.session_id, g.deadline, g.value, s.deadline
         FROM (SELECT clock_timestamp() AS t) now
@@ -48,12 +56,9 @@ internal sealed class PgGrants(PgRecordTable table)
         ORDER BY g.slot
         """;
 
-    /// <summary>The template of the statement that waits for the writers of a keyspace's row.</summary>
-    private const string LockShare = """
-        SELECT 1 FROM {schema}.keyspaces WHERE id = $1 FOR SHARE
-        """;
-
-    /// <summary>The template of the statement that writes a grant, replacing the row that holds its slot.</summary>
+    /// <summary>
+    /// The template of the statement that writes a grant, replacing the row that holds its slot.
+    /// </summary>
     private const string UpsertGrant = """
         INSERT INTO {schema}.grants
             (keyspace_id, kind, idx, depth, key, slot, capacity, fencing, owner, session_id, deadline, value)
@@ -63,55 +68,253 @@ internal sealed class PgGrants(PgRecordTable table)
             session_id = EXCLUDED.session_id, deadline = EXCLUDED.deadline, value = EXCLUDED.value
         """;
 
-    /// <summary>The template of the statement that stores the last fencing token of a resource.</summary>
+    /// <summary>
+    /// The template of the statement that stores the last fencing token of a resource.
+    /// </summary>
     private const string UpsertFencing = """
         INSERT INTO {schema}.fencing (keyspace_id, kind, idx, depth, key, last)
         VALUES ($1, $2, $3, $4, $5, $6)
         ON CONFLICT (keyspace_id, kind, idx, depth) DO UPDATE SET last = EXCLUDED.last
         """;
 
-    /// <summary>The template of the statement that moves the deadline of a grant.</summary>
+    /// <summary>
+    /// The template of the statement that moves the deadline of a grant.
+    /// </summary>
     private const string RenewGrant = """
         UPDATE {schema}.grants SET deadline = $6
         WHERE keyspace_id = $1 AND kind = $2 AND idx = $3 AND depth = $4 AND slot = $5 AND fencing = $7
         """;
 
-    /// <summary>The template of the statement that deletes a grant.</summary>
+    /// <summary>
+    /// The template of the statement that deletes a grant.
+    /// </summary>
     private const string DeleteGrant = """
         DELETE FROM {schema}.grants
         WHERE keyspace_id = $1 AND kind = $2 AND idx = $3 AND depth = $4 AND slot = $5 AND fencing = $6
         """;
 
     /// <summary>
+    /// Reads a column of an instant as UTC.
+    /// </summary>
+    /// <param name="reader">The reader, on a row.</param>
+    /// <param name="ordinal">The column's ordinal.</param>
+    /// <returns>The instant, of kind UTC.</returns>
+    private static DateTime ReadUtc(NpgsqlDataReader reader, int ordinal)
+    {
+        var instant = reader.GetDateTime(ordinal);
+
+        return DateTime.SpecifyKind(instant, DateTimeKind.Utc);
+    }
+
+    /// <summary>
+    /// Reads a column of an instant that may be null, as UTC.
+    /// </summary>
+    /// <param name="reader">The reader, on a row.</param>
+    /// <param name="ordinal">The column's ordinal.</param>
+    /// <returns>The instant, of kind UTC, or null.</returns>
+    private static DateTime? ReadNullableUtc(NpgsqlDataReader reader, int ordinal)
+    {
+        if (reader.IsDBNull(ordinal))
+        {
+            return null;
+        }
+
+        return ReadUtc(reader, ordinal);
+    }
+
+    /// <summary>
+    /// Reads a column of text that may be null.
+    /// </summary>
+    /// <param name="reader">The reader, on a row.</param>
+    /// <param name="ordinal">The column's ordinal.</param>
+    /// <returns>The text, or null.</returns>
+    private static string? ReadNullableText(NpgsqlDataReader reader, int ordinal)
+    {
+        if (reader.IsDBNull(ordinal))
+        {
+            return null;
+        }
+
+        return reader.GetString(ordinal);
+    }
+
+    /// <summary>
+    /// Reads a column of bytes that may be null.
+    /// </summary>
+    /// <param name="reader">The reader, on a row.</param>
+    /// <param name="ordinal">The column's ordinal.</param>
+    /// <returns>The bytes, or null.</returns>
+    private static byte[]? ReadNullableBytes(NpgsqlDataReader reader, int ordinal)
+    {
+        if (reader.IsDBNull(ordinal))
+        {
+            return null;
+        }
+
+        return reader.GetFieldValue<byte[]>(ordinal);
+    }
+
+    /// <summary>
+    /// Maps a row of the <c>grants</c> table, which the statements select in the same column order.
+    /// </summary>
+    /// <param name="reader">The reader, positioned on the row.</param>
+    /// <param name="offset">The position of the row's first column.</param>
+    /// <returns>The row.</returns>
+    private static PgGrantRow MapRow(NpgsqlDataReader reader, int offset)
+    {
+        var slot = reader.GetInt32(offset);
+        var capacity = reader.GetInt32(offset + 1);
+        var fencing = reader.GetInt64(offset + 2);
+        var owner = reader.GetString(offset + 3);
+        var session = ReadNullableText(reader, offset + 4);
+        var deadline = ReadNullableUtc(reader, offset + 5);
+        var value = ReadNullableBytes(reader, offset + 6);
+        var sessionDeadline = ReadNullableUtc(reader, offset + 7);
+
+        return new PgGrantRow(
+            slot,
+            capacity,
+            fencing,
+            owner,
+            session,
+            deadline,
+            value,
+            sessionDeadline
+        );
+    }
+
+    /// <summary>
+    /// Reads a row of the result of the statement that lists a resource's grant rows beside the server's instant.
+    /// </summary>
+    /// <param name="reader">The reader, on a row.</param>
+    /// <returns>The server's instant and the grant row, or null when the resource has none.</returns>
+    private static (DateTime Now, PgGrantRow? Row) ReadNowAndRow(NpgsqlDataReader reader)
+    {
+        var now = ReadUtc(reader, 0);
+        var row = reader.IsDBNull(1) ? null : MapRow(reader, 1);
+
+        return (now, row);
+    }
+
+    /// <summary>
+    /// Reads the deadline of a session's row from the first column.
+    /// </summary>
+    /// <param name="reader">The reader, on a row.</param>
+    /// <returns>The deadline, of kind UTC.</returns>
+    private static DateTime ReadSessionDeadline(NpgsqlDataReader reader)
+    {
+        return ReadUtc(reader, 0);
+    }
+
+    /// <summary>
+    /// Reads the results of the first batch of a change to a resource's grants.
+    /// </summary>
+    /// <param name="results">The results of the batch.</param>
+    /// <param name="cancellationToken">The token that cancels the call.</param>
+    /// <returns>What the batch's five statements returned.</returns>
+    private static async ValueTask<PgGrantStartRead> ReadStartAsync(
+        PgResults results,
+        CancellationToken cancellationToken
+    )
+    {
+        var revisions = await results
+            .ReadAsync(reader => reader.GetInt64(0), cancellationToken)
+            .ConfigureAwait(false);
+        var clocks = await results
+            .ReadAsync(reader => reader.GetDateTime(0), cancellationToken)
+            .ConfigureAwait(false);
+        var rows = await results
+            .ReadAsync(reader => MapRow(reader, 0), cancellationToken)
+            .ConfigureAwait(false);
+        var lasts = await results
+            .ReadAsync(reader => reader.GetInt64(0), cancellationToken)
+            .ConfigureAwait(false);
+        var deadlines = await results
+            .ReadAsync(ReadSessionDeadline, cancellationToken)
+            .ConfigureAwait(false);
+
+        return new PgGrantStartRead(revisions, clocks, rows, lasts, deadlines);
+    }
+
+    /// <summary>
+    /// Reads the result of the statement that lists a resource's grant rows with the server's instant.
+    /// </summary>
+    /// <param name="results">The results of the batch.</param>
+    /// <param name="cancellationToken">The token that cancels the call.</param>
+    /// <returns>The server's instant and the rows that exist.</returns>
+    private static async ValueTask<PgGrantRead> ReadRowsAsync(
+        PgResults results,
+        CancellationToken cancellationToken
+    )
+    {
+        var rows = await results.ReadAsync(ReadNowAndRow, cancellationToken).ConfigureAwait(false);
+
+        var existing = rows.Select(row => row.Row).OfType<PgGrantRow>().ToImmutableArray();
+
+        return new PgGrantRead(rows[0].Now, existing);
+    }
+
+    /// <summary>
+    /// Tells whether a grant's own deadline or its session's deadline has passed, so a writer may be about to renew or
+    /// replace it. A grant whose session's row is gone has ended for good.
+    /// </summary>
+    /// <param name="row">The grant.</param>
+    /// <param name="now">The instant of the read.</param>
+    /// <returns><see langword="true"/> when the grant is expired or its session is.</returns>
+    private static bool IsExpired(PgGrantRow row, DateTime now) =>
+        row.StateAt(now) is PgRecordState.Expired or PgRecordState.SessionExpired;
+
+    /// <summary>
+    /// Keeps the grants of a read that are live at its instant.
+    /// </summary>
+    /// <param name="read">What the read returned.</param>
+    /// <returns>The live grants.</returns>
+    private static ImmutableArray<PgGrantRow> Live(PgGrantRead read) =>
+        [.. read.Rows.Where(row => row.StateAt(read.Now) == PgRecordState.Live)];
+
+    /// <summary>
     /// Gets the record table, whose keyspaces' ids, transactions and changes the grants share.
     /// </summary>
     public PgRecordTable Table { get; } = table ?? throw new ArgumentNullException(nameof(table));
 
-    /// <summary>Gets the statement that reads a resource's grant rows.</summary>
+    /// <summary>
+    /// Gets the statement that reads a resource's grant rows.
+    /// </summary>
     private string SelectGrantsSql { get; } = table.Settings.Schema.Apply(SelectGrants);
 
-    /// <summary>Gets the statement that reads the last fencing token of a resource.</summary>
+    /// <summary>
+    /// Gets the statement that reads the last fencing token of a resource.
+    /// </summary>
     private string SelectLastSql { get; } = table.Settings.Schema.Apply(SelectLast);
 
-    /// <summary>Gets the statement that reads the deadline of a session's row.</summary>
+    /// <summary>
+    /// Gets the statement that reads the deadline of a session's row.
+    /// </summary>
     private string SelectSessionSql { get; } = table.Settings.Schema.Apply(SelectSession);
 
-    /// <summary>Gets the statement that reads the server's instant and a resource's grant rows.</summary>
+    /// <summary>
+    /// Gets the statement that reads the server's instant and a resource's grant rows.
+    /// </summary>
     private string SelectNowSql { get; } = table.Settings.Schema.Apply(SelectNow);
 
-    /// <summary>Gets the statement that waits for the writers of a keyspace's row.</summary>
-    private string LockShareSql { get; } = table.Settings.Schema.Apply(LockShare);
-
-    /// <summary>Gets the statement that writes a grant.</summary>
+    /// <summary>
+    /// Gets the statement that writes a grant.
+    /// </summary>
     private string UpsertGrantSql { get; } = table.Settings.Schema.Apply(UpsertGrant);
 
-    /// <summary>Gets the statement that stores the last fencing token of a resource.</summary>
+    /// <summary>
+    /// Gets the statement that stores the last fencing token of a resource.
+    /// </summary>
     private string UpsertFencingSql { get; } = table.Settings.Schema.Apply(UpsertFencing);
 
-    /// <summary>Gets the statement that moves the deadline of a grant.</summary>
+    /// <summary>
+    /// Gets the statement that moves the deadline of a grant.
+    /// </summary>
     private string RenewGrantSql { get; } = table.Settings.Schema.Apply(RenewGrant);
 
-    /// <summary>Gets the statement that deletes a grant.</summary>
+    /// <summary>
+    /// Gets the statement that deletes a grant.
+    /// </summary>
     private string DeleteGrantSql { get; } = table.Settings.Schema.Apply(DeleteGrant);
 
     /// <summary>
@@ -145,56 +348,28 @@ internal sealed class PgGrants(PgRecordTable table)
         var indexArgument = PgArgument.Typed(index, NpgsqlDbType.Bytea);
         var sessionArgument = PgArgument.Typed(session, NpgsqlDbType.Text);
 
-        var (revisions, clocks, rows, lasts, deadlines) = await transaction
-            .FirstAsync(
-                [
-                    Table.LockKeyspace(keyspaceId),
-                    Table.Clock(),
-                    new PgStatement(SelectGrantsSql, keyspaceId, kind, indexArgument, depth),
-                    new PgStatement(SelectLastSql, keyspaceId, kind, indexArgument, depth),
-                    new PgStatement(SelectSessionSql, keyspaceId, sessionArgument),
-                ],
-                async (results, token) =>
-                {
-                    var revisionRows = await results
-                        .ReadAsync(reader => reader.GetInt64(0), token)
-                        .ConfigureAwait(false);
-                    var clockRows = await results
-                        .ReadAsync(reader => reader.GetDateTime(0), token)
-                        .ConfigureAwait(false);
-                    var grantRows = await results
-                        .ReadAsync(reader => MapRow(reader, 0), token)
-                        .ConfigureAwait(false);
-                    var lastRows = await results
-                        .ReadAsync(reader => reader.GetInt64(0), token)
-                        .ConfigureAwait(false);
-                    var sessionRows = await results
-                        .ReadAsync(
-                            reader => DateTime.SpecifyKind(reader.GetDateTime(0), DateTimeKind.Utc),
-                            token
-                        )
-                        .ConfigureAwait(false);
+        var lockKeyspace = Table.LockKeyspace(keyspaceId);
+        var clock = Table.Clock();
+        var selectGrants = new PgStatement(SelectGrantsSql, keyspaceId, kind, indexArgument, depth);
+        var selectLast = new PgStatement(SelectLastSql, keyspaceId, kind, indexArgument, depth);
+        var selectSession = new PgStatement(SelectSessionSql, keyspaceId, sessionArgument);
+        PgStatement[] statements = [lockKeyspace, clock, selectGrants, selectLast, selectSession];
 
-                    return (revisionRows, clockRows, grantRows, lastRows, sessionRows);
-                },
-                cancellationToken
-            )
+        var read = await transaction
+            .FirstAsync(statements, ReadStartAsync, cancellationToken)
             .ConfigureAwait(false);
 
-        if (revisions.Length == 0)
+        if (read.Revisions.Length == 0)
         {
-            throw new PgKeyspaceMissingException("The keyspace's row does not exist.");
+            throw new PgKeyspaceMissingException(PgKeyspaceMissingException.RowMissingMessage);
         }
 
-        var now = DateTime.SpecifyKind(clocks[0], DateTimeKind.Utc);
-        var change = Table.NewChange(keyspaceId, revisions[0], now);
+        var now = DateTime.SpecifyKind(read.Clocks[0], DateTimeKind.Utc);
+        var change = Table.NewChange(keyspaceId, read.Revisions[0], now);
+        var last = read.Lasts.Length == 0 ? 0 : read.Lasts[0];
+        DateTime? sessionDeadline = read.Deadlines.Length == 0 ? null : read.Deadlines[0];
 
-        return new PgGrantStart(
-            change,
-            rows,
-            lasts.Length == 0 ? 0 : lasts[0],
-            deadlines.Length == 0 ? null : deadlines[0]
-        );
+        return new PgGrantStart(change, read.Rows, last, sessionDeadline);
     }
 
     /// <summary>
@@ -380,12 +555,10 @@ internal sealed class PgGrants(PgRecordTable table)
         var index = PgKeys.Index(resource);
         var depth = (short)resource.PartitionDepth;
 
+        var statement = SelectNowStatement(keyspaceId, kind, index, depth);
+
         var first = await Table
-            .Server.ExecuteAsync(
-                [SelectNowStatement(keyspaceId, kind, index, depth)],
-                ReadRowsAsync,
-                cancellationToken
-            )
+            .Server.ExecuteAsync([statement], ReadRowsAsync, cancellationToken)
             .ConfigureAwait(false);
 
         if (!first.Rows.Any(row => IsExpired(row, first.Now)))
@@ -394,28 +567,7 @@ internal sealed class PgGrants(PgRecordTable table)
         }
 
         var second = await Table
-            .Server.TransactAsync(
-                PgIsolation.ReadCommitted,
-                async (transaction, transactionToken) =>
-                    await transaction
-                        .FirstAsync(
-                            [
-                                new PgStatement(LockShareSql, keyspaceId),
-                                SelectNowStatement(keyspaceId, kind, index, depth),
-                            ],
-                            async (results, readToken) =>
-                            {
-                                await results
-                                    .ReadAsync(reader => reader.GetInt32(0), readToken)
-                                    .ConfigureAwait(false);
-                                return await ReadRowsAsync(results, readToken)
-                                    .ConfigureAwait(false);
-                            },
-                            transactionToken
-                        )
-                        .ConfigureAwait(false),
-                cancellationToken
-            )
+            .ReadAfterWritersAsync(keyspaceId, statement, ReadRowsAsync, cancellationToken)
             .ConfigureAwait(false);
 
         return Live(second);
@@ -435,69 +587,4 @@ internal sealed class PgGrants(PgRecordTable table)
 
         return new PgStatement(SelectNowSql, keyspaceId, kind, indexArgument, depth);
     }
-
-    /// <summary>
-    /// Reads the result of the statement that lists a resource's grant rows with the server's instant.
-    /// </summary>
-    /// <param name="results">The results of the batch.</param>
-    /// <param name="cancellationToken">The token that cancels the call.</param>
-    /// <returns>The server's instant and the rows that exist.</returns>
-    private static async ValueTask<PgGrantRead> ReadRowsAsync(
-        PgResults results,
-        CancellationToken cancellationToken
-    )
-    {
-        var rows = await results
-            .ReadAsync(
-                reader =>
-                    (
-                        Now: DateTime.SpecifyKind(reader.GetDateTime(0), DateTimeKind.Utc),
-                        Row: reader.IsDBNull(1) ? null : MapRow(reader, 1)
-                    ),
-                cancellationToken
-            )
-            .ConfigureAwait(false);
-
-        return new PgGrantRead(rows[0].Now, [.. rows.Select(row => row.Row).OfType<PgGrantRow>()]);
-    }
-
-    /// <summary>
-    /// Maps a row of the <c>grants</c> table, which the statements select in the same column order.
-    /// </summary>
-    /// <param name="reader">The reader, positioned on the row.</param>
-    /// <param name="offset">The position of the row's first column.</param>
-    /// <returns>The row.</returns>
-    private static PgGrantRow MapRow(NpgsqlDataReader reader, int offset) =>
-        new(
-            reader.GetInt32(offset),
-            reader.GetInt32(offset + 1),
-            reader.GetInt64(offset + 2),
-            reader.GetString(offset + 3),
-            reader.IsDBNull(offset + 4) ? null : reader.GetString(offset + 4),
-            reader.IsDBNull(offset + 5)
-                ? null
-                : DateTime.SpecifyKind(reader.GetDateTime(offset + 5), DateTimeKind.Utc),
-            reader.IsDBNull(offset + 6) ? null : reader.GetFieldValue<byte[]>(offset + 6),
-            reader.IsDBNull(offset + 7)
-                ? null
-                : DateTime.SpecifyKind(reader.GetDateTime(offset + 7), DateTimeKind.Utc)
-        );
-
-    /// <summary>
-    /// Tells whether a grant's own deadline or its session's deadline has passed, so a writer may be about to renew or
-    /// replace it. A grant whose session's row is gone has ended for good.
-    /// </summary>
-    /// <param name="row">The grant.</param>
-    /// <param name="now">The instant of the read.</param>
-    /// <returns><see langword="true"/> when the grant is expired or its session is.</returns>
-    private static bool IsExpired(PgGrantRow row, DateTime now) =>
-        row.StateAt(now) is PgRecordState.Expired or PgRecordState.SessionExpired;
-
-    /// <summary>
-    /// Keeps the grants of a read that are live at its instant.
-    /// </summary>
-    /// <param name="read">What the read returned.</param>
-    /// <returns>The live grants.</returns>
-    private static ImmutableArray<PgGrantRow> Live(PgGrantRead read) =>
-        [.. read.Rows.Where(row => row.StateAt(read.Now) == PgRecordState.Live)];
 }

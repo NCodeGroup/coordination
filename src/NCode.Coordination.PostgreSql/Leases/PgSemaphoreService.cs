@@ -17,8 +17,119 @@ namespace NCode.Coordination.PostgreSql.Leases;
 /// <exception cref="ArgumentNullException">The grants or the tokens are null.</exception>
 internal sealed class PgSemaphoreService(PgGrants grants, IPgTokens tokens) : ISemaphoreService
 {
-    /// <summary>The kind of the grant rows of semaphores.</summary>
+    /// <summary>
+    /// The kind of the grant rows of semaphores.
+    /// </summary>
     private const short Kind = 2;
+
+    /// <summary>
+    /// Finds the lowest slot of a semaphore that no live grant holds.
+    /// </summary>
+    /// <param name="live">The live grants of the semaphore.</param>
+    /// <param name="capacity">The semaphore's capacity.</param>
+    /// <returns>The lowest free slot, or -1 when every slot is held.</returns>
+    private static int LowestFreeSlot(List<PgGrantRow> live, int capacity)
+    {
+        for (var slot = 0; slot < capacity; slot++)
+        {
+            if (!live.Exists(row => row.Slot == slot))
+            {
+                return slot;
+            }
+        }
+
+        return -1;
+    }
+
+    /// <summary>
+    /// Tells whether the session of a grant's terms has ended: the terms bind to a session whose row is gone or past
+    /// its deadline.
+    /// </summary>
+    /// <param name="start">What the transaction's first batch read.</param>
+    /// <param name="terms">The terms of the grant.</param>
+    /// <returns>True when the terms' session is not live.</returns>
+    private static bool SessionHasEnded(PgGrantStart start, LeaseTerms terms)
+    {
+        if (!terms.IsBoundToSession)
+        {
+            return false;
+        }
+
+        return start.SessionDeadline is not { } deadline || deadline <= start.Change.Now;
+    }
+
+    /// <summary>
+    /// Finds the live grant that the attempt's own session already holds.
+    /// </summary>
+    /// <param name="live">The live grants of the semaphore.</param>
+    /// <param name="sessionId">The id of the attempt's session, or null when it has none.</param>
+    /// <returns>The row, or null when the session holds no slot.</returns>
+    private static PgGrantRow? FindOwnSessionGrant(List<PgGrantRow> live, string? sessionId)
+    {
+        if (sessionId is null)
+        {
+            return null;
+        }
+
+        return live.Find(row => string.Equals(row.Session, sessionId, StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// Decides an attempt whose session already holds a slot: the grant is the one it holds.
+    /// </summary>
+    /// <param name="held">The live grant row that the attempt's session holds.</param>
+    /// <param name="request">What the attempt needs.</param>
+    /// <returns>The result that says the attempt's session already holds its slot.</returns>
+    private static SemaphoreAcquireResult DecideHeld(PgGrantRow held, PgSemaphoreRequest request)
+    {
+        var fencingToken = new FencingToken(held.Fencing);
+        var ownerToken = new OwnerToken(held.Owner);
+        var grant = new SemaphoreGrant(
+            request.Resource,
+            held.Slot,
+            fencingToken,
+            ownerToken,
+            request.Terms
+        );
+        return SemaphoreAcquireResult.Acquired(grant);
+    }
+
+    /// <summary>
+    /// Gets the instant a new grant expires.
+    /// </summary>
+    /// <param name="now">The instant the transaction read on the server's clock.</param>
+    /// <param name="terms">The terms of the grant.</param>
+    /// <returns>The deadline, or null when the grant is bound to a session and lives as it does.</returns>
+    private static DateTime? GrantDeadlineOf(DateTime now, LeaseTerms terms)
+    {
+        if (terms.IsBoundToSession)
+        {
+            return null;
+        }
+
+        return PgCall.DeadlineAfter(now, terms.TimeToLive);
+    }
+
+    /// <summary>
+    /// Finds the grant row of a semaphore's slot when the grant is still the live one: the slot, the fencing token
+    /// and the owner token all match.
+    /// </summary>
+    /// <param name="start">What the transaction's first batch read.</param>
+    /// <param name="grant">The grant.</param>
+    /// <returns>The row, or null when the grant has ended.</returns>
+    private static PgGrantRow? FindHeld(PgGrantStart start, SemaphoreGrant grant)
+    {
+        var now = start.Change.Now;
+        var fencing = grant.FencingToken.Value;
+        var owner = grant.Owner.Value;
+
+        return start.Rows.FirstOrDefault(row =>
+            row.Slot == grant.Slot
+            && row.Fencing == fencing
+            && string.Equals(row.Owner, owner, StringComparison.Ordinal)
+            && row.StateAt(now) == PgRecordState.Live
+        );
+    }
 
     /// <summary>
     /// Gets the reads and writes that the grants share.
@@ -49,131 +160,12 @@ internal sealed class PgSemaphoreService(PgGrants grants, IPgTokens tokens) : IS
         PgCall.Check(options, cancellationToken);
 
         var sessionId = terms.IsBoundToSession ? terms.Session.Value : null;
+        var request = new PgSemaphoreRequest(resource, capacity, terms, sessionId);
 
         return await Grants
             .Table.Keyspaces.RunAsync<SemaphoreAcquireResult>(
                 resource.Keyspace,
-                async (id, token) =>
-                    await Grants
-                        .Table.Server.TransactAsync(
-                            PgIsolation.ReadCommitted,
-                            async (transaction, transactionToken) =>
-                            {
-                                var start = await Grants
-                                    .BeginAsync(
-                                        transaction,
-                                        id,
-                                        Kind,
-                                        resource,
-                                        sessionId,
-                                        transactionToken
-                                    )
-                                    .ConfigureAwait(false);
-
-                                start.EndExpiredSessions(sessionId);
-
-                                var now = start.Change.Now;
-                                var live = start
-                                    .Rows.Where(row => row.StateAt(now) == PgRecordState.Live)
-                                    .ToList();
-
-                                SemaphoreAcquireResult result;
-                                if (
-                                    terms.IsBoundToSession
-                                    && (
-                                        start.SessionDeadline is not { } deadline || deadline <= now
-                                    )
-                                )
-                                {
-                                    result = SemaphoreAcquireResult.SessionEnded;
-                                }
-                                else if (live.Exists(row => row.Capacity != capacity))
-                                {
-                                    result = SemaphoreAcquireResult.CapacityConflict;
-                                }
-                                else if (
-                                    sessionId is not null
-                                    && live.Find(row =>
-                                        string.Equals(
-                                            row.Session,
-                                            sessionId,
-                                            StringComparison.Ordinal
-                                        )
-                                    )
-                                        is { } held
-                                )
-                                {
-                                    result = SemaphoreAcquireResult.Acquired(
-                                        new SemaphoreGrant(
-                                            resource,
-                                            held.Slot,
-                                            new FencingToken(held.Fencing),
-                                            new OwnerToken(held.Owner),
-                                            terms
-                                        )
-                                    );
-                                }
-                                else
-                                {
-                                    var slot = LowestFreeSlot(live, capacity);
-
-                                    if (slot < 0)
-                                    {
-                                        result = SemaphoreAcquireResult.Full;
-                                    }
-                                    else
-                                    {
-                                        var fencing = start.Last + 1;
-                                        var owner = Tokens.Next(PgTokenPrefixes.Owner);
-                                        DateTime? grantDeadline = terms.IsBoundToSession
-                                            ? null
-                                            : now.AddTicks(
-                                                PgCall.ToMicroseconds(terms.TimeToLive) * 10
-                                            );
-
-                                        start.Change.Write(
-                                            Grants.Upsert(
-                                                id,
-                                                Kind,
-                                                resource,
-                                                slot,
-                                                capacity,
-                                                fencing,
-                                                owner,
-                                                sessionId,
-                                                grantDeadline,
-                                                null
-                                            )
-                                        );
-                                        start.Change.Write(
-                                            Grants.Fence(id, Kind, resource, fencing)
-                                        );
-
-                                        result = SemaphoreAcquireResult.Acquired(
-                                            new SemaphoreGrant(
-                                                resource,
-                                                slot,
-                                                new FencingToken(fencing),
-                                                new OwnerToken(owner),
-                                                terms
-                                            )
-                                        );
-                                    }
-                                }
-
-                                await Grants
-                                    .Table.CommitAsync(
-                                        transaction,
-                                        start.Change,
-                                        id,
-                                        transactionToken
-                                    )
-                                    .ConfigureAwait(false);
-                                return result;
-                            },
-                            token
-                        )
-                        .ConfigureAwait(false),
+                (id, token) => AcquireInKeyspaceAsync(id, request, token),
                 cancellationToken
             )
             .ConfigureAwait(false);
@@ -199,19 +191,9 @@ internal sealed class PgSemaphoreService(PgGrants grants, IPgTokens tokens) : IS
             );
         }
 
-        var microseconds = PgCall.ToMicroseconds(timeToLive);
-
         return await ChangeHeldAsync(
                 grant,
-                (id, row, now) =>
-                    Grants.Renew(
-                        id,
-                        Kind,
-                        grant.Resource,
-                        grant.Slot,
-                        row.Fencing,
-                        now.AddTicks(microseconds * 10)
-                    ),
+                (id, row, now) => RenewStatement(id, grant, row, now, timeToLive),
                 cancellationToken
             )
             .ConfigureAwait(false);
@@ -251,22 +233,165 @@ internal sealed class PgSemaphoreService(PgGrants grants, IPgTokens tokens) : IS
     }
 
     /// <summary>
-    /// Finds the lowest slot of a semaphore that no live grant holds.
+    /// Builds the statement that renews the grant of a semaphore's slot.
     /// </summary>
-    /// <param name="live">The live grants of the semaphore.</param>
-    /// <param name="capacity">The semaphore's capacity.</param>
-    /// <returns>The lowest free slot, or -1 when every slot is held.</returns>
-    private static int LowestFreeSlot(List<PgGrantRow> live, int capacity)
+    /// <param name="id">The keyspace's id.</param>
+    /// <param name="grant">The grant.</param>
+    /// <param name="row">The slot's grant row.</param>
+    /// <param name="now">The instant the transaction read on the server's clock.</param>
+    /// <param name="timeToLive">The time to live that the grant is renewed for.</param>
+    /// <returns>The statement.</returns>
+    private PgStatement RenewStatement(
+        long id,
+        SemaphoreGrant grant,
+        PgGrantRow row,
+        DateTime now,
+        TimeToLive timeToLive
+    )
     {
-        for (var slot = 0; slot < capacity; slot++)
+        var deadline = PgCall.DeadlineAfter(now, timeToLive);
+        return Grants.Renew(id, Kind, grant.Resource, grant.Slot, row.Fencing, deadline);
+    }
+
+    /// <summary>
+    /// Attempts to acquire a slot of a semaphore in a keyspace, in a transaction.
+    /// </summary>
+    /// <param name="id">The keyspace's id.</param>
+    /// <param name="request">What the attempt needs.</param>
+    /// <param name="cancellationToken">The token that cancels the call.</param>
+    /// <returns>The result of the attempt.</returns>
+    private async ValueTask<SemaphoreAcquireResult> AcquireInKeyspaceAsync(
+        long id,
+        PgSemaphoreRequest request,
+        CancellationToken cancellationToken
+    )
+    {
+        return await Grants
+            .Table.Server.TransactAsync(
+                PgIsolation.ReadCommitted,
+                (transaction, token) => AcquireInTransactionAsync(transaction, id, request, token),
+                cancellationToken
+            )
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Begins a change, decides the attempt from the semaphore's grant rows and commits the change.
+    /// </summary>
+    /// <param name="transaction">The transaction, which has not run a batch.</param>
+    /// <param name="id">The keyspace's id.</param>
+    /// <param name="request">What the attempt needs.</param>
+    /// <param name="cancellationToken">The token that cancels the call.</param>
+    /// <returns>The result of the attempt.</returns>
+    private async ValueTask<SemaphoreAcquireResult> AcquireInTransactionAsync(
+        PgTransaction transaction,
+        long id,
+        PgSemaphoreRequest request,
+        CancellationToken cancellationToken
+    )
+    {
+        var start = await Grants
+            .BeginAsync(
+                transaction,
+                id,
+                Kind,
+                request.Resource,
+                request.SessionId,
+                cancellationToken
+            )
+            .ConfigureAwait(false);
+
+        start.EndExpiredSessions(request.SessionId);
+
+        var result = DecideAcquire(id, start, request);
+
+        await Grants
+            .Table.CommitAsync(transaction, start.Change, id, cancellationToken)
+            .ConfigureAwait(false);
+        return result;
+    }
+
+    /// <summary>
+    /// Decides an attempt to acquire a slot from the grant rows that were read, having made its writes in the change.
+    /// </summary>
+    /// <param name="id">The keyspace's id.</param>
+    /// <param name="start">What the transaction's first batch read.</param>
+    /// <param name="request">What the attempt needs.</param>
+    /// <returns>The result of the attempt.</returns>
+    private SemaphoreAcquireResult DecideAcquire(
+        long id,
+        PgGrantStart start,
+        PgSemaphoreRequest request
+    )
+    {
+        if (SessionHasEnded(start, request.Terms))
         {
-            if (!live.Exists(row => row.Slot == slot))
-            {
-                return slot;
-            }
+            return SemaphoreAcquireResult.SessionEnded;
         }
 
-        return -1;
+        var now = start.Change.Now;
+        var live = start.Rows.Where(row => row.StateAt(now) == PgRecordState.Live).ToList();
+
+        if (live.Exists(row => row.Capacity != request.Capacity))
+        {
+            return SemaphoreAcquireResult.CapacityConflict;
+        }
+
+        var held = FindOwnSessionGrant(live, request.SessionId);
+        if (held is not null)
+        {
+            return DecideHeld(held, request);
+        }
+
+        return GrantSlot(id, start, live, request);
+    }
+
+    /// <summary>
+    /// Gives the attempt the lowest free slot: writes its grant and the resource's fencing token in the change.
+    /// </summary>
+    /// <param name="id">The keyspace's id.</param>
+    /// <param name="start">What the transaction's first batch read.</param>
+    /// <param name="live">The live grants of the semaphore.</param>
+    /// <param name="request">What the attempt needs.</param>
+    /// <returns>The result that says the semaphore is full, or that the attempt's grant was acquired.</returns>
+    private SemaphoreAcquireResult GrantSlot(
+        long id,
+        PgGrantStart start,
+        List<PgGrantRow> live,
+        PgSemaphoreRequest request
+    )
+    {
+        var slot = LowestFreeSlot(live, request.Capacity);
+        if (slot < 0)
+        {
+            return SemaphoreAcquireResult.Full;
+        }
+
+        var resource = request.Resource;
+        var fencing = start.Last + 1;
+        var owner = Tokens.Next(PgTokenPrefixes.Owner);
+        var deadline = GrantDeadlineOf(start.Change.Now, request.Terms);
+
+        var upsert = Grants.Upsert(
+            id,
+            Kind,
+            resource,
+            slot,
+            request.Capacity,
+            fencing,
+            owner,
+            request.SessionId,
+            deadline,
+            null
+        );
+        var fence = Grants.Fence(id, Kind, resource, fencing);
+        start.Change.Write(upsert);
+        start.Change.Write(fence);
+
+        var fencingToken = new FencingToken(fencing);
+        var ownerToken = new OwnerToken(owner);
+        var grant = new SemaphoreGrant(resource, slot, fencingToken, ownerToken, request.Terms);
+        return SemaphoreAcquireResult.Acquired(grant);
     }
 
     /// <summary>
@@ -284,61 +409,73 @@ internal sealed class PgSemaphoreService(PgGrants grants, IPgTokens tokens) : IS
         CancellationToken cancellationToken
     )
     {
+        var change = new PgSemaphoreHeldChange(grant, write);
+
         return await Grants
             .Table.Keyspaces.RunAsync<bool>(
                 grant.Resource.Keyspace,
-                async (id, token) =>
-                    await Grants
-                        .Table.Server.TransactAsync(
-                            PgIsolation.ReadCommitted,
-                            async (transaction, transactionToken) =>
-                            {
-                                var start = await Grants
-                                    .BeginAsync(
-                                        transaction,
-                                        id,
-                                        Kind,
-                                        grant.Resource,
-                                        null,
-                                        transactionToken
-                                    )
-                                    .ConfigureAwait(false);
-
-                                start.EndExpiredSessions(null);
-
-                                var now = start.Change.Now;
-                                var held = start.Rows.FirstOrDefault(row =>
-                                    row.Slot == grant.Slot
-                                    && row.Fencing == grant.FencingToken.Value
-                                    && string.Equals(
-                                        row.Owner,
-                                        grant.Owner.Value,
-                                        StringComparison.Ordinal
-                                    )
-                                    && row.StateAt(now) == PgRecordState.Live
-                                );
-
-                                if (held is not null)
-                                {
-                                    start.Change.Write(write(id, held, now));
-                                }
-
-                                await Grants
-                                    .Table.CommitAsync(
-                                        transaction,
-                                        start.Change,
-                                        id,
-                                        transactionToken
-                                    )
-                                    .ConfigureAwait(false);
-                                return held is not null;
-                            },
-                            token
-                        )
-                        .ConfigureAwait(false),
+                (id, token) => ChangeHeldInKeyspaceAsync(id, change, token),
                 cancellationToken
             )
             .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Changes the grant of a semaphore's slot in a keyspace, in a transaction.
+    /// </summary>
+    /// <param name="id">The keyspace's id.</param>
+    /// <param name="change">The grant and how to build the write.</param>
+    /// <param name="cancellationToken">The token that cancels the call.</param>
+    /// <returns><see langword="true"/> when the write was made; <see langword="false"/> when the grant has ended.</returns>
+    private async ValueTask<bool> ChangeHeldInKeyspaceAsync(
+        long id,
+        PgSemaphoreHeldChange change,
+        CancellationToken cancellationToken
+    )
+    {
+        return await Grants
+            .Table.Server.TransactAsync(
+                PgIsolation.ReadCommitted,
+                (transaction, token) =>
+                    ChangeHeldInTransactionAsync(transaction, id, change, token),
+                cancellationToken
+            )
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Begins a change, makes the write when the grant is still the live one and commits the change.
+    /// </summary>
+    /// <param name="transaction">The transaction, which has not run a batch.</param>
+    /// <param name="id">The keyspace's id.</param>
+    /// <param name="change">The grant and how to build the write.</param>
+    /// <param name="cancellationToken">The token that cancels the call.</param>
+    /// <returns><see langword="true"/> when the write was made; <see langword="false"/> when the grant has ended.</returns>
+    private async ValueTask<bool> ChangeHeldInTransactionAsync(
+        PgTransaction transaction,
+        long id,
+        PgSemaphoreHeldChange change,
+        CancellationToken cancellationToken
+    )
+    {
+        var resource = change.Grant.Resource;
+        var start = await Grants
+            .BeginAsync(transaction, id, Kind, resource, null, cancellationToken)
+            .ConfigureAwait(false);
+
+        start.EndExpiredSessions(null);
+
+        var held = FindHeld(start, change.Grant);
+        if (held is not null)
+        {
+            var statement = change.Write(id, held, start.Change.Now);
+            start.Change.Write(statement);
+        }
+
+        await Grants
+            .Table.CommitAsync(transaction, start.Change, id, cancellationToken)
+            .ConfigureAwait(false);
+        return held is not null;
     }
 
     /// <summary>
@@ -356,8 +493,7 @@ internal sealed class PgSemaphoreService(PgGrants grants, IPgTokens tokens) : IS
         var live = await Grants
             .Table.Keyspaces.RunAsync(
                 resource.Keyspace,
-                async (id, token) =>
-                    await Grants.ReadAsync(id, Kind, resource, token).ConfigureAwait(false),
+                (id, token) => Grants.ReadAsync(id, Kind, resource, token),
                 cancellationToken
             )
             .ConfigureAwait(false);
