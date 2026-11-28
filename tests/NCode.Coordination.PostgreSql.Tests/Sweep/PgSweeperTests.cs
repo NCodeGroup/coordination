@@ -85,6 +85,21 @@ public sealed class PgSweeperTests
         );
     }
 
+    [Fact]
+    public async Task Start_AfterDispose_StartsNoLoop()
+    {
+        await WithSweeperAsync(
+            async (sweeper, time) =>
+            {
+                await sweeper.DisposeAsync();
+
+                sweeper.Start();
+
+                Assert.Equal(0, time.Timers);
+            }
+        );
+    }
+
     #endregion
 
     #region DisposeAsync Tests

@@ -14,8 +14,20 @@ internal sealed class PgSweeper(PgSweeps sweeps, TimeSpan interval, TimeProvider
     : IAsyncDisposable,
         IDisposable
 {
-    private int _started;
-    private int _cancelled;
+    /// <summary>
+    /// Gets the lock that orders starting, cancelling and reading the loop.
+    /// </summary>
+    private Lock Gate { get; } = new();
+
+    /// <summary>
+    /// Gets or sets a value that indicates whether the loop was started.
+    /// </summary>
+    private bool Started { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value that indicates whether the sweeper was cancelled.
+    /// </summary>
+    private bool Cancelled { get; set; }
 
     /// <summary>
     /// Gets the source of the token that ends the loop.
@@ -42,23 +54,32 @@ internal sealed class PgSweeper(PgSweeps sweeps, TimeSpan interval, TimeProvider
     /// </summary>
     public void Start()
     {
-        if (Volatile.Read(ref _cancelled) != 0 || Interlocked.Exchange(ref _started, 1) != 0)
+        lock (Gate)
         {
-            return;
-        }
+            if (Cancelled || Started)
+            {
+                return;
+            }
 
-        var token = Cancellation.Token;
-        Loop = Task.Run(() => RunAsync(token), CancellationToken.None);
+            Started = true;
+            var token = Cancellation.Token;
+            Loop = Task.Run(() => RunAsync(token), CancellationToken.None);
+        }
     }
 
     /// <inheritdoc />
     public async ValueTask DisposeAsync()
     {
-        Cancel();
+        Task loop;
+        lock (Gate)
+        {
+            Cancel();
+            loop = Loop;
+        }
 
         try
         {
-            await Loop.ConfigureAwait(false);
+            await loop.ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
@@ -71,15 +92,24 @@ internal sealed class PgSweeper(PgSweeps sweeps, TimeSpan interval, TimeProvider
     /// <inheritdoc />
     public void Dispose()
     {
-        Cancel();
+        lock (Gate)
+        {
+            Cancel();
+        }
     }
 
+    /// <summary>
+    /// Marks the sweeper cancelled and cancels the source of the loop's token. The caller holds the lock.
+    /// </summary>
     private void Cancel()
     {
-        if (Interlocked.Exchange(ref _cancelled, 1) == 0)
+        if (Cancelled)
         {
-            Cancellation.Cancel();
+            return;
         }
+
+        Cancelled = true;
+        Cancellation.Cancel();
     }
 
     private async Task RunAsync(CancellationToken cancellationToken)
