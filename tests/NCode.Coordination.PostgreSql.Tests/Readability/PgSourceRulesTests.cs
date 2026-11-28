@@ -5,27 +5,52 @@ namespace NCode.Coordination.PostgreSql.Tests.Readability;
 
 public sealed class PgSourceRulesTests
 {
-    public static TheoryData<string> CheckedPaths =>
-        [
-            "Server",
-            "Keys",
-            "Schema",
-            ".",
-            "Counters",
-            "Occurrences",
-            "Sequences",
-            "Sets",
-            "Claims",
-            "Records",
-            "Transactions",
-            "Sessions",
-            "Elections",
-            "Leases",
-            "Membership",
-            "Notifications",
-            "Subscriptions",
-            "Sweep",
-        ];
+    private const string SolutionFileName = "NCode.Coordination.slnx";
+
+    public static TheoryData<string> CheckedPaths
+    {
+        get
+        {
+            var data = new TheoryData<string> { "." };
+            foreach (var folder in FindPackageFolders())
+            {
+                data.Add(folder);
+            }
+
+            return data;
+        }
+    }
+
+    private static List<string> FindPackageFolders()
+    {
+        var packageRoot = FindPackageRoot();
+        var folders = Directory.GetDirectories(packageRoot);
+        var names = folders.Select(folder => Path.GetFileName(folder));
+        var sources = names.Where(name => name is not ("bin" or "obj"));
+        return sources.Order(StringComparer.Ordinal).ToList();
+    }
+
+    private static string FindPackageRoot()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null && !ContainsSolution(directory))
+        {
+            directory = directory.Parent;
+        }
+
+        if (directory is null)
+            throw new InvalidOperationException(
+                $"No folder above the tests holds {SolutionFileName}."
+            );
+
+        return Path.Combine(directory.FullName, "src", "NCode.Coordination.PostgreSql");
+    }
+
+    private static bool ContainsSolution(DirectoryInfo directory)
+    {
+        var solutionPath = Path.Combine(directory.FullName, SolutionFileName);
+        return File.Exists(solutionPath);
+    }
 
     private static string BuildMethodSpanning(int lines)
     {
@@ -250,7 +275,7 @@ public sealed class PgSourceRulesTests
 
     #region CheckPath Tests
 
-    [Theory(SkipTestWithoutData = true)]
+    [Theory]
     [MemberData(nameof(CheckedPaths))]
     public void CheckPath_CheckedPath_FollowsTheRules(string path)
     {
