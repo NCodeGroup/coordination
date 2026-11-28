@@ -4,12 +4,14 @@
 using System.Diagnostics;
 using System.Globalization;
 using NCode.Coordination.PostgreSql.Keys;
+using NCode.Coordination.PostgreSql.Notifications;
 using NCode.Coordination.PostgreSql.Occurrences;
 using NCode.Coordination.PostgreSql.Records;
 using NCode.Coordination.PostgreSql.Schema;
 using NCode.Coordination.PostgreSql.Server;
 using NCode.Coordination.PostgreSql.Sessions;
 using NCode.Coordination.PostgreSql.Sets;
+using NCode.Coordination.PostgreSql.Subscriptions;
 using NCode.Coordination.PostgreSql.Tests.Servers;
 using Npgsql;
 
@@ -28,7 +30,8 @@ public sealed class PgSweepsTests(PgServers servers)
         PgOccurrenceService Occurrences,
         PgSetService Sets,
         PgRecordService Records,
-        PgSessionService Sessions
+        PgSessionService Sessions,
+        PgNotificationService Notifications
     )
     {
         public Keyspace Keyspace { get; } = new("sweep");
@@ -102,6 +105,12 @@ public sealed class PgSweepsTests(PgServers servers)
 
                 var keyspaces = new PgKeyspaces(server, schema);
                 var table = new PgRecordTable(server, keyspaces, settings);
+                await using var hub = new PgLogHub(
+                    source,
+                    keyspaces,
+                    settings,
+                    TimeProvider.System
+                );
                 await test(
                     new Context(
                         adminConnectionString,
@@ -110,7 +119,8 @@ public sealed class PgSweepsTests(PgServers servers)
                         new PgOccurrenceService(server, keyspaces, schema),
                         new PgSetService(server, keyspaces, schema),
                         new PgRecordService(table),
-                        new PgSessionService(table, new PgRandomTokens())
+                        new PgSessionService(table, new PgRandomTokens()),
+                        new PgNotificationService(server, keyspaces, settings, hub)
                     )
                 );
             }
@@ -292,6 +302,41 @@ public sealed class PgSweepsTests(PgServers servers)
                     3,
                     await context.ScalarAsync("log_removed", "keyspaces", cancellationToken)
                 );
+            },
+            cancellationToken,
+            TimeSpan.FromSeconds(1)
+        );
+    }
+
+    [PgServerFact]
+    public async Task SweepAsync_MessagesPastRetention_RaisesRemoved()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await WithSweepsAsync(
+            async context =>
+            {
+                for (var number = 0; number < 3; number++)
+                {
+                    await context.Notifications.PublishAsync(
+                        context.KeyOf(0),
+                        new byte[] { 1 },
+                        null,
+                        cancellationToken
+                    );
+                }
+
+                Assert.Equal(3, await context.CountAsync("messages", cancellationToken));
+                await Task.Delay(TimeSpan.FromMilliseconds(1200), cancellationToken);
+
+                await context.Sweeps.SweepAsync(cancellationToken);
+
+                Assert.Equal(1, await context.CountAsync("messages", cancellationToken));
+                Assert.Equal(2, await context.ScalarAsync("removed", "topics", cancellationToken));
+
+                await context.Sweeps.SweepAsync(cancellationToken);
+
+                Assert.Equal(0, await context.CountAsync("messages", cancellationToken));
+                Assert.Equal(3, await context.ScalarAsync("removed", "topics", cancellationToken));
             },
             cancellationToken,
             TimeSpan.FromSeconds(1)

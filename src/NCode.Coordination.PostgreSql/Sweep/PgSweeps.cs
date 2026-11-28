@@ -182,6 +182,23 @@ internal sealed class PgSweeps(PgServer server, PgSettings settings, PgRecordTab
         WHERE k.id = m.keyspace_id
         """;
 
+    /// <summary>The statement that deletes the messages of the topics' logs that passed their retention.</summary>
+    private const string MessagesSql = """
+        WITH removed AS (
+          DELETE FROM {schema}.messages
+          WHERE ctid = ANY (ARRAY(
+            SELECT ctid FROM {schema}.messages
+            WHERE deadline <= clock_timestamp()
+            ORDER BY keyspace_id, idx, depth, sequence
+            LIMIT $1
+            FOR UPDATE SKIP LOCKED))
+          RETURNING keyspace_id, idx, depth, sequence)
+        UPDATE {schema}.topics t
+        SET removed = greatest(t.removed, m.sequence)
+        FROM (SELECT keyspace_id, idx, depth, max(sequence) AS sequence FROM removed GROUP BY keyspace_id, idx, depth) m
+        WHERE t.keyspace_id = m.keyspace_id AND t.idx = m.idx AND t.depth = m.depth
+        """;
+
     /// <summary>
     /// Gets the seam to the server.
     /// </summary>
@@ -240,6 +257,9 @@ internal sealed class PgSweeps(PgServer server, PgSettings settings, PgRecordTab
     /// <summary>Gets the statement that deletes the change log entries that passed their retention.</summary>
     private string LogRetention { get; } = settings.Schema.Apply(LogRetentionSql);
 
+    /// <summary>Gets the statement that deletes the messages that passed their retention.</summary>
+    private string Messages { get; } = settings.Schema.Apply(MessagesSql);
+
     /// <summary>
     /// Runs each pass once, in order. A pass that fails doesn't stop the passes after it.
     /// </summary>
@@ -275,6 +295,7 @@ internal sealed class PgSweeps(PgServer server, PgSettings settings, PgRecordTab
         }
 
         await RunPassAsync(LogRetention, cancellationToken).ConfigureAwait(false);
+        await RunPassAsync(Messages, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
