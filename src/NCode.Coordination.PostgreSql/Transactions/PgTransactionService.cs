@@ -315,8 +315,8 @@ internal sealed class PgTransactionService(PgRecordTable table) : ITransactionSe
         ArgumentNullException.ThrowIfNull(transaction);
         PgCall.Check(options, cancellationToken);
 
-        var keys = KeysOf(transaction);
-        var sessions = SessionsOf(transaction);
+        ImmutableArray<CoordinationKey> keys = [.. KeysOf(transaction)];
+        ImmutableArray<string> sessions = [.. SessionsOf(transaction)];
         var request = new PgTransactionRequest(transaction, keys, sessions);
 
         return await Table
@@ -368,7 +368,7 @@ internal sealed class PgTransactionService(PgRecordTable table) : ITransactionSe
     )
     {
         var transaction = request.Transaction;
-        var scope = new PgRecordScope(id, [.. request.Keys], [.. request.Sessions]);
+        var scope = new PgRecordScope(id, request.Keys, request.Sessions);
         var start = await Table
             .BeginAsync(pgTransaction, scope, cancellationToken)
             .ConfigureAwait(false);

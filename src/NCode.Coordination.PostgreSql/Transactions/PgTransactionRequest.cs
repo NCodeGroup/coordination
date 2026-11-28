@@ -1,6 +1,8 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using System.Collections.Immutable;
+
 namespace NCode.Coordination.PostgreSql.Transactions;
 
 /// <summary>
@@ -12,6 +14,6 @@ namespace NCode.Coordination.PostgreSql.Transactions;
 /// <param name="Sessions">The ids of the distinct sessions of the transaction's keyspace that its writes bind records to.</param>
 internal readonly record struct PgTransactionRequest(
     RecordTransaction Transaction,
-    IReadOnlyList<CoordinationKey> Keys,
-    IReadOnlyCollection<string> Sessions
+    ImmutableArray<CoordinationKey> Keys,
+    ImmutableArray<string> Sessions
 );

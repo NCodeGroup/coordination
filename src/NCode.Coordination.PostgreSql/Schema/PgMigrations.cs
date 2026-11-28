@@ -448,7 +448,7 @@ internal static partial class PgMigrations
     /// <returns>The migrations, in order of their versions.</returns>
     private static ImmutableArray<PgMigration> Load()
     {
-        var migrations = ImmutableArray.CreateBuilder<PgMigration>();
+        var migrations = ImmutableArray.CreateBuilder<PgMigration>(Table.Length);
         foreach (var (version, name, compatibleFrom) in Table)
         {
             var script = ReadResource($"{version:D4}-{name}");
