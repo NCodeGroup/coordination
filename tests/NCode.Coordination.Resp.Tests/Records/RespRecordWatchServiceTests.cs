@@ -1,7 +1,10 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging.Testing;
+using NCode.Coordination.Resp.Logging;
 using NCode.Coordination.Resp.Server;
 using NCode.Coordination.Resp.Tests.Servers;
 using StackExchange.Redis;
@@ -47,7 +50,15 @@ public sealed class RespRecordWatchServiceTests(RespServers servers)
         );
         var records = new RespRecordService(table);
 
-        return (records, new RespRecordWatchService(table, records, subscriptions));
+        return (
+            records,
+            new RespRecordWatchService(
+                table,
+                records,
+                subscriptions,
+                NullLogger<RespRecordWatchService>.Instance
+            )
+        );
     }
 
     private static async Task<RecordChange> NextAsync(
@@ -99,6 +110,50 @@ public sealed class RespRecordWatchServiceTests(RespServers servers)
     [RespServerFact]
     public Task WatchKeyAsync_Garnet_WhenTheRecordExpires_YieldsTheDeleteAtACheck() =>
         AssertExpiredRecordYieldsTheDeleteAtACheckAsync(servers.Garnet, RespProfiles.Garnet);
+
+    #endregion
+
+    #region TryReadAsync Tests
+
+    [Fact]
+    public async Task TryReadAsync_WhenTheServerIsUnreachable_LogsTheReadFailureOnce()
+    {
+        var connection = new RespConnection(
+            _ =>
+                ValueTask.FromException<IConnectionMultiplexer>(
+                    new RedisConnectionException(
+                        ConnectionFailureType.UnableToConnect,
+                        CommandFlags.None,
+                        "unreachable",
+                        null,
+                        CommandStatus.Unknown
+                    )
+                ),
+            owned: false
+        );
+        var profile = RespProfiles.Valkey;
+        var table = new RespRecordTable(new RespServer(connection), profile);
+        var schedule = new RespCheckSchedule(TimeSpan.FromMinutes(1), TimeProvider.System);
+        var subscriptions = new RespSubscriptions(
+            connection,
+            profile,
+            schedule,
+            NullLoggerFactory.Instance
+        );
+        var records = new RespRecordService(table);
+        var logger = new FakeLogger<RespRecordWatchService>();
+        var watches = new RespRecordWatchService(table, records, subscriptions, logger);
+        var key = CreateKeyspace().CreateKey("a");
+
+        var (read, record) = await watches.TryReadAsync(key, TestContext.Current.CancellationToken);
+
+        Assert.False(read);
+        Assert.Null(record);
+        var entries = logger.Collector.GetSnapshot();
+        var entry = Assert.Single(entries);
+        Assert.Equal(EventIds.WatchRecordReadFailed, entry.Id.Id);
+        Assert.Equal(LogLevel.Warning, entry.Level);
+    }
 
     #endregion
 }

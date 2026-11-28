@@ -56,7 +56,11 @@ public sealed class RespSessionServiceTests(RespServers servers)
             schedule,
             NullLoggerFactory.Instance
         );
-        var membership = new RespMembershipService(table, subscriptions);
+        var membership = new RespMembershipService(
+            table,
+            subscriptions,
+            NullLogger<RespMembershipService>.Instance
+        );
         var keyspace = CreateKeyspace();
         var minute = TimeSpan.FromMinutes(1);
         var timeToLive = new TimeToLive(minute);

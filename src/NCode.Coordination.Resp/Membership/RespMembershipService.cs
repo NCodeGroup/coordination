@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using System.Runtime.CompilerServices;
+using Microsoft.Extensions.Logging;
 using NCode.Coordination.Resp.Keys;
+using NCode.Coordination.Resp.Logging;
 using NCode.Coordination.Resp.Records;
 using NCode.Coordination.Resp.Server;
 using StackExchange.Redis;
@@ -17,9 +19,13 @@ namespace NCode.Coordination.Resp.Membership;
 /// </summary>
 /// <param name="table">The table that runs the keyspace scripts.</param>
 /// <param name="subscriptions">Opens the provider's subscriptions to numbered channels.</param>
-/// <exception cref="ArgumentNullException">The table or the subscriptions are null.</exception>
-internal class RespMembershipService(RespRecordTable table, RespSubscriptions subscriptions)
-    : IMembershipService
+/// <param name="logger">The logger that reports a read the watch could not make.</param>
+/// <exception cref="ArgumentNullException">The table, the subscriptions or the logger are null.</exception>
+internal class RespMembershipService(
+    RespRecordTable table,
+    RespSubscriptions subscriptions,
+    ILogger<RespMembershipService> logger
+) : IMembershipService
 {
     /// <summary>
     /// The number of fields a listed member takes in the reply: node id, session, address and metadata.
@@ -37,6 +43,12 @@ internal class RespMembershipService(RespRecordTable table, RespSubscriptions su
     /// </summary>
     private RespSubscriptions Subscriptions { get; } =
         subscriptions ?? throw new ArgumentNullException(nameof(subscriptions));
+
+    /// <summary>
+    /// Gets the logger that reports a read the watch could not make.
+    /// </summary>
+    private ILogger<RespMembershipService> Logger { get; } =
+        logger ?? throw new ArgumentNullException(nameof(logger));
 
     /// <inheritdoc />
     public async ValueTask<MembershipJoinStatus> JoinAsync(
@@ -168,7 +180,7 @@ internal class RespMembershipService(RespRecordTable table, RespSubscriptions su
     /// <param name="group">The group to list.</param>
     /// <param name="cancellationToken">The token that cancels the read.</param>
     /// <returns>The view of the group, or null when the read failed.</returns>
-    private async ValueTask<MembershipView?> TryReadAsync(
+    internal async ValueTask<MembershipView?> TryReadAsync(
         CoordinationKey group,
         CancellationToken cancellationToken
     )
@@ -177,8 +189,10 @@ internal class RespMembershipService(RespRecordTable table, RespSubscriptions su
         {
             return await ReadAsync(group, null, cancellationToken).ConfigureAwait(false);
         }
-        catch (CoordinationException)
+        catch (CoordinationException e)
         {
+            Logger.WatchGroupReadFailed(e);
+
             return null;
         }
     }
