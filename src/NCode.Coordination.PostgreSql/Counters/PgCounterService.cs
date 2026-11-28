@@ -94,7 +94,7 @@ internal sealed class PgCounterService(PgServer server, PgKeyspaces keyspaces, P
     }
 
     /// <summary>
-    /// Reads the results of a batch's first batch: the locked rows, then the server's clock.
+    /// Reads the results of a transaction's first batch: the locked rows, then the server's clock.
     /// </summary>
     /// <param name="results">The results of the batch.</param>
     /// <param name="cancellationToken">The token that cancels the read.</param>
@@ -117,8 +117,7 @@ internal sealed class PgCounterService(PgServer server, PgKeyspaces keyspaces, P
     /// <returns>The row.</returns>
     private static PgCounterRow ReadRow(NpgsqlDataReader reader)
     {
-        var indexBytes = reader.GetFieldValue<byte[]>(0);
-        var index = Convert.ToHexString(indexBytes);
+        var index = reader.GetFieldValue<byte[]>(0);
         var depth = reader.GetInt16(1);
         var count = reader.GetInt64(2);
         var deadline = reader.GetDateTime(3);
@@ -192,7 +191,7 @@ internal sealed class PgCounterService(PgServer server, PgKeyspaces keyspaces, P
     /// <returns>The batch, whose entries are in key order.</returns>
     private static PgCounterBatch BuildBatch(IReadOnlyList<CounterIncrement> increments)
     {
-        var entries = new Dictionary<CoordinationKey, PgCounterEntry>();
+        var entries = new Dictionary<CoordinationKey, PgCounterEntry>(increments.Count);
         foreach (var increment in increments)
         {
             if (!entries.ContainsKey(increment.Key))
@@ -201,7 +200,7 @@ internal sealed class PgCounterService(PgServer server, PgKeyspaces keyspaces, P
             }
         }
 
-        var ordered = entries.Values.ToList();
+        var ordered = new List<PgCounterEntry>(entries.Values);
         ordered.Sort(CompareEntries);
 
         return new PgCounterBatch([.. increments], [.. ordered]);
@@ -248,7 +247,7 @@ internal sealed class PgCounterService(PgServer server, PgKeyspaces keyspaces, P
     )
     {
         var stored = FindUnexpired(rows, instant);
-        var entries = batch.Entries.ToDictionary(entry => entry.Key);
+        var entries = IndexEntries(batch.Entries);
         var pending = new Dictionary<CoordinationKey, PgCounterWrite>(batch.Increments.Length);
         var counts = new List<long>(batch.Increments.Length);
         int? exceeded = null;
@@ -283,23 +282,41 @@ internal sealed class PgCounterService(PgServer server, PgKeyspaces keyspaces, P
     }
 
     /// <summary>
+    /// Finds the entry of each key of a batch.
+    /// </summary>
+    /// <param name="entries">The entries of the batch.</param>
+    /// <returns>The entries by key.</returns>
+    private static Dictionary<CoordinationKey, PgCounterEntry> IndexEntries(
+        ImmutableArray<PgCounterEntry> entries
+    )
+    {
+        var byKey = new Dictionary<CoordinationKey, PgCounterEntry>(entries.Length);
+        foreach (var entry in entries)
+        {
+            byKey[entry.Key] = entry;
+        }
+
+        return byKey;
+    }
+
+    /// <summary>
     /// Finds the rows that have not expired at an instant.
     /// </summary>
     /// <param name="rows">The rows of the batch's counters.</param>
     /// <param name="instant">The instant of the server's clock.</param>
-    /// <returns>The unexpired rows by slot, whose deadlines are UTC.</returns>
-    private static Dictionary<(string Index, short Depth), PgCounterRow> FindUnexpired(
+    /// <returns>The unexpired rows by identity, whose deadlines are UTC.</returns>
+    private static Dictionary<PgRowIdentity, PgCounterRow> FindUnexpired(
         ImmutableArray<PgCounterRow> rows,
         DateTime instant
     )
     {
-        var unexpired = new Dictionary<(string Index, short Depth), PgCounterRow>();
+        var unexpired = new Dictionary<PgRowIdentity, PgCounterRow>(rows.Length);
         foreach (var row in rows)
         {
             var deadline = DateTime.SpecifyKind(row.Deadline, DateTimeKind.Utc);
             if (deadline > instant)
             {
-                unexpired[row.Slot] = row with { Deadline = deadline };
+                unexpired[row.Identity] = row with { Deadline = deadline };
             }
         }
 
@@ -312,17 +329,17 @@ internal sealed class PgCounterService(PgServer server, PgKeyspaces keyspaces, P
     /// </summary>
     /// <param name="entry">The counter's entry.</param>
     /// <param name="timeToLive">The time to live of the increment that first touches the counter.</param>
-    /// <param name="stored">The unexpired rows by slot.</param>
+    /// <param name="stored">The unexpired rows by identity.</param>
     /// <param name="instant">The instant of the server's clock.</param>
     /// <returns>The write, before the increment is added.</returns>
     private static PgCounterWrite StartWrite(
         PgCounterEntry entry,
         TimeToLive timeToLive,
-        Dictionary<(string Index, short Depth), PgCounterRow> stored,
+        Dictionary<PgRowIdentity, PgCounterRow> stored,
         DateTime instant
     )
     {
-        if (stored.TryGetValue(entry.Slot, out var live))
+        if (stored.TryGetValue(entry.Identity, out var live))
         {
             return new PgCounterWrite(entry, live.Count, live.Deadline);
         }
@@ -643,9 +660,17 @@ internal sealed class PgCounterService(PgServer server, PgKeyspaces keyspaces, P
     /// <returns>The statement.</returns>
     private PgStatement CreateLockStatement(long id, PgCounterBatch batch)
     {
-        var indexes = batch.Entries.Select(entry => entry.Index).ToArray();
-        var depths = batch.Entries.Select(entry => entry.Depth).ToArray();
-        var texts = batch.Entries.Select(entry => entry.Text).ToArray();
+        var count = batch.Entries.Length;
+        var indexes = new byte[count][];
+        var depths = new short[count];
+        var texts = new string[count];
+        for (var position = 0; position < count; position++)
+        {
+            var entry = batch.Entries[position];
+            indexes[position] = entry.Index;
+            depths[position] = entry.Depth;
+            texts[position] = entry.Text;
+        }
 
         var indexesArgument = PgArgument.Typed(indexes, NpgsqlDbType.Array | NpgsqlDbType.Bytea);
         var depthsArgument = PgArgument.Typed(depths, NpgsqlDbType.Array | NpgsqlDbType.Smallint);
@@ -663,10 +688,19 @@ internal sealed class PgCounterService(PgServer server, PgKeyspaces keyspaces, P
     /// <returns>The statement.</returns>
     private PgStatement CreateCommitStatement(long id, ImmutableArray<PgCounterWrite> writes)
     {
-        var indexes = writes.Select(write => write.Entry.Index).ToArray();
-        var depths = writes.Select(write => write.Entry.Depth).ToArray();
-        var counts = writes.Select(write => write.Count).ToArray();
-        var deadlines = writes.Select(write => write.Deadline).ToArray();
+        var count = writes.Length;
+        var indexes = new byte[count][];
+        var depths = new short[count];
+        var counts = new long[count];
+        var deadlines = new DateTime[count];
+        for (var position = 0; position < count; position++)
+        {
+            var write = writes[position];
+            indexes[position] = write.Entry.Index;
+            depths[position] = write.Entry.Depth;
+            counts[position] = write.Count;
+            deadlines[position] = write.Deadline;
+        }
 
         var indexesArgument = PgArgument.Typed(indexes, NpgsqlDbType.Array | NpgsqlDbType.Bytea);
         var depthsArgument = PgArgument.Typed(depths, NpgsqlDbType.Array | NpgsqlDbType.Smallint);

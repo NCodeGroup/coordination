@@ -1,6 +1,8 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using NCode.Coordination.PostgreSql.Keys;
+
 namespace NCode.Coordination.PostgreSql.Counters;
 
 /// <summary>
@@ -13,7 +15,7 @@ namespace NCode.Coordination.PostgreSql.Counters;
 internal sealed record PgCounterEntry(CoordinationKey Key, byte[] Index, short Depth, string Text)
 {
     /// <summary>
-    /// Gets the index value as hexadecimal text and the depth, which name the row among the rows of a batch.
+    /// Gets the index value and the depth, which name the row among the rows of a batch.
     /// </summary>
-    public (string Index, short Depth) Slot => (Convert.ToHexString(Index), Depth);
+    public PgRowIdentity Identity => new(Index, Depth);
 }

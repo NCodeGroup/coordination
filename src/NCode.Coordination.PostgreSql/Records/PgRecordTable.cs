@@ -286,17 +286,17 @@ internal sealed class PgRecordTable(PgServer server, PgKeyspaces keyspaces, PgSe
         ImmutableArray<PgRecordRow> rows
     )
     {
-        var byIdentity = new Dictionary<(string Index, short Depth), PgRecordRow>();
+        var byIdentity = new Dictionary<PgRowIdentity, PgRecordRow>(rows.Length);
         foreach (var row in rows)
         {
-            var identity = (Convert.ToHexString(row.Index), row.Depth);
+            var identity = new PgRowIdentity(row.Index, row.Depth);
             byIdentity[identity] = row;
         }
 
         var found = ImmutableDictionary.CreateBuilder<CoordinationKey, PgRecordRow>();
         for (var position = 0; position < keys.Length; position++)
         {
-            var identity = (Convert.ToHexString(indexes[position]), depths[position]);
+            var identity = new PgRowIdentity(indexes[position], depths[position]);
             if (byIdentity.TryGetValue(identity, out var row))
             {
                 found[keys[position]] = row;
