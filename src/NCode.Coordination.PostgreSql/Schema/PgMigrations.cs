@@ -176,9 +176,10 @@ internal static partial class PgMigrations
                         return (0, 0);
                     }
 
+                    var latestSql = schema.Apply(LatestRowSql);
                     var latest = await transaction
                         .NextAsync(
-                            [new PgStatement(schema.Apply(LatestRowSql))],
+                            [new PgStatement(latestSql)],
                             async (results, t) =>
                                 await results
                                     .ReadAsync(
@@ -237,9 +238,10 @@ internal static partial class PgMigrations
                     var applied = 0;
                     if (tableExists)
                     {
+                        var maxVersionSql = schema.Apply(MaxVersionSql);
                         var versions = await transaction
                             .NextAsync(
-                                [new PgStatement(schema.Apply(MaxVersionSql))],
+                                [new PgStatement(maxVersionSql)],
                                 async (results, t) =>
                                     await results
                                         .ReadAsync(reader => reader.GetInt32(0), t)
@@ -263,7 +265,11 @@ internal static partial class PgMigrations
                                 && statement.StartsWith(CreateSchema, StringComparison.Ordinal)
                             )
                         )
-                        .Select(statement => new PgStatement(schema.Apply(statement)))
+                        .Select(statement =>
+                        {
+                            var statementSql = schema.Apply(statement);
+                            return new PgStatement(statementSql);
+                        })
                         .ToList();
 
                     await transaction.CommitAsync(statements, token).ConfigureAwait(false);

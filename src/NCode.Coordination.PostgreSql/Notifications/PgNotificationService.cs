@@ -184,7 +184,8 @@ internal sealed class PgNotificationService(
             .ResolveAsync(topic.Keyspace, cancellationToken)
             .ConfigureAwait(false);
 
-        var logId = new PgLogId(keyspaceId, PgKeys.PageToken(index, depth));
+        var topicToken = PgKeys.PageToken(index, depth);
+        var logId = new PgLogId(keyspaceId, topicToken);
         var subscriber = await Hub.SubscribeAsync(
                 logId,
                 () =>

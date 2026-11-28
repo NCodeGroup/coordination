@@ -228,7 +228,8 @@ internal sealed class PgGrants(PgRecordTable table)
         ArgumentNullException.ThrowIfNull(resource);
         ArgumentNullException.ThrowIfNull(owner);
 
-        var indexArgument = PgArgument.Typed(PgKeys.Index(resource), NpgsqlDbType.Bytea);
+        var index = PgKeys.Index(resource);
+        var indexArgument = PgArgument.Typed(index, NpgsqlDbType.Bytea);
         var depth = (short)resource.PartitionDepth;
         var keyText = PgKeys.KeyText(resource);
         var sessionArgument = PgArgument.Typed(session, NpgsqlDbType.Text);
@@ -265,7 +266,8 @@ internal sealed class PgGrants(PgRecordTable table)
     {
         ArgumentNullException.ThrowIfNull(resource);
 
-        var indexArgument = PgArgument.Typed(PgKeys.Index(resource), NpgsqlDbType.Bytea);
+        var index = PgKeys.Index(resource);
+        var indexArgument = PgArgument.Typed(index, NpgsqlDbType.Bytea);
         var depth = (short)resource.PartitionDepth;
         var keyText = PgKeys.KeyText(resource);
 
@@ -302,7 +304,8 @@ internal sealed class PgGrants(PgRecordTable table)
     {
         ArgumentNullException.ThrowIfNull(resource);
 
-        var indexArgument = PgArgument.Typed(PgKeys.Index(resource), NpgsqlDbType.Bytea);
+        var index = PgKeys.Index(resource);
+        var indexArgument = PgArgument.Typed(index, NpgsqlDbType.Bytea);
         var depth = (short)resource.PartitionDepth;
         var deadlineArgument = PgArgument.Typed(deadline, NpgsqlDbType.TimestampTz);
 
@@ -338,7 +341,8 @@ internal sealed class PgGrants(PgRecordTable table)
     {
         ArgumentNullException.ThrowIfNull(resource);
 
-        var indexArgument = PgArgument.Typed(PgKeys.Index(resource), NpgsqlDbType.Bytea);
+        var index = PgKeys.Index(resource);
+        var indexArgument = PgArgument.Typed(index, NpgsqlDbType.Bytea);
         var depth = (short)resource.PartitionDepth;
 
         return new PgStatement(

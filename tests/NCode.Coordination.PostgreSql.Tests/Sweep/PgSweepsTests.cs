@@ -1,7 +1,6 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
-using System.Diagnostics;
 using System.Globalization;
 using NCode.Coordination.PostgreSql.Keys;
 using NCode.Coordination.PostgreSql.Notifications;
@@ -200,16 +199,13 @@ public sealed class PgSweepsTests(PgServers servers)
                 };
                 await hold.ExecuteNonQueryAsync(cancellationToken);
 
-                var stopwatch = Stopwatch.StartNew();
                 await context
                     .Sweeps.SweepAsync(cancellationToken)
                     .AsTask()
                     .WaitAsync(TimeSpan.FromSeconds(3), cancellationToken);
-                stopwatch.Stop();
 
                 var remaining = await context.CountAsync("occurrences", cancellationToken);
 
-                Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(3));
                 Assert.Equal(1, remaining);
 
                 await transaction.RollbackAsync(cancellationToken);
