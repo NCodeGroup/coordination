@@ -412,6 +412,12 @@ listeners read the log after the last number they delivered; a subscriber resync
 longer holds what it needs or its numbers went backwards.
 [ADR-1034](../decisions/1034-postgresql-notifications-and-watches-are-numbered-in-the-writing-transaction-kept-in-a-bounded-log-and-woken-by-notify.md)
 
+### D35. Provider logging
+
+Each provider logs every failure its background work catches through the host's `ILogger`, with event ids in a band of
+its own, and goes on as before.
+[ADR-1035](../decisions/1035-the-providers-log-every-failure-their-background-work-catches-with-event-ids-of-their-own.md)
+
 ## Open Questions
 
 - **Q1.** How NCode.Identity consumes the packages while both repositories change together: prerelease packages from a
