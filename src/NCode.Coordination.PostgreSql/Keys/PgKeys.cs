@@ -44,6 +44,18 @@ internal static class PgKeys
         new(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
 
     /// <summary>
+    /// Gets the most bytes a continuation token holds: its depth byte and the digests of a key of the most segments.
+    /// </summary>
+    private static int MaxTokenBytes { get; } =
+        DepthBytes + (SHA256.HashSizeInBytes * CoordinationKey.MaxSegments);
+
+    /// <summary>
+    /// Gets the length of the longest token <see cref="PageToken"/> writes, which
+    /// <see cref="TryDecodeTokenBytes"/> uses to refuse a longer token before it decodes.
+    /// </summary>
+    private static int MaxTokenLength { get; } = Base64Url.GetEncodedLength(MaxTokenBytes);
+
+    /// <summary>
     /// Encodes one segment as a letter for its kind and its value: "t" and the escaped text, "n" and the invariant
     /// decimal, or "u" and the 32 lowercase hex digits of the UUID.
     /// </summary>
@@ -58,10 +70,14 @@ internal static class PgKeys
         return segment switch
         {
             { Kind: KeySegmentKind.Text, Text: { } text } => EncodeText(text),
-            { Kind: KeySegmentKind.Number, Number: { } number } => "n"
-                + number.ToString(CultureInfo.InvariantCulture),
-            { Kind: KeySegmentKind.Uuid, Uuid: { } uuid } => "u"
-                + uuid.ToString("N", CultureInfo.InvariantCulture),
+            { Kind: KeySegmentKind.Number, Number: { } number } => string.Create(
+                CultureInfo.InvariantCulture,
+                $"n{number}"
+            ),
+            { Kind: KeySegmentKind.Uuid, Uuid: { } uuid } => string.Create(
+                CultureInfo.InvariantCulture,
+                $"u{uuid:N}"
+            ),
             _ => throw new ArgumentException(
                 "The segment holds no value for its kind.",
                 nameof(segment)
@@ -373,11 +389,17 @@ internal static class PgKeys
     /// </summary>
     /// <param name="token">The token.</param>
     /// <param name="bytes">The decoded bytes, when the token has the right shape.</param>
-    /// <returns>False when the token does not decode, or its length is not 1 and a multiple of 32; true
-    /// otherwise.</returns>
+    /// <returns>False when the token is longer than the longest token <see cref="PageToken"/> writes, does not
+    /// decode, or its length is not 1 and a multiple of 32; true otherwise.</returns>
     private static bool TryDecodeTokenBytes(string token, [NotNullWhen(true)] out byte[]? bytes)
     {
         bytes = null;
+
+        if (token.Length > MaxTokenLength)
+        {
+            return false;
+        }
+
         byte[] decoded;
 
         try

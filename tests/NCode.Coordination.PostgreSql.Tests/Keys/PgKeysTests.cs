@@ -300,6 +300,25 @@ public sealed class PgKeysTests
         Assert.Null(result);
     }
 
+    [Fact]
+    public void TryReadPageToken_LongestToken_RoundTrips()
+    {
+        var keyspace = new Keyspace("prod");
+        var segments = Enumerable
+            .Range(0, CoordinationKey.MaxSegments)
+            .Select(position => KeySegment.FromInt64(position))
+            .ToArray();
+        var key = new CoordinationKey(keyspace, segments);
+        var index = PgKeys.Index(key);
+        var token = PgKeys.PageToken(index, CoordinationKey.MaxSegments);
+
+        var read = PgKeys.TryReadPageToken(token, [], out var result, out var depth);
+
+        Assert.True(read);
+        Assert.Equal(index, result);
+        Assert.Equal(CoordinationKey.MaxSegments, depth);
+    }
+
     #endregion
 
     #region PrefixEnd Tests
