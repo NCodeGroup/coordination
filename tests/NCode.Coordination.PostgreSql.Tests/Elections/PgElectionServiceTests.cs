@@ -13,8 +13,9 @@ public sealed class PgElectionServiceTests
     {
         var grants = new PgGrants(offline.Table);
         var tokens = new PgRandomTokens();
+        var polling = new PgPolling(TimeProvider.System);
 
-        return new PgElectionService(grants, tokens);
+        return new PgElectionService(grants, tokens, polling);
     }
 
     #region TryLeadAsync Tests

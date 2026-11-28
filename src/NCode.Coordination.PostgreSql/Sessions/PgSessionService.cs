@@ -16,8 +16,10 @@ namespace NCode.Coordination.PostgreSql.Sessions;
 /// </summary>
 /// <param name="table">The record table, whose keyspaces' ids and transactions the service shares.</param>
 /// <param name="tokens">The source of session ids.</param>
-/// <exception cref="ArgumentNullException">The table or the tokens are null.</exception>
-internal sealed class PgSessionService(PgRecordTable table, IPgTokens tokens) : ISessionService
+/// <param name="polling">The poll that a wait for a session's end runs on the provider's clock.</param>
+/// <exception cref="ArgumentNullException">The table, the tokens or the polling are null.</exception>
+internal sealed class PgSessionService(PgRecordTable table, IPgTokens tokens, PgPolling polling)
+    : ISessionService
 {
     /// <summary>
     /// The template of the statement that inserts a session's row.
@@ -123,6 +125,12 @@ internal sealed class PgSessionService(PgRecordTable table, IPgTokens tokens) : 
     private IPgTokens Tokens { get; } = tokens ?? throw new ArgumentNullException(nameof(tokens));
 
     /// <summary>
+    /// Gets the poll that a wait for a session's end runs on the provider's clock.
+    /// </summary>
+    private PgPolling Polling { get; } =
+        polling ?? throw new ArgumentNullException(nameof(polling));
+
+    /// <summary>
     /// Gets the statement that inserts a session's row.
     /// </summary>
     private string InsertSql { get; } = table.Settings.Schema.Apply(InsertSession);
@@ -212,7 +220,7 @@ internal sealed class PgSessionService(PgRecordTable table, IPgTokens tokens) : 
         ArgumentNullException.ThrowIfNull(session);
         PgCall.Check(options, cancellationToken);
 
-        await PgPolling
+        await Polling
             .UntilAsync(token => HasEndedAsync(session, token), cancellationToken)
             .ConfigureAwait(false);
     }

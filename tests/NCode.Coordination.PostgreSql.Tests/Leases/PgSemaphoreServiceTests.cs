@@ -12,8 +12,9 @@ public sealed class PgSemaphoreServiceTests
     {
         var grants = new PgGrants(offline.Table);
         var tokens = new PgRandomTokens();
+        var polling = new PgPolling(TimeProvider.System);
 
-        return new PgSemaphoreService(grants, tokens);
+        return new PgSemaphoreService(grants, tokens, polling);
     }
 
     #region TryAcquireAsync Tests

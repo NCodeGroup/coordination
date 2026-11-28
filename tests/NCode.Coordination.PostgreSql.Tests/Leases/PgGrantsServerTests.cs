@@ -110,13 +110,14 @@ public sealed class PgGrantsServerTests(PgServers servers)
             var tokens = new PgRandomTokens();
             var keyspaces = new PgKeyspaces(server, schema, tokens);
             var table = new PgRecordTable(server, keyspaces, settings);
+            var polling = new PgPolling(TimeProvider.System);
 
             await test(
                 new Context(
                     servers.Admin19,
                     schemaName,
-                    new PgLeaseService(new PgGrants(table), tokens),
-                    new PgSessionService(table, tokens),
+                    new PgLeaseService(new PgGrants(table), tokens, polling),
+                    new PgSessionService(table, tokens, polling),
                     new PgSweeps(server, settings, table)
                 )
             );

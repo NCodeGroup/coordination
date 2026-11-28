@@ -102,6 +102,7 @@ public sealed class PgSweepsTests(PgServers servers)
             var keyspaces = new PgKeyspaces(server, schema, new PgRandomTokens());
             var table = new PgRecordTable(server, keyspaces, settings);
             await using var hub = new PgLogHub(source, keyspaces, settings, TimeProvider.System);
+            var polling = new PgPolling(TimeProvider.System);
             await test(
                 new Context(
                     adminConnectionString,
@@ -110,7 +111,7 @@ public sealed class PgSweepsTests(PgServers servers)
                     new PgOccurrenceService(server, keyspaces, schema),
                     new PgSetService(server, keyspaces, schema),
                     new PgRecordService(table),
-                    new PgSessionService(table, new PgRandomTokens()),
+                    new PgSessionService(table, new PgRandomTokens(), polling),
                     new PgNotificationService(server, keyspaces, settings, hub)
                 )
             );

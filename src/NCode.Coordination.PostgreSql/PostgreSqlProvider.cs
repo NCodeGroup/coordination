@@ -242,6 +242,7 @@ internal sealed class PostgreSqlProvider : ICoordinationProvider, IAsyncDisposab
     {
         var schema = Settings.Schema;
         var grants = new PgGrants(RecordTable);
+        var polling = new PgPolling(TimeProvider.System);
 
         var services = new Dictionary<Type, object>
         {
@@ -251,11 +252,11 @@ internal sealed class PostgreSqlProvider : ICoordinationProvider, IAsyncDisposab
             [typeof(ISetService)] = new PgSetService(Server, Keyspaces, schema),
             [typeof(ICounterService)] = new PgCounterService(Server, Keyspaces, schema),
             [typeof(ISequenceService)] = new PgSequenceService(Server, Keyspaces, schema),
-            [typeof(ISessionService)] = new PgSessionService(RecordTable, Tokens),
+            [typeof(ISessionService)] = new PgSessionService(RecordTable, Tokens, polling),
             [typeof(IMembershipService)] = new PgMembershipService(RecordTable, ChangeLog, Hub),
-            [typeof(ILeaseService)] = new PgLeaseService(grants, Tokens),
-            [typeof(ISemaphoreService)] = new PgSemaphoreService(grants, Tokens),
-            [typeof(IElectionService)] = new PgElectionService(grants, Tokens),
+            [typeof(ILeaseService)] = new PgLeaseService(grants, Tokens, polling),
+            [typeof(ISemaphoreService)] = new PgSemaphoreService(grants, Tokens, polling),
+            [typeof(IElectionService)] = new PgElectionService(grants, Tokens, polling),
             [typeof(IClaimService)] = new PgClaimService(Server, Keyspaces, schema),
             [typeof(IRecordWatchService)] = new PgRecordWatchService(Keyspaces, ChangeLog, Hub),
             [typeof(INotificationService)] = new PgNotificationService(

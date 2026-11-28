@@ -13,8 +13,10 @@ namespace NCode.Coordination.PostgreSql.Leases;
 /// </summary>
 /// <param name="grants">The reads and writes that the grants share.</param>
 /// <param name="tokens">The source of owner tokens.</param>
-/// <exception cref="ArgumentNullException">The grants or the tokens are null.</exception>
-internal sealed class PgLeaseService(PgGrants grants, IPgTokens tokens) : ILeaseService
+/// <param name="polling">The poll that a wait for a release runs on the provider's clock.</param>
+/// <exception cref="ArgumentNullException">The grants, the tokens or the polling are null.</exception>
+internal sealed class PgLeaseService(PgGrants grants, IPgTokens tokens, PgPolling polling)
+    : ILeaseService
 {
     /// <summary>
     /// The kind of the grant rows of leases.
@@ -60,6 +62,12 @@ internal sealed class PgLeaseService(PgGrants grants, IPgTokens tokens) : ILease
     /// Gets the source of owner tokens.
     /// </summary>
     private IPgTokens Tokens { get; } = tokens ?? throw new ArgumentNullException(nameof(tokens));
+
+    /// <summary>
+    /// Gets the poll that a wait for a release runs on the provider's clock.
+    /// </summary>
+    private PgPolling Polling { get; } =
+        polling ?? throw new ArgumentNullException(nameof(polling));
 
     /// <inheritdoc />
     public async ValueTask<LeaseAcquireResult> TryAcquireAsync(
@@ -149,7 +157,7 @@ internal sealed class PgLeaseService(PgGrants grants, IPgTokens tokens) : ILease
         ArgumentNullException.ThrowIfNull(resource);
         PgCall.Check(options, cancellationToken);
 
-        await PgPolling
+        await Polling
             .UntilAsync(token => IsFreeAsync(resource, token), cancellationToken)
             .ConfigureAwait(false);
     }

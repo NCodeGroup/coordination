@@ -52,12 +52,13 @@ public sealed class PgChangeLogTests(PgServers servers)
 
             var keyspaces = new PgKeyspaces(server, schema, new PgRandomTokens());
             var table = new PgRecordTable(server, keyspaces, settings);
+            var polling = new PgPolling(TimeProvider.System);
 
             await test(
                 new Context(
                     keyspaces,
                     new PgChangeLog(server, schema),
-                    new PgSessionService(table, new PgRandomTokens()),
+                    new PgSessionService(table, new PgRandomTokens(), polling),
                     new PgRecordService(table)
                 )
             );

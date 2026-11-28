@@ -17,8 +17,10 @@ namespace NCode.Coordination.PostgreSql.Elections;
 /// </summary>
 /// <param name="grants">The reads and writes that the grants share.</param>
 /// <param name="tokens">The source of owner tokens.</param>
-/// <exception cref="ArgumentNullException">The grants or the tokens are null.</exception>
-internal sealed class PgElectionService(PgGrants grants, IPgTokens tokens) : IElectionService
+/// <param name="polling">The poll that a watch runs on the provider's clock.</param>
+/// <exception cref="ArgumentNullException">The grants, the tokens or the polling are null.</exception>
+internal sealed class PgElectionService(PgGrants grants, IPgTokens tokens, PgPolling polling)
+    : IElectionService
 {
     /// <summary>
     /// The kind of the grant rows of elections.
@@ -99,6 +101,12 @@ internal sealed class PgElectionService(PgGrants grants, IPgTokens tokens) : IEl
     /// Gets the source of owner tokens.
     /// </summary>
     private IPgTokens Tokens { get; } = tokens ?? throw new ArgumentNullException(nameof(tokens));
+
+    /// <summary>
+    /// Gets the poll that a watch runs on the provider's clock.
+    /// </summary>
+    private PgPolling Polling { get; } =
+        polling ?? throw new ArgumentNullException(nameof(polling));
 
     /// <inheritdoc />
     public async ValueTask<ElectionResult> TryLeadAsync(
@@ -220,7 +228,7 @@ internal sealed class PgElectionService(PgGrants grants, IPgTokens tokens) : IEl
 
         while (true)
         {
-            await Task.Delay(PgPolling.Interval, cancellationToken).ConfigureAwait(false);
+            await Polling.DelayAsync(cancellationToken).ConfigureAwait(false);
 
             var view = await ReadAsync(role, options, cancellationToken).ConfigureAwait(false);
             if (!Equals(view.Leader?.Term, last.Leader?.Term))

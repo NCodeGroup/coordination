@@ -13,8 +13,9 @@ public sealed class PgSessionServiceTests
     {
         var table = offline.Table;
         var tokens = new PgRandomTokens();
+        var polling = new PgPolling(TimeProvider.System);
 
-        return new PgSessionService(table, tokens);
+        return new PgSessionService(table, tokens, polling);
     }
 
     #region OpenAsync Tests
