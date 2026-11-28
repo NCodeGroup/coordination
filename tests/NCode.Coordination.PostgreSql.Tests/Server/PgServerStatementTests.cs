@@ -1,7 +1,6 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
-using System.Diagnostics;
 using System.Globalization;
 using System.Transactions;
 using NCode.Coordination.PostgreSql.Tests.Servers;
@@ -39,50 +38,6 @@ public sealed class PgServerStatementTests(PgServers servers)
                 CancellationToken.None
             );
         }
-    }
-
-    private static async Task<object?> ScalarAsync(
-        string connectionString,
-        string sql,
-        CancellationToken cancellationToken
-    )
-    {
-        await using var connection = new NpgsqlConnection(connectionString);
-        await connection.OpenAsync(cancellationToken);
-
-        await using var command = new NpgsqlCommand(sql, connection);
-        return await command.ExecuteScalarAsync(cancellationToken);
-    }
-
-    private static async Task WaitForSleepingBackendAsync(
-        string adminConnectionString,
-        string applicationName,
-        CancellationToken cancellationToken
-    )
-    {
-        await using var connection = new NpgsqlConnection(adminConnectionString);
-        await connection.OpenAsync(cancellationToken);
-
-        var deadline = Stopwatch.StartNew();
-        while (deadline.Elapsed < TimeSpan.FromSeconds(15))
-        {
-            await using var command = new NpgsqlCommand(
-                "SELECT count(*) FROM pg_stat_activity WHERE application_name = $1 "
-                    + "AND state = 'active' AND query LIKE '%pg_sleep(5)%'",
-                connection
-            );
-            command.Parameters.Add(new NpgsqlParameter { Value = applicationName });
-            var scalar = await command.ExecuteScalarAsync(cancellationToken);
-            var count = Convert.ToInt64(scalar, CultureInfo.InvariantCulture);
-            if (count > 0)
-            {
-                return;
-            }
-
-            await Task.Delay(TimeSpan.FromMilliseconds(50), cancellationToken);
-        }
-
-        Assert.Fail("No backend of the application ran pg_sleep(5) within 15 seconds.");
     }
 
     private static PgServer NewServer(PgSource source, PgSettings? settings = null) =>
@@ -189,7 +144,7 @@ public sealed class PgServerStatementTests(PgServers servers)
         var terminate = Task.Run(
             async () =>
             {
-                await WaitForSleepingBackendAsync(
+                await PgActivity.WaitForSleepingBackendAsync(
                     servers.Admin19,
                     applicationName,
                     cancellationToken
@@ -322,7 +277,7 @@ public sealed class PgServerStatementTests(PgServers servers)
                     );
                 }
 
-                var count = await ScalarAsync(
+                var count = await PgServers.ScalarAsync(
                     servers.Admin19,
                     $"SELECT count(*) FROM {schema}.t",
                     cancellationToken

@@ -114,6 +114,49 @@ public sealed class PgServers : IAsyncLifetime
     }
 
     /// <summary>
+    /// Moves the <c>deadline</c> of every row of a table that has one into the past, as <c>postgres</c>, so that the
+    /// server's clock decides the rows are expired and a test needs no sleep.
+    /// </summary>
+    /// <param name="adminConnectionString">The connection string of the user that runs the update.</param>
+    /// <param name="schemaName">The name of the provider's schema.</param>
+    /// <param name="table">The name of the table.</param>
+    /// <param name="cancellationToken">A token that cancels the update.</param>
+    /// <returns>A task that completes when the rows are expired.</returns>
+    internal static ValueTask ExpireRowsAsync(
+        string adminConnectionString,
+        string schemaName,
+        string table,
+        CancellationToken cancellationToken
+    )
+    {
+        var sql =
+            $"UPDATE \"{schemaName}\".{table} SET deadline = clock_timestamp() - interval '1 second' "
+            + "WHERE deadline IS NOT NULL";
+
+        return ExecuteAsAdminAsync(adminConnectionString, sql, cancellationToken);
+    }
+
+    /// <summary>
+    /// Runs one command on a server through a connection of its own and returns its first value.
+    /// </summary>
+    /// <param name="connectionString">The connection string of the user that runs the command.</param>
+    /// <param name="sql">The text of the command.</param>
+    /// <param name="cancellationToken">A token that cancels the command.</param>
+    /// <returns>The first column of the first row, or <see langword="null"/>.</returns>
+    internal static async Task<object?> ScalarAsync(
+        string connectionString,
+        string sql,
+        CancellationToken cancellationToken
+    )
+    {
+        await using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync(cancellationToken);
+
+        await using var command = new NpgsqlCommand(sql, connection);
+        return await command.ExecuteScalarAsync(cancellationToken);
+    }
+
+    /// <summary>
     /// Creates a server whose data directory is in memory: it still runs with <c>fsync</c> on when
     /// <paramref name="durable"/> is true, which the probe checks, but each commit's flush costs a memory write instead
     /// of a disk write, so the suites' long runs of single commits fit their times to live. A test that restarts or
