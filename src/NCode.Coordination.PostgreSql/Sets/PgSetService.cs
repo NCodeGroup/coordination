@@ -24,8 +24,8 @@ internal sealed class PgSetService(PgServer server, PgKeyspaces keyspaces, PgSch
     /// The statement that takes the row lock of a set, inserting the row when the sweep removed it meanwhile.
     /// </summary>
     private const string LockSql = """
-        INSERT INTO {schema}.sets AS s (keyspace_id, idx, depth, key)
-        VALUES ($1, $2, $3, $4)
+        INSERT INTO {schema}.sets AS s (keyspace_id, idx, depth, key, deadline)
+        VALUES ($1, $2, $3, $4, clock_timestamp())
         ON CONFLICT (keyspace_id, idx, depth) DO UPDATE SET key = EXCLUDED.key
         RETURNING 1
         """;
@@ -67,7 +67,8 @@ internal sealed class PgSetService(PgServer server, PgKeyspaces keyspaces, PgSch
         ),
         u AS (
           UPDATE {schema}.sets s
-          SET members = coalesce(chk.total, s.members) + CASE WHEN chk.stored THEN 0 ELSE 1 END
+          SET members = coalesce(chk.total, s.members) + CASE WHEN chk.stored THEN 0 ELSE 1 END,
+            deadline = greatest(s.deadline, chk.t + $5 * interval '1 microsecond')
           FROM chk
           WHERE s.keyspace_id = $1 AND s.idx = $2 AND s.depth = $3 AND EXISTS (SELECT 1 FROM w)
           RETURNING 1

@@ -31,8 +31,10 @@ CREATE TABLE {schema}.sets (
     depth smallint NOT NULL,
     key text NOT NULL,
     members integer NOT NULL DEFAULT 0,
+    deadline timestamptz NOT NULL,
     PRIMARY KEY (keyspace_id, idx, depth)
 );
+CREATE INDEX sets_deadline ON {schema}.sets (deadline);
 CREATE TABLE {schema}.set_members (
     keyspace_id bigint NOT NULL REFERENCES {schema}.keyspaces (id),
     idx bytea NOT NULL,

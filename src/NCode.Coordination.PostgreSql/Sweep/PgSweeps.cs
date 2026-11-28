@@ -76,7 +76,7 @@ internal sealed class PgSweeps(PgServer server, PgSettings settings, PgRecordTab
           DELETE FROM {schema}.sets
           WHERE ctid = ANY (ARRAY(
             SELECT h.ctid FROM {schema}.sets h
-            WHERE NOT EXISTS (
+            WHERE h.deadline <= clock_timestamp() AND NOT EXISTS (
               SELECT 1 FROM {schema}.set_members m
               WHERE m.keyspace_id = h.keyspace_id AND m.idx = h.idx AND m.depth = h.depth)
             LIMIT $1

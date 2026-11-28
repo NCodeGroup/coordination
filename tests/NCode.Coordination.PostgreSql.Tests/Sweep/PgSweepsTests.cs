@@ -544,6 +544,7 @@ public sealed class PgSweepsTests(PgServers servers)
                     cancellationToken
                 );
                 await context.ExpireAsync("set_members", cancellationToken);
+                await context.ExpireAsync("sets", cancellationToken);
 
                 await context.Sweeps.SweepAsync(cancellationToken);
                 await context.Sweeps.SweepAsync(cancellationToken);
@@ -553,6 +554,35 @@ public sealed class PgSweepsTests(PgServers servers)
 
                 Assert.Equal(0, members);
                 Assert.Equal(0, sets);
+            },
+            cancellationToken
+        );
+    }
+
+    [PgServerFact]
+    public async Task SweepAsync_SetEmptiedBeforeItsDeadline_KeepsItsRow()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await WithSweepsAsync(
+            async context =>
+            {
+                var key = context.KeyOf(0);
+                var member = KeySegment.FromString("member");
+                await context.Sets.AddAsync(
+                    key,
+                    member,
+                    new TimeToLive(Live),
+                    null,
+                    cancellationToken
+                );
+                await context.Sets.RemoveAsync(key, member, null, cancellationToken);
+
+                await context.Sweeps.SweepAsync(cancellationToken);
+                await context.Sweeps.SweepAsync(cancellationToken);
+
+                var sets = await context.CountAsync("sets", cancellationToken);
+
+                Assert.Equal(1, sets);
             },
             cancellationToken
         );
