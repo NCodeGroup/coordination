@@ -53,6 +53,11 @@ internal sealed class PgSweeper(
         sweep ?? throw new ArgumentNullException(nameof(sweep));
 
     /// <summary>
+    /// Gets the time between the sweeps.
+    /// </summary>
+    private TimeSpan Interval { get; } = interval;
+
+    /// <summary>
     /// Gets the clock that times the interval.
     /// </summary>
     private TimeProvider Time { get; } = time ?? throw new ArgumentNullException(nameof(time));
@@ -70,7 +75,7 @@ internal sealed class PgSweeper(
             }
 
             Started = true;
-            var timer = new PeriodicTimer(interval, Time);
+            var timer = new PeriodicTimer(Interval, Time);
             Timer = timer;
             var token = Cancellation.Token;
             Loop = Task.Run(() => RunAsync(timer, token).AsTask(), CancellationToken.None);

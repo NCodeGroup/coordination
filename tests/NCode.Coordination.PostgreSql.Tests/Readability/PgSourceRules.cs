@@ -11,7 +11,8 @@ namespace NCode.Coordination.PostgreSql.Tests.Readability;
 /// <summary>
 /// Parses the PostgreSQL provider's source and reports what breaks its readability rules: a call inside another
 /// call's arguments, a lambda argument that isn't one plain expression, a member over 40 lines, a constant or
-/// static member declared after an instance member, and a member without a documentation comment.
+/// static member declared after an instance member, a member without a documentation comment, and a primary
+/// constructor parameter read in a member instead of through a property.
 /// </summary>
 internal static class PgSourceRules
 {
@@ -20,6 +21,7 @@ internal static class PgSourceRules
     private const string LongMemberRule = "long-member";
     private const string StaticOrderRule = "static-order";
     private const string MissingDocRule = "missing-doc";
+    private const string CapturedParameterRule = "captured-parameter";
 
     private const int MaxMemberLines = 40;
     private const int MaxTextLength = 80;
@@ -49,8 +51,8 @@ internal static class PgSourceRules
     }
 
     /// <summary>
-    /// Checks one source text for a constant or static member declared after an instance member, and for a member
-    /// without a documentation comment.
+    /// Checks one source text for a constant or static member declared after an instance member, for a member
+    /// without a documentation comment, and for a primary constructor parameter read in a member.
     /// </summary>
     /// <param name="source">The C# source text.</param>
     /// <returns>
@@ -64,6 +66,7 @@ internal static class PgSourceRules
         var violations = new List<(SyntaxNode Node, string Rule)>();
         violations.AddRange(FindMisplacedStatics(root));
         violations.AddRange(FindUndocumentedMembers(root));
+        violations.AddRange(FindCapturedParameters(root));
 
         return DescribeAll(tree, violations);
     }
@@ -294,6 +297,72 @@ internal static class PgSourceRules
         var trivia = node.GetLeadingTrivia();
         return trivia.Any(SyntaxKind.SingleLineDocumentationCommentTrivia);
     }
+
+    #endregion
+
+    #region Captured parameters
+
+    private static IEnumerable<(SyntaxNode Node, string Rule)> FindCapturedParameters(
+        SyntaxNode root
+    )
+    {
+        var declarations = root.DescendantNodes().OfType<TypeDeclarationSyntax>();
+        var parameterized = declarations.Where(HasPrimaryConstructor);
+        var captured = parameterized.SelectMany(FindCapturedParametersIn);
+        return captured.Select(identifier => ((SyntaxNode)identifier, CapturedParameterRule));
+    }
+
+    private static bool HasPrimaryConstructor(TypeDeclarationSyntax declaration) =>
+        declaration.ParameterList is not null
+        && declaration.Kind() is SyntaxKind.ClassDeclaration or SyntaxKind.StructDeclaration;
+
+    private static IEnumerable<IdentifierNameSyntax> FindCapturedParametersIn(
+        TypeDeclarationSyntax declaration
+    )
+    {
+        var parameters = declaration.ParameterList?.Parameters ?? default;
+        var names = parameters.Select(parameter => parameter.Identifier.ValueText).ToHashSet();
+
+        var identifiers = declaration.DescendantNodes().OfType<IdentifierNameSyntax>();
+        var named = identifiers.Where(identifier =>
+            names.Contains(identifier.Identifier.ValueText)
+        );
+        var read = named.Where(identifier => !IsNameOfAMemberOrArgument(identifier));
+        return read.Where(identifier => IsReadInAMember(identifier, declaration));
+    }
+
+    private static bool IsNameOfAMemberOrArgument(IdentifierNameSyntax identifier) =>
+        identifier.Parent switch
+        {
+            MemberAccessExpressionSyntax access => access.Name == identifier,
+            NameColonSyntax => true,
+            _ => false,
+        };
+
+    private static bool IsReadInAMember(
+        IdentifierNameSyntax identifier,
+        TypeDeclarationSyntax declaration
+    )
+    {
+        var owner = identifier.Ancestors().OfType<TypeDeclarationSyntax>().FirstOrDefault();
+        if (owner != declaration)
+            return false;
+
+        var members = identifier.Ancestors().OfType<MemberDeclarationSyntax>();
+        var member = members.FirstOrDefault(candidate => candidate.Parent == declaration);
+        return member switch
+        {
+            null => false,
+            BaseFieldDeclarationSyntax => false,
+            PropertyDeclarationSyntax property => !IsInInitializer(identifier, property),
+            _ => true,
+        };
+    }
+
+    private static bool IsInInitializer(
+        IdentifierNameSyntax identifier,
+        PropertyDeclarationSyntax property
+    ) => property.Initializer is { } initializer && initializer.Span.Contains(identifier.Span);
 
     #endregion
 

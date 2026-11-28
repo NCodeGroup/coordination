@@ -70,6 +70,16 @@ internal sealed class PgKeyspaces(PgServer server, PgSchemaName schema, IPgToken
     }
 
     /// <summary>
+    /// Gets the seam to the server.
+    /// </summary>
+    private PgServer Server { get; } = server;
+
+    /// <summary>
+    /// Gets the source of the keyspace ids.
+    /// </summary>
+    private IPgTokens Tokens { get; } = tokens;
+
+    /// <summary>
     /// Gets the cached id of each keyspace's row.
     /// </summary>
     private ConcurrentDictionary<Keyspace, long> Ids { get; } = new();
@@ -110,10 +120,10 @@ internal sealed class PgKeyspaces(PgServer server, PgSchemaName schema, IPgToken
 
         for (var attempt = 0; attempt < MaxAttempts; attempt++)
         {
-            var candidate = tokens.NextKeyspaceId();
+            var candidate = Tokens.NextKeyspaceId();
             var insertStatement = new PgStatement(Insert, candidate, name);
             var selectStatement = new PgStatement(Select, name);
-            var ids = await server
+            var ids = await Server
                 .ExecuteAsync([insertStatement, selectStatement], ReadIdsAsync, cancellationToken)
                 .ConfigureAwait(false);
 

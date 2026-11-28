@@ -76,16 +76,16 @@ internal sealed class PgServer(PgSource source, PgSettings settings)
     /// <summary>
     /// Creates the statement that sets the timeouts of the current transaction from the settings.
     /// </summary>
-    /// <param name="settings">The settings that hold the timeouts.</param>
+    /// <param name="timeoutSettings">The settings that hold the timeouts.</param>
     /// <returns>The statement, whose arguments are the timeouts in milliseconds.</returns>
     /// <exception cref="ArgumentNullException">The settings are null.</exception>
-    private static PgStatement CreateTimeouts(PgSettings settings)
+    private static PgStatement CreateTimeouts(PgSettings timeoutSettings)
     {
-        ArgumentNullException.ThrowIfNull(settings);
+        ArgumentNullException.ThrowIfNull(timeoutSettings);
 
-        var statementTimeout = ToMilliseconds(settings.StatementTimeout);
-        var lockTimeout = ToMilliseconds(settings.LockTimeout);
-        var idleTimeout = ToMilliseconds(settings.IdleInTransactionTimeout);
+        var statementTimeout = ToMilliseconds(timeoutSettings.StatementTimeout);
+        var lockTimeout = ToMilliseconds(timeoutSettings.LockTimeout);
+        var idleTimeout = ToMilliseconds(timeoutSettings.IdleInTransactionTimeout);
 
         return new PgStatement(TimeoutsSql, statementTimeout, lockTimeout, idleTimeout);
     }
@@ -101,6 +101,11 @@ internal sealed class PgServer(PgSource source, PgSettings settings)
             (duration.Ticks + TimeSpan.TicksPerMillisecond - 1) / TimeSpan.TicksPerMillisecond;
         return milliseconds.ToString(CultureInfo.InvariantCulture) + "ms";
     }
+
+    /// <summary>
+    /// Gets the source of the connections.
+    /// </summary>
+    private PgSource Source { get; } = source;
 
     /// <summary>
     /// Gets the statement that sets the statement, lock and idle-in-transaction timeouts of the current transaction.
@@ -134,7 +139,7 @@ internal sealed class PgServer(PgSource source, PgSettings settings)
         var sent = false;
         try
         {
-            await using var connection = await source
+            await using var connection = await Source
                 .OpenAsync(cancellationToken)
                 .ConfigureAwait(false);
 
@@ -175,7 +180,7 @@ internal sealed class PgServer(PgSource source, PgSettings settings)
         PgTransaction? transaction = null;
         try
         {
-            await using var connection = await source
+            await using var connection = await Source
                 .OpenAsync(cancellationToken)
                 .ConfigureAwait(false);
 
@@ -208,7 +213,7 @@ internal sealed class PgServer(PgSource source, PgSettings settings)
     {
         if (PgFailures.IsConnectionLost(exception))
         {
-            source.ClearPool();
+            Source.ClearPool();
         }
 
         if (PgFailures.IsKeyspaceMissing(exception))

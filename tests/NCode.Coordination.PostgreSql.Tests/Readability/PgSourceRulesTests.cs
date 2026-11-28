@@ -271,6 +271,60 @@ public sealed class PgSourceRulesTests
         Assert.Empty(violations);
     }
 
+    [Fact]
+    public void CheckLayout_ParameterReadInAMethod_ReportsCapturedParameter()
+    {
+        const string source = """
+            /// <summary>C.</summary>
+            class C(int value)
+            {
+                /// <summary>M.</summary>
+                int M() => value;
+            }
+            """;
+
+        var violations = PgSourceRules.CheckLayout(source);
+
+        Assert.Equal<string>(["5: captured-parameter: value"], violations);
+    }
+
+    [Fact]
+    public void CheckLayout_ParameterReadInAPropertyInitializer_ReportsNothing()
+    {
+        const string source = """
+            /// <summary>C.</summary>
+            class C(int value)
+            {
+                /// <summary>P.</summary>
+                int P { get; } = value;
+
+                /// <summary>M.</summary>
+                int M() => P;
+            }
+            """;
+
+        var violations = PgSourceRules.CheckLayout(source);
+
+        Assert.Empty(violations);
+    }
+
+    [Fact]
+    public void CheckLayout_RecordParameterReadInAMethod_ReportsNothing()
+    {
+        const string source = """
+            /// <summary>C.</summary>
+            record C(int Value)
+            {
+                /// <summary>M.</summary>
+                int M() => Value;
+            }
+            """;
+
+        var violations = PgSourceRules.CheckLayout(source);
+
+        Assert.Empty(violations);
+    }
+
     #endregion
 
     #region CheckPath Tests

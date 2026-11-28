@@ -190,6 +190,26 @@ internal sealed class PgProbe(
     }
 
     /// <summary>
+    /// Gets the server to probe.
+    /// </summary>
+    private PgServer Server { get; } = server;
+
+    /// <summary>
+    /// Gets the source of the connections, whose connection string is checked.
+    /// </summary>
+    private PgSource Source { get; } = source;
+
+    /// <summary>
+    /// Gets the profile whose requirements the server must meet.
+    /// </summary>
+    private PostgreSqlProfile Profile { get; } = profile;
+
+    /// <summary>
+    /// Gets the settings of the provider.
+    /// </summary>
+    private PgSettings Settings { get; } = settings;
+
+    /// <summary>
     /// Runs the probe: refuses what the provider can't use, and applies the migrations when the settings say so.
     /// </summary>
     /// <param name="cancellationToken">The token that cancels the probe.</param>
@@ -199,7 +219,7 @@ internal sealed class PgProbe(
     /// </exception>
     public async ValueTask RunAsync(CancellationToken cancellationToken)
     {
-        var connectionString = new NpgsqlConnectionStringBuilder(source.ConnectionString);
+        var connectionString = new NpgsqlConnectionStringBuilder(Source.ConnectionString);
 
         if (connectionString.Multiplexing)
         {
@@ -217,10 +237,10 @@ internal sealed class PgProbe(
 
         await CheckServerAsync(cancellationToken).ConfigureAwait(false);
 
-        if (settings.ApplyMigrations)
+        if (Settings.ApplyMigrations)
         {
             await PgMigrations
-                .ApplyAsync(server, settings.Schema, cancellationToken)
+                .ApplyAsync(Server, Settings.Schema, cancellationToken)
                 .ConfigureAwait(false);
         }
 
@@ -237,7 +257,7 @@ internal sealed class PgProbe(
     private async ValueTask CheckServerAsync(CancellationToken cancellationToken)
     {
         var statement = new PgStatement(ServerSql);
-        var (version, inRecovery, fsync, commit, names) = await server
+        var (version, inRecovery, fsync, commit, names) = await Server
             .ExecuteAsync([statement], ReadServerAsync, cancellationToken)
             .ConfigureAwait(false);
 
@@ -254,7 +274,7 @@ internal sealed class PgProbe(
     /// <exception cref="CoordinationException">The server is refused.</exception>
     private void CheckSynchronousStandby(string commit, string names)
     {
-        if (!profile.RequiresSynchronousStandby)
+        if (!Profile.RequiresSynchronousStandby)
         {
             return;
         }
@@ -266,7 +286,7 @@ internal sealed class PgProbe(
         if (string.IsNullOrWhiteSpace(names) || !commitWaitsForStandby)
         {
             throw Unsupported(
-                $"The '{profile.Name}' profile needs synchronous_standby_names to name a standby and synchronous_commit on or remote_apply, and the provider's sessions see '{names}' and '{commit}'."
+                $"The '{Profile.Name}' profile needs synchronous_standby_names to name a standby and synchronous_commit on or remote_apply, and the provider's sessions see '{names}' and '{commit}'."
             );
         }
     }
@@ -280,11 +300,11 @@ internal sealed class PgProbe(
     private async ValueTask CheckVersionAsync(CancellationToken cancellationToken)
     {
         var (version, compatibleFrom) = await PgMigrations
-            .ReadVersionAsync(server, settings.Schema, cancellationToken)
+            .ReadVersionAsync(Server, Settings.Schema, cancellationToken)
             .ConfigureAwait(false);
 
         var latest = PgMigrations.Latest;
-        var name = settings.Schema.Name;
+        var name = Settings.Schema.Name;
 
         if (version == 0)
         {
@@ -316,14 +336,14 @@ internal sealed class PgProbe(
     /// <exception cref="CoordinationException">The role is refused, or the server could not be reached or failed.</exception>
     private async ValueTask CheckPrivilegesAsync(CancellationToken cancellationToken)
     {
-        var name = settings.Schema.Name;
+        var name = Settings.Schema.Name;
         var tables = PgMigrations.Tables.ToArray();
 
         var tablesArgument = PgArgument.Of(tables);
         var schemaStatement = new PgStatement(SchemaPrivilegeSql, name);
         var tablesStatement = new PgStatement(TablePrivilegesSql, name, tablesArgument);
 
-        var (usage, denied) = await server
+        var (usage, denied) = await Server
             .ExecuteAsync(
                 [schemaStatement, tablesStatement],
                 ReadPrivilegesAsync,

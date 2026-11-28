@@ -27,6 +27,11 @@ internal sealed class PgResults(NpgsqlDataReader reader)
     }
 
     /// <summary>
+    /// Gets the reader of the batch.
+    /// </summary>
+    private NpgsqlDataReader Reader { get; } = reader;
+
+    /// <summary>
     /// Gets or sets whether the current result of the reader was handed out.
     /// </summary>
     private bool Started { get; set; }
@@ -52,9 +57,9 @@ internal sealed class PgResults(NpgsqlDataReader reader)
         }
 
         var rows = ImmutableArray.CreateBuilder<T>();
-        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        while (await Reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
-            var row = map(reader);
+            var row = map(Reader);
             rows.Add(row);
         }
 
@@ -70,7 +75,7 @@ internal sealed class PgResults(NpgsqlDataReader reader)
     {
         while (await MoveNextAsync(cancellationToken).ConfigureAwait(false))
         {
-            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false)) { }
+            while (await Reader.ReadAsync(cancellationToken).ConfigureAwait(false)) { }
         }
     }
 
@@ -87,6 +92,6 @@ internal sealed class PgResults(NpgsqlDataReader reader)
             return true;
         }
 
-        return await reader.NextResultAsync(cancellationToken).ConfigureAwait(false);
+        return await Reader.NextResultAsync(cancellationToken).ConfigureAwait(false);
     }
 }
