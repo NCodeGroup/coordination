@@ -125,7 +125,7 @@ internal sealed class PgSemaphoreService(PgGrants grants, IPgTokens tokens) : IS
         var request = new PgSemaphoreRequest(resource, capacity, terms, sessionId);
 
         return await Grants
-            .Table.Keyspaces.RunAsync<SemaphoreAcquireResult>(
+            .RunInKeyspaceAsync<SemaphoreAcquireResult>(
                 resource.Keyspace,
                 (id, token) => AcquireInKeyspaceAsync(id, request, token),
                 cancellationToken
@@ -216,7 +216,7 @@ internal sealed class PgSemaphoreService(PgGrants grants, IPgTokens tokens) : IS
     )
     {
         return await Grants
-            .Table.Server.TransactAsync(
+            .TransactAsync(
                 PgIsolation.ReadCommitted,
                 (transaction, token) => AcquireInTransactionAsync(transaction, id, request, token),
                 cancellationToken
@@ -255,7 +255,7 @@ internal sealed class PgSemaphoreService(PgGrants grants, IPgTokens tokens) : IS
         var result = DecideAcquire(id, start, request);
 
         await Grants
-            .Table.CommitAsync(transaction, start.Change, id, cancellationToken)
+            .CommitAsync(transaction, start.Change, id, cancellationToken)
             .ConfigureAwait(false);
         return result;
     }
@@ -346,7 +346,7 @@ internal sealed class PgSemaphoreService(PgGrants grants, IPgTokens tokens) : IS
     )
     {
         var live = await Grants
-            .Table.Keyspaces.RunAsync(
+            .RunInKeyspaceAsync(
                 resource.Keyspace,
                 (id, token) => Grants.ReadAsync(id, Kind, resource, token),
                 cancellationToken

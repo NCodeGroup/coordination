@@ -140,7 +140,7 @@ internal sealed class PgElectionService(PgGrants grants, IPgTokens tokens) : IEl
         var request = new PgLeadRequest(role, bytes, terms, sessionId);
 
         return await Grants
-            .Table.Keyspaces.RunAsync<ElectionResult>(
+            .RunInKeyspaceAsync<ElectionResult>(
                 role.Keyspace,
                 (id, token) => LeadInKeyspaceAsync(id, request, token),
                 cancellationToken
@@ -213,7 +213,7 @@ internal sealed class PgElectionService(PgGrants grants, IPgTokens tokens) : IEl
         PgCall.Check(options, cancellationToken);
 
         var rows = await Grants
-            .Table.Keyspaces.RunAsync<ImmutableArray<PgGrantRow>>(
+            .RunInKeyspaceAsync<ImmutableArray<PgGrantRow>>(
                 role.Keyspace,
                 (id, token) => Grants.ReadAsync(id, Kind, role, token),
                 cancellationToken
@@ -266,7 +266,7 @@ internal sealed class PgElectionService(PgGrants grants, IPgTokens tokens) : IEl
     )
     {
         return await Grants
-            .Table.Server.TransactAsync(
+            .TransactAsync(
                 PgIsolation.ReadCommitted,
                 (transaction, token) => LeadInTransactionAsync(transaction, id, request, token),
                 cancellationToken
@@ -298,7 +298,7 @@ internal sealed class PgElectionService(PgGrants grants, IPgTokens tokens) : IEl
         var result = DecideLead(id, start, request);
 
         await Grants
-            .Table.CommitAsync(transaction, start.Change, id, cancellationToken)
+            .CommitAsync(transaction, start.Change, id, cancellationToken)
             .ConfigureAwait(false);
         return result;
     }

@@ -294,7 +294,7 @@ internal sealed class PgGrants(PgRecordTable table)
     /// <summary>
     /// Gets the record table, whose keyspaces' ids, transactions and changes the grants share.
     /// </summary>
-    public PgRecordTable Table { get; } = table ?? throw new ArgumentNullException(nameof(table));
+    private PgRecordTable Table { get; } = table ?? throw new ArgumentNullException(nameof(table));
 
     /// <summary>
     /// Gets the statement that reads a resource's grant rows.
@@ -335,6 +335,87 @@ internal sealed class PgGrants(PgRecordTable table)
     /// Gets the statement that deletes a grant.
     /// </summary>
     private string DeleteGrantSql { get; } = table.Settings.Schema.Apply(DeleteGrant);
+
+    /// <summary>
+    /// Runs an operation with a keyspace's id; when the operation finds the keyspace's row missing, resolves the id
+    /// again and runs it once more.
+    /// </summary>
+    /// <typeparam name="T">The type that <paramref name="operation"/> returns.</typeparam>
+    /// <param name="keyspace">The keyspace.</param>
+    /// <param name="operation">The operation, which takes the keyspace's id.</param>
+    /// <param name="cancellationToken">The token that cancels the call.</param>
+    /// <returns>What <paramref name="operation"/> returned.</returns>
+    /// <exception cref="ArgumentNullException">The keyspace or the operation is null.</exception>
+    /// <exception cref="CoordinationException">
+    /// The server failed, or the row was missing on both runs, which did not apply.
+    /// </exception>
+    public ValueTask<T> RunInKeyspaceAsync<T>(
+        Keyspace keyspace,
+        Func<long, CancellationToken, ValueTask<T>> operation,
+        CancellationToken cancellationToken
+    )
+    {
+        return Table.Keyspaces.RunAsync(keyspace, operation, cancellationToken);
+    }
+
+    /// <summary>
+    /// Runs an operation with a keyspace's id; when the operation finds the keyspace's row missing, resolves the id
+    /// again and runs it once more.
+    /// </summary>
+    /// <param name="keyspace">The keyspace.</param>
+    /// <param name="operation">The operation, which takes the keyspace's id.</param>
+    /// <param name="cancellationToken">The token that cancels the call.</param>
+    /// <returns>A task that completes when the operation has.</returns>
+    /// <exception cref="ArgumentNullException">The keyspace or the operation is null.</exception>
+    /// <exception cref="CoordinationException">
+    /// The server failed, or the row was missing on both runs, which did not apply.
+    /// </exception>
+    public ValueTask RunInKeyspaceAsync(
+        Keyspace keyspace,
+        Func<long, CancellationToken, ValueTask> operation,
+        CancellationToken cancellationToken
+    )
+    {
+        return Table.Keyspaces.RunAsync(keyspace, operation, cancellationToken);
+    }
+
+    /// <summary>
+    /// Runs a short transaction on one connection.
+    /// </summary>
+    /// <typeparam name="T">The type that <paramref name="body"/> returns.</typeparam>
+    /// <param name="isolation">The transaction's isolation.</param>
+    /// <param name="body">Runs the transaction's batches, and completes it.</param>
+    /// <param name="cancellationToken">The token that cancels the call.</param>
+    /// <returns>What <paramref name="body"/> returned.</returns>
+    /// <exception cref="CoordinationException">The server could not be reached or failed.</exception>
+    /// <exception cref="PgKeyspaceMissingException">A statement found its keyspace's row missing.</exception>
+    public ValueTask<T> TransactAsync<T>(
+        PgIsolation isolation,
+        Func<PgTransaction, CancellationToken, ValueTask<T>> body,
+        CancellationToken cancellationToken
+    )
+    {
+        return Table.Server.TransactAsync(isolation, body, cancellationToken);
+    }
+
+    /// <summary>
+    /// Commits a change in its transaction, or rolls the transaction back when the change took no revision.
+    /// </summary>
+    /// <param name="transaction">The transaction that <see cref="BeginAsync"/> began.</param>
+    /// <param name="change">The change.</param>
+    /// <param name="keyspaceId">The keyspace's id.</param>
+    /// <param name="cancellationToken">The token that cancels the call.</param>
+    /// <returns>A task that completes when the transaction has ended.</returns>
+    /// <exception cref="ArgumentNullException">The transaction or the change is null.</exception>
+    public ValueTask CommitAsync(
+        PgTransaction transaction,
+        PgKeyspaceChange change,
+        long keyspaceId,
+        CancellationToken cancellationToken
+    )
+    {
+        return Table.CommitAsync(transaction, change, keyspaceId, cancellationToken);
+    }
 
     /// <summary>
     /// Begins a change to a resource's grants in a transaction: its first batch locks the keyspace's row and reads its

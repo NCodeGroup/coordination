@@ -98,7 +98,7 @@ internal sealed class PgLeaseService(PgGrants grants, IPgTokens tokens) : ILease
         var request = new PgLeaseRequest(resource, terms, sessionId);
 
         return await Grants
-            .Table.Keyspaces.RunAsync<LeaseAcquireResult>(
+            .RunInKeyspaceAsync<LeaseAcquireResult>(
                 resource.Keyspace,
                 (id, token) => AcquireInKeyspaceAsync(id, request, token),
                 cancellationToken
@@ -189,7 +189,7 @@ internal sealed class PgLeaseService(PgGrants grants, IPgTokens tokens) : ILease
     )
     {
         return await Grants
-            .Table.Server.TransactAsync(
+            .TransactAsync(
                 PgIsolation.ReadCommitted,
                 (transaction, token) => AcquireInTransactionAsync(transaction, id, request, token),
                 cancellationToken
@@ -228,7 +228,7 @@ internal sealed class PgLeaseService(PgGrants grants, IPgTokens tokens) : ILease
         var result = DecideAcquire(id, start, request);
 
         await Grants
-            .Table.CommitAsync(transaction, start.Change, id, cancellationToken)
+            .CommitAsync(transaction, start.Change, id, cancellationToken)
             .ConfigureAwait(false);
         return result;
     }
@@ -299,7 +299,7 @@ internal sealed class PgLeaseService(PgGrants grants, IPgTokens tokens) : ILease
     )
     {
         var live = await Grants
-            .Table.Keyspaces.RunAsync<int>(
+            .RunInKeyspaceAsync<int>(
                 resource.Keyspace,
                 (id, token) => CountLiveAsync(id, resource, token),
                 cancellationToken
