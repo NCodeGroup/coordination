@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using System.Globalization;
+using Microsoft.Extensions.Logging.Abstractions;
 using NCode.Coordination.PostgreSql.Keys;
 using NCode.Coordination.PostgreSql.Records;
 using NCode.Coordination.PostgreSql.Schema;
@@ -119,7 +120,7 @@ public sealed class PgGrantsServerTests(PgServers servers)
             var grants = new PgGrants(table);
             var leases = new PgLeaseService(grants, tokens, polling);
             var sessions = new PgSessionService(table, tokens, polling);
-            var sweeps = new PgSweeps(server, settings, table);
+            var sweeps = new PgSweeps(server, settings, table, NullLogger<PgSweeps>.Instance);
             var context = new Context(servers.Admin19, schemaName, leases, sessions, sweeps);
 
             await test(context);

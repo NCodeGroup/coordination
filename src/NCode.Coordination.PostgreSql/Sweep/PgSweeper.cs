@@ -1,6 +1,9 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using Microsoft.Extensions.Logging;
+using NCode.Coordination.PostgreSql.Logging;
+
 namespace NCode.Coordination.PostgreSql.Sweep;
 
 /// <summary>
@@ -9,11 +12,13 @@ namespace NCode.Coordination.PostgreSql.Sweep;
 /// <param name="sweep">The sweep to run at each tick.</param>
 /// <param name="interval">The time between the sweeps.</param>
 /// <param name="time">The clock that times the interval.</param>
-/// <exception cref="ArgumentNullException">The sweep or the clock are null.</exception>
+/// <param name="logger">The logger that reports a failed sweep.</param>
+/// <exception cref="ArgumentNullException">The sweep, the clock or the logger are null.</exception>
 internal sealed class PgSweeper(
     Func<CancellationToken, ValueTask> sweep,
     TimeSpan interval,
-    TimeProvider time
+    TimeProvider time,
+    ILogger<PgSweeper> logger
 ) : IAsyncDisposable, IDisposable
 {
     /// <summary>
@@ -61,6 +66,12 @@ internal sealed class PgSweeper(
     /// Gets the clock that times the interval.
     /// </summary>
     private TimeProvider Time { get; } = time ?? throw new ArgumentNullException(nameof(time));
+
+    /// <summary>
+    /// Gets the logger that reports a failed sweep.
+    /// </summary>
+    private ILogger<PgSweeper> Logger { get; } =
+        logger ?? throw new ArgumentNullException(nameof(logger));
 
     /// <summary>
     /// Starts the loop that sweeps at each tick of a periodic timer, unless it was already started or disposed.
@@ -163,9 +174,10 @@ internal sealed class PgSweeper(
         {
             await Sweep(cancellationToken).ConfigureAwait(false);
         }
-        catch (Exception) when (!cancellationToken.IsCancellationRequested)
+        catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
         {
-            // The next tick sweeps again, and one failed sweep must not end the sweeping; the package has no logger to report it to.
+            // The next tick sweeps again, and one failed sweep must not end the sweeping.
+            Logger.SweepFailed(exception);
         }
     }
 }

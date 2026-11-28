@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using System.Globalization;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging.Testing;
 using NCode.Coordination.PostgreSql.Keys;
+using NCode.Coordination.PostgreSql.Logging;
 using NCode.Coordination.PostgreSql.Notifications;
 using NCode.Coordination.PostgreSql.Occurrences;
 using NCode.Coordination.PostgreSql.Records;
@@ -11,6 +14,7 @@ using NCode.Coordination.PostgreSql.Server;
 using NCode.Coordination.PostgreSql.Sessions;
 using NCode.Coordination.PostgreSql.Sets;
 using NCode.Coordination.PostgreSql.Subscriptions;
+using NCode.Coordination.PostgreSql.Tests;
 using NCode.Coordination.PostgreSql.Tests.Servers;
 using Npgsql;
 
@@ -93,6 +97,12 @@ public sealed class PgSweepsTests(PgServers servers)
         }
     }
 
+    private static string[] ValuesOf(IReadOnlyList<FakeLogRecord> records, int eventId, string name)
+    {
+        var matching = records.Where(record => record.Id.Id == eventId);
+        return [.. matching.Select(record => record.GetStructuredStateValue(name) ?? string.Empty)];
+    }
+
     private static async Task WithSweepsAsync(
         string adminConnectionString,
         string connectionString,
@@ -116,7 +126,7 @@ public sealed class PgSweepsTests(PgServers servers)
             var table = new PgRecordTable(server, keyspaces, settings);
             await using var hub = new PgLogHub(source, keyspaces, settings, TimeProvider.System);
             var polling = new PgPolling(TimeProvider.System);
-            var sweeps = new PgSweeps(server, settings, table);
+            var sweeps = new PgSweeps(server, settings, table, NullLogger<PgSweeps>.Instance);
             var occurrences = new PgOccurrenceService(server, keyspaces, schema);
             var sets = new PgSetService(server, keyspaces, schema);
             var records = new PgRecordService(table);
@@ -608,6 +618,39 @@ public sealed class PgSweepsTests(PgServers servers)
             },
             cancellationToken
         );
+    }
+
+    [Fact]
+    public async Task SweepAsync_ServerUnreachable_LogsEachPassAndStepOnce()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var offline = new PgOfflineServer();
+        var logger = new FakeLogger<PgSweeps>();
+        var sweeps = new PgSweeps(offline.Server, offline.Settings, offline.Table, logger);
+        string[] expectedPasses =
+        [
+            "occurrences",
+            "counters",
+            "set members",
+            "sets",
+            "bound records",
+            "bound members",
+            "bound grants",
+            "ended sessions",
+            "grants",
+            "claims",
+            "change log",
+            "messages",
+        ];
+        string[] expectedSteps = ["records", "sessions"];
+
+        await sweeps.SweepAsync(cancellationToken);
+
+        var records = logger.Collector.GetSnapshot();
+        var passes = ValuesOf(records, EventIds.SweepPassFailed, "Pass");
+        var steps = ValuesOf(records, EventIds.SweepStepFailed, "Step");
+        Assert.Equal(expectedPasses, passes);
+        Assert.Equal(expectedSteps, steps);
     }
 
     #endregion

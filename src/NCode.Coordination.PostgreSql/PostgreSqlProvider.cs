@@ -3,6 +3,8 @@
 
 using System.Collections.Frozen;
 using System.Collections.Immutable;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using NCode.Coordination.PostgreSql.Claims;
 using NCode.Coordination.PostgreSql.Counters;
 using NCode.Coordination.PostgreSql.Elections;
@@ -116,14 +118,32 @@ internal sealed class PostgreSqlProvider : ICoordinationProvider, IAsyncDisposab
     /// <param name="settings">The settings of the provider.</param>
     /// <exception cref="ArgumentNullException">The source, the profile or the settings are null.</exception>
     public PostgreSqlProvider(PgSource source, PostgreSqlProfile profile, PgSettings settings)
+        : this(source, profile, settings, NullLoggerFactory.Instance) { }
+
+    /// <summary>
+    /// Creates the provider and the services that share its data source.
+    /// </summary>
+    /// <param name="source">The source of the provider's connections. The provider disposes it, which disposes the data source only when the source owns it.</param>
+    /// <param name="profile">The profile that the server must match.</param>
+    /// <param name="settings">The settings of the provider.</param>
+    /// <param name="loggerFactory">The factory of the loggers that report the failures the provider's background work catches.</param>
+    /// <exception cref="ArgumentNullException">The source, the profile, the settings or the logger factory are null.</exception>
+    public PostgreSqlProvider(
+        PgSource source,
+        PostgreSqlProfile profile,
+        PgSettings settings,
+        ILoggerFactory loggerFactory
+    )
     {
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(profile);
         ArgumentNullException.ThrowIfNull(settings);
+        ArgumentNullException.ThrowIfNull(loggerFactory);
 
         Source = source;
         Profile = profile;
         Settings = settings;
+        LoggerFactory = loggerFactory;
         Server = new PgServer(source, settings);
         Tokens = new PgRandomTokens();
         Keyspaces = new PgKeyspaces(Server, settings.Schema, Tokens);
@@ -138,8 +158,7 @@ internal sealed class PostgreSqlProvider : ICoordinationProvider, IAsyncDisposab
         {
             Profile = profile.Name,
         };
-        var sweeps = new PgSweeps(Server, settings, RecordTable);
-        Sweeper = new PgSweeper(sweeps.SweepAsync, settings.SweepInterval, TimeProvider.System);
+        Sweeper = CreateSweeper();
         Services = CreateServices();
     }
 
@@ -157,6 +176,11 @@ internal sealed class PostgreSqlProvider : ICoordinationProvider, IAsyncDisposab
     /// Gets the settings of the provider.
     /// </summary>
     private PgSettings Settings { get; }
+
+    /// <summary>
+    /// Gets the factory of the loggers that report the failures the provider's background work catches.
+    /// </summary>
+    private ILoggerFactory LoggerFactory { get; }
 
     /// <summary>
     /// Gets the seam between the provider and its server.
@@ -232,6 +256,20 @@ internal sealed class PostgreSqlProvider : ICoordinationProvider, IAsyncDisposab
         Sweeper.Dispose();
         Hub.Dispose();
         Source.Dispose();
+    }
+
+    /// <summary>
+    /// Creates the loop that deletes the expired rows, with the loggers of the sweep and of the loop.
+    /// </summary>
+    /// <returns>The sweeper, which isn't started.</returns>
+    private PgSweeper CreateSweeper()
+    {
+        var sweepsLogger = LoggerFactory.CreateLogger<PgSweeps>();
+        var sweeperLogger = LoggerFactory.CreateLogger<PgSweeper>();
+        var sweeps = new PgSweeps(Server, Settings, RecordTable, sweepsLogger);
+        var interval = Settings.SweepInterval;
+
+        return new PgSweeper(sweeps.SweepAsync, interval, TimeProvider.System, sweeperLogger);
     }
 
     /// <summary>

@@ -1,6 +1,8 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using NCode.Coordination.PostgreSql.Server;
 using Npgsql;
 
@@ -29,8 +31,11 @@ internal sealed record PgProviderFactory(
     public PostgreSqlProvider Create(IServiceProvider services)
     {
         var source = CreateSource(services);
+        var loggerFactory =
+            services.GetService(typeof(ILoggerFactory)) as ILoggerFactory
+            ?? NullLoggerFactory.Instance;
 
-        return new PostgreSqlProvider(source, Profile, Settings);
+        return new PostgreSqlProvider(source, Profile, Settings, loggerFactory);
     }
 
     /// <summary>

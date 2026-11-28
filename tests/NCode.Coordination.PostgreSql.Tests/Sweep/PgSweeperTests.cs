@@ -1,7 +1,11 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging.Testing;
 using Microsoft.Extensions.Time.Testing;
+using NCode.Coordination.PostgreSql.Logging;
 
 namespace NCode.Coordination.PostgreSql.Sweep.Tests;
 
@@ -63,15 +67,25 @@ public sealed class PgSweeperTests
         }
     }
 
+    private static Task WithSweeperAsync(
+        bool failFirst,
+        Func<PgSweeper, CountingTimeProvider, CountingSweep, Task> test
+    )
+    {
+        var logger = NullLogger<PgSweeper>.Instance;
+        return WithSweeperAsync(failFirst, logger, test);
+    }
+
     private static async Task WithSweeperAsync(
         bool failFirst,
+        ILogger<PgSweeper> logger,
         Func<PgSweeper, CountingTimeProvider, CountingSweep, Task> test
     )
     {
         var sweep = new CountingSweep(failFirst);
         var time = new CountingTimeProvider();
 
-        await using var sweeper = new PgSweeper(sweep.SweepAsync, Interval, time);
+        await using var sweeper = new PgSweeper(sweep.SweepAsync, Interval, time, logger);
         await test(sweeper, time, sweep);
     }
 
@@ -131,6 +145,28 @@ public sealed class PgSweeperTests
             time.Advance(Interval);
 
             await sweep.SecondCall.WaitAsync(WaitLimit, cancellationToken);
+        });
+    }
+
+    [Fact]
+    public async Task Start_SweepThrowsUnexpectedly_LogsSweepFailedOnce()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var logger = new FakeLogger<PgSweeper>();
+        await WithSweeperAsync(failFirst: true, logger, async (sweeper, time, sweep) =>
+        {
+            sweeper.Start();
+            time.Advance(Interval);
+            await sweep.FirstCall.WaitAsync(WaitLimit, cancellationToken);
+            time.Advance(Interval);
+            await sweep.SecondCall.WaitAsync(WaitLimit, cancellationToken);
+
+            var records = logger.Collector.GetSnapshot();
+
+            var record = Assert.Single(records);
+            Assert.Equal(EventIds.SweepFailed, record.Id.Id);
+            Assert.Equal(LogLevel.Error, record.Level);
+            Assert.IsType<InvalidOperationException>(record.Exception);
         });
     }
 

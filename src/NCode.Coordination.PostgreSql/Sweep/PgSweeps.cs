@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using System.Collections.Immutable;
+using Microsoft.Extensions.Logging;
+using NCode.Coordination.PostgreSql.Logging;
 using NCode.Coordination.PostgreSql.Records;
+using NCode.Coordination.PostgreSql.Schema;
 using NCode.Coordination.PostgreSql.Server;
 using Npgsql;
 
@@ -15,8 +18,14 @@ namespace NCode.Coordination.PostgreSql.Sweep;
 /// <param name="server">The seam to the server.</param>
 /// <param name="settings">The settings, whose sweep batch size bounds every pass's statement.</param>
 /// <param name="table">The record table, which commits the deletion of expired records as a change.</param>
-/// <exception cref="ArgumentNullException">The server, the settings or the table are null.</exception>
-internal sealed class PgSweeps(PgServer server, PgSettings settings, PgRecordTable table)
+/// <param name="logger">The logger that reports the failures the sweep ignores.</param>
+/// <exception cref="ArgumentNullException">The server, the settings, the table or the logger are null.</exception>
+internal sealed class PgSweeps(
+    PgServer server,
+    PgSettings settings,
+    PgRecordTable table,
+    ILogger<PgSweeps> logger
+)
 {
     /// <summary>
     /// The most keyspaces one sweep visits for expired records or for expired sessions; the next sweep lists again.
@@ -300,32 +309,6 @@ internal sealed class PgSweeps(PgServer server, PgSettings settings, PgRecordTab
         """;
 
     /// <summary>
-    /// Runs one step of a sweep and ignores its failure.
-    /// </summary>
-    /// <param name="step">The step to run.</param>
-    /// <param name="cancellationToken">The token that cancels the sweep.</param>
-    /// <returns>A task that completes after the step ran or failed.</returns>
-    /// <exception cref="OperationCanceledException">The token was cancelled.</exception>
-    private static async ValueTask IgnoreFailureAsync(
-        Func<CancellationToken, ValueTask> step,
-        CancellationToken cancellationToken
-    )
-    {
-        try
-        {
-            await step(cancellationToken).ConfigureAwait(false);
-        }
-        catch (CoordinationException)
-        {
-            // The next sweep reads the rows again, and one failing step must not stop the others.
-        }
-        catch (PgKeyspaceMissingException)
-        {
-            // The next sweep reads the rows again, and one failing step must not stop the others.
-        }
-    }
-
-    /// <summary>
     /// Reads the first column of the reader's current row as a 64-bit integer.
     /// </summary>
     /// <param name="reader">The reader, on a row.</param>
@@ -476,6 +459,20 @@ internal sealed class PgSweeps(PgServer server, PgSettings settings, PgRecordTab
     }
 
     /// <summary>
+    /// Creates a pass from its statement's template.
+    /// </summary>
+    /// <param name="name">The name that a log entry gives the pass.</param>
+    /// <param name="template">The statement, with <c>{schema}</c> where the schema's quoted name goes.</param>
+    /// <param name="schema">The schema whose quoted name the statement takes.</param>
+    /// <returns>The pass.</returns>
+    private static PgSweepPass CreatePass(string name, string template, PgSchemaName schema)
+    {
+        var sql = schema.Apply(template);
+
+        return new PgSweepPass(name, sql);
+    }
+
+    /// <summary>
     /// Gets the seam to the server.
     /// </summary>
     private PgServer Server { get; } = server ?? throw new ArgumentNullException(nameof(server));
@@ -492,27 +489,33 @@ internal sealed class PgSweeps(PgServer server, PgSettings settings, PgRecordTab
     private PgRecordTable Table { get; } = table ?? throw new ArgumentNullException(nameof(table));
 
     /// <summary>
-    /// Gets the statements of the passes that delete rows without a change, in the order they run.
+    /// Gets the logger that reports the failures the sweep ignores.
     /// </summary>
-    private string[] Passes { get; } =
+    private ILogger<PgSweeps> Logger { get; } =
+        logger ?? throw new ArgumentNullException(nameof(logger));
+
+    /// <summary>
+    /// Gets the passes that delete rows without a change, in the order they run.
+    /// </summary>
+    private PgSweepPass[] Passes { get; } =
     [
-        settings.Schema.Apply(OccurrencesSql),
-        settings.Schema.Apply(CountersSql),
-        settings.Schema.Apply(SetMembersSql),
-        settings.Schema.Apply(SetsSql),
+        CreatePass("occurrences", OccurrencesSql, settings.Schema),
+        CreatePass("counters", CountersSql, settings.Schema),
+        CreatePass("set members", SetMembersSql, settings.Schema),
+        CreatePass("sets", SetsSql, settings.Schema),
     ];
 
     /// <summary>
-    /// Gets the statements of the passes that run after the sessions ended, in the order they run.
+    /// Gets the passes that run after the sessions ended, in the order they run.
     /// </summary>
-    private string[] PassesAfterSessions { get; } =
+    private PgSweepPass[] PassesAfterSessions { get; } =
     [
-        settings.Schema.Apply(BoundRecordsSql),
-        settings.Schema.Apply(BoundMembersSql),
-        settings.Schema.Apply(BoundGrantsSql),
-        settings.Schema.Apply(EndedSessionsSql),
-        settings.Schema.Apply(GrantsSql),
-        settings.Schema.Apply(ClaimsSql),
+        CreatePass("bound records", BoundRecordsSql, settings.Schema),
+        CreatePass("bound members", BoundMembersSql, settings.Schema),
+        CreatePass("bound grants", BoundGrantsSql, settings.Schema),
+        CreatePass("ended sessions", EndedSessionsSql, settings.Schema),
+        CreatePass("grants", GrantsSql, settings.Schema),
+        CreatePass("claims", ClaimsSql, settings.Schema),
     ];
 
     /// <summary>
@@ -542,14 +545,15 @@ internal sealed class PgSweeps(PgServer server, PgSettings settings, PgRecordTab
     private string ExpiredRecords { get; } = settings.Schema.Apply(ExpiredRecordsSql);
 
     /// <summary>
-    /// Gets the statement that deletes the change log entries that passed their retention.
+    /// Gets the pass that deletes the change log entries that passed their retention.
     /// </summary>
-    private string LogRetention { get; } = settings.Schema.Apply(LogRetentionSql);
+    private PgSweepPass LogRetention { get; } =
+        CreatePass("change log", LogRetentionSql, settings.Schema);
 
     /// <summary>
-    /// Gets the statement that deletes the messages that passed their retention.
+    /// Gets the pass that deletes the messages that passed their retention.
     /// </summary>
-    private string Messages { get; } = settings.Schema.Apply(MessagesSql);
+    private PgSweepPass Messages { get; } = CreatePass("messages", MessagesSql, settings.Schema);
 
     /// <summary>
     /// Runs each pass, in order, each repeated while it deletes a full batch. A pass that fails doesn't stop the passes
@@ -560,20 +564,22 @@ internal sealed class PgSweeps(PgServer server, PgSettings settings, PgRecordTab
     /// <exception cref="OperationCanceledException">The token was cancelled.</exception>
     public async ValueTask SweepAsync(CancellationToken cancellationToken)
     {
-        foreach (var sql in Passes)
+        foreach (var pass in Passes)
         {
-            await RunPassAsync(sql, cancellationToken).ConfigureAwait(false);
+            await RunPassAsync(pass, cancellationToken).ConfigureAwait(false);
         }
 
         cancellationToken.ThrowIfCancellationRequested();
-        await IgnoreFailureAsync(SweepRecordsAsync, cancellationToken).ConfigureAwait(false);
+        await IgnoreFailureAsync("records", SweepRecordsAsync, cancellationToken)
+            .ConfigureAwait(false);
 
         cancellationToken.ThrowIfCancellationRequested();
-        await IgnoreFailureAsync(SweepSessionsAsync, cancellationToken).ConfigureAwait(false);
+        await IgnoreFailureAsync("sessions", SweepSessionsAsync, cancellationToken)
+            .ConfigureAwait(false);
 
-        foreach (var sql in PassesAfterSessions)
+        foreach (var pass in PassesAfterSessions)
         {
-            await RunPassAsync(sql, cancellationToken).ConfigureAwait(false);
+            await RunPassAsync(pass, cancellationToken).ConfigureAwait(false);
         }
 
         await RunPassAsync(LogRetention, cancellationToken).ConfigureAwait(false);
@@ -583,13 +589,13 @@ internal sealed class PgSweeps(PgServer server, PgSettings settings, PgRecordTab
     /// <summary>
     /// Runs one pass that is a single statement, again while it deletes a full batch, and ignores its failure.
     /// </summary>
-    /// <param name="sql">The statement, whose only argument is the batch size and which returns the count of rows it deleted.</param>
+    /// <param name="pass">The pass, whose statement's only argument is the batch size and which returns the count of rows it deleted.</param>
     /// <param name="cancellationToken">The token that cancels the sweep.</param>
     /// <returns>A task that completes after the pass ran.</returns>
     /// <exception cref="OperationCanceledException">The token was cancelled.</exception>
-    private async ValueTask RunPassAsync(string sql, CancellationToken cancellationToken)
+    private async ValueTask RunPassAsync(PgSweepPass pass, CancellationToken cancellationToken)
     {
-        var statement = new PgStatement(sql, Settings.SweepBatchSize);
+        var statement = new PgStatement(pass.Sql, Settings.SweepBatchSize);
         try
         {
             long deleted;
@@ -601,13 +607,45 @@ internal sealed class PgSweeps(PgServer server, PgSettings settings, PgRecordTab
                     .ConfigureAwait(false);
             } while (deleted == Settings.SweepBatchSize);
         }
-        catch (CoordinationException)
+        catch (CoordinationException exception)
         {
             // The next sweep runs the pass again, and one failing pass must not stop the others.
+            Logger.SweepPassFailed(exception, pass.Name);
         }
-        catch (PgKeyspaceMissingException)
+        catch (PgKeyspaceMissingException exception)
         {
             // The next sweep runs the pass again, and one failing pass must not stop the others.
+            Logger.SweepPassFailed(exception, pass.Name);
+        }
+    }
+
+    /// <summary>
+    /// Runs one step of a sweep and logs and ignores its failure.
+    /// </summary>
+    /// <param name="step">The name that a log entry gives the step.</param>
+    /// <param name="run">The step to run.</param>
+    /// <param name="cancellationToken">The token that cancels the sweep.</param>
+    /// <returns>A task that completes after the step ran or failed.</returns>
+    /// <exception cref="OperationCanceledException">The token was cancelled.</exception>
+    private async ValueTask IgnoreFailureAsync(
+        string step,
+        Func<CancellationToken, ValueTask> run,
+        CancellationToken cancellationToken
+    )
+    {
+        try
+        {
+            await run(cancellationToken).ConfigureAwait(false);
+        }
+        catch (CoordinationException exception)
+        {
+            // The next sweep reads the rows again, and one failing step must not stop the others.
+            Logger.SweepStepFailed(exception, step);
+        }
+        catch (PgKeyspaceMissingException exception)
+        {
+            // The next sweep reads the rows again, and one failing step must not stop the others.
+            Logger.SweepStepFailed(exception, step);
         }
     }
 
@@ -648,6 +686,7 @@ internal sealed class PgSweeps(PgServer server, PgSettings settings, PgRecordTab
             cancellationToken.ThrowIfCancellationRequested();
 
             await IgnoreFailureAsync(
+                    "a keyspace's records",
                     token => SweepKeyspaceFullyAsync(keyspaceId, token),
                     cancellationToken
                 )
@@ -775,6 +814,7 @@ internal sealed class PgSweeps(PgServer server, PgSettings settings, PgRecordTab
             cancellationToken.ThrowIfCancellationRequested();
 
             await IgnoreFailureAsync(
+                    "a keyspace's sessions",
                     token => SweepSessionKeyspaceFullyAsync(keyspaceId, token),
                     cancellationToken
                 )
