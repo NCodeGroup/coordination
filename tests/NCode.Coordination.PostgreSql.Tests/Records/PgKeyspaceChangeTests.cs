@@ -159,13 +159,16 @@ public sealed class PgKeyspaceChangeTests
 
         var statements = change.Statements("channel");
 
-        Assert.Equal(4, statements.Length);
+        Assert.Equal(5, statements.Length);
         Assert.Contains("DELETE FROM \"coordination\".sessions", statements[0].Sql);
         Assert.Equal("s-1", statements[0].Arguments[1].Value);
-        Assert.Contains("INSERT INTO \"coordination\".changes", statements[1].Sql);
-        Assert.Equal(6L, statements[1].Arguments[1].Value);
-        Assert.Equal("s-1", statements[1].Arguments[3].Value);
-        Assert.Equal("c:6", statements[3].Arguments[1].Value);
+        Assert.Contains("INSERT INTO \"coordination\".ended_sessions", statements[1].Sql);
+        Assert.Equal("s-1", statements[1].Arguments[1].Value);
+        Assert.Equal(6L, statements[1].Arguments[2].Value);
+        Assert.Contains("INSERT INTO \"coordination\".changes", statements[2].Sql);
+        Assert.Equal(6L, statements[2].Arguments[1].Value);
+        Assert.Equal("s-1", statements[2].Arguments[3].Value);
+        Assert.Equal("c:6", statements[4].Arguments[1].Value);
     }
 
     #endregion

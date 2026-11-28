@@ -140,19 +140,22 @@ internal sealed class PgSweeps(PgServer server, PgSettings settings, PgRecordTab
     /// The statement that deletes the records bound to a session that ended and left the log.
     /// </summary>
     private const string BoundRecordsSql = """
-        WITH deleted AS (
+        WITH due AS (
+          SELECT e.keyspace_id, e.session_id
+          FROM {schema}.ended_sessions e
+          JOIN {schema}.keyspaces k ON k.id = e.keyspace_id
+          WHERE e.revision <= k.log_removed
+            AND EXISTS (
+              SELECT 1 FROM {schema}.records b
+              WHERE b.keyspace_id = e.keyspace_id AND b.session_id = e.session_id)
+          LIMIT $1),
+        deleted AS (
           DELETE FROM {schema}.records
           WHERE ctid = ANY (ARRAY(
             SELECT b.ctid FROM {schema}.records b
-            WHERE b.session_id IS NOT NULL
-              AND NOT EXISTS (
-                SELECT 1 FROM {schema}.sessions s
-                WHERE s.keyspace_id = b.keyspace_id AND s.id = b.session_id)
-              AND NOT EXISTS (
-                SELECT 1 FROM {schema}.changes c
-                WHERE c.keyspace_id = b.keyspace_id AND c.ended_session = b.session_id)
+            JOIN due d ON d.keyspace_id = b.keyspace_id AND d.session_id = b.session_id
             LIMIT $1
-            FOR UPDATE SKIP LOCKED))
+            FOR UPDATE OF b SKIP LOCKED))
           RETURNING 1)
         SELECT count(*) FROM deleted
         """;
@@ -161,19 +164,22 @@ internal sealed class PgSweeps(PgServer server, PgSettings settings, PgRecordTab
     /// The statement that deletes the members bound to a session that ended and left the log.
     /// </summary>
     private const string BoundMembersSql = """
-        WITH deleted AS (
+        WITH due AS (
+          SELECT e.keyspace_id, e.session_id
+          FROM {schema}.ended_sessions e
+          JOIN {schema}.keyspaces k ON k.id = e.keyspace_id
+          WHERE e.revision <= k.log_removed
+            AND EXISTS (
+              SELECT 1 FROM {schema}.members b
+              WHERE b.keyspace_id = e.keyspace_id AND b.session_id = e.session_id)
+          LIMIT $1),
+        deleted AS (
           DELETE FROM {schema}.members
           WHERE ctid = ANY (ARRAY(
             SELECT b.ctid FROM {schema}.members b
-            WHERE b.session_id IS NOT NULL
-              AND NOT EXISTS (
-                SELECT 1 FROM {schema}.sessions s
-                WHERE s.keyspace_id = b.keyspace_id AND s.id = b.session_id)
-              AND NOT EXISTS (
-                SELECT 1 FROM {schema}.changes c
-                WHERE c.keyspace_id = b.keyspace_id AND c.ended_session = b.session_id)
+            JOIN due d ON d.keyspace_id = b.keyspace_id AND d.session_id = b.session_id
             LIMIT $1
-            FOR UPDATE SKIP LOCKED))
+            FOR UPDATE OF b SKIP LOCKED))
           RETURNING 1)
         SELECT count(*) FROM deleted
         """;
@@ -182,19 +188,41 @@ internal sealed class PgSweeps(PgServer server, PgSettings settings, PgRecordTab
     /// The statement that deletes the grants bound to a session that ended and left the log.
     /// </summary>
     private const string BoundGrantsSql = """
-        WITH deleted AS (
+        WITH due AS (
+          SELECT e.keyspace_id, e.session_id
+          FROM {schema}.ended_sessions e
+          JOIN {schema}.keyspaces k ON k.id = e.keyspace_id
+          WHERE e.revision <= k.log_removed
+            AND EXISTS (
+              SELECT 1 FROM {schema}.grants b
+              WHERE b.keyspace_id = e.keyspace_id AND b.session_id = e.session_id)
+          LIMIT $1),
+        deleted AS (
           DELETE FROM {schema}.grants
           WHERE ctid = ANY (ARRAY(
             SELECT b.ctid FROM {schema}.grants b
-            WHERE b.session_id IS NOT NULL
-              AND NOT EXISTS (
-                SELECT 1 FROM {schema}.sessions s
-                WHERE s.keyspace_id = b.keyspace_id AND s.id = b.session_id)
-              AND NOT EXISTS (
-                SELECT 1 FROM {schema}.changes c
-                WHERE c.keyspace_id = b.keyspace_id AND c.ended_session = b.session_id)
+            JOIN due d ON d.keyspace_id = b.keyspace_id AND d.session_id = b.session_id
             LIMIT $1
-            FOR UPDATE SKIP LOCKED))
+            FOR UPDATE OF b SKIP LOCKED))
+          RETURNING 1)
+        SELECT count(*) FROM deleted
+        """;
+
+    /// <summary>
+    /// The statement that forgets the ended sessions whose entry left the log and that nothing is bound to.
+    /// </summary>
+    private const string EndedSessionsSql = """
+        WITH deleted AS (
+          DELETE FROM {schema}.ended_sessions
+          WHERE ctid = ANY (ARRAY(
+            SELECT e.ctid FROM {schema}.ended_sessions e
+            JOIN {schema}.keyspaces k ON k.id = e.keyspace_id
+            WHERE e.revision <= k.log_removed
+              AND NOT EXISTS (SELECT 1 FROM {schema}.records r WHERE r.keyspace_id = e.keyspace_id AND r.session_id = e.session_id)
+              AND NOT EXISTS (SELECT 1 FROM {schema}.members m WHERE m.keyspace_id = e.keyspace_id AND m.session_id = e.session_id)
+              AND NOT EXISTS (SELECT 1 FROM {schema}.grants g WHERE g.keyspace_id = e.keyspace_id AND g.session_id = e.session_id)
+            LIMIT $1
+            FOR UPDATE OF e SKIP LOCKED))
           RETURNING 1)
         SELECT count(*) FROM deleted
         """;
@@ -482,6 +510,7 @@ internal sealed class PgSweeps(PgServer server, PgSettings settings, PgRecordTab
         settings.Schema.Apply(BoundRecordsSql),
         settings.Schema.Apply(BoundMembersSql),
         settings.Schema.Apply(BoundGrantsSql),
+        settings.Schema.Apply(EndedSessionsSql),
         settings.Schema.Apply(GrantsSql),
         settings.Schema.Apply(ClaimsSql),
     ];

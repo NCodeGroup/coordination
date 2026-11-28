@@ -491,6 +491,45 @@ public sealed class PgSweepsTests(PgServers servers)
     }
 
     [PgServerFact]
+    public async Task SweepAsync_EndedSessionAfterItsEntryLeftTheLog_ForgetsIt()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await WithSweepsAsync(
+            async context =>
+            {
+                var grant = await context.Sessions.OpenAsync(
+                    context.Keyspace,
+                    new TimeToLive(Live),
+                    null,
+                    cancellationToken
+                );
+                var result = await context.Records.CreateAsync(
+                    context.KeyOf(0),
+                    new byte[] { 1 },
+                    RecordLifetime.ForSession(grant.Id),
+                    null,
+                    cancellationToken
+                );
+                Assert.True(result.IsWritten);
+                await context.Sessions.CloseAsync(grant.Id, null, cancellationToken);
+                var queued = await context.CountAsync("ended_sessions", cancellationToken);
+                Assert.Equal(1, queued);
+
+                await context.ExpireAsync("changes", cancellationToken);
+                await context.Sweeps.SweepAsync(cancellationToken);
+                await context.Sweeps.SweepAsync(cancellationToken);
+
+                var records = await context.CountAsync("records", cancellationToken);
+                var ended = await context.CountAsync("ended_sessions", cancellationToken);
+
+                Assert.Equal(0, records);
+                Assert.Equal(0, ended);
+            },
+            cancellationToken
+        );
+    }
+
+    [PgServerFact]
     public async Task SweepAsync_SetWithoutMembers_RemovesItsRow()
     {
         var cancellationToken = TestContext.Current.CancellationToken;

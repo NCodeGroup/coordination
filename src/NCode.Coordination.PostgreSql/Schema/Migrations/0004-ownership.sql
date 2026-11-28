@@ -6,6 +6,12 @@ CREATE TABLE {schema}.sessions (
     PRIMARY KEY (keyspace_id, id)
 );
 CREATE INDEX sessions_deadline ON {schema}.sessions (deadline);
+CREATE TABLE {schema}.ended_sessions (
+    keyspace_id bigint NOT NULL REFERENCES {schema}.keyspaces (id),
+    session_id text NOT NULL,
+    revision bigint NOT NULL,
+    PRIMARY KEY (keyspace_id, session_id)
+);
 CREATE TABLE {schema}.members (
     keyspace_id bigint NOT NULL REFERENCES {schema}.keyspaces (id),
     group_idx bytea NOT NULL,

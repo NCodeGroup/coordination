@@ -43,6 +43,14 @@ internal sealed class PgKeyspaceChange(PgSettings settings, PgChangeOrigin origi
         """;
 
     /// <summary>
+    /// The template of the statement that queues an ended session, so the sweep reclaims the rows bound to it.
+    /// </summary>
+    private const string InsertEndedSession = """
+        INSERT INTO {schema}.ended_sessions (keyspace_id, session_id, revision) VALUES ($1, $2, $3)
+        ON CONFLICT DO NOTHING
+        """;
+
+    /// <summary>
     /// The template of the statement that logs one entry of the change log.
     /// </summary>
     private const string InsertChange = """
@@ -117,6 +125,11 @@ internal sealed class PgKeyspaceChange(PgSettings settings, PgChangeOrigin origi
     /// Gets the statement that deletes a session's row.
     /// </summary>
     private string DeleteSessionSql { get; } = settings.Schema.Apply(DeleteSession);
+
+    /// <summary>
+    /// Gets the statement that queues an ended session.
+    /// </summary>
+    private string InsertEndedSessionSql { get; } = settings.Schema.Apply(InsertEndedSession);
 
     /// <summary>
     /// Gets the statement that logs one entry.
@@ -205,7 +218,7 @@ internal sealed class PgKeyspaceChange(PgSettings settings, PgChangeOrigin origi
 
     /// <summary>
     /// Ends a session: takes the next revision for an entry that names the session as ended, and deletes the
-    /// session's row. A session ends once in a change.
+    /// session's row and queues it in the ended sessions. A session ends once in a change.
     /// </summary>
     /// <param name="session">The session's id.</param>
     /// <returns>True when the session was ended; false when this change has ended it already.</returns>
@@ -219,10 +232,12 @@ internal sealed class PgKeyspaceChange(PgSettings settings, PgChangeOrigin origi
             return false;
         }
 
-        Begin();
+        var revision = Begin();
         Entries[^1].EndedSession = session;
         var deleteSession = new PgStatement(DeleteSessionSql, KeyspaceId, session);
         Extras.Add(deleteSession);
+        var queueSession = new PgStatement(InsertEndedSessionSql, KeyspaceId, session, revision);
+        Extras.Add(queueSession);
         return true;
     }
 

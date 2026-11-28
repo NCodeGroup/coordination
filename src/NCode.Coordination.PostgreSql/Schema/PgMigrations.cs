@@ -105,6 +105,7 @@ internal static partial class PgMigrations
         "changes",
         "change_items",
         "sessions",
+        "ended_sessions",
         "members",
         "grants",
         "fencing",
