@@ -1,6 +1,7 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using System.Collections.Immutable;
 using NCode.Coordination.PostgreSql.Keys;
 using NCode.Coordination.PostgreSql.Schema;
 using NCode.Coordination.PostgreSql.Server;
@@ -18,7 +19,9 @@ namespace NCode.Coordination.PostgreSql.Claims;
 internal sealed class PgClaimService(PgServer server, PgKeyspaces keyspaces, PgSchemaName schema)
     : IClaimService
 {
-    /// <summary>The statement that records a claim unless an unexpired one exists.</summary>
+    /// <summary>
+    /// The statement that records a claim unless an unexpired one exists.
+    /// </summary>
     private const string ClaimSql = """
         WITH now AS (SELECT clock_timestamp() AS t)
         INSERT INTO {schema}.claims AS c (keyspace_id, idx, depth, key, deadline)
@@ -27,6 +30,22 @@ internal sealed class PgClaimService(PgServer server, PgKeyspaces keyspaces, PgS
         WHERE c.deadline <= (SELECT t FROM now)
         RETURNING 1
         """;
+
+    /// <summary>
+    /// Reads the rows that the claim statement returned.
+    /// </summary>
+    /// <param name="results">The results of the batch.</param>
+    /// <param name="cancellationToken">The token that cancels the read.</param>
+    /// <returns>One value for the row that was written, or none when an unexpired claim exists.</returns>
+    private static async ValueTask<ImmutableArray<int>> ReadClaimedAsync(
+        PgResults results,
+        CancellationToken cancellationToken
+    )
+    {
+        return await results
+            .ReadAsync(reader => reader.GetInt32(0), cancellationToken)
+            .ConfigureAwait(false);
+    }
 
     /// <summary>
     /// Gets the seam to the server.
@@ -78,33 +97,43 @@ internal sealed class PgClaimService(PgServer server, PgKeyspaces keyspaces, PgS
             PartitionDepth = name.PartitionDepth,
         };
 
-        var index = PgKeys.Index(key);
-        var depth = (short)key.PartitionDepth;
-        var text = PgKeys.KeyText(key);
         var microseconds = PgCall.ToMicroseconds(timeToLive);
 
         var claimed = await Keyspaces
             .RunAsync(
                 key.Keyspace,
-                async (id, token) =>
-                {
-                    var rows = await Server
-                        .ExecuteAsync(
-                            [new PgStatement(Claim, id, index, depth, text, microseconds)],
-                            async (results, readToken) =>
-                                await results
-                                    .ReadAsync(reader => reader.GetInt32(0), readToken)
-                                    .ConfigureAwait(false),
-                            token
-                        )
-                        .ConfigureAwait(false);
-
-                    return rows.Length > 0;
-                },
+                (id, token) => ClaimInKeyspaceAsync(id, key, microseconds, token),
                 cancellationToken
             )
             .ConfigureAwait(false);
 
         return claimed ? ClaimStatus.Claimed : ClaimStatus.Taken;
+    }
+
+    /// <summary>
+    /// Records a claim in a keyspace unless an unexpired one exists.
+    /// </summary>
+    /// <param name="id">The keyspace's id.</param>
+    /// <param name="key">The key of the claim: its name followed by the window's segment.</param>
+    /// <param name="microseconds">The time to live, in whole microseconds.</param>
+    /// <param name="cancellationToken">The token that cancels the call.</param>
+    /// <returns>True when the claim was recorded; false when an unexpired one exists.</returns>
+    private async ValueTask<bool> ClaimInKeyspaceAsync(
+        long id,
+        CoordinationKey key,
+        long microseconds,
+        CancellationToken cancellationToken
+    )
+    {
+        var index = PgKeys.Index(key);
+        var depth = (short)key.PartitionDepth;
+        var text = PgKeys.KeyText(key);
+
+        var statement = new PgStatement(Claim, id, index, depth, text, microseconds);
+        var rows = await Server
+            .ExecuteAsync([statement], ReadClaimedAsync, cancellationToken)
+            .ConfigureAwait(false);
+
+        return rows.Length > 0;
     }
 }

@@ -5,6 +5,7 @@ using System.Collections.Immutable;
 using NCode.Coordination.PostgreSql.Keys;
 using NCode.Coordination.PostgreSql.Schema;
 using NCode.Coordination.PostgreSql.Server;
+using Npgsql;
 
 namespace NCode.Coordination.PostgreSql.Sets;
 
@@ -74,7 +75,9 @@ internal sealed class PgSetService(PgServer server, PgKeyspaces keyspaces, PgSch
         SELECT chk.present, EXISTS (SELECT 1 FROM w) FROM chk
         """;
 
-    /// <summary>The statement that takes the row lock of a set when the set has a row.</summary>
+    /// <summary>
+    /// The statement that takes the row lock of a set when the set has a row.
+    /// </summary>
     private const string LockExistingSql = """
         SELECT 1 FROM {schema}.sets WHERE keyspace_id = $1 AND idx = $2 AND depth = $3 FOR UPDATE
         """;
@@ -98,22 +101,159 @@ internal sealed class PgSetService(PgServer server, PgKeyspaces keyspaces, PgSch
         SELECT EXISTS (SELECT 1 FROM d, now WHERE d.deadline > now.t)
         """;
 
-    /// <summary>The statement that lists the unexpired members of a set.</summary>
+    /// <summary>
+    /// The statement that lists the unexpired members of a set.
+    /// </summary>
     private const string ListSql = """
         SELECT member FROM {schema}.set_members
         WHERE keyspace_id = $1 AND idx = $2 AND depth = $3 AND deadline > clock_timestamp()
         ORDER BY member
         """;
 
-    /// <summary>The statement that deletes the row of a set.</summary>
+    /// <summary>
+    /// The statement that deletes the row of a set.
+    /// </summary>
     private const string ClearSetSql = """
         DELETE FROM {schema}.sets WHERE keyspace_id = $1 AND idx = $2 AND depth = $3
         """;
 
-    /// <summary>The statement that deletes every member of a set.</summary>
+    /// <summary>
+    /// The statement that deletes every member of a set.
+    /// </summary>
     private const string ClearMembersSql = """
         DELETE FROM {schema}.set_members WHERE keyspace_id = $1 AND idx = $2 AND depth = $3
         """;
+
+    /// <summary>
+    /// Reads the results of the add batch: the row lock, then whether the member was present and whether it was
+    /// written.
+    /// </summary>
+    /// <param name="results">The results of the batch.</param>
+    /// <param name="cancellationToken">The token that cancels the read.</param>
+    /// <returns>Whether the member was present before the add, and whether the add wrote it.</returns>
+    private static async ValueTask<(bool Present, bool Written)> ReadAddedAsync(
+        PgResults results,
+        CancellationToken cancellationToken
+    )
+    {
+        await results.ReadAsync(ReadLock, cancellationToken).ConfigureAwait(false);
+        var rows = await results.ReadAsync(ReadAdd, cancellationToken).ConfigureAwait(false);
+
+        return rows[0];
+    }
+
+    /// <summary>
+    /// Reads the results of the remove batch: the row lock, then whether an unexpired member was deleted.
+    /// </summary>
+    /// <param name="results">The results of the batch.</param>
+    /// <param name="cancellationToken">The token that cancels the read.</param>
+    /// <returns>True when an unexpired member was deleted; otherwise, false.</returns>
+    private static async ValueTask<bool> ReadRemovedAsync(
+        PgResults results,
+        CancellationToken cancellationToken
+    )
+    {
+        await results.ReadAsync(ReadLock, cancellationToken).ConfigureAwait(false);
+        var rows = await results.ReadAsync(ReadRemove, cancellationToken).ConfigureAwait(false);
+
+        return rows[0];
+    }
+
+    /// <summary>
+    /// Reads the encoded members that the list statement returned.
+    /// </summary>
+    /// <param name="results">The results of the batch.</param>
+    /// <param name="cancellationToken">The token that cancels the read.</param>
+    /// <returns>The encoded members, in the order the server sent them.</returns>
+    private static async ValueTask<ImmutableArray<string>> ReadMembersAsync(
+        PgResults results,
+        CancellationToken cancellationToken
+    )
+    {
+        return await results.ReadAsync(ReadMember, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Reads the row that a lock statement returned.
+    /// </summary>
+    /// <param name="reader">The reader, at a row.</param>
+    /// <returns>The row's only column.</returns>
+    private static int ReadLock(NpgsqlDataReader reader)
+    {
+        return reader.GetInt32(0);
+    }
+
+    /// <summary>
+    /// Reads the row that the add statement returned.
+    /// </summary>
+    /// <param name="reader">The reader, at a row.</param>
+    /// <returns>Whether the member was present before the add, and whether the add wrote it.</returns>
+    private static (bool Present, bool Written) ReadAdd(NpgsqlDataReader reader)
+    {
+        var present = reader.GetBoolean(0);
+        var written = reader.GetBoolean(1);
+        return (present, written);
+    }
+
+    /// <summary>
+    /// Reads the row that the remove statement returned.
+    /// </summary>
+    /// <param name="reader">The reader, at a row.</param>
+    /// <returns>True when an unexpired member was deleted; otherwise, false.</returns>
+    private static bool ReadRemove(NpgsqlDataReader reader)
+    {
+        return reader.GetBoolean(0);
+    }
+
+    /// <summary>
+    /// Reads a row that the list statement returned.
+    /// </summary>
+    /// <param name="reader">The reader, at a row.</param>
+    /// <returns>The encoded member.</returns>
+    private static string ReadMember(NpgsqlDataReader reader)
+    {
+        return reader.GetString(0);
+    }
+
+    /// <summary>
+    /// Reads the results of the clear batch, which hold nothing to read.
+    /// </summary>
+    /// <param name="results">The results of the batch.</param>
+    /// <param name="cancellationToken">The token that cancels the read.</param>
+    /// <returns>True, as the batch has been sent.</returns>
+    private static ValueTask<bool> ReadCleared(
+        PgResults results,
+        CancellationToken cancellationToken
+    )
+    {
+        return ValueTask.FromResult(true);
+    }
+
+    /// <summary>
+    /// Decodes the members that the server returned.
+    /// </summary>
+    /// <param name="rows">The encoded members.</param>
+    /// <returns>The members' segments.</returns>
+    /// <exception cref="CoordinationException">A member doesn't decode.</exception>
+    private static ImmutableArray<KeySegment> DecodeMembers(ImmutableArray<string> rows)
+    {
+        var members = ImmutableArray.CreateBuilder<KeySegment>(rows.Length);
+        foreach (var row in rows)
+        {
+            if (!PgKeys.TryDecodeSegment(row, out var member))
+            {
+                throw new CoordinationException(
+                    CoordinationErrorCodes.Unavailable,
+                    outcomeUnknown: false,
+                    "The server returned a set member the provider didn't write."
+                );
+            }
+
+            members.Add(member);
+        }
+
+        return members.MoveToImmutable();
+    }
 
     /// <summary>
     /// Gets the seam to the server.
@@ -182,47 +322,12 @@ internal sealed class PgSetService(PgServer server, PgKeyspaces keyspaces, PgSch
         ArgumentNullException.ThrowIfNull(timeToLive);
         PgCall.Check(options, cancellationToken);
 
-        var index = PgKeys.Index(key);
-        var depth = (short)key.PartitionDepth;
-        var text = PgKeys.KeyText(key);
-        var encoded = PgKeys.EncodeSegment(member);
         var microseconds = PgCall.ToMicroseconds(timeToLive);
 
         var (present, written) = await Keyspaces
             .RunAsync(
                 key.Keyspace,
-                async (id, token) =>
-                    await Server
-                        .ExecuteAsync(
-                            [
-                                new PgStatement(Lock, id, index, depth, text),
-                                new PgStatement(
-                                    Add,
-                                    id,
-                                    index,
-                                    depth,
-                                    encoded,
-                                    microseconds,
-                                    (long)CoordinationLimits.MaxSetMembers
-                                ),
-                            ],
-                            async (results, readToken) =>
-                            {
-                                await results
-                                    .ReadAsync(reader => reader.GetInt32(0), readToken)
-                                    .ConfigureAwait(false);
-                                var rows = await results
-                                    .ReadAsync(
-                                        reader => (reader.GetBoolean(0), reader.GetBoolean(1)),
-                                        readToken
-                                    )
-                                    .ConfigureAwait(false);
-
-                                return rows[0];
-                            },
-                            token
-                        )
-                        .ConfigureAwait(false),
+                (id, token) => AddInKeyspaceAsync(id, key, member, microseconds, token),
                 cancellationToken
             )
             .ConfigureAwait(false);
@@ -256,34 +361,10 @@ internal sealed class PgSetService(PgServer server, PgKeyspaces keyspaces, PgSch
         ArgumentNullException.ThrowIfNull(member);
         PgCall.Check(options, cancellationToken);
 
-        var index = PgKeys.Index(key);
-        var depth = (short)key.PartitionDepth;
-        var encoded = PgKeys.EncodeSegment(member);
-
         return await Keyspaces
             .RunAsync(
                 key.Keyspace,
-                async (id, token) =>
-                    await Server
-                        .ExecuteAsync(
-                            [
-                                new PgStatement(LockExisting, id, index, depth),
-                                new PgStatement(Remove, id, index, depth, encoded),
-                            ],
-                            async (results, readToken) =>
-                            {
-                                await results
-                                    .ReadAsync(reader => reader.GetInt32(0), readToken)
-                                    .ConfigureAwait(false);
-                                var rows = await results
-                                    .ReadAsync(reader => reader.GetBoolean(0), readToken)
-                                    .ConfigureAwait(false);
-
-                                return rows[0];
-                            },
-                            token
-                        )
-                        .ConfigureAwait(false),
+                (id, token) => RemoveInKeyspaceAsync(id, key, member, token),
                 cancellationToken
             )
             .ConfigureAwait(false);
@@ -303,45 +384,15 @@ internal sealed class PgSetService(PgServer server, PgKeyspaces keyspaces, PgSch
         ArgumentNullException.ThrowIfNull(key);
         PgCall.Check(options, cancellationToken);
 
-        var index = PgKeys.Index(key);
-        var depth = (short)key.PartitionDepth;
-
-        return await Keyspaces
+        var rows = await Keyspaces
             .RunAsync(
                 key.Keyspace,
-                async (id, token) =>
-                {
-                    var rows = await Server
-                        .ExecuteAsync(
-                            [new PgStatement(List, id, index, depth)],
-                            async (results, readToken) =>
-                                await results
-                                    .ReadAsync(reader => reader.GetString(0), readToken)
-                                    .ConfigureAwait(false),
-                            token
-                        )
-                        .ConfigureAwait(false);
-
-                    var members = ImmutableArray.CreateBuilder<KeySegment>(rows.Length);
-                    foreach (var row in rows)
-                    {
-                        if (!PgKeys.TryDecodeSegment(row, out var member))
-                        {
-                            throw new CoordinationException(
-                                CoordinationErrorCodes.Unavailable,
-                                outcomeUnknown: false,
-                                "The server returned a set member the provider didn't write."
-                            );
-                        }
-
-                        members.Add(member);
-                    }
-
-                    return members.MoveToImmutable();
-                },
+                (id, token) => ListInKeyspaceAsync(id, key, token),
                 cancellationToken
             )
             .ConfigureAwait(false);
+
+        return DecodeMembers(rows);
     }
 
     /// <inheritdoc />
@@ -358,23 +409,123 @@ internal sealed class PgSetService(PgServer server, PgKeyspaces keyspaces, PgSch
         ArgumentNullException.ThrowIfNull(key);
         PgCall.Check(options, cancellationToken);
 
-        var index = PgKeys.Index(key);
-        var depth = (short)key.PartitionDepth;
-
         await Keyspaces
             .RunAsync(
                 key.Keyspace,
-                async (id, token) =>
-                    await Server
-                        .ExecuteAsync(
-                            [
-                                new PgStatement(ClearSet, id, index, depth),
-                                new PgStatement(ClearMembers, id, index, depth),
-                            ],
-                            (_, _) => ValueTask.FromResult(true),
-                            token
-                        )
-                        .ConfigureAwait(false),
+                (id, token) => ClearInKeyspaceAsync(id, key, token),
+                cancellationToken
+            )
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Adds a member to a set in a keyspace in one batch.
+    /// </summary>
+    /// <param name="id">The keyspace's id.</param>
+    /// <param name="key">The key of the set.</param>
+    /// <param name="member">The member.</param>
+    /// <param name="microseconds">The time to live, in whole microseconds.</param>
+    /// <param name="cancellationToken">The token that cancels the call.</param>
+    /// <returns>Whether the member was present before the add, and whether the add wrote it.</returns>
+    private async ValueTask<(bool Present, bool Written)> AddInKeyspaceAsync(
+        long id,
+        CoordinationKey key,
+        KeySegment member,
+        long microseconds,
+        CancellationToken cancellationToken
+    )
+    {
+        var index = PgKeys.Index(key);
+        var depth = (short)key.PartitionDepth;
+        var text = PgKeys.KeyText(key);
+        var encoded = PgKeys.EncodeSegment(member);
+        const long maxMembers = CoordinationLimits.MaxSetMembers;
+
+        var lockStatement = new PgStatement(Lock, id, index, depth, text);
+        var addStatement = new PgStatement(
+            Add,
+            id,
+            index,
+            depth,
+            encoded,
+            microseconds,
+            maxMembers
+        );
+        return await Server
+            .ExecuteAsync([lockStatement, addStatement], ReadAddedAsync, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Removes a member from a set in a keyspace in one batch.
+    /// </summary>
+    /// <param name="id">The keyspace's id.</param>
+    /// <param name="key">The key of the set.</param>
+    /// <param name="member">The member.</param>
+    /// <param name="cancellationToken">The token that cancels the call.</param>
+    /// <returns>True when an unexpired member was removed; otherwise, false.</returns>
+    private async ValueTask<bool> RemoveInKeyspaceAsync(
+        long id,
+        CoordinationKey key,
+        KeySegment member,
+        CancellationToken cancellationToken
+    )
+    {
+        var index = PgKeys.Index(key);
+        var depth = (short)key.PartitionDepth;
+        var encoded = PgKeys.EncodeSegment(member);
+
+        var lockStatement = new PgStatement(LockExisting, id, index, depth);
+        var removeStatement = new PgStatement(Remove, id, index, depth, encoded);
+        return await Server
+            .ExecuteAsync([lockStatement, removeStatement], ReadRemovedAsync, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Lists the unexpired members of a set in a keyspace.
+    /// </summary>
+    /// <param name="id">The keyspace's id.</param>
+    /// <param name="key">The key of the set.</param>
+    /// <param name="cancellationToken">The token that cancels the call.</param>
+    /// <returns>The encoded members.</returns>
+    private async ValueTask<ImmutableArray<string>> ListInKeyspaceAsync(
+        long id,
+        CoordinationKey key,
+        CancellationToken cancellationToken
+    )
+    {
+        var index = PgKeys.Index(key);
+        var depth = (short)key.PartitionDepth;
+
+        var statement = new PgStatement(List, id, index, depth);
+        return await Server
+            .ExecuteAsync([statement], ReadMembersAsync, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Deletes a set's row and its members in a keyspace in one batch.
+    /// </summary>
+    /// <param name="id">The keyspace's id.</param>
+    /// <param name="key">The key of the set.</param>
+    /// <param name="cancellationToken">The token that cancels the call.</param>
+    /// <returns>A task that completes when the batch has been read.</returns>
+    private async ValueTask ClearInKeyspaceAsync(
+        long id,
+        CoordinationKey key,
+        CancellationToken cancellationToken
+    )
+    {
+        var index = PgKeys.Index(key);
+        var depth = (short)key.PartitionDepth;
+
+        var clearSetStatement = new PgStatement(ClearSet, id, index, depth);
+        var clearMembersStatement = new PgStatement(ClearMembers, id, index, depth);
+        await Server
+            .ExecuteAsync(
+                [clearSetStatement, clearMembersStatement],
+                ReadCleared,
                 cancellationToken
             )
             .ConfigureAwait(false);

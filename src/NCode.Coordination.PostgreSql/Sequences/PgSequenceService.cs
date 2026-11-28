@@ -1,6 +1,7 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using System.Collections.Immutable;
 using NCode.Coordination.PostgreSql.Keys;
 using NCode.Coordination.PostgreSql.Schema;
 using NCode.Coordination.PostgreSql.Server;
@@ -17,13 +18,31 @@ namespace NCode.Coordination.PostgreSql.Sequences;
 internal sealed class PgSequenceService(PgServer server, PgKeyspaces keyspaces, PgSchemaName schema)
     : ISequenceService
 {
-    /// <summary>The statement that adds an amount to a sequence, creating it when none exists.</summary>
+    /// <summary>
+    /// The statement that adds an amount to a sequence, creating it when none exists.
+    /// </summary>
     private const string AddSql = """
         INSERT INTO {schema}.sequences AS s (keyspace_id, idx, depth, key, value)
         VALUES ($1, $2, $3, $4, $5)
         ON CONFLICT (keyspace_id, idx, depth) DO UPDATE SET value = s.value + EXCLUDED.value
         RETURNING value
         """;
+
+    /// <summary>
+    /// Reads the value that the add statement returned.
+    /// </summary>
+    /// <param name="results">The results of the batch.</param>
+    /// <param name="cancellationToken">The token that cancels the read.</param>
+    /// <returns>The value of the sequence after the addition, as the only row.</returns>
+    private static async ValueTask<ImmutableArray<long>> ReadValueAsync(
+        PgResults results,
+        CancellationToken cancellationToken
+    )
+    {
+        return await results
+            .ReadAsync(reader => reader.GetInt64(0), cancellationToken)
+            .ConfigureAwait(false);
+    }
 
     /// <summary>
     /// Gets the seam to the server.
@@ -92,30 +111,39 @@ internal sealed class PgSequenceService(PgServer server, PgKeyspaces keyspaces, 
         CancellationToken cancellationToken
     )
     {
+        return await Keyspaces
+            .RunAsync(
+                key.Keyspace,
+                (id, token) => AddInKeyspaceAsync(id, key, amount, token),
+                cancellationToken
+            )
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Adds an amount to a sequence in a keyspace.
+    /// </summary>
+    /// <param name="id">The keyspace's id.</param>
+    /// <param name="key">The key of the sequence.</param>
+    /// <param name="amount">The amount to add.</param>
+    /// <param name="cancellationToken">The token that cancels the call.</param>
+    /// <returns>The value of the sequence after the addition.</returns>
+    private async ValueTask<long> AddInKeyspaceAsync(
+        long id,
+        CoordinationKey key,
+        long amount,
+        CancellationToken cancellationToken
+    )
+    {
         var index = PgKeys.Index(key);
         var depth = (short)key.PartitionDepth;
         var text = PgKeys.KeyText(key);
 
-        return await Keyspaces
-            .RunAsync(
-                key.Keyspace,
-                async (id, token) =>
-                {
-                    var rows = await Server
-                        .ExecuteAsync(
-                            [new PgStatement(Add, id, index, depth, text, amount)],
-                            async (results, readToken) =>
-                                await results
-                                    .ReadAsync(reader => reader.GetInt64(0), readToken)
-                                    .ConfigureAwait(false),
-                            token
-                        )
-                        .ConfigureAwait(false);
-
-                    return rows[0];
-                },
-                cancellationToken
-            )
+        var statement = new PgStatement(Add, id, index, depth, text, amount);
+        var rows = await Server
+            .ExecuteAsync([statement], ReadValueAsync, cancellationToken)
             .ConfigureAwait(false);
+
+        return rows[0];
     }
 }

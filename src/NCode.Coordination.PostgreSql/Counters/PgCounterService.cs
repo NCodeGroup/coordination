@@ -1,9 +1,11 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using System.Collections.Immutable;
 using NCode.Coordination.PostgreSql.Keys;
 using NCode.Coordination.PostgreSql.Schema;
 using NCode.Coordination.PostgreSql.Server;
+using Npgsql;
 using NpgsqlTypes;
 
 namespace NCode.Coordination.PostgreSql.Counters;
@@ -33,13 +35,17 @@ internal sealed class PgCounterService(PgServer server, PgKeyspaces keyspaces, P
         RETURNING count
         """;
 
-    /// <summary>The statement that reads the count of an unexpired counter.</summary>
+    /// <summary>
+    /// The statement that reads the count of an unexpired counter.
+    /// </summary>
     private const string ReadSql = """
         SELECT count FROM {schema}.counters
         WHERE keyspace_id = $1 AND idx = $2 AND depth = $3 AND deadline > clock_timestamp()
         """;
 
-    /// <summary>The statement that deletes a counter.</summary>
+    /// <summary>
+    /// The statement that deletes a counter.
+    /// </summary>
     private const string ResetSql = """
         DELETE FROM {schema}.counters WHERE keyspace_id = $1 AND idx = $2 AND depth = $3
         """;
@@ -57,15 +63,287 @@ internal sealed class PgCounterService(PgServer server, PgKeyspaces keyspaces, P
         RETURNING idx, depth, count, deadline
         """;
 
-    /// <summary>The statement that reads the server's clock.</summary>
+    /// <summary>
+    /// The statement that reads the server's clock.
+    /// </summary>
     private const string BatchClockSql = "SELECT clock_timestamp()";
 
-    /// <summary>The statement that writes the counts and deadlines that a batch changed.</summary>
+    /// <summary>
+    /// The statement that writes the counts and deadlines that a batch changed.
+    /// </summary>
     private const string BatchCommitSql = """
         UPDATE {schema}.counters AS c SET count = u.count, deadline = u.deadline
         FROM unnest($2::bytea[], $3::smallint[], $4::bigint[], $5::timestamptz[]) AS u(idx, depth, count, deadline)
         WHERE c.keyspace_id = $1 AND c.idx = u.idx AND c.depth = u.depth
         """;
+
+    /// <summary>
+    /// Reads the counts that a statement returned.
+    /// </summary>
+    /// <param name="results">The results of the batch.</param>
+    /// <param name="cancellationToken">The token that cancels the read.</param>
+    /// <returns>The counts, in the order the server sent them.</returns>
+    private static async ValueTask<ImmutableArray<long>> ReadCountsAsync(
+        PgResults results,
+        CancellationToken cancellationToken
+    )
+    {
+        return await results
+            .ReadAsync(reader => reader.GetInt64(0), cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Reads the results of a batch that has nothing to read.
+    /// </summary>
+    /// <param name="results">The results of the batch.</param>
+    /// <param name="cancellationToken">The token that cancels the read.</param>
+    /// <returns>True, as the batch has been sent.</returns>
+    private static ValueTask<bool> ReadCleared(
+        PgResults results,
+        CancellationToken cancellationToken
+    )
+    {
+        return ValueTask.FromResult(true);
+    }
+
+    /// <summary>
+    /// Reads the results of a batch's first batch: the locked rows, then the server's clock.
+    /// </summary>
+    /// <param name="results">The results of the batch.</param>
+    /// <param name="cancellationToken">The token that cancels the read.</param>
+    /// <returns>The rows of the batch's counters and the instant of the server's clock.</returns>
+    private static async ValueTask<(
+        ImmutableArray<PgCounterRow> Rows,
+        DateTime Now
+    )> ReadLockedAsync(PgResults results, CancellationToken cancellationToken)
+    {
+        var rows = await results.ReadAsync(ReadRow, cancellationToken).ConfigureAwait(false);
+        var clock = await results.ReadAsync(ReadClock, cancellationToken).ConfigureAwait(false);
+
+        return (rows, clock[0]);
+    }
+
+    /// <summary>
+    /// Reads a row that the batch's lock statement returned.
+    /// </summary>
+    /// <param name="reader">The reader, at a row.</param>
+    /// <returns>The row.</returns>
+    private static PgCounterRow ReadRow(NpgsqlDataReader reader)
+    {
+        var indexBytes = reader.GetFieldValue<byte[]>(0);
+        var index = Convert.ToHexString(indexBytes);
+        var depth = reader.GetInt16(1);
+        var count = reader.GetInt64(2);
+        var deadline = reader.GetDateTime(3);
+
+        return new PgCounterRow(index, depth, count, deadline);
+    }
+
+    /// <summary>
+    /// Reads the row that the clock statement returned.
+    /// </summary>
+    /// <param name="reader">The reader, at a row.</param>
+    /// <returns>The instant of the server's clock.</returns>
+    private static DateTime ReadClock(NpgsqlDataReader reader)
+    {
+        return reader.GetDateTime(0);
+    }
+
+    /// <summary>
+    /// Checks the arguments of a batch.
+    /// </summary>
+    /// <param name="increments">The increments of the batch.</param>
+    /// <exception cref="ArgumentNullException">The increments are null.</exception>
+    /// <exception cref="ArgumentException">
+    /// The batch has too few or too many increments, holds a null one, or spans keyspaces.
+    /// </exception>
+    private static void ValidateBatch(IReadOnlyList<CounterIncrement> increments)
+    {
+        ArgumentNullException.ThrowIfNull(increments);
+
+        if (increments.Count < 1 || increments.Count > CoordinationLimits.MaxBatchIncrements)
+        {
+            throw new ArgumentException(
+                $"A batch has 1 to {CoordinationLimits.MaxBatchIncrements} increments.",
+                nameof(increments)
+            );
+        }
+
+        ValidateOneKeyspace(increments);
+    }
+
+    /// <summary>
+    /// Checks that no increment of a batch is null and that every one is in one keyspace.
+    /// </summary>
+    /// <param name="increments">The increments of the batch.</param>
+    /// <exception cref="ArgumentException">The batch holds a null increment or spans keyspaces.</exception>
+    private static void ValidateOneKeyspace(IReadOnlyList<CounterIncrement> increments)
+    {
+        Keyspace? keyspace = null;
+        foreach (var increment in increments)
+        {
+            if (increment is null)
+            {
+                throw new ArgumentException("A batch holds no null increment.", nameof(increments));
+            }
+
+            keyspace ??= increment.Key.Keyspace;
+            if (increment.Key.Keyspace != keyspace)
+            {
+                throw new ArgumentException(
+                    "Every increment of a batch is in one keyspace.",
+                    nameof(increments)
+                );
+            }
+        }
+    }
+
+    /// <summary>
+    /// Builds the entry of each distinct key of a batch, in the order the rows are locked in.
+    /// </summary>
+    /// <param name="increments">The increments of the batch.</param>
+    /// <returns>The batch, whose entries are in key order.</returns>
+    private static PgCounterBatch BuildBatch(IReadOnlyList<CounterIncrement> increments)
+    {
+        var entries = new Dictionary<CoordinationKey, PgCounterEntry>();
+        foreach (var increment in increments)
+        {
+            if (!entries.ContainsKey(increment.Key))
+            {
+                entries[increment.Key] = CreateEntry(increment.Key);
+            }
+        }
+
+        var ordered = entries.Values.ToList();
+        ordered.Sort(CompareEntries);
+
+        return new PgCounterBatch(increments, [.. ordered]);
+    }
+
+    /// <summary>
+    /// Creates the entry of a key.
+    /// </summary>
+    /// <param name="key">The key of a counter.</param>
+    /// <returns>The entry, which holds the key's index value, depth and text.</returns>
+    private static PgCounterEntry CreateEntry(CoordinationKey key)
+    {
+        var index = PgKeys.Index(key);
+        var depth = (short)key.PartitionDepth;
+        var text = PgKeys.KeyText(key);
+
+        return new PgCounterEntry(key, index, depth, text);
+    }
+
+    /// <summary>
+    /// Compares two entries in the order the server locks rows in: by index value, then by depth.
+    /// </summary>
+    /// <param name="left">The first entry.</param>
+    /// <param name="right">The second entry.</param>
+    /// <returns>A value that is negative, zero or positive as the first entry is before, equal to or after the second.</returns>
+    private static int CompareEntries(PgCounterEntry left, PgCounterEntry right)
+    {
+        var order = left.Index.AsSpan().SequenceCompareTo(right.Index);
+        return order != 0 ? order : left.Depth.CompareTo(right.Depth);
+    }
+
+    /// <summary>
+    /// Decides a batch exactly as the in-process service does: adds each increment in order to the count of its
+    /// counter, which is 0 when the counter has no unexpired row, and stops at the first count past its limit.
+    /// </summary>
+    /// <param name="batch">The batch.</param>
+    /// <param name="rows">The rows of the batch's counters, as the lock statement returned them.</param>
+    /// <param name="instant">The instant of the server's clock.</param>
+    /// <returns>The result of the batch and the rows to write, or the decision that a sum passes the largest count.</returns>
+    private static PgCounterDecision Decide(
+        PgCounterBatch batch,
+        ImmutableArray<PgCounterRow> rows,
+        DateTime instant
+    )
+    {
+        var stored = FindUnexpired(rows, instant);
+        var entries = batch.Entries.ToDictionary(entry => entry.Key);
+        var pending = new Dictionary<CoordinationKey, PgCounterWrite>(batch.Increments.Count);
+        var counts = new List<long>(batch.Increments.Count);
+        int? exceeded = null;
+
+        for (var position = 0; position < batch.Increments.Count; position++)
+        {
+            var increment = batch.Increments[position];
+            if (!pending.TryGetValue(increment.Key, out var write))
+            {
+                var entry = entries[increment.Key];
+                write = StartWrite(entry, increment.TimeToLive, stored, instant);
+            }
+
+            if (write.Count > long.MaxValue - increment.Amount)
+            {
+                return PgCounterDecision.Overflow;
+            }
+
+            var added = write with { Count = write.Count + increment.Amount };
+            pending[increment.Key] = added;
+            counts.Add(added.Count);
+
+            if (added.Count > increment.Limit)
+            {
+                exceeded = position;
+                break;
+            }
+        }
+
+        var result = new CounterBatchResult(counts) { ExceededIndex = exceeded };
+        return new PgCounterDecision(result, [.. pending.Values]);
+    }
+
+    /// <summary>
+    /// Finds the rows that have not expired at an instant.
+    /// </summary>
+    /// <param name="rows">The rows of the batch's counters.</param>
+    /// <param name="instant">The instant of the server's clock.</param>
+    /// <returns>The unexpired rows by slot, whose deadlines are UTC.</returns>
+    private static Dictionary<(string Index, short Depth), PgCounterRow> FindUnexpired(
+        ImmutableArray<PgCounterRow> rows,
+        DateTime instant
+    )
+    {
+        var unexpired = new Dictionary<(string Index, short Depth), PgCounterRow>();
+        foreach (var row in rows)
+        {
+            var deadline = DateTime.SpecifyKind(row.Deadline, DateTimeKind.Utc);
+            if (deadline > instant)
+            {
+                unexpired[row.Slot] = row with { Deadline = deadline };
+            }
+        }
+
+        return unexpired;
+    }
+
+    /// <summary>
+    /// Starts the write of a counter that a batch first touches: its unexpired row when it has one, otherwise a count
+    /// of 0 that expires one time to live after the instant.
+    /// </summary>
+    /// <param name="entry">The counter's entry.</param>
+    /// <param name="timeToLive">The time to live of the increment that first touches the counter.</param>
+    /// <param name="stored">The unexpired rows by slot.</param>
+    /// <param name="instant">The instant of the server's clock.</param>
+    /// <returns>The write, before the increment is added.</returns>
+    private static PgCounterWrite StartWrite(
+        PgCounterEntry entry,
+        TimeToLive timeToLive,
+        Dictionary<(string Index, short Depth), PgCounterRow> stored,
+        DateTime instant
+    )
+    {
+        if (stored.TryGetValue(entry.Slot, out var live))
+        {
+            return new PgCounterWrite(entry, live.Count, live.Deadline);
+        }
+
+        var deadline = PgCall.DeadlineAfter(instant, timeToLive);
+        return new PgCounterWrite(entry, 0, deadline);
+    }
 
     /// <summary>
     /// Gets the seam to the server.
@@ -128,39 +406,12 @@ internal sealed class PgCounterService(PgServer server, PgKeyspaces keyspaces, P
         ArgumentOutOfRangeException.ThrowIfLessThan(amount, 1);
         PgCall.Check(options, cancellationToken);
 
-        var index = PgKeys.Index(key);
-        var depth = (short)key.PartitionDepth;
-        var text = PgKeys.KeyText(key);
         var microseconds = PgCall.ToMicroseconds(timeToLive);
 
         return await Keyspaces
             .RunAsync(
                 key.Keyspace,
-                async (id, token) =>
-                {
-                    var rows = await Server
-                        .ExecuteAsync(
-                            [
-                                new PgStatement(
-                                    Increment,
-                                    id,
-                                    index,
-                                    depth,
-                                    text,
-                                    amount,
-                                    microseconds
-                                ),
-                            ],
-                            async (results, readToken) =>
-                                await results
-                                    .ReadAsync(reader => reader.GetInt64(0), readToken)
-                                    .ConfigureAwait(false),
-                            token
-                        )
-                        .ConfigureAwait(false);
-
-                    return rows[0];
-                },
+                (id, token) => IncrementInKeyspaceAsync(id, key, amount, microseconds, token),
                 cancellationToken
             )
             .ConfigureAwait(false);
@@ -179,27 +430,10 @@ internal sealed class PgCounterService(PgServer server, PgKeyspaces keyspaces, P
         ArgumentNullException.ThrowIfNull(key);
         PgCall.Check(options, cancellationToken);
 
-        var index = PgKeys.Index(key);
-        var depth = (short)key.PartitionDepth;
-
         return await Keyspaces
             .RunAsync(
                 key.Keyspace,
-                async (id, token) =>
-                {
-                    var rows = await Server
-                        .ExecuteAsync(
-                            [new PgStatement(Read, id, index, depth)],
-                            async (results, readToken) =>
-                                await results
-                                    .ReadAsync(reader => reader.GetInt64(0), readToken)
-                                    .ConfigureAwait(false),
-                            token
-                        )
-                        .ConfigureAwait(false);
-
-                    return rows.Length > 0 ? rows[0] : 0L;
-                },
+                (id, token) => ReadInKeyspaceAsync(id, key, token),
                 cancellationToken
             )
             .ConfigureAwait(false);
@@ -218,20 +452,10 @@ internal sealed class PgCounterService(PgServer server, PgKeyspaces keyspaces, P
         ArgumentNullException.ThrowIfNull(key);
         PgCall.Check(options, cancellationToken);
 
-        var index = PgKeys.Index(key);
-        var depth = (short)key.PartitionDepth;
-
         await Keyspaces
             .RunAsync(
                 key.Keyspace,
-                async (id, token) =>
-                    await Server
-                        .ExecuteAsync(
-                            [new PgStatement(Reset, id, index, depth)],
-                            (_, _) => ValueTask.FromResult(true),
-                            token
-                        )
-                        .ConfigureAwait(false),
+                (id, token) => ResetInKeyspaceAsync(id, key, token),
                 cancellationToken
             )
             .ConfigureAwait(false);
@@ -250,246 +474,229 @@ internal sealed class PgCounterService(PgServer server, PgKeyspaces keyspaces, P
         CancellationToken cancellationToken
     )
     {
-        ArgumentNullException.ThrowIfNull(increments);
+        ValidateBatch(increments);
+        PgCall.Check(options, cancellationToken);
 
-        if (increments.Count < 1 || increments.Count > CoordinationLimits.MaxBatchIncrements)
+        var keyspace = increments[0].Key.Keyspace;
+        var batch = BuildBatch(increments);
+
+        return await Keyspaces
+            .RunAsync(
+                keyspace,
+                (id, token) => IncrementBatchInKeyspaceAsync(id, batch, token),
+                cancellationToken
+            )
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Adds an amount to a counter in a keyspace in one statement.
+    /// </summary>
+    /// <param name="id">The keyspace's id.</param>
+    /// <param name="key">The key of the counter.</param>
+    /// <param name="amount">The amount to add.</param>
+    /// <param name="microseconds">The time to live, in whole microseconds.</param>
+    /// <param name="cancellationToken">The token that cancels the call.</param>
+    /// <returns>The count after the addition.</returns>
+    private async ValueTask<long> IncrementInKeyspaceAsync(
+        long id,
+        CoordinationKey key,
+        long amount,
+        long microseconds,
+        CancellationToken cancellationToken
+    )
+    {
+        var index = PgKeys.Index(key);
+        var depth = (short)key.PartitionDepth;
+        var text = PgKeys.KeyText(key);
+
+        var statement = new PgStatement(Increment, id, index, depth, text, amount, microseconds);
+        var rows = await Server
+            .ExecuteAsync([statement], ReadCountsAsync, cancellationToken)
+            .ConfigureAwait(false);
+
+        return rows[0];
+    }
+
+    /// <summary>
+    /// Reads the count of an unexpired counter in a keyspace.
+    /// </summary>
+    /// <param name="id">The keyspace's id.</param>
+    /// <param name="key">The key of the counter.</param>
+    /// <param name="cancellationToken">The token that cancels the call.</param>
+    /// <returns>The count, or 0 when the counter has no unexpired row.</returns>
+    private async ValueTask<long> ReadInKeyspaceAsync(
+        long id,
+        CoordinationKey key,
+        CancellationToken cancellationToken
+    )
+    {
+        var index = PgKeys.Index(key);
+        var depth = (short)key.PartitionDepth;
+
+        var statement = new PgStatement(Read, id, index, depth);
+        var rows = await Server
+            .ExecuteAsync([statement], ReadCountsAsync, cancellationToken)
+            .ConfigureAwait(false);
+
+        return rows.Length > 0 ? rows[0] : 0L;
+    }
+
+    /// <summary>
+    /// Deletes a counter in a keyspace in one statement.
+    /// </summary>
+    /// <param name="id">The keyspace's id.</param>
+    /// <param name="key">The key of the counter.</param>
+    /// <param name="cancellationToken">The token that cancels the call.</param>
+    /// <returns>A task that completes when the statement has run.</returns>
+    private async ValueTask ResetInKeyspaceAsync(
+        long id,
+        CoordinationKey key,
+        CancellationToken cancellationToken
+    )
+    {
+        var index = PgKeys.Index(key);
+        var depth = (short)key.PartitionDepth;
+
+        var statement = new PgStatement(Reset, id, index, depth);
+        await Server
+            .ExecuteAsync([statement], ReadCleared, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Runs a batch of increments in one transaction on one connection.
+    /// </summary>
+    /// <param name="id">The keyspace's id.</param>
+    /// <param name="batch">The batch.</param>
+    /// <param name="cancellationToken">The token that cancels the call.</param>
+    /// <returns>The result of the batch.</returns>
+    private async ValueTask<CounterBatchResult> IncrementBatchInKeyspaceAsync(
+        long id,
+        PgCounterBatch batch,
+        CancellationToken cancellationToken
+    )
+    {
+        return await Server
+            .TransactAsync(
+                PgIsolation.ReadCommitted,
+                (transaction, token) => ApplyBatchAsync(transaction, id, batch, token),
+                cancellationToken
+            )
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Locks the batch's rows, decides the batch, and writes what it decided, or rolls back when a sum would pass
+    /// the largest count.
+    /// </summary>
+    /// <param name="transaction">The transaction that runs the batch.</param>
+    /// <param name="id">The keyspace's id.</param>
+    /// <param name="batch">The batch.</param>
+    /// <param name="cancellationToken">The token that cancels the call.</param>
+    /// <returns>The result of the batch.</returns>
+    /// <exception cref="CoordinationException">A sum would pass the largest count.</exception>
+    private async ValueTask<CounterBatchResult> ApplyBatchAsync(
+        PgTransaction transaction,
+        long id,
+        PgCounterBatch batch,
+        CancellationToken cancellationToken
+    )
+    {
+        var (rows, now) = await LockRowsAsync(transaction, id, batch, cancellationToken)
+            .ConfigureAwait(false);
+
+        var instant = DateTime.SpecifyKind(now, DateTimeKind.Utc);
+        var decision = Decide(batch, rows, instant);
+        if (decision.Result is not { } result)
         {
-            throw new ArgumentException(
-                $"A batch has 1 to {CoordinationLimits.MaxBatchIncrements} increments.",
-                nameof(increments)
+            await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+            throw new CoordinationException(
+                CoordinationErrorCodes.LimitExceeded,
+                outcomeUnknown: false,
+                "The counter would pass the largest count."
             );
         }
 
-        Keyspace? keyspace = null;
-        foreach (var increment in increments)
-        {
-            if (increment is null)
-            {
-                throw new ArgumentException("A batch holds no null increment.", nameof(increments));
-            }
+        var commitStatement = CreateCommitStatement(id, decision.Writes);
+        await transaction.CommitAsync([commitStatement], cancellationToken).ConfigureAwait(false);
 
-            keyspace ??= increment.Key.Keyspace;
-            if (increment.Key.Keyspace != keyspace)
-            {
-                throw new ArgumentException(
-                    "Every increment of a batch is in one keyspace.",
-                    nameof(increments)
-                );
-            }
-        }
+        return result;
+    }
 
-        PgCall.Check(options, cancellationToken);
+    /// <summary>
+    /// Sends the transaction's first batch, which takes the row lock of every counter of a batch in key order and
+    /// reads the server's clock.
+    /// </summary>
+    /// <param name="transaction">The transaction that runs the batch.</param>
+    /// <param name="id">The keyspace's id.</param>
+    /// <param name="batch">The batch.</param>
+    /// <param name="cancellationToken">The token that cancels the call.</param>
+    /// <returns>The rows of the batch's counters and the instant of the server's clock.</returns>
+    private async ValueTask<(ImmutableArray<PgCounterRow> Rows, DateTime Now)> LockRowsAsync(
+        PgTransaction transaction,
+        long id,
+        PgCounterBatch batch,
+        CancellationToken cancellationToken
+    )
+    {
+        var lockStatement = CreateLockStatement(id, batch);
+        var clockStatement = new PgStatement(BatchClock);
 
-        var batchKeyspace = increments[0].Key.Keyspace;
-        var entries = new Dictionary<CoordinationKey, (byte[] Index, short Depth, string Text)>();
-        foreach (var increment in increments)
-        {
-            if (!entries.ContainsKey(increment.Key))
-            {
-                entries[increment.Key] = (
-                    PgKeys.Index(increment.Key),
-                    (short)increment.Key.PartitionDepth,
-                    PgKeys.KeyText(increment.Key)
-                );
-            }
-        }
+        return await transaction
+            .FirstAsync([lockStatement, clockStatement], ReadLockedAsync, cancellationToken)
+            .ConfigureAwait(false);
+    }
 
-        var sorted = entries.ToList();
-        sorted.Sort(
-            (left, right) =>
-            {
-                var order = left.Value.Index.AsSpan().SequenceCompareTo(right.Value.Index);
-                return order != 0 ? order : left.Value.Depth.CompareTo(right.Value.Depth);
-            }
-        );
+    /// <summary>
+    /// Creates the statement that takes the row lock of every counter of a batch, whose array arguments are in key
+    /// order.
+    /// </summary>
+    /// <param name="id">The keyspace's id.</param>
+    /// <param name="batch">The batch.</param>
+    /// <returns>The statement.</returns>
+    private PgStatement CreateLockStatement(long id, PgCounterBatch batch)
+    {
+        var indexes = batch.Entries.Select(entry => entry.Index).ToArray();
+        var depths = batch.Entries.Select(entry => entry.Depth).ToArray();
+        var texts = batch.Entries.Select(entry => entry.Text).ToArray();
 
-        var indexes = sorted.Select(pair => pair.Value.Index).ToArray();
-        var depths = sorted.Select(pair => pair.Value.Depth).ToArray();
-        var texts = sorted.Select(pair => pair.Value.Text).ToArray();
         var indexesArgument = PgArgument.Typed(indexes, NpgsqlDbType.Array | NpgsqlDbType.Bytea);
         var depthsArgument = PgArgument.Typed(depths, NpgsqlDbType.Array | NpgsqlDbType.Smallint);
         var textsArgument = PgArgument.Typed(texts, NpgsqlDbType.Array | NpgsqlDbType.Text);
 
-        return await Keyspaces
-            .RunAsync(
-                batchKeyspace,
-                async (id, runToken) =>
-                    await Server
-                        .TransactAsync(
-                            PgIsolation.ReadCommitted,
-                            async (transaction, token) =>
-                            {
-                                var (rows, now) = await transaction
-                                    .FirstAsync(
-                                        [
-                                            new PgStatement(
-                                                BatchUpsert,
-                                                id,
-                                                indexesArgument,
-                                                depthsArgument,
-                                                textsArgument
-                                            ),
-                                            new PgStatement(BatchClock),
-                                        ],
-                                        async (results, t) =>
-                                        {
-                                            var existing = await results
-                                                .ReadAsync(
-                                                    reader =>
-                                                        (
-                                                            Slot: (
-                                                                Convert.ToHexString(
-                                                                    reader.GetFieldValue<byte[]>(0)
-                                                                ),
-                                                                reader.GetInt16(1)
-                                                            ),
-                                                            Count: reader.GetInt64(2),
-                                                            Deadline: reader.GetDateTime(3)
-                                                        ),
-                                                    t
-                                                )
-                                                .ConfigureAwait(false);
-                                            var clock = await results
-                                                .ReadAsync(reader => reader.GetDateTime(0), t)
-                                                .ConfigureAwait(false);
+        return new PgStatement(BatchUpsert, id, indexesArgument, depthsArgument, textsArgument);
+    }
 
-                                            return (existing, clock[0]);
-                                        },
-                                        token
-                                    )
-                                    .ConfigureAwait(false);
+    /// <summary>
+    /// Creates the statement that writes the counts and deadlines that a batch changed, whose array arguments hold
+    /// one element per counter.
+    /// </summary>
+    /// <param name="id">The keyspace's id.</param>
+    /// <param name="writes">The counters to write.</param>
+    /// <returns>The statement.</returns>
+    private PgStatement CreateCommitStatement(long id, ImmutableArray<PgCounterWrite> writes)
+    {
+        var indexes = writes.Select(write => write.Entry.Index).ToArray();
+        var depths = writes.Select(write => write.Entry.Depth).ToArray();
+        var counts = writes.Select(write => write.Count).ToArray();
+        var deadlines = writes.Select(write => write.Deadline).ToArray();
 
-                                var instant = DateTime.SpecifyKind(now, DateTimeKind.Utc);
-                                var stored =
-                                    new Dictionary<
-                                        (string Index, short Depth),
-                                        (long Count, DateTime Deadline)
-                                    >();
-                                foreach (var row in rows)
-                                {
-                                    var deadline = DateTime.SpecifyKind(
-                                        row.Deadline,
-                                        DateTimeKind.Utc
-                                    );
-                                    if (deadline > instant)
-                                    {
-                                        stored[(row.Slot.Item1, row.Slot.Item2)] = (
-                                            row.Count,
-                                            deadline
-                                        );
-                                    }
-                                }
+        var indexesArgument = PgArgument.Typed(indexes, NpgsqlDbType.Array | NpgsqlDbType.Bytea);
+        var depthsArgument = PgArgument.Typed(depths, NpgsqlDbType.Array | NpgsqlDbType.Smallint);
+        var countsArgument = PgArgument.Typed(counts, NpgsqlDbType.Array | NpgsqlDbType.Bigint);
+        var deadlinesArgument = PgArgument.Typed(
+            deadlines,
+            NpgsqlDbType.Array | NpgsqlDbType.TimestampTz
+        );
 
-                                var pending = new Dictionary<CoordinationKey, long>(
-                                    increments.Count
-                                );
-                                var timeToLives = new Dictionary<CoordinationKey, TimeToLive>(
-                                    increments.Count
-                                );
-                                var counts = new List<long>(increments.Count);
-                                int? exceeded = null;
-
-                                for (var position = 0; position < increments.Count; position++)
-                                {
-                                    var increment = increments[position];
-                                    timeToLives.TryAdd(increment.Key, increment.TimeToLive);
-
-                                    if (!pending.TryGetValue(increment.Key, out var current))
-                                    {
-                                        var entry = entries[increment.Key];
-                                        current = stored.TryGetValue(
-                                            (Convert.ToHexString(entry.Index), entry.Depth),
-                                            out var live
-                                        )
-                                            ? live.Count
-                                            : 0;
-                                    }
-
-                                    if (current > long.MaxValue - increment.Amount)
-                                    {
-                                        await transaction
-                                            .RollbackAsync(token)
-                                            .ConfigureAwait(false);
-                                        throw new CoordinationException(
-                                            CoordinationErrorCodes.LimitExceeded,
-                                            outcomeUnknown: false,
-                                            "The counter would pass the largest count."
-                                        );
-                                    }
-
-                                    var newCount = current + increment.Amount;
-                                    pending[increment.Key] = newCount;
-                                    counts.Add(newCount);
-
-                                    if (newCount > increment.Limit)
-                                    {
-                                        exceeded = position;
-                                        break;
-                                    }
-                                }
-
-                                var changedIndexes = new List<byte[]>(pending.Count);
-                                var changedDepths = new List<short>(pending.Count);
-                                var changedCounts = new List<long>(pending.Count);
-                                var changedDeadlines = new List<DateTime>(pending.Count);
-                                foreach (var (key, count) in pending)
-                                {
-                                    var entry = entries[key];
-                                    var deadline = stored.TryGetValue(
-                                        (Convert.ToHexString(entry.Index), entry.Depth),
-                                        out var live
-                                    )
-                                        ? live.Deadline
-                                        : instant.AddTicks(
-                                            PgCall.ToMicroseconds(timeToLives[key]) * 10
-                                        );
-
-                                    changedIndexes.Add(entry.Index);
-                                    changedDepths.Add(entry.Depth);
-                                    changedCounts.Add(count);
-                                    changedDeadlines.Add(deadline);
-                                }
-
-                                var changedIndexesArgument = PgArgument.Typed(
-                                    changedIndexes.ToArray(),
-                                    NpgsqlDbType.Array | NpgsqlDbType.Bytea
-                                );
-                                var changedDepthsArgument = PgArgument.Typed(
-                                    changedDepths.ToArray(),
-                                    NpgsqlDbType.Array | NpgsqlDbType.Smallint
-                                );
-                                var changedCountsArgument = PgArgument.Typed(
-                                    changedCounts.ToArray(),
-                                    NpgsqlDbType.Array | NpgsqlDbType.Bigint
-                                );
-                                var changedDeadlinesArgument = PgArgument.Typed(
-                                    changedDeadlines.ToArray(),
-                                    NpgsqlDbType.Array | NpgsqlDbType.TimestampTz
-                                );
-
-                                await transaction
-                                    .CommitAsync(
-                                        [
-                                            new PgStatement(
-                                                BatchCommit,
-                                                id,
-                                                changedIndexesArgument,
-                                                changedDepthsArgument,
-                                                changedCountsArgument,
-                                                changedDeadlinesArgument
-                                            ),
-                                        ],
-                                        token
-                                    )
-                                    .ConfigureAwait(false);
-
-                                return new CounterBatchResult(counts) { ExceededIndex = exceeded };
-                            },
-                            runToken
-                        )
-                        .ConfigureAwait(false),
-                cancellationToken
-            )
-            .ConfigureAwait(false);
+        return new PgStatement(
+            BatchCommit,
+            id,
+            indexesArgument,
+            depthsArgument,
+            countsArgument,
+            deadlinesArgument
+        );
     }
 }

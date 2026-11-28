@@ -1,6 +1,7 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using System.Collections.Immutable;
 using NCode.Coordination.PostgreSql.Keys;
 using NCode.Coordination.PostgreSql.Schema;
 using NCode.Coordination.PostgreSql.Server;
@@ -21,7 +22,9 @@ internal sealed class PgOccurrenceService(
     PgSchemaName schema
 ) : IOccurrenceService
 {
-    /// <summary>The statement that records an occurrence unless an unexpired one exists.</summary>
+    /// <summary>
+    /// The statement that records an occurrence unless an unexpired one exists.
+    /// </summary>
     private const string RecordSql = """
         WITH now AS (SELECT clock_timestamp() AS t)
         INSERT INTO {schema}.occurrences AS o (keyspace_id, idx, depth, key, deadline)
@@ -30,6 +33,22 @@ internal sealed class PgOccurrenceService(
         WHERE o.deadline <= (SELECT t FROM now)
         RETURNING 1
         """;
+
+    /// <summary>
+    /// Reads the rows that the record statement returned.
+    /// </summary>
+    /// <param name="results">The results of the batch.</param>
+    /// <param name="cancellationToken">The token that cancels the read.</param>
+    /// <returns>One value for the row that was written, or none when an unexpired occurrence exists.</returns>
+    private static async ValueTask<ImmutableArray<int>> ReadRecordedAsync(
+        PgResults results,
+        CancellationToken cancellationToken
+    )
+    {
+        return await results
+            .ReadAsync(reader => reader.GetInt32(0), cancellationToken)
+            .ConfigureAwait(false);
+    }
 
     /// <summary>
     /// Gets the seam to the server.
@@ -63,33 +82,43 @@ internal sealed class PgOccurrenceService(
         ArgumentNullException.ThrowIfNull(timeToLive);
         PgCall.Check(options, cancellationToken);
 
-        var index = PgKeys.Index(key);
-        var depth = (short)key.PartitionDepth;
-        var text = PgKeys.KeyText(key);
         var microseconds = PgCall.ToMicroseconds(timeToLive);
 
         var recorded = await Keyspaces
             .RunAsync(
                 key.Keyspace,
-                async (id, token) =>
-                {
-                    var rows = await Server
-                        .ExecuteAsync(
-                            [new PgStatement(Record, id, index, depth, text, microseconds)],
-                            async (results, readToken) =>
-                                await results
-                                    .ReadAsync(reader => reader.GetInt32(0), readToken)
-                                    .ConfigureAwait(false),
-                            token
-                        )
-                        .ConfigureAwait(false);
-
-                    return rows.Length > 0;
-                },
+                (id, token) => RecordInKeyspaceAsync(id, key, microseconds, token),
                 cancellationToken
             )
             .ConfigureAwait(false);
 
         return recorded ? OccurrenceStatus.Recorded : OccurrenceStatus.Duplicate;
+    }
+
+    /// <summary>
+    /// Records an occurrence in a keyspace unless an unexpired one exists.
+    /// </summary>
+    /// <param name="id">The keyspace's id.</param>
+    /// <param name="key">The key of the occurrence.</param>
+    /// <param name="microseconds">The time to live, in whole microseconds.</param>
+    /// <param name="cancellationToken">The token that cancels the call.</param>
+    /// <returns>True when the occurrence was recorded; false when an unexpired one exists.</returns>
+    private async ValueTask<bool> RecordInKeyspaceAsync(
+        long id,
+        CoordinationKey key,
+        long microseconds,
+        CancellationToken cancellationToken
+    )
+    {
+        var index = PgKeys.Index(key);
+        var depth = (short)key.PartitionDepth;
+        var text = PgKeys.KeyText(key);
+
+        var statement = new PgStatement(Record, id, index, depth, text, microseconds);
+        var rows = await Server
+            .ExecuteAsync([statement], ReadRecordedAsync, cancellationToken)
+            .ConfigureAwait(false);
+
+        return rows.Length > 0;
     }
 }
