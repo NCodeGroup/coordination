@@ -22,9 +22,14 @@ internal sealed class PgProbe(
 )
 {
     /// <summary>
-    /// The oldest server version number that the provider supports: PostgreSQL 15.
+    /// The oldest major version of PostgreSQL that the provider supports.
     /// </summary>
-    private const int MinimumVersion = 150000;
+    private const int MinimumMajorVersion = 15;
+
+    /// <summary>
+    /// The oldest server version number that the provider supports, as <c>server_version_num</c> reports it.
+    /// </summary>
+    private const int MinimumVersion = MinimumMajorVersion * 10_000;
 
     /// <summary>
     /// The value of a boolean or commit setting that the server reports when it is on.
@@ -166,7 +171,7 @@ internal sealed class PgProbe(
     /// <param name="version">The server's version number.</param>
     /// <returns>The message, which names the version.</returns>
     internal static string TooOldMessage(int version) =>
-        $"The provider needs PostgreSQL 15 or later, and the server reports {version}.";
+        $"The provider needs PostgreSQL {MinimumMajorVersion} or later, and the server reports {version}.";
 
     /// <summary>
     /// Refuses a server older than <see cref="MinimumVersion"/> and a server that is a standby.
@@ -209,6 +214,36 @@ internal sealed class PgProbe(
         {
             throw Unsupported(
                 "The provider's sessions see synchronous_commit off, so a crash loses commits it acknowledged."
+            );
+        }
+    }
+
+    /// <summary>
+    /// Refuses a server without a synchronous standby when the profile requires one.
+    /// </summary>
+    /// <param name="standbyProfile">The profile whose requirements the server must meet.</param>
+    /// <param name="commit">The synchronous_commit setting that the provider's sessions see.</param>
+    /// <param name="names">The server's synchronous_standby_names setting.</param>
+    /// <exception cref="CoordinationException">The server is refused.</exception>
+    internal static void CheckSynchronousStandby(
+        PostgreSqlProfile standbyProfile,
+        string commit,
+        string names
+    )
+    {
+        if (!standbyProfile.RequiresSynchronousStandby)
+        {
+            return;
+        }
+
+        var commitWaitsForStandby =
+            string.Equals(commit, On, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(commit, "remote_apply", StringComparison.OrdinalIgnoreCase);
+
+        if (string.IsNullOrWhiteSpace(names) || !commitWaitsForStandby)
+        {
+            throw Unsupported(
+                $"The '{standbyProfile.Name}' profile needs synchronous_standby_names to name a standby and synchronous_commit on or remote_apply, and the provider's sessions see '{names}' and '{commit}'."
             );
         }
     }
@@ -283,32 +318,7 @@ internal sealed class PgProbe(
 
         CheckVersionAndRole(version, inRecovery);
         CheckCommitsAreDurable(fsync, commit);
-        CheckSynchronousStandby(commit, names);
-    }
-
-    /// <summary>
-    /// Refuses a server without a synchronous standby when the profile requires one.
-    /// </summary>
-    /// <param name="commit">The synchronous_commit setting that the provider's sessions see.</param>
-    /// <param name="names">The server's synchronous_standby_names setting.</param>
-    /// <exception cref="CoordinationException">The server is refused.</exception>
-    private void CheckSynchronousStandby(string commit, string names)
-    {
-        if (!Profile.RequiresSynchronousStandby)
-        {
-            return;
-        }
-
-        var commitWaitsForStandby =
-            string.Equals(commit, On, StringComparison.OrdinalIgnoreCase)
-            || string.Equals(commit, "remote_apply", StringComparison.OrdinalIgnoreCase);
-
-        if (string.IsNullOrWhiteSpace(names) || !commitWaitsForStandby)
-        {
-            throw Unsupported(
-                $"The '{Profile.Name}' profile needs synchronous_standby_names to name a standby and synchronous_commit on or remote_apply, and the provider's sessions see '{names}' and '{commit}'."
-            );
-        }
+        CheckSynchronousStandby(Profile, commit, names);
     }
 
     /// <summary>

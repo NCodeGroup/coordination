@@ -69,4 +69,33 @@ public sealed class PgProbeTests
     }
 
     #endregion
+
+    #region CheckSynchronousStandby Tests
+
+    [Theory]
+    [InlineData("on")]
+    [InlineData("remote_apply")]
+    public void CheckSynchronousStandby_StandbyNamedAndCommitWaitsForIt_Passes(string commit)
+    {
+        PgProbe.CheckSynchronousStandby(PostgreSqlProfiles.Synchronous, commit, "standby1");
+    }
+
+    [Theory]
+    [InlineData("remote_write", "standby1")]
+    [InlineData("local", "standby1")]
+    [InlineData("on", "")]
+    public void CheckSynchronousStandby_CommitOrStandbyMissing_ThrowsUnsupported(
+        string commit,
+        string names
+    )
+    {
+        var exception = Assert.Throws<CoordinationException>(() =>
+            PgProbe.CheckSynchronousStandby(PostgreSqlProfiles.Synchronous, commit, names)
+        );
+
+        Assert.Equal(CoordinationErrorCodes.Unsupported, exception.Code);
+        Assert.Contains("synchronous_standby_names", exception.Message, StringComparison.Ordinal);
+    }
+
+    #endregion
 }
