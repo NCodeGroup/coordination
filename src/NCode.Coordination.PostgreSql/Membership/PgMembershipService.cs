@@ -294,38 +294,6 @@ internal sealed class PgMembershipService(PgRecordTable table, PgChangeLog chang
     }
 
     /// <summary>
-    /// Reads a text column that may be null.
-    /// </summary>
-    /// <param name="reader">The reader, on a row.</param>
-    /// <param name="ordinal">The column's position.</param>
-    /// <returns>The text, or null.</returns>
-    private static string? ReadNullableText(NpgsqlDataReader reader, int ordinal)
-    {
-        if (reader.IsDBNull(ordinal))
-        {
-            return null;
-        }
-
-        return reader.GetString(ordinal);
-    }
-
-    /// <summary>
-    /// Reads a text array column that may be null.
-    /// </summary>
-    /// <param name="reader">The reader, on a row.</param>
-    /// <param name="ordinal">The column's position.</param>
-    /// <returns>The texts, or null.</returns>
-    private static string[]? ReadNullableTexts(NpgsqlDataReader reader, int ordinal)
-    {
-        if (reader.IsDBNull(ordinal))
-        {
-            return null;
-        }
-
-        return reader.GetFieldValue<string[]>(ordinal);
-    }
-
-    /// <summary>
     /// Reads a row of the result of the statement that reads a group's rows beside the deadlines of their sessions.
     /// </summary>
     /// <param name="reader">The reader, on a row.</param>
@@ -356,11 +324,11 @@ internal sealed class PgMembershipService(PgRecordTable table, PgChangeLog chang
     {
         var revision = reader.GetInt64(0);
         var now = PgColumns.ReadUtc(reader, 1);
-        var session = ReadNullableText(reader, 2);
-        var nodeId = ReadNullableText(reader, 3);
-        var address = ReadNullableText(reader, 4);
-        var names = ReadNullableTexts(reader, 5);
-        var values = ReadNullableTexts(reader, 6);
+        var session = PgColumns.ReadNullableText(reader, 2);
+        var nodeId = PgColumns.ReadNullableText(reader, 3);
+        var address = PgColumns.ReadNullableText(reader, 4);
+        var names = PgColumns.ReadNullableTexts(reader, 5);
+        var values = PgColumns.ReadNullableTexts(reader, 6);
         var deadline = PgColumns.ReadNullableUtc(reader, 7);
 
         return new PgMemberRow(revision, now, session, nodeId, address, names, values, deadline);
@@ -383,7 +351,7 @@ internal sealed class PgMembershipService(PgRecordTable table, PgChangeLog chang
             .ReadAsync(reader => reader.GetInt64(0), cancellationToken)
             .ConfigureAwait(false);
         var clocks = await results
-            .ReadAsync(reader => reader.GetDateTime(0), cancellationToken)
+            .ReadAsync(reader => PgColumns.ReadUtc(reader, 0), cancellationToken)
             .ConfigureAwait(false);
         var rows = await results.ReadAsync(ReadGroupRow, cancellationToken).ConfigureAwait(false);
         var deadlines = await results
@@ -943,7 +911,7 @@ internal sealed class PgMembershipService(PgRecordTable table, PgChangeLog chang
             throw new PgKeyspaceMissingException(PgKeyspaceMissingException.RowMissingMessage);
         }
 
-        var now = DateTime.SpecifyKind(read.Clocks[0], DateTimeKind.Utc);
+        var now = read.Clocks[0];
         var origin = new PgChangeOrigin(keyspaceId, read.Revisions[0], now);
         var change = Table.NewChange(origin);
         DateTime? sessionDeadline = read.Deadlines.Length == 0 ? null : read.Deadlines[0];

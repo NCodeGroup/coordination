@@ -258,8 +258,7 @@ internal sealed class PgRecordService(PgRecordTable table) : IRecordService
     private static PgListItem ReadListItem(NpgsqlDataReader reader)
     {
         var keyspaceRevision = reader.GetInt64(0);
-        var instant = reader.GetDateTime(1);
-        var now = DateTime.SpecifyKind(instant, DateTimeKind.Utc);
+        var now = PgColumns.ReadUtc(reader, 1);
         var row = reader.IsDBNull(2) ? null : PgRecordTable.ReadRowAt(reader, 2);
 
         return new PgListItem(keyspaceRevision, now, row);

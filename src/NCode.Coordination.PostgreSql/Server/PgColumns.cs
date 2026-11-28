@@ -38,4 +38,52 @@ internal static class PgColumns
 
         return ReadUtc(reader, ordinal);
     }
+
+    /// <summary>
+    /// Reads a text column that can be null.
+    /// </summary>
+    /// <param name="reader">The reader, on a row.</param>
+    /// <param name="ordinal">The column's ordinal.</param>
+    /// <returns>The text, or null when the column is null.</returns>
+    public static string? ReadNullableText(NpgsqlDataReader reader, int ordinal)
+    {
+        if (reader.IsDBNull(ordinal))
+        {
+            return null;
+        }
+
+        return reader.GetString(ordinal);
+    }
+
+    /// <summary>
+    /// Reads a column of bytes that can be null.
+    /// </summary>
+    /// <param name="reader">The reader, on a row.</param>
+    /// <param name="ordinal">The column's ordinal.</param>
+    /// <returns>The bytes, or null when the column is null.</returns>
+    public static byte[]? ReadNullableBytes(NpgsqlDataReader reader, int ordinal)
+    {
+        if (reader.IsDBNull(ordinal))
+        {
+            return null;
+        }
+
+        return reader.GetFieldValue<byte[]>(ordinal);
+    }
+
+    /// <summary>
+    /// Reads a text array column that can be null.
+    /// </summary>
+    /// <param name="reader">The reader, on a row.</param>
+    /// <param name="ordinal">The column's ordinal.</param>
+    /// <returns>The texts, or null when the column is null.</returns>
+    public static string[]? ReadNullableTexts(NpgsqlDataReader reader, int ordinal)
+    {
+        if (reader.IsDBNull(ordinal))
+        {
+            return null;
+        }
+
+        return reader.GetFieldValue<string[]>(ordinal);
+    }
 }

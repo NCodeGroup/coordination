@@ -325,7 +325,7 @@ internal sealed class PgSweeps(
     /// <returns>The time stamp.</returns>
     private static DateTime ReadFirstDateTime(NpgsqlDataReader reader)
     {
-        return reader.GetDateTime(0);
+        return PgColumns.ReadUtc(reader, 0);
     }
 
     /// <summary>
@@ -781,12 +781,11 @@ internal sealed class PgSweeps(
     /// </summary>
     /// <param name="keyspaceId">The keyspace's id.</param>
     /// <param name="revision">The keyspace's revision.</param>
-    /// <param name="clock">The server's instant.</param>
+    /// <param name="clock">The server's instant, of kind UTC.</param>
     /// <returns>The change, which logs for the configured retention.</returns>
     private PgKeyspaceChange CreateChange(long keyspaceId, long revision, DateTime clock)
     {
-        var now = DateTime.SpecifyKind(clock, DateTimeKind.Utc);
-        var origin = new PgChangeOrigin(keyspaceId, revision, now);
+        var origin = new PgChangeOrigin(keyspaceId, revision, clock);
         return new PgKeyspaceChange(Settings, origin);
     }
 

@@ -110,38 +110,6 @@ internal sealed class PgGrants(PgRecordTable table)
     }
 
     /// <summary>
-    /// Reads a column of text that may be null.
-    /// </summary>
-    /// <param name="reader">The reader, on a row.</param>
-    /// <param name="ordinal">The column's ordinal.</param>
-    /// <returns>The text, or null.</returns>
-    private static string? ReadNullableText(NpgsqlDataReader reader, int ordinal)
-    {
-        if (reader.IsDBNull(ordinal))
-        {
-            return null;
-        }
-
-        return reader.GetString(ordinal);
-    }
-
-    /// <summary>
-    /// Reads a column of bytes that may be null.
-    /// </summary>
-    /// <param name="reader">The reader, on a row.</param>
-    /// <param name="ordinal">The column's ordinal.</param>
-    /// <returns>The bytes, or null.</returns>
-    private static byte[]? ReadNullableBytes(NpgsqlDataReader reader, int ordinal)
-    {
-        if (reader.IsDBNull(ordinal))
-        {
-            return null;
-        }
-
-        return reader.GetFieldValue<byte[]>(ordinal);
-    }
-
-    /// <summary>
     /// Maps a row of the <c>grants</c> table, which the statements select in the same column order.
     /// </summary>
     /// <param name="reader">The reader, positioned on the row.</param>
@@ -153,9 +121,9 @@ internal sealed class PgGrants(PgRecordTable table)
         var capacity = reader.GetInt32(offset + 1);
         var fencing = reader.GetInt64(offset + 2);
         var owner = reader.GetString(offset + 3);
-        var session = ReadNullableText(reader, offset + 4);
+        var session = PgColumns.ReadNullableText(reader, offset + 4);
         var deadline = PgColumns.ReadNullableUtc(reader, offset + 5);
-        var value = ReadNullableBytes(reader, offset + 6);
+        var value = PgColumns.ReadNullableBytes(reader, offset + 6);
         var sessionDeadline = PgColumns.ReadNullableUtc(reader, offset + 7);
 
         return new PgGrantRow(
@@ -208,7 +176,7 @@ internal sealed class PgGrants(PgRecordTable table)
             .ReadAsync(reader => reader.GetInt64(0), cancellationToken)
             .ConfigureAwait(false);
         var clocks = await results
-            .ReadAsync(reader => reader.GetDateTime(0), cancellationToken)
+            .ReadAsync(reader => PgColumns.ReadUtc(reader, 0), cancellationToken)
             .ConfigureAwait(false);
         var rows = await results
             .ReadAsync(reader => MapRow(reader, 0), cancellationToken)
@@ -497,7 +465,7 @@ internal sealed class PgGrants(PgRecordTable table)
             throw new PgKeyspaceMissingException(PgKeyspaceMissingException.RowMissingMessage);
         }
 
-        var now = DateTime.SpecifyKind(read.Clocks[0], DateTimeKind.Utc);
+        var now = read.Clocks[0];
         var origin = new PgChangeOrigin(keyspaceId, read.Revisions[0], now);
         var change = Table.NewChange(origin);
         var last = read.Lasts.Length == 0 ? 0 : read.Lasts[0];

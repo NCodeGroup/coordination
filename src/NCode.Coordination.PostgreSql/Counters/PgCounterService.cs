@@ -120,7 +120,7 @@ internal sealed class PgCounterService(PgServer server, PgKeyspaces keyspaces, P
         var index = reader.GetFieldValue<byte[]>(0);
         var depth = reader.GetInt16(1);
         var count = reader.GetInt64(2);
-        var deadline = reader.GetDateTime(3);
+        var deadline = PgColumns.ReadUtc(reader, 3);
 
         return new PgCounterRow(index, depth, count, deadline);
     }
@@ -132,7 +132,7 @@ internal sealed class PgCounterService(PgServer server, PgKeyspaces keyspaces, P
     /// <returns>The instant of the server's clock.</returns>
     private static DateTime ReadClock(NpgsqlDataReader reader)
     {
-        return reader.GetDateTime(0);
+        return PgColumns.ReadUtc(reader, 0);
     }
 
     /// <summary>
@@ -313,10 +313,9 @@ internal sealed class PgCounterService(PgServer server, PgKeyspaces keyspaces, P
         var unexpired = new Dictionary<PgRowIdentity, PgCounterRow>(rows.Length);
         foreach (var row in rows)
         {
-            var deadline = DateTime.SpecifyKind(row.Deadline, DateTimeKind.Utc);
-            if (deadline > instant)
+            if (row.Deadline > instant)
             {
-                unexpired[row.Identity] = row with { Deadline = deadline };
+                unexpired[row.Identity] = row;
             }
         }
 
@@ -609,8 +608,7 @@ internal sealed class PgCounterService(PgServer server, PgKeyspaces keyspaces, P
         var (rows, now) = await LockRowsAsync(transaction, id, batch, cancellationToken)
             .ConfigureAwait(false);
 
-        var instant = DateTime.SpecifyKind(now, DateTimeKind.Utc);
-        var decision = Decide(batch, rows, instant);
+        var decision = Decide(batch, rows, now);
         if (decision.Result is not { } result)
         {
             await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);

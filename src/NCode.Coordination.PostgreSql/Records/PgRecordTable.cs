@@ -65,17 +65,6 @@ internal sealed class PgRecordTable(PgServer server, PgKeyspaces keyspaces, PgSe
         """;
 
     /// <summary>
-    /// Reads a text column that can be null.
-    /// </summary>
-    /// <param name="reader">The reader, on a row.</param>
-    /// <param name="ordinal">The column's ordinal.</param>
-    /// <returns>The text, or null when the column is null.</returns>
-    private static string? ReadNullableText(NpgsqlDataReader reader, int ordinal)
-    {
-        return reader.IsDBNull(ordinal) ? null : reader.GetString(ordinal);
-    }
-
-    /// <summary>
     /// Reads the row of a key from eight columns: the index value, the depth, the key's text, the value, the
     /// revision, the deadline, the session's id and the session's deadline.
     /// </summary>
@@ -90,7 +79,7 @@ internal sealed class PgRecordTable(PgServer server, PgKeyspaces keyspaces, PgSe
         var value = reader.GetFieldValue<byte[]>(first + 3);
         var revision = reader.GetInt64(first + 4);
         var deadline = PgColumns.ReadNullableUtc(reader, first + 5);
-        var session = ReadNullableText(reader, first + 6);
+        var session = PgColumns.ReadNullableText(reader, first + 6);
         var sessionDeadline = PgColumns.ReadNullableUtc(reader, first + 7);
 
         return new PgRecordRow(
@@ -144,7 +133,7 @@ internal sealed class PgRecordTable(PgServer server, PgKeyspaces keyspaces, PgSe
         var value = reader.GetFieldValue<byte[]>(1);
         var revision = reader.GetInt64(2);
         var deadline = PgColumns.ReadNullableUtc(reader, 3);
-        var session = ReadNullableText(reader, 4);
+        var session = PgColumns.ReadNullableText(reader, 4);
         var sessionDeadline = PgColumns.ReadNullableUtc(reader, 5);
 
         return new PgOneRead(now, value, revision, deadline, session, sessionDeadline);
@@ -181,7 +170,7 @@ internal sealed class PgRecordTable(PgServer server, PgKeyspaces keyspaces, PgSe
             .ReadAsync(reader => reader.GetInt64(0), cancellationToken)
             .ConfigureAwait(false);
         var clocks = await results
-            .ReadAsync(reader => reader.GetDateTime(0), cancellationToken)
+            .ReadAsync(reader => PgColumns.ReadUtc(reader, 0), cancellationToken)
             .ConfigureAwait(false);
         var rows = await results.ReadAsync(ReadRow, cancellationToken).ConfigureAwait(false);
         var sessions = await results
@@ -699,7 +688,7 @@ internal sealed class PgRecordTable(PgServer server, PgKeyspaces keyspaces, PgSe
             throw new PgKeyspaceMissingException(PgKeyspaceMissingException.RowMissingMessage);
         }
 
-        var now = DateTime.SpecifyKind(read.Clocks[0], DateTimeKind.Utc);
+        var now = read.Clocks[0];
         var origin = new PgChangeOrigin(keyspaceId, read.Revisions[0], now);
         var change = NewChange(origin);
         var found = FindRows(distinct, indexes, depths, read.Rows);
