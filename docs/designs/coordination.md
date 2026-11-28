@@ -2,7 +2,7 @@
 
 - **Status:** In progress (phase 4 of 7)
 - **Date:** 2026-11-24
-- **Issue:** [#4](https://github.com/NCodeGroup/coordination/issues/4)
+- **Issue:** [#4](https://github.com/NCodeGroup/Coordination/issues/4)
 - **Authors:** NCode Group
 
 ## Summary
@@ -437,21 +437,21 @@ its own, and goes on as before.
 1. **Foundation.** The repository, this design, the originality policy and the founding decisions.
 2. **Model.** The abstractions, the in-process provider and the conformance kit with its history checker, and the
    license check [ORIGINALITY.md](../../ORIGINALITY.md) requires in CI, in eight plans:
-   the abstractions foundation with the CI checks ([#6](https://github.com/NCodeGroup/coordination/issues/6)), the
-   primitives' contracts ([#7](https://github.com/NCodeGroup/coordination/issues/7)), the composition
-   ([#8](https://github.com/NCodeGroup/coordination/issues/8)), the in-process provider with the kit's contract tests
-   ([#9](https://github.com/NCodeGroup/coordination/issues/9), [#10](https://github.com/NCodeGroup/coordination/issues/10)),
-   the history checker ([#11](https://github.com/NCodeGroup/coordination/issues/11)), the recipes
-   ([#12](https://github.com/NCodeGroup/coordination/issues/12)) and hosting
-   ([#13](https://github.com/NCodeGroup/coordination/issues/13)).
+   the abstractions foundation with the CI checks ([#6](https://github.com/NCodeGroup/Coordination/issues/6)), the
+   primitives' contracts ([#7](https://github.com/NCodeGroup/Coordination/issues/7)), the composition
+   ([#8](https://github.com/NCodeGroup/Coordination/issues/8)), the in-process provider with the kit's contract tests
+   ([#9](https://github.com/NCodeGroup/Coordination/issues/9), [#10](https://github.com/NCodeGroup/Coordination/issues/10)),
+   the history checker ([#11](https://github.com/NCodeGroup/Coordination/issues/11)), the recipes
+   ([#12](https://github.com/NCodeGroup/Coordination/issues/12)) and hosting
+   ([#13](https://github.com/NCodeGroup/Coordination/issues/13)).
 3. **RESP.** The RESP provider with Valkey and Garnet profiles, covering every NCode.Identity need, with gap-detecting
    notifications, in six plans: the provider foundation with the Valkey and Garnet profiles and a server test harness
-   ([#24](https://github.com/NCodeGroup/coordination/issues/24)), occurrences, counters, sequences and sets
-   ([#25](https://github.com/NCodeGroup/coordination/issues/25)), records and transactions
-   ([#26](https://github.com/NCodeGroup/coordination/issues/26)), sessions, membership, leases, semaphores, elections
-   and claims ([#27](https://github.com/NCodeGroup/coordination/issues/27)), notifications and watches with gap
-   detection and resync ([#28](https://github.com/NCodeGroup/coordination/issues/28)), and concurrent conformance
-   runs, injected faults and cluster mode ([#29](https://github.com/NCodeGroup/coordination/issues/29)).
+   ([#24](https://github.com/NCodeGroup/Coordination/issues/24)), occurrences, counters, sequences and sets
+   ([#25](https://github.com/NCodeGroup/Coordination/issues/25)), records and transactions
+   ([#26](https://github.com/NCodeGroup/Coordination/issues/26)), sessions, membership, leases, semaphores, elections
+   and claims ([#27](https://github.com/NCodeGroup/Coordination/issues/27)), notifications and watches with gap
+   detection and resync ([#28](https://github.com/NCodeGroup/Coordination/issues/28)), and concurrent conformance
+   runs, injected faults and cluster mode ([#29](https://github.com/NCodeGroup/Coordination/issues/29)).
 4. **PostgreSQL.** A provider that needs no infrastructure beyond the database a service already runs. NCode.Identity's
    hosted platform runs PostgreSQL as a managed three-node service in the cluster's datacenter
    ([hosting analysis](https://github.com/NCodeGroup/identity/blob/main/docs/hosting-analysis.md)), so the provider's
@@ -465,14 +465,14 @@ its own, and goes on as before.
    and its notifications and watches
    ([ADR-1034](../decisions/1034-postgresql-notifications-and-watches-are-numbered-in-the-writing-transaction-kept-in-a-bounded-log-and-woken-by-notify.md)),
    in six plans: the provider foundation with the profiles, the schema's migrations and a server test harness
-   ([#41](https://github.com/NCodeGroup/coordination/issues/41)), occurrences, counters, sequences and sets
-   ([#42](https://github.com/NCodeGroup/coordination/issues/42)), records and transactions with the keyspace revision,
-   the change log and expiry ([#43](https://github.com/NCodeGroup/coordination/issues/43)), sessions, membership,
-   leases, semaphores, elections and claims ([#44](https://github.com/NCodeGroup/coordination/issues/44)),
+   ([#41](https://github.com/NCodeGroup/Coordination/issues/41)), occurrences, counters, sequences and sets
+   ([#42](https://github.com/NCodeGroup/Coordination/issues/42)), records and transactions with the keyspace revision,
+   the change log and expiry ([#43](https://github.com/NCodeGroup/Coordination/issues/43)), sessions, membership,
+   leases, semaphores, elections and claims ([#44](https://github.com/NCodeGroup/Coordination/issues/44)),
    notifications and watches with replay from the log, gap detection and resync
-   ([#45](https://github.com/NCodeGroup/coordination/issues/45)), and concurrent conformance runs, injected faults and
-   failover ([#46](https://github.com/NCodeGroup/coordination/issues/46)). Moving the provider to Npgsql 11 follows once
-   its hosts can ([#47](https://github.com/NCodeGroup/coordination/issues/47)).
+   ([#45](https://github.com/NCodeGroup/Coordination/issues/45)), and concurrent conformance runs, injected faults and
+   failover ([#46](https://github.com/NCodeGroup/Coordination/issues/46)). Moving the provider to Npgsql 11 follows once
+   its hosts can ([#47](https://github.com/NCodeGroup/Coordination/issues/47)).
 5. **First-consumer adoption.** NCode.Identity depends on NCode.Coordination and retires its shared-state packages;
    its interval passes and refresh lease become claims and fenced leases. This phase is planned and landed in
    NCode.Identity, and the first stable release follows it ([D8](#d8-first-stable-release)). Its stories span both
