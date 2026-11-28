@@ -92,13 +92,34 @@ internal sealed class PgKeyspaceChange(PgSettings settings, PgChangeOrigin origi
     /// <param name="elementType">The PostgreSQL type of an element.</param>
     /// <returns>The argument, typed as an array of <paramref name="elementType"/>.</returns>
     private static PgArgument ArrayOf<T>(
-        IReadOnlyList<PgRecordWrite> writes,
+        List<PgRecordWrite> writes,
         Func<PgRecordWrite, T> select,
         NpgsqlDbType elementType
     )
     {
-        var elements = writes.Select(select).ToArray();
+        var elements = new T[writes.Count];
+        for (var position = 0; position < elements.Length; position++)
+        {
+            elements[position] = select(writes[position]);
+        }
+
         return PgArgument.Typed(elements, NpgsqlDbType.Array | elementType);
+    }
+
+    /// <summary>
+    /// Builds the ordinals of an entry's items.
+    /// </summary>
+    /// <param name="count">The number of items.</param>
+    /// <returns>The numbers from 0 up to <paramref name="count"/>, as 16-bit integers.</returns>
+    private static short[] OrdinalsOf(int count)
+    {
+        var ordinals = new short[count];
+        for (var ordinal = 0; ordinal < ordinals.Length; ordinal++)
+        {
+            ordinals[ordinal] = (short)ordinal;
+        }
+
+        return ordinals;
     }
 
     /// <summary>
@@ -280,13 +301,12 @@ internal sealed class PgKeyspaceChange(PgSettings settings, PgChangeOrigin origi
         var index = PgKeys.Index(put.Key);
         var depth = (short)put.Key.PartitionDepth;
         var keyText = PgKeys.KeyText(put.Key);
-        var valueCopy = put.Value.ToArray();
         var write = new PgRecordWrite(
             PgChangeKinds.Written,
             index,
             depth,
             keyText,
-            valueCopy,
+            put.Value,
             put.Deadline,
             put.Session,
             put.ReplacedSession
@@ -448,8 +468,7 @@ internal sealed class PgKeyspaceChange(PgSettings settings, PgChangeOrigin origi
     {
         var writes = entry.Writes;
 
-        var ordinalValues = Enumerable.Range(0, writes.Count).Select(ordinal => (short)ordinal);
-        var ordinalArray = ordinalValues.ToArray();
+        var ordinalArray = OrdinalsOf(writes.Count);
         var ordinals = PgArgument.Typed(ordinalArray, NpgsqlDbType.Array | NpgsqlDbType.Smallint);
         var kinds = ArrayOf(writes, write => write.Kind, NpgsqlDbType.Smallint);
         var indexes = ArrayOf(writes, write => write.Index, NpgsqlDbType.Bytea);

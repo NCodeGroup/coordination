@@ -287,10 +287,27 @@ internal sealed class PgRecordService(PgRecordTable table) : IRecordService
     /// <returns>True when a row of the page is expired, or bound to a session that has expired.</returns>
     private static bool HoldsExpiredRow(ImmutableArray<PgListItem> items, int limit)
     {
-        var page = items.Where(item => item.Row is not null).Take(limit);
-        return page.Any(item =>
-            item.StateAt() is PgRecordState.Expired or PgRecordState.SessionExpired
-        );
+        var counted = 0;
+        foreach (var item in items)
+        {
+            if (item.Row is null)
+            {
+                continue;
+            }
+
+            if (counted == limit)
+            {
+                return false;
+            }
+
+            counted++;
+            if (item.StateAt() is PgRecordState.Expired or PgRecordState.SessionExpired)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -299,11 +316,16 @@ internal sealed class PgRecordService(PgRecordTable table) : IRecordService
     /// <param name="request">The request for the page.</param>
     /// <param name="listed">The items that have a row, in order.</param>
     /// <returns>The live records among the first items that the page holds.</returns>
-    private static List<StoredRecord> ReadLiveRecords(PgListRequest request, PgListItem[] listed)
+    private static List<StoredRecord> ReadLiveRecords(
+        PgListRequest request,
+        List<PgListItem> listed
+    )
     {
-        var records = new List<StoredRecord>();
-        foreach (var item in listed.Take(request.Limit))
+        var count = Math.Min(request.Limit, listed.Count);
+        var records = new List<StoredRecord>(count);
+        for (var position = 0; position < count; position++)
         {
+            var item = listed[position];
             if (item.Row is { } row && item.StateAt() == PgRecordState.Live)
             {
                 var key = PgRecordTable.DecodeKey(request.Prefix.Keyspace, row.Key, row.Depth);
@@ -322,9 +344,9 @@ internal sealed class PgRecordService(PgRecordTable table) : IRecordService
     /// <param name="listed">The items that have a row, in order.</param>
     /// <param name="limit">The most records the page holds.</param>
     /// <returns>The token, or null when no row follows the page.</returns>
-    private static string? NextPageToken(PgListItem[] listed, int limit)
+    private static string? NextPageToken(List<PgListItem> listed, int limit)
     {
-        if (listed.Length > limit && listed[limit - 1].Row is { } last)
+        if (listed.Count > limit && listed[limit - 1].Row is { } last)
         {
             return PgKeys.PageToken(last.Index, last.Depth);
         }
@@ -340,7 +362,15 @@ internal sealed class PgRecordService(PgRecordTable table) : IRecordService
     /// <returns>The page.</returns>
     private static RecordPage ToPage(PgListRequest request, ImmutableArray<PgListItem> read)
     {
-        var listed = read.Where(item => item.Row is not null).ToArray();
+        var listed = new List<PgListItem>(read.Length);
+        foreach (var item in read)
+        {
+            if (item.Row is not null)
+            {
+                listed.Add(item);
+            }
+        }
+
         var records = ReadLiveRecords(request, listed);
         var next = NextPageToken(listed, request.Limit);
         var revision = new Revision(read[0].KeyspaceRevision);

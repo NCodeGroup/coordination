@@ -193,8 +193,9 @@ internal sealed class PgTransactionService(PgRecordTable table) : ITransactionSe
         var deadline = DeadlineOf(change, lifetime);
         var session = lifetime.Session?.Value;
         var replacedSession = ReplacedSessionOf(replaceable, write.Key);
+        var value = write.Value.ToArray();
 
-        var put = new PgRecordPut(write.Key, write.Value, deadline, session)
+        var put = new PgRecordPut(write.Key, value, deadline, session)
         {
             ReplacedSession = replacedSession,
         };

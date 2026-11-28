@@ -307,6 +307,83 @@ internal sealed class PgRecordTable(PgServer server, PgKeyspaces keyspaces, PgSe
     }
 
     /// <summary>
+    /// Gets the keys of a scope without repeats, each in the place where it first appears.
+    /// </summary>
+    /// <param name="keys">The scope's keys.</param>
+    /// <returns>The distinct keys, in first-seen order.</returns>
+    private static CoordinationKey[] DistinctKeys(ImmutableArray<CoordinationKey> keys)
+    {
+        var seen = new HashSet<CoordinationKey>(keys.Length);
+        var distinct = new List<CoordinationKey>(keys.Length);
+        foreach (var key in keys)
+        {
+            if (seen.Add(key))
+            {
+                distinct.Add(key);
+            }
+        }
+
+        return distinct.ToArray();
+    }
+
+    /// <summary>
+    /// Gets the index value and the partition depth of each key.
+    /// </summary>
+    /// <param name="keys">The keys.</param>
+    /// <returns>The index value of each key and the partition depth of each key, in the keys' order.</returns>
+    private static (byte[][] Indexes, short[] Depths) IndexesAndDepthsOf(CoordinationKey[] keys)
+    {
+        var indexes = new byte[keys.Length][];
+        var depths = new short[keys.Length];
+        for (var position = 0; position < keys.Length; position++)
+        {
+            var key = keys[position];
+            indexes[position] = PgKeys.Index(key);
+            depths[position] = (short)key.PartitionDepth;
+        }
+
+        return (indexes, depths);
+    }
+
+    /// <summary>
+    /// Gets the ids of the sessions of a scope without repeats, each in the place where it first appears.
+    /// </summary>
+    /// <param name="sessions">The scope's session ids.</param>
+    /// <returns>The distinct ids, in first-seen order.</returns>
+    private static string[] DistinctSessions(ImmutableArray<string> sessions)
+    {
+        var seen = new HashSet<string>(sessions.Length, StringComparer.Ordinal);
+        var distinct = new List<string>(sessions.Length);
+        foreach (var session in sessions)
+        {
+            if (seen.Add(session))
+            {
+                distinct.Add(session);
+            }
+        }
+
+        return distinct.ToArray();
+    }
+
+    /// <summary>
+    /// Gets the deadlines of the sessions that exist, by session id.
+    /// </summary>
+    /// <param name="sessions">The id and deadline of each session whose row exists.</param>
+    /// <returns>The deadlines, by session id.</returns>
+    private static ImmutableDictionary<string, DateTime> DeadlinesOf(
+        ImmutableArray<(string Id, DateTime Deadline)> sessions
+    )
+    {
+        var deadlines = ImmutableDictionary.CreateBuilder<string, DateTime>(StringComparer.Ordinal);
+        foreach (var (id, deadline) in sessions)
+        {
+            deadlines[id] = deadline;
+        }
+
+        return deadlines.ToImmutable();
+    }
+
+    /// <summary>
     /// Gets the settings of the provider.
     /// </summary>
     public PgSettings Settings { get; } = settings;
@@ -552,7 +629,9 @@ internal sealed class PgRecordTable(PgServer server, PgKeyspaces keyspaces, PgSe
     }
 
     /// <summary>
-    /// Reads one record of a keyspace, again after the keyspace's writers when the first read met an expired row.
+    /// Reads one record of a keyspace. A live row is the record and a row whose session has ended is absent at once;
+    /// a row that has expired, or whose session is past its deadline, is read again after the keyspace's writers and
+    /// is the record only when it is then live.
     /// </summary>
     /// <param name="id">The keyspace's id.</param>
     /// <param name="key">The record's key.</param>
@@ -632,10 +711,9 @@ internal sealed class PgRecordTable(PgServer server, PgKeyspaces keyspaces, PgSe
         ArgumentNullException.ThrowIfNull(scope);
 
         var keyspaceId = scope.KeyspaceId;
-        var distinct = scope.Keys.Distinct().ToArray();
-        var indexes = distinct.Select(PgKeys.Index).ToArray();
-        var depths = distinct.Select(key => (short)key.PartitionDepth).ToArray();
-        var sessionIds = scope.Sessions.Distinct(StringComparer.Ordinal).ToArray();
+        var distinct = DistinctKeys(scope.Keys);
+        var (indexes, depths) = IndexesAndDepthsOf(distinct);
+        var sessionIds = DistinctSessions(scope.Sessions);
         var statements = StartStatements(keyspaceId, indexes, depths, sessionIds);
 
         var read = await transaction
@@ -651,11 +729,7 @@ internal sealed class PgRecordTable(PgServer server, PgKeyspaces keyspaces, PgSe
         var origin = new PgChangeOrigin(keyspaceId, read.Revisions[0], now);
         var change = NewChange(origin);
         var found = FindRows(distinct, indexes, depths, read.Rows);
-        var deadlines = read.Sessions.ToImmutableDictionary(
-            session => session.Id,
-            session => session.Deadline,
-            StringComparer.Ordinal
-        );
+        var deadlines = DeadlinesOf(read.Sessions);
 
         return new PgChangeStart(change, found, deadlines);
     }
