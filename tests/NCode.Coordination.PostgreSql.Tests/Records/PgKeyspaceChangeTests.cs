@@ -131,6 +131,10 @@ public sealed class PgKeyspaceChangeTests
         Assert.Equal("c:7", statements[7].Arguments[1].Value);
     }
 
+    #endregion
+
+    #region Put Tests
+
     [Fact]
     public void Put_BeforeBegin_Throws()
     {

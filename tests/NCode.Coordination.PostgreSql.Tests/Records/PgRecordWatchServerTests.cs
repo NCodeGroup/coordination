@@ -43,7 +43,7 @@ public sealed class PgRecordWatchServerTests(PgServers servers)
     {
         var result = await context.Records.CreateAsync(
             key,
-            new[] { value },
+            new byte[] { value },
             lifetime,
             null,
             cancellationToken
@@ -63,7 +63,7 @@ public sealed class PgRecordWatchServerTests(PgServers servers)
         var result = await context.Records.CompareAndSwapAsync(
             key,
             expected,
-            new[] { value },
+            new byte[] { value },
             RecordLifetime.Persistent,
             null,
             cancellationToken

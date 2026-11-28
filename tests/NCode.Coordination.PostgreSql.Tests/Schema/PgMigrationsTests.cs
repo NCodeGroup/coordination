@@ -10,7 +10,7 @@ public sealed partial class PgMigrationsTests
     [GeneratedRegex(@"^CREATE TABLE \{schema\}\.(?<name>[a-z_]+)", RegexOptions.CultureInvariant)]
     private static partial Regex CreatedTable();
 
-    #region All Tests
+    #region All Property Tests
 
     [Fact]
     public void All_Versions_StartAtOneWithoutGaps()

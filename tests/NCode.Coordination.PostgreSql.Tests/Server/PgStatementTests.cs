@@ -84,7 +84,7 @@ public sealed class PgStatementTests
     [Fact]
     public void ImplicitConversion_Bytes_GivesTheArgumentOfBuilds()
     {
-        var bytes = new byte[] { 1, 2 };
+        byte[] bytes = [1, 2];
         PgArgument argument = bytes;
 
         var expected = PgArgument.Of(bytes);

@@ -33,9 +33,11 @@ public sealed class PgMembershipServiceTests
         var cancellationToken = TestContext.Current.CancellationToken;
         var group = new Keyspace("prod").CreateKey("g");
 
-        await Assert.ThrowsAsync<ArgumentNullException>(async () =>
+        var exception = await Assert.ThrowsAsync<ArgumentNullException>(async () =>
             await service.JoinAsync(group, null!, null, cancellationToken)
         );
+
+        Assert.Equal("member", exception.ParamName);
     }
 
     #endregion

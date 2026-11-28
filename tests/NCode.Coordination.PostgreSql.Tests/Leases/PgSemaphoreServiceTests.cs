@@ -28,9 +28,11 @@ public sealed class PgSemaphoreServiceTests
         var resource = new Keyspace("prod").CreateKey("r");
         var terms = LeaseTerms.ForTimeToLive(new TimeToLive(TimeSpan.FromSeconds(5)));
 
-        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(async () =>
+        var exception = await Assert.ThrowsAsync<ArgumentOutOfRangeException>(async () =>
             await service.TryAcquireAsync(resource, 0, terms, null, cancellationToken)
         );
+
+        Assert.Equal("capacity", exception.ParamName);
     }
 
     [Fact]
@@ -42,7 +44,7 @@ public sealed class PgSemaphoreServiceTests
         var resource = new Keyspace("prod").CreateKey("r");
         var terms = LeaseTerms.ForTimeToLive(new TimeToLive(TimeSpan.FromSeconds(5)));
 
-        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(async () =>
+        var exception = await Assert.ThrowsAsync<ArgumentOutOfRangeException>(async () =>
             await service.TryAcquireAsync(
                 resource,
                 CoordinationLimits.MaxSemaphoreCapacity + 1,
@@ -51,6 +53,8 @@ public sealed class PgSemaphoreServiceTests
                 cancellationToken
             )
         );
+
+        Assert.Equal("capacity", exception.ParamName);
     }
 
     #endregion

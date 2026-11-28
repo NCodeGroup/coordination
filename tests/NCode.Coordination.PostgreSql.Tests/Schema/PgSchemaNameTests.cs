@@ -48,7 +48,7 @@ public sealed class PgSchemaNameTests
 
     #endregion
 
-    #region Hash Tests
+    #region Hash Property Tests
 
     [Fact]
     public void Hash_DefaultName_IsTheKnownDigestPrefix()

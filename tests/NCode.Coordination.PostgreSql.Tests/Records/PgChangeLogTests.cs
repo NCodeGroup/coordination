@@ -141,7 +141,12 @@ public sealed class PgChangeLogTests(PgServers servers)
                 );
                 var lifetime = RecordLifetime.ForSession(grant.Id);
 
-                var keys = new[] { context.KeyOf("a"), context.KeyOf("b"), context.KeyOf("c") };
+                CoordinationKey[] keys =
+                [
+                    context.KeyOf("a"),
+                    context.KeyOf("b"),
+                    context.KeyOf("c"),
+                ];
                 foreach (var key in keys)
                 {
                     var created = await context.Records.CreateAsync(

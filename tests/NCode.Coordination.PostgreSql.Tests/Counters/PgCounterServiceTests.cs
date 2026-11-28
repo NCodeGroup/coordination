@@ -27,7 +27,7 @@ public sealed class PgCounterServiceTests
         var cancellationToken = TestContext.Current.CancellationToken;
         var key = new Keyspace("prod").CreateKey("k");
 
-        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(async () =>
+        var exception = await Assert.ThrowsAsync<ArgumentOutOfRangeException>(async () =>
             await service.IncrementAsync(
                 key,
                 0,
@@ -36,6 +36,8 @@ public sealed class PgCounterServiceTests
                 cancellationToken
             )
         );
+
+        Assert.Equal("amount", exception.ParamName);
     }
 
     [Fact]
@@ -75,9 +77,11 @@ public sealed class PgCounterServiceTests
         var service = CreateService(offline);
         var cancellationToken = TestContext.Current.CancellationToken;
 
-        await Assert.ThrowsAsync<ArgumentException>(async () =>
+        var exception = await Assert.ThrowsAsync<ArgumentException>(async () =>
             await service.IncrementBatchAsync([], null, cancellationToken)
         );
+
+        Assert.Equal("increments", exception.ParamName);
     }
 
     [Fact]
@@ -87,15 +91,17 @@ public sealed class PgCounterServiceTests
         var service = CreateService(offline);
         var cancellationToken = TestContext.Current.CancellationToken;
         var timeToLive = new TimeToLive(TimeSpan.FromSeconds(5));
-        var increments = new[]
-        {
+        CounterIncrement[] increments =
+        [
             new CounterIncrement(new Keyspace("prod").CreateKey("a"), 1, 10, timeToLive),
             new CounterIncrement(new Keyspace("staging").CreateKey("b"), 1, 10, timeToLive),
-        };
+        ];
 
-        await Assert.ThrowsAsync<ArgumentException>(async () =>
+        var exception = await Assert.ThrowsAsync<ArgumentException>(async () =>
             await service.IncrementBatchAsync(increments, null, cancellationToken)
         );
+
+        Assert.Equal("increments", exception.ParamName);
     }
 
     #endregion

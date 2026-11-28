@@ -30,9 +30,11 @@ public sealed class PgElectionServiceTests
         var terms = LeaseTerms.ForTimeToLive(new TimeToLive(TimeSpan.FromSeconds(5)));
         var value = new byte[CoordinationLimits.MaxValueLength + 1];
 
-        await Assert.ThrowsAsync<ArgumentException>(async () =>
+        var exception = await Assert.ThrowsAsync<ArgumentException>(async () =>
             await service.TryLeadAsync(role, value, terms, null, cancellationToken)
         );
+
+        Assert.Equal("value", exception.ParamName);
     }
 
     #endregion
@@ -52,7 +54,7 @@ public sealed class PgElectionServiceTests
             LeaseTerms.ForSession(new SessionId(keyspace, "s-1"))
         );
 
-        await Assert.ThrowsAsync<ArgumentException>(async () =>
+        var exception = await Assert.ThrowsAsync<ArgumentException>(async () =>
             await service.RenewAsync(
                 leadership,
                 new TimeToLive(TimeSpan.FromSeconds(5)),
@@ -60,6 +62,8 @@ public sealed class PgElectionServiceTests
                 cancellationToken
             )
         );
+
+        Assert.Equal("leadership", exception.ParamName);
     }
 
     #endregion

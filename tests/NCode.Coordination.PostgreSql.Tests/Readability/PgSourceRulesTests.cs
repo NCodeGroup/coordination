@@ -5,8 +5,6 @@ namespace NCode.Coordination.PostgreSql.Tests.Readability;
 
 public sealed class PgSourceRulesTests
 {
-    private const string SolutionFileName = "NCode.Coordination.slnx";
-
     public static TheoryData<string> CheckedPaths
     {
         get
@@ -23,33 +21,11 @@ public sealed class PgSourceRulesTests
 
     private static List<string> FindPackageFolders()
     {
-        var packageRoot = FindPackageRoot();
+        var packageRoot = PgSourceRules.PackageRoot;
         var folders = Directory.GetDirectories(packageRoot);
         var names = folders.Select(folder => Path.GetFileName(folder));
         var sources = names.Where(name => name is not ("bin" or "obj"));
         return sources.Order(StringComparer.Ordinal).ToList();
-    }
-
-    private static string FindPackageRoot()
-    {
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !ContainsSolution(directory))
-        {
-            directory = directory.Parent;
-        }
-
-        if (directory is null)
-            throw new InvalidOperationException(
-                $"No folder above the tests holds {SolutionFileName}."
-            );
-
-        return Path.Combine(directory.FullName, "src", "NCode.Coordination.PostgreSql");
-    }
-
-    private static bool ContainsSolution(DirectoryInfo directory)
-    {
-        var solutionPath = Path.Combine(directory.FullName, SolutionFileName);
-        return File.Exists(solutionPath);
     }
 
     private static string BuildMethodSpanning(int lines)

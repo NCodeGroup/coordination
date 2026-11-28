@@ -28,7 +28,11 @@ internal static class PgSourceRules
 
     private const string SolutionFileName = "NCode.Coordination.slnx";
 
-    private static string PackageRoot { get; } = FindPackageRoot();
+    /// <summary>
+    /// Gets the folder of the PostgreSQL provider's package, <c>src/NCode.Coordination.PostgreSql</c> under the
+    /// folder that holds the solution.
+    /// </summary>
+    internal static string PackageRoot { get; } = FindPackageRoot();
 
     /// <summary>
     /// Checks one source text.

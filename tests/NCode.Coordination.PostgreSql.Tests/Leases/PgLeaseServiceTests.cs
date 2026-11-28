@@ -59,7 +59,7 @@ public sealed class PgLeaseServiceTests
             LeaseTerms.ForSession(new SessionId(keyspace, "s-1"))
         );
 
-        await Assert.ThrowsAsync<ArgumentException>(async () =>
+        var exception = await Assert.ThrowsAsync<ArgumentException>(async () =>
             await service.RenewAsync(
                 grant,
                 new TimeToLive(TimeSpan.FromSeconds(5)),
@@ -67,6 +67,8 @@ public sealed class PgLeaseServiceTests
                 cancellationToken
             )
         );
+
+        Assert.Equal("grant", exception.ParamName);
     }
 
     #endregion

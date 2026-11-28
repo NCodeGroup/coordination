@@ -7,7 +7,7 @@ namespace NCode.Coordination.PostgreSql.Server.Tests;
 
 public sealed class PgServerUnitTests
 {
-    #region Timeouts Tests
+    #region Timeouts Property Tests
 
     [Fact]
     public async Task Timeouts_Settings_FormatsWholeMilliseconds()
