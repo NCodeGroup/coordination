@@ -236,18 +236,102 @@ public sealed class PgChangeLogTests(PgServers servers)
     [PgServerFact]
     public async Task ReadAsync_SessionEndWithMoreKeysThanAPage_ListsEachKeyOnceInOrder()
     {
-        await AssertSessionEndListsEachKeyOnceInOrderAsync(1_001);
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await AssertSessionEndListsEachKeyOnceInOrderAsync(1_001, cancellationToken);
     }
 
     [PgServerFact]
     public async Task ReadAsync_SessionEndWithExactlyAPageOfKeys_ListsEachKeyOnce()
     {
-        await AssertSessionEndListsEachKeyOnceInOrderAsync(1_000);
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await AssertSessionEndListsEachKeyOnceInOrderAsync(1_000, cancellationToken);
     }
 
-    private async Task AssertSessionEndListsEachKeyOnceInOrderAsync(int count)
+    [PgServerFact]
+    public async Task ReadAsync_TwoSessionsEnd_ListsEachSessionsKeys()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
+        await WithServicesAsync(
+            async context =>
+            {
+                var first = await context.Sessions.OpenAsync(
+                    context.Keyspace,
+                    OneMinute,
+                    null,
+                    cancellationToken
+                );
+                var second = await context.Sessions.OpenAsync(
+                    context.Keyspace,
+                    OneMinute,
+                    null,
+                    cancellationToken
+                );
+                var firstLifetime = RecordLifetime.ForSession(first.Id);
+                var secondLifetime = RecordLifetime.ForSession(second.Id);
+
+                var keyA1 = context.KeyOf("a1");
+                var keyA2 = context.KeyOf("a2");
+                var keyB1 = context.KeyOf("b1");
+                var createdA1 = await context.Records.CreateAsync(
+                    keyA1,
+                    new byte[] { 1 },
+                    firstLifetime,
+                    null,
+                    cancellationToken
+                );
+                var createdA2 = await context.Records.CreateAsync(
+                    keyA2,
+                    new byte[] { 1 },
+                    firstLifetime,
+                    null,
+                    cancellationToken
+                );
+                var createdB1 = await context.Records.CreateAsync(
+                    keyB1,
+                    new byte[] { 1 },
+                    secondLifetime,
+                    null,
+                    cancellationToken
+                );
+                Assert.True(createdA1.IsWritten);
+                Assert.True(createdA2.IsWritten);
+                Assert.True(createdB1.IsWritten);
+
+                await context.Sessions.CloseAsync(first.Id, null, cancellationToken);
+                await context.Sessions.CloseAsync(second.Id, null, cancellationToken);
+
+                var read = await context.ReadAsync(cancellationToken);
+
+                var ended = read.Entries.Where(entry => entry.EndedSession is not null).ToList();
+                Assert.Equal(2, ended.Count);
+
+                var firstEnded = Assert.Single(ended, entry =>
+                    entry.EndedSession == first.Id.Value
+                );
+                var firstExpected = new[] { keyA1, keyA2 }
+                    .Select(PgKeys.KeyText)
+                    .Order(StringComparer.Ordinal);
+                var firstKeys = firstEnded
+                    .EndedKeys.Select(item => item.Key)
+                    .Order(StringComparer.Ordinal);
+                Assert.Equal(firstExpected, firstKeys);
+
+                var secondEnded = Assert.Single(ended, entry =>
+                    entry.EndedSession == second.Id.Value
+                );
+                var secondKeyText = PgKeys.KeyText(keyB1);
+                var secondKey = Assert.Single(secondEnded.EndedKeys);
+                Assert.Equal(secondKeyText, secondKey.Key);
+            },
+            cancellationToken
+        );
+    }
+
+    private async Task AssertSessionEndListsEachKeyOnceInOrderAsync(
+        int count,
+        CancellationToken cancellationToken
+    )
+    {
         await WithServicesAsync(
             async context =>
             {

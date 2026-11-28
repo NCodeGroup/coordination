@@ -16,7 +16,7 @@ namespace NCode.Coordination.PostgreSql.Records;
 /// </summary>
 /// <param name="server">The seam to the server.</param>
 /// <param name="schema">The schema that holds the tables.</param>
-/// <exception cref="ArgumentNullException">An argument is null.</exception>
+/// <exception cref="ArgumentNullException">The server is null.</exception>
 internal sealed class PgChangeLog(PgServer server, PgSchemaName schema)
 {
     /// <summary>
@@ -136,10 +136,10 @@ internal sealed class PgChangeLog(PgServer server, PgSchemaName schema)
     /// </summary>
     /// <param name="rows">The rows, in revision order.</param>
     /// <returns>The entries, in revision order, without the keys of ended sessions.</returns>
-    private static List<PgChange> GroupEntries(ImmutableArray<PgChangeRow> rows)
+    private static ImmutableArray<PgChange> GroupEntries(ImmutableArray<PgChangeRow> rows)
     {
-        var changes = new List<PgChange>();
-        var items = ImmutableArray.CreateBuilder<PgChangeItem>();
+        var changes = ImmutableArray.CreateBuilder<PgChange>(rows.Length);
+        var items = ImmutableArray.CreateBuilder<PgChangeItem>(rows.Length);
         for (var position = 0; position < rows.Length; position++)
         {
             var row = rows[position];
@@ -166,7 +166,7 @@ internal sealed class PgChangeLog(PgServer server, PgSchemaName schema)
             items.Clear();
         }
 
-        return changes;
+        return changes.ToImmutable();
     }
 
     /// <summary>
@@ -224,6 +224,53 @@ internal sealed class PgChangeLog(PgServer server, PgSchemaName schema)
         var depth = reader.GetInt16(1);
         var key = reader.GetString(2);
         return new PgChangeItem(PgChangeKinds.Deleted, index, depth, key, null);
+    }
+
+    /// <summary>
+    /// Lists the cursors that start the first page of each session that an entry ended.
+    /// </summary>
+    /// <param name="changes">The entries, in revision order.</param>
+    /// <returns>One cursor for each entry that ended a session, in the entries' order.</returns>
+    private static ImmutableArray<PgEndedKeysCursor> EndedCursors(IReadOnlyList<PgChange> changes)
+    {
+        var cursors = ImmutableArray.CreateBuilder<PgEndedKeysCursor>();
+        foreach (var change in changes)
+        {
+            if (change.EndedSession is not { } session)
+            {
+                continue;
+            }
+
+            var cursor = PgEndedKeysCursor.First(session, change.Number);
+            cursors.Add(cursor);
+        }
+
+        return cursors.ToImmutable();
+    }
+
+    /// <summary>
+    /// Reads the results of a batch that holds one page of ended keys for each cursor.
+    /// </summary>
+    /// <param name="results">The results of the batch.</param>
+    /// <param name="count">The number of pages, which is that of the batch's statements.</param>
+    /// <param name="cancellationToken">The token that cancels the read.</param>
+    /// <returns>The pages, in the order of the statements.</returns>
+    private static async ValueTask<ImmutableArray<ImmutableArray<PgChangeItem>>> ReadPagesAsync(
+        PgResults results,
+        int count,
+        CancellationToken cancellationToken
+    )
+    {
+        var pages = ImmutableArray.CreateBuilder<ImmutableArray<PgChangeItem>>(count);
+        for (var number = 0; number < count; number++)
+        {
+            var page = await ReadEndedKeyPageAsync(results, cancellationToken)
+                .ConfigureAwait(false);
+
+            pages.Add(page);
+        }
+
+        return pages.ToImmutable();
     }
 
     /// <summary>
@@ -342,103 +389,184 @@ internal sealed class PgChangeLog(PgServer server, PgSchemaName schema)
     /// </summary>
     /// <param name="transaction">The transaction that holds the snapshot.</param>
     /// <param name="keyspaceId">The keyspace's id.</param>
-    /// <param name="changes">The entries, in revision order.</param>
+    /// <param name="entries">The entries, in revision order.</param>
     /// <param name="cancellationToken">The token that cancels the read.</param>
     /// <returns>The entries, in revision order, each with its ended keys.</returns>
     private async ValueTask<ImmutableArray<PgChange>> AddEndedKeysAsync(
         PgTransaction transaction,
         long keyspaceId,
-        List<PgChange> changes,
+        IReadOnlyList<PgChange> entries,
         CancellationToken cancellationToken
     )
     {
-        var result = ImmutableArray.CreateBuilder<PgChange>(changes.Count);
-        foreach (var change in changes)
+        var cursors = EndedCursors(entries);
+        if (cursors.IsEmpty)
         {
-            var completed = await WithEndedKeysAsync(
+            return ImmutableArray.CreateRange(entries);
+        }
+
+        var pages = await ReadFirstPagesAsync(transaction, keyspaceId, cursors, cancellationToken)
+            .ConfigureAwait(false);
+
+        return await CompleteEntriesAsync(
+                transaction,
+                keyspaceId,
+                entries,
+                cursors,
+                pages,
+                cancellationToken
+            )
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Sets the keys of each ended session on the entry that ended it, reading the pages after a full first page.
+    /// </summary>
+    /// <param name="transaction">The transaction that holds the snapshot.</param>
+    /// <param name="keyspaceId">The keyspace's id.</param>
+    /// <param name="entries">The entries, in revision order.</param>
+    /// <param name="cursors">The cursors that started the first pages, one for each entry that ended a session.</param>
+    /// <param name="pages">The first pages, in the order of the cursors.</param>
+    /// <param name="cancellationToken">The token that cancels the read.</param>
+    /// <returns>The entries, in revision order, each with its ended keys.</returns>
+    private async ValueTask<ImmutableArray<PgChange>> CompleteEntriesAsync(
+        PgTransaction transaction,
+        long keyspaceId,
+        IReadOnlyList<PgChange> entries,
+        IReadOnlyList<PgEndedKeysCursor> cursors,
+        ImmutableArray<ImmutableArray<PgChangeItem>> pages,
+        CancellationToken cancellationToken
+    )
+    {
+        var result = ImmutableArray.CreateBuilder<PgChange>(entries.Count);
+        var position = 0;
+        foreach (var entry in entries)
+        {
+            if (entry.EndedSession is null)
+            {
+                result.Add(entry);
+                continue;
+            }
+
+            var keys = await CompleteKeysAsync(
                     transaction,
                     keyspaceId,
-                    change,
+                    cursors[position],
+                    pages[position],
                     cancellationToken
                 )
                 .ConfigureAwait(false);
 
-            result.Add(completed);
+            result.Add(entry with { EndedKeys = keys });
+            position++;
         }
 
         return result.ToImmutable();
     }
 
     /// <summary>
-    /// Sets the keys still bound to the session that an entry ended.
+    /// Completes a session's keys: the first page, and the pages after it when the first one was full.
     /// </summary>
     /// <param name="transaction">The transaction that holds the snapshot.</param>
     /// <param name="keyspaceId">The keyspace's id.</param>
-    /// <param name="change">The entry.</param>
+    /// <param name="cursor">The cursor that started the first page.</param>
+    /// <param name="firstPage">The first page of the session's keys.</param>
     /// <param name="cancellationToken">The token that cancels the read.</param>
-    /// <returns>The entry with its ended keys, or the entry itself when it ended no session.</returns>
-    private async ValueTask<PgChange> WithEndedKeysAsync(
+    /// <returns>The keys, as deleted items in index order.</returns>
+    private async ValueTask<ImmutableArray<PgChangeItem>> CompleteKeysAsync(
         PgTransaction transaction,
         long keyspaceId,
-        PgChange change,
+        PgEndedKeysCursor cursor,
+        ImmutableArray<PgChangeItem> firstPage,
         CancellationToken cancellationToken
     )
     {
-        if (change.EndedSession is not { } session)
+        if (firstPage.Length < EndedPageSize)
         {
-            return change;
+            return firstPage;
         }
 
-        var endedKeys = await ReadEndedKeysAsync(
-                transaction,
-                keyspaceId,
-                session,
-                change.Number,
-                cancellationToken
-            )
+        var next = cursor.After(firstPage[^1]);
+        var rest = await ReadRemainingKeysAsync(transaction, keyspaceId, next, cancellationToken)
             .ConfigureAwait(false);
 
-        return change with
-        {
-            EndedKeys = endedKeys,
-        };
+        return firstPage.AddRange(rest);
     }
 
     /// <summary>
-    /// Reads, in pages, the keys still bound to a session that an entry ended.
+    /// Builds the statement that reads the page of an ended session's keys that a cursor starts.
+    /// </summary>
+    /// <param name="keyspaceId">The keyspace's id.</param>
+    /// <param name="cursor">The cursor that starts the page.</param>
+    /// <returns>The statement.</returns>
+    private PgStatement EndedKeysStatement(long keyspaceId, PgEndedKeysCursor cursor)
+    {
+        var afterIndex = PgArgument.Typed(cursor.AfterIndex, NpgsqlDbType.Bytea);
+        var afterDepth = PgArgument.Typed(cursor.AfterDepth, NpgsqlDbType.Smallint);
+        var pageSize = PgArgument.Typed(EndedPageSize, NpgsqlDbType.Integer);
+        return new PgStatement(
+            EndedKeys,
+            keyspaceId,
+            cursor.Session,
+            cursor.Revision,
+            afterIndex,
+            afterDepth,
+            pageSize
+        );
+    }
+
+    /// <summary>
+    /// Reads the first page of every ended session's keys in one batch.
     /// </summary>
     /// <param name="transaction">The transaction that holds the snapshot.</param>
     /// <param name="keyspaceId">The keyspace's id.</param>
-    /// <param name="session">The ended session's id.</param>
-    /// <param name="revision">The revision of the entry that ended the session.</param>
+    /// <param name="cursors">The cursors that start the first pages.</param>
     /// <param name="cancellationToken">The token that cancels the read.</param>
-    /// <returns>The keys, as deleted items in index order.</returns>
-    private async ValueTask<ImmutableArray<PgChangeItem>> ReadEndedKeysAsync(
+    /// <returns>The pages, in the order of the cursors.</returns>
+    private async ValueTask<ImmutableArray<ImmutableArray<PgChangeItem>>> ReadFirstPagesAsync(
         PgTransaction transaction,
         long keyspaceId,
-        string session,
-        long revision,
+        IReadOnlyList<PgEndedKeysCursor> cursors,
+        CancellationToken cancellationToken
+    )
+    {
+        var statements = new List<PgStatement>(cursors.Count);
+        foreach (var cursor in cursors)
+        {
+            var statement = EndedKeysStatement(keyspaceId, cursor);
+            statements.Add(statement);
+        }
+
+        var count = cursors.Count;
+        return await transaction
+            .NextAsync(
+                statements,
+                (results, token) => ReadPagesAsync(results, count, token),
+                cancellationToken
+            )
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Reads, in pages, the keys still bound to a session that an entry ended, from a cursor on.
+    /// </summary>
+    /// <param name="transaction">The transaction that holds the snapshot.</param>
+    /// <param name="keyspaceId">The keyspace's id.</param>
+    /// <param name="cursor">The cursor that starts the first page to read.</param>
+    /// <param name="cancellationToken">The token that cancels the read.</param>
+    /// <returns>The keys after the cursor, as deleted items in index order.</returns>
+    private async ValueTask<ImmutableArray<PgChangeItem>> ReadRemainingKeysAsync(
+        PgTransaction transaction,
+        long keyspaceId,
+        PgEndedKeysCursor cursor,
         CancellationToken cancellationToken
     )
     {
         var keys = ImmutableArray.CreateBuilder<PgChangeItem>();
-        var lastIndex = Array.Empty<byte>();
-        short lastDepth = -1;
-        var pageSize = PgArgument.Typed(EndedPageSize, NpgsqlDbType.Integer);
 
         while (true)
         {
-            var lastIndexArgument = PgArgument.Typed(lastIndex, NpgsqlDbType.Bytea);
-            var lastDepthArgument = PgArgument.Typed(lastDepth, NpgsqlDbType.Smallint);
-            var statement = new PgStatement(
-                EndedKeys,
-                keyspaceId,
-                session,
-                revision,
-                lastIndexArgument,
-                lastDepthArgument,
-                pageSize
-            );
+            var statement = EndedKeysStatement(keyspaceId, cursor);
             IReadOnlyList<PgStatement> statements = [statement];
             var page = await transaction
                 .NextAsync(statements, ReadEndedKeyPageAsync, cancellationToken)
@@ -450,8 +578,7 @@ internal sealed class PgChangeLog(PgServer server, PgSchemaName schema)
                 return keys.ToImmutable();
             }
 
-            lastIndex = page[^1].Index;
-            lastDepth = page[^1].Depth;
+            cursor = cursor.After(page[^1]);
         }
     }
 }
