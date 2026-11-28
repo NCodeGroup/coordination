@@ -137,7 +137,7 @@ internal sealed class PgSetService(PgServer server, PgKeyspaces keyspaces, PgSch
         CancellationToken cancellationToken
     )
     {
-        await results.ReadAsync(ReadLock, cancellationToken).ConfigureAwait(false);
+        await results.SkipAsync(cancellationToken).ConfigureAwait(false);
         var rows = await results.ReadAsync(ReadAdd, cancellationToken).ConfigureAwait(false);
 
         return rows[0];
@@ -154,7 +154,7 @@ internal sealed class PgSetService(PgServer server, PgKeyspaces keyspaces, PgSch
         CancellationToken cancellationToken
     )
     {
-        await results.ReadAsync(ReadLock, cancellationToken).ConfigureAwait(false);
+        await results.SkipAsync(cancellationToken).ConfigureAwait(false);
         var rows = await results.ReadAsync(ReadRemove, cancellationToken).ConfigureAwait(false);
 
         return rows[0];
@@ -172,16 +172,6 @@ internal sealed class PgSetService(PgServer server, PgKeyspaces keyspaces, PgSch
     )
     {
         return await results.ReadAsync(ReadMember, cancellationToken).ConfigureAwait(false);
-    }
-
-    /// <summary>
-    /// Reads the row that a lock statement returned.
-    /// </summary>
-    /// <param name="reader">The reader, at a row.</param>
-    /// <returns>The row's only column.</returns>
-    private static int ReadLock(NpgsqlDataReader reader)
-    {
-        return reader.GetInt32(0);
     }
 
     /// <summary>

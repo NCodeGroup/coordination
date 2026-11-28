@@ -67,6 +67,22 @@ internal sealed class PgResults(NpgsqlDataReader reader)
     }
 
     /// <summary>
+    /// Moves past the next result, whose rows the caller doesn't use.
+    /// </summary>
+    /// <param name="cancellationToken">The token that cancels the read.</param>
+    /// <returns>A task that completes when the result's rows have been read.</returns>
+    /// <exception cref="InvalidOperationException">The batch has no further result.</exception>
+    public async ValueTask SkipAsync(CancellationToken cancellationToken)
+    {
+        if (!await MoveNextAsync(cancellationToken).ConfigureAwait(false))
+        {
+            throw new InvalidOperationException("The batch has no further result.");
+        }
+
+        while (await Reader.ReadAsync(cancellationToken).ConfigureAwait(false)) { }
+    }
+
+    /// <summary>
     /// Reads every remaining result, so that an error later in the batch surfaces.
     /// </summary>
     /// <param name="cancellationToken">The token that cancels the read.</param>

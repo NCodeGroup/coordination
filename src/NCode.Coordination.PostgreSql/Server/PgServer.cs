@@ -68,7 +68,7 @@ internal sealed class PgServer(PgSource source, PgSettings settings)
     {
         return async (results, cancellationToken) =>
         {
-            await results.ReadAsync(_ => true, cancellationToken).ConfigureAwait(false);
+            await results.SkipAsync(cancellationToken).ConfigureAwait(false);
             return await read(results, cancellationToken).ConfigureAwait(false);
         };
     }

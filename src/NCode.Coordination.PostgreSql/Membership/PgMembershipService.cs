@@ -822,7 +822,7 @@ internal sealed class PgMembershipService(PgRecordTable table, PgChangeLog chang
             request.Values
         );
 
-        start.Change.Begin();
+        _ = start.Change.Begin();
         start.Change.NameGroup(address.Index, address.Depth);
         start.Change.Write(upsert);
     }
@@ -898,7 +898,7 @@ internal sealed class PgMembershipService(PgRecordTable table, PgChangeLog chang
             request.Session.Value
         );
 
-        start.Change.Begin();
+        _ = start.Change.Begin();
         start.Change.NameGroup(address.Index, address.Depth);
         start.Change.Write(delete);
     }

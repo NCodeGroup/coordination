@@ -206,9 +206,7 @@ internal sealed class PgRecordTable(PgServer server, PgKeyspaces keyspaces, PgSe
         CancellationToken cancellationToken
     )
     {
-        await results
-            .ReadAsync(reader => reader.GetInt32(0), cancellationToken)
-            .ConfigureAwait(false);
+        await results.SkipAsync(cancellationToken).ConfigureAwait(false);
 
         return await readResults(results, cancellationToken).ConfigureAwait(false);
     }

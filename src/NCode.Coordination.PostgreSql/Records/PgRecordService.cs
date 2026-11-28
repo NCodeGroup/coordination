@@ -199,7 +199,7 @@ internal sealed class PgRecordService(PgRecordTable table) : IRecordService
     /// <param name="liveRow">The row to delete.</param>
     private static void DeleteRecord(PgKeyspaceChange change, PgRecordRow liveRow)
     {
-        change.Begin();
+        _ = change.Begin();
         change.Delete(liveRow);
     }
 

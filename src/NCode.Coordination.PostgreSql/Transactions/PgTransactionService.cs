@@ -283,7 +283,7 @@ internal sealed class PgTransactionService(PgRecordTable table) : ITransactionSe
         PgTransactionRows rows
     )
     {
-        change.Begin();
+        _ = change.Begin();
 
         foreach (var write in writes)
         {

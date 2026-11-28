@@ -218,7 +218,7 @@ internal sealed class PgKeyspaceChange(PgSettings settings, PgChangeOrigin origi
             return;
         }
 
-        Begin();
+        _ = Begin();
         foreach (var row in rows)
         {
             Delete(row);
