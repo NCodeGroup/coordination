@@ -23,7 +23,7 @@ Each provider runs work no caller waits on, and that work catches the failures i
 
 A failure in that work is caught, since the next round repeats the work or the subscriber resyncs
 ([ADR-1011](1011-an-operation-returns-its-outcome-and-throws-a-coded-failure-that-says-whether-it-may-have-taken-effect.md)
-gives the failures their codes). The providers log nothing, so a sweep that fails every pass, a pump that never reads
+gives the failures their codes). Unless the failure is logged, a sweep that fails every pass, a pump that never reads
 its log or a subscription that never reads its channel's number looks, to an operator, like a quiet system whose
 subscribers resync often and whose expired rows linger.
 
@@ -110,8 +110,16 @@ the entry: the failure stays caught, and the next round repeats the work or the 
 
 ## Consequences
 
-- A failed round logs once: an outage logs once per sweep interval, and once per check interval of each subscription
-  that reads during it. A host filters by category and level, and a flood from a long outage is the host's to filter.
+- A failed round logs once, and a round is a pass, a step, a read or an attempt, so an outage logs at these rates:
+  - The PostgreSQL sweep logs one entry for each of its twelve passes and two steps that fail, at every
+    `SweepInterval`: 4002 and 4003, up to fourteen entries, and 4001 only for an unexpected failure.
+  - A log's pump logs once for each failed read, and a wake-up, a check or a reconnect starts a read, so a burst of
+    wake-ups logs a burst; coalescing leaves at most one waiting pump per log.
+  - The listening connection logs once for each failed connection attempt, a second apart (`ReconnectDelay`), until
+    the server returns.
+  - RESP's subscriptions log once for each failed read, at a check of each subscription.
+
+  A host that finds these too many filters the category or the ids, as the last bullet here says.
 - An operator can tell a provider that can't reach its server from a quiet one, by the entries of 3001 to 3003 or 4001
   to 4006, and a defect from an outage, by the level.
 - The messages name no keyspace, key or channel, so an entry shows that something failed, not for whom; the exception's
