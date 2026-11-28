@@ -68,7 +68,8 @@ public sealed class PgStatementTests
     {
         PgArgument argument = 7L;
 
-        Assert.Equal(PgArgument.Of(7L), argument);
+        var expected = PgArgument.Of(7L);
+        Assert.Equal(expected, argument);
     }
 
     [Fact]
@@ -76,7 +77,8 @@ public sealed class PgStatementTests
     {
         PgArgument argument = "text";
 
-        Assert.Equal(PgArgument.Of("text"), argument);
+        var expected = PgArgument.Of("text");
+        Assert.Equal(expected, argument);
     }
 
     [Fact]
@@ -85,7 +87,8 @@ public sealed class PgStatementTests
         var bytes = new byte[] { 1, 2 };
         PgArgument argument = bytes;
 
-        Assert.Equal(PgArgument.Of(bytes), argument);
+        var expected = PgArgument.Of(bytes);
+        Assert.Equal(expected, argument);
     }
 
     [Fact]

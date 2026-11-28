@@ -66,7 +66,8 @@ public sealed class PgKeysTests
 
         Assert.True(decoded);
         Assert.NotNull(segment);
-        Assert.Equal(encoded, PgKeys.EncodeSegment(segment));
+        var encodedSegment = PgKeys.EncodeSegment(segment);
+        Assert.Equal(encoded, encodedSegment);
     }
 
     [Theory]
@@ -149,7 +150,8 @@ public sealed class PgKeysTests
         var prefixIndex = PgKeys.Index(prefix);
         var keyIndex = PgKeys.Index(key);
 
-        Assert.True(keyIndex.AsSpan().StartsWith(prefixIndex));
+        var startsWithPrefix = keyIndex.AsSpan().StartsWith(prefixIndex);
+        Assert.True(startsWithPrefix);
     }
 
     [Fact]

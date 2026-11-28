@@ -239,13 +239,15 @@ public sealed class PgRecordWatchServerTests(PgServers servers)
                 Assert.False(change.IsResync);
                 Assert.Equal(RecordChangeKind.Written, change.Kind);
                 Assert.Equal(second, change.Record?.Revision);
-                Assert.Equal(new byte[] { 2 }, change.Record?.Value.ToArray());
+                var secondValue = change.Record?.Value.ToArray();
+                Assert.Equal(new byte[] { 2 }, secondValue);
 
                 change = await NextAsync(changes, cancellationToken);
                 Assert.False(change.IsResync);
                 Assert.Equal(RecordChangeKind.Written, change.Kind);
                 Assert.Equal(third, change.Record?.Revision);
-                Assert.Equal(new byte[] { 3 }, change.Record?.Value.ToArray());
+                var thirdValue = change.Record?.Value.ToArray();
+                Assert.Equal(new byte[] { 3 }, thirdValue);
             },
             cancellationToken
         );
@@ -434,7 +436,8 @@ public sealed class PgRecordWatchServerTests(PgServers servers)
                 notification = await NextAsync(notifications, twoChecks, cancellationToken);
                 Assert.Equal(NotificationKind.Message, notification.Kind);
                 Assert.Equal(2, notification.Sequence);
-                Assert.Equal(new byte[] { 2 }, notification.Payload.ToArray());
+                var payload = notification.Payload.ToArray();
+                Assert.Equal(new byte[] { 2 }, payload);
             },
             cancellationToken
         );

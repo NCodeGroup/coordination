@@ -80,7 +80,9 @@ public sealed class PgFailuresTests
     {
         var exception = CreateServerError("23503", "ERROR");
 
-        Assert.True(PgFailures.IsKeyspaceMissing(exception));
+        var missing = PgFailures.IsKeyspaceMissing(exception);
+
+        Assert.True(missing);
     }
 
     [Fact]
@@ -88,7 +90,9 @@ public sealed class PgFailuresTests
     {
         var exception = CreateServerError("23505", "ERROR");
 
-        Assert.False(PgFailures.IsKeyspaceMissing(exception));
+        var missing = PgFailures.IsKeyspaceMissing(exception);
+
+        Assert.False(missing);
     }
 
     #endregion
@@ -98,14 +102,24 @@ public sealed class PgFailuresTests
     [Fact]
     public void IsClientFailure_NpgsqlExceptions_ReturnsTrue()
     {
-        Assert.True(PgFailures.IsClientFailure(new NpgsqlException("down")));
-        Assert.True(PgFailures.IsClientFailure(CreateServerError("40001", "ERROR")));
+        var clientError = new NpgsqlException("down");
+        var serverError = CreateServerError("40001", "ERROR");
+
+        var clientIsFailure = PgFailures.IsClientFailure(clientError);
+        var serverIsFailure = PgFailures.IsClientFailure(serverError);
+
+        Assert.True(clientIsFailure);
+        Assert.True(serverIsFailure);
     }
 
     [Fact]
     public void IsClientFailure_OtherException_ReturnsFalse()
     {
-        Assert.False(PgFailures.IsClientFailure(new InvalidOperationException()));
+        var exception = new InvalidOperationException();
+
+        var isFailure = PgFailures.IsClientFailure(exception);
+
+        Assert.False(isFailure);
     }
 
     #endregion
@@ -130,14 +144,18 @@ public sealed class PgFailuresTests
     [MemberData(nameof(LostConnectionFailures))]
     public void IsConnectionLost_ServerEndedOrIoFailure_ReturnsTrue(Exception exception)
     {
-        Assert.True(PgFailures.IsConnectionLost(exception));
+        var lost = PgFailures.IsConnectionLost(exception);
+
+        Assert.True(lost);
     }
 
     [Theory]
     [MemberData(nameof(StatementFailures))]
     public void IsConnectionLost_StatementError_ReturnsFalse(Exception exception)
     {
-        Assert.False(PgFailures.IsConnectionLost(exception));
+        var lost = PgFailures.IsConnectionLost(exception);
+
+        Assert.False(lost);
     }
 
     #endregion

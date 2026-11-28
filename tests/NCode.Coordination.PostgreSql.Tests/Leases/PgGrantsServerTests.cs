@@ -275,7 +275,8 @@ public sealed class PgGrantsServerTests(PgServers servers)
                     null,
                     cancellationToken
                 );
-                Assert.True(GrantOf(second).FencingToken.Value > firstToken);
+                var secondToken = GrantOf(second).FencingToken.Value;
+                Assert.True(secondToken > firstToken);
             },
             cancellationToken
         );

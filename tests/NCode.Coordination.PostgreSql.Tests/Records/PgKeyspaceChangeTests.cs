@@ -88,12 +88,14 @@ public sealed class PgKeyspaceChangeTests
         Assert.Contains("INSERT INTO \"coordination\".records", statements[0].Sql);
         Assert.Equal(revision, statements[0].Arguments[5].Value);
         Assert.Contains("INSERT INTO \"coordination\".changes", statements[1].Sql);
-        Assert.Equal(Now.AddMinutes(5), statements[1].Arguments[2].Value);
+        var expectedDeadline = Now.AddMinutes(5);
+        Assert.Equal(expectedDeadline, statements[1].Arguments[2].Value);
         Assert.Contains("INSERT INTO \"coordination\".change_items", statements[2].Sql);
         Assert.Contains("UPDATE \"coordination\".keyspaces", statements[3].Sql);
         Assert.Equal(KeyspaceId, statements[3].Arguments[0].Value);
         Assert.Equal(revision, statements[3].Arguments[1].Value);
-        Assert.Equal(1, statements.Count(s => s.Sql.Contains("pg_notify")));
+        var notifyCount = statements.Count(s => s.Sql.Contains("pg_notify"));
+        Assert.Equal(1, notifyCount);
         Assert.Equal("channel", statements[4].Arguments[0].Value);
         Assert.Equal("c:6", statements[4].Arguments[1].Value);
     }
@@ -115,7 +117,8 @@ public sealed class PgKeyspaceChangeTests
         Assert.Contains("INSERT INTO \"coordination\".change_items", statements[2].Sql);
         Assert.Contains("INSERT INTO \"coordination\".records", statements[3].Sql);
         Assert.Equal(7L, statements[4].Arguments[1].Value);
-        Assert.Equal(2, statements.Count(s => s.Sql.Contains("\"coordination\".changes")));
+        var changesCount = statements.Count(s => s.Sql.Contains("\"coordination\".changes"));
+        Assert.Equal(2, changesCount);
         Assert.Equal(revision, statements[6].Arguments[1].Value);
         Assert.Equal("c:7", statements[7].Arguments[1].Value);
     }

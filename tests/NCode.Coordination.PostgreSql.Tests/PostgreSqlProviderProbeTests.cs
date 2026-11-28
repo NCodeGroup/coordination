@@ -331,19 +331,14 @@ public sealed class PostgreSqlProviderProbeTests(PgServers servers)
 
         var exception = await ProbeAsRoleWithGrantsAsync([], cancellationToken);
 
+        var allTables = PgMigrations.Tables.Append("schema_version").Order(StringComparer.Ordinal);
+        var tableList = string.Join(", ", allTables);
+        var expectedText = "privileges on " + tableList + " in schema";
+
         Assert.NotNull(exception);
         Assert.Equal(CoordinationErrorCodes.AccessDenied, exception.Code);
         Assert.False(exception.OutcomeUnknown);
-        Assert.Contains(
-            "privileges on "
-                + string.Join(
-                    ", ",
-                    PgMigrations.Tables.Append("schema_version").Order(StringComparer.Ordinal)
-                )
-                + " in schema",
-            exception.Message,
-            StringComparison.Ordinal
-        );
+        Assert.Contains(expectedText, exception.Message, StringComparison.Ordinal);
     }
 
     [PgServerFact]
@@ -356,16 +351,14 @@ public sealed class PostgreSqlProviderProbeTests(PgServers servers)
             cancellationToken
         );
 
+        var orderedTables = PgMigrations.Tables.Order(StringComparer.Ordinal);
+        var tableList = string.Join(", ", orderedTables);
+        var expectedText = "privileges on " + tableList + " in schema";
+
         Assert.NotNull(exception);
         Assert.Equal(CoordinationErrorCodes.AccessDenied, exception.Code);
         Assert.False(exception.OutcomeUnknown);
-        Assert.Contains(
-            "privileges on "
-                + string.Join(", ", PgMigrations.Tables.Order(StringComparer.Ordinal))
-                + " in schema",
-            exception.Message,
-            StringComparison.Ordinal
-        );
+        Assert.Contains(expectedText, exception.Message, StringComparison.Ordinal);
     }
 
     [PgServerFact]

@@ -70,10 +70,8 @@ public sealed class PgListenerServerTests(PgServers servers)
         {
             Parameters = { new NpgsqlParameter { Value = applicationName } },
         };
-        var terminated = Convert.ToInt64(
-            await command.ExecuteScalarAsync(cancellationToken),
-            CultureInfo.InvariantCulture
-        );
+        var scalar = await command.ExecuteScalarAsync(cancellationToken);
+        var terminated = Convert.ToInt64(scalar, CultureInfo.InvariantCulture);
         Assert.True(terminated > 0);
     }
 
@@ -92,9 +90,9 @@ public sealed class PgListenerServerTests(PgServers servers)
             () => { }
         );
 
-        await using var source = PgSource.FromConnectionString(
-            NewListenerConnectionString("listener-" + Guid.NewGuid().ToString("N"))
-        );
+        var applicationName = "listener-" + Guid.NewGuid().ToString("N");
+        var connectionString = NewListenerConnectionString(applicationName);
+        await using var source = PgSource.FromConnectionString(connectionString);
         await using var listener = new PgListener(source, events, TimeProvider.System);
 
         await listener.ListenAsync(channel, cancellationToken);
@@ -123,9 +121,9 @@ public sealed class PgListenerServerTests(PgServers servers)
             () => { }
         );
 
-        await using var source = PgSource.FromConnectionString(
-            NewListenerConnectionString("listener-" + Guid.NewGuid().ToString("N"))
-        );
+        var applicationName = "listener-" + Guid.NewGuid().ToString("N");
+        var connectionString = NewListenerConnectionString(applicationName);
+        await using var source = PgSource.FromConnectionString(connectionString);
         await using var listener = new PgListener(source, events, TimeProvider.System);
 
         await listener.ListenAsync(channel, cancellationToken);
@@ -143,7 +141,8 @@ public sealed class PgListenerServerTests(PgServers servers)
         var next = await ReadAsync(received.Reader, cancellationToken);
         Assert.Equal(sentinel, next.Channel);
         Assert.Equal("c:3", next.Payload);
-        Assert.False(received.Reader.TryRead(out _));
+        var drained = received.Reader.TryRead(out _);
+        Assert.False(drained);
     }
 
     #endregion
@@ -168,9 +167,8 @@ public sealed class PgListenerServerTests(PgServers servers)
             () => Interlocked.Increment(ref identityChanges)
         );
 
-        await using var source = PgSource.FromConnectionString(
-            NewListenerConnectionString(applicationName)
-        );
+        var connectionString = NewListenerConnectionString(applicationName);
+        await using var source = PgSource.FromConnectionString(connectionString);
         await using var listener = new PgListener(source, events, TimeProvider.System);
 
         await listener.ListenAsync(channel, cancellationToken);
@@ -183,7 +181,8 @@ public sealed class PgListenerServerTests(PgServers servers)
         Assert.Equal(channel, notification.Channel);
         Assert.Equal("c:9", notification.Payload);
 
-        Assert.Equal(0, Volatile.Read(ref identityChanges));
+        var changes = Volatile.Read(ref identityChanges);
+        Assert.Equal(0, changes);
         Assert.False(listener.HasSeenAnotherServer);
     }
 

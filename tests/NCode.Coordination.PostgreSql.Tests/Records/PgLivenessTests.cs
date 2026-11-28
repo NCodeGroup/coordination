@@ -33,7 +33,8 @@ public sealed class PgLivenessTests
             Now
         );
 
-        Assert.Equal(expected, state.ToString());
+        var stateName = state.ToString();
+        Assert.Equal(expected, stateName);
     }
 
     #endregion

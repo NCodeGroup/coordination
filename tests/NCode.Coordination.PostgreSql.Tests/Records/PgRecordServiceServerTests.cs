@@ -171,7 +171,9 @@ public sealed class PgRecordServiceServerTests(PgServers servers)
                 );
                 Assert.False(notifiedAgain);
 
-                Assert.Equal([PgChannels.ChangePayload(result.Revision.Value)], payloads.ToArray());
+                var expectedPayload = PgChannels.ChangePayload(result.Revision.Value);
+                var receivedPayloads = payloads.ToArray();
+                Assert.Equal([expectedPayload], receivedPayloads);
 
                 var entries = await context.QueryAsync(
                     "SELECT revision FROM {schema}.changes",
@@ -322,7 +324,8 @@ public sealed class PgRecordServiceServerTests(PgServers servers)
 
                     var record = await read.WaitAsync(TimeSpan.FromSeconds(10), cancellationToken);
                     Assert.NotNull(record);
-                    Assert.Equal(new byte[] { 2 }, record.Value.ToArray());
+                    var recordValue = record.Value.ToArray();
+                    Assert.Equal(new byte[] { 2 }, recordValue);
                     Assert.Equal(swapped.Revision.Value, record.Revision.Value);
                 }
                 finally
@@ -383,7 +386,8 @@ public sealed class PgRecordServiceServerTests(PgServers servers)
                 } while (token is not null);
 
                 Assert.Equal(30, listed.Count);
-                Assert.Equal(expected, listed.ToHashSet(StringComparer.Ordinal));
+                var listedSet = listed.ToHashSet(StringComparer.Ordinal);
+                Assert.Equal(expected, listedSet);
             },
             cancellationToken
         );

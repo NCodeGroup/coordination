@@ -49,7 +49,8 @@ public sealed class PostgreSqlProfileTests
         Assert.Equal("postgresql-synchronous", profile.Name);
         Assert.Equal(Guarantees.Durable, profile.Durability);
         Assert.True(profile.RequiresSynchronousStandby);
-        Assert.Equal("postgresql-synchronous", profile.ToString());
+        var text = profile.ToString();
+        Assert.Equal("postgresql-synchronous", text);
     }
 
     #endregion

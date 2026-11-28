@@ -72,7 +72,8 @@ public sealed class PgLogHubServerTests(PgServers servers)
 
             Assert.False(delivered.IsResync);
             Assert.Equal(1, delivered.Current);
-            Assert.Equal(new TestEntry(1), delivered.Entry);
+            var expectedEntry = new TestEntry(1);
+            Assert.Equal(expectedEntry, delivered.Entry);
         }
         finally
         {

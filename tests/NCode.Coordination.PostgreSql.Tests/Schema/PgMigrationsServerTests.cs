@@ -62,10 +62,10 @@ public sealed class PgMigrationsServerTests(PgServers servers)
     {
         var rows = await ReadRowsAsync(connectionString, schema, cancellationToken);
 
-        Assert.Equal(
-            PgMigrations.All.Select(migration => migration.Version),
-            rows.Select(r => r.Version)
-        );
+        var expectedVersions = PgMigrations.All.Select(migration => migration.Version);
+        var actualVersions = rows.Select(r => r.Version);
+
+        Assert.Equal(expectedVersions, actualVersions);
     }
 
     private static async Task ApplyAsAsync(

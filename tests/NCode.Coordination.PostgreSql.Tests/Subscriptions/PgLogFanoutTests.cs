@@ -60,10 +60,10 @@ public sealed class PgLogFanoutTests
 
         await fanout.PumpAsync(CancellationToken.None);
 
-        Assert.Equal<PgLogEvent<TestEntry>>(
-            [PgLogEvent<TestEntry>.ForResync(3)],
-            Drain(subscriber)
-        );
+        var resync = PgLogEvent<TestEntry>.ForResync(3);
+        var events = Drain(subscriber);
+
+        Assert.Equal<PgLogEvent<TestEntry>>([resync], events);
         Assert.Equal(3, subscriber.Cursor);
         Assert.False(subscriber.NeedsResync);
         Assert.Equal([long.MaxValue], log.Afters);
@@ -78,10 +78,10 @@ public sealed class PgLogFanoutTests
 
         await fanout.PumpAsync(CancellationToken.None);
 
-        Assert.Equal<PgLogEvent<TestEntry>>(
-            [Delivered(3), Delivered(4), Delivered(5)],
-            Drain(subscriber)
-        );
+        PgLogEvent<TestEntry>[] expected = [Delivered(3), Delivered(4), Delivered(5)];
+        var events = Drain(subscriber);
+
+        Assert.Equal<PgLogEvent<TestEntry>>(expected, events);
         Assert.Equal(5, subscriber.Cursor);
         Assert.Equal([2L], log.Afters);
     }
@@ -95,10 +95,15 @@ public sealed class PgLogFanoutTests
 
         await fanout.PumpAsync(CancellationToken.None);
 
-        Assert.Equal<PgLogEvent<TestEntry>>(
-            [Delivered(1), Delivered(2), PgLogEvent<TestEntry>.ForResync(4)],
-            Drain(subscriber)
-        );
+        PgLogEvent<TestEntry>[] expected =
+        [
+            Delivered(1),
+            Delivered(2),
+            PgLogEvent<TestEntry>.ForResync(4),
+        ];
+        var events = Drain(subscriber);
+
+        Assert.Equal<PgLogEvent<TestEntry>>(expected, events);
         Assert.Equal(4, subscriber.Cursor);
     }
 
@@ -111,10 +116,10 @@ public sealed class PgLogFanoutTests
 
         await fanout.PumpAsync(CancellationToken.None);
 
-        Assert.Equal<PgLogEvent<TestEntry>>(
-            [PgLogEvent<TestEntry>.ForResync(8)],
-            Drain(subscriber)
-        );
+        PgLogEvent<TestEntry>[] expected = [PgLogEvent<TestEntry>.ForResync(8)];
+        var events = Drain(subscriber);
+
+        Assert.Equal<PgLogEvent<TestEntry>>(expected, events);
         Assert.Equal(8, subscriber.Cursor);
     }
 
@@ -127,10 +132,10 @@ public sealed class PgLogFanoutTests
 
         await fanout.PumpAsync(CancellationToken.None);
 
-        Assert.Equal<PgLogEvent<TestEntry>>(
-            [PgLogEvent<TestEntry>.ForResync(3)],
-            Drain(subscriber)
-        );
+        PgLogEvent<TestEntry>[] expected = [PgLogEvent<TestEntry>.ForResync(3)];
+        var events = Drain(subscriber);
+
+        Assert.Equal<PgLogEvent<TestEntry>>(expected, events);
         Assert.Equal(3, subscriber.Cursor);
     }
 
@@ -144,10 +149,15 @@ public sealed class PgLogFanoutTests
 
         await fanout.PumpAsync(CancellationToken.None);
 
+        PgLogEvent<TestEntry>[] expectedBehind = [Delivered(2), Delivered(3)];
+        PgLogEvent<TestEntry>[] expectedAhead = [Delivered(3)];
+        var behindEvents = Drain(behind);
+        var aheadEvents = Drain(ahead);
+
         Assert.Equal(1, log.Reads);
         Assert.Equal([1L], log.Afters);
-        Assert.Equal<PgLogEvent<TestEntry>>([Delivered(2), Delivered(3)], Drain(behind));
-        Assert.Equal<PgLogEvent<TestEntry>>([Delivered(3)], Drain(ahead));
+        Assert.Equal<PgLogEvent<TestEntry>>(expectedBehind, behindEvents);
+        Assert.Equal<PgLogEvent<TestEntry>>(expectedAhead, aheadEvents);
     }
 
     [Fact]
@@ -167,10 +177,10 @@ public sealed class PgLogFanoutTests
 
         await fanout.PumpAsync(CancellationToken.None);
 
-        Assert.Equal<PgLogEvent<TestEntry>>(
-            [PgLogEvent<TestEntry>.ForResync(1_100)],
-            Drain(subscriber)
-        );
+        PgLogEvent<TestEntry>[] expected = [PgLogEvent<TestEntry>.ForResync(1_100)];
+        var events = Drain(subscriber);
+
+        Assert.Equal<PgLogEvent<TestEntry>>(expected, events);
         Assert.False(subscriber.NeedsResync);
         Assert.Equal(1_100, subscriber.Cursor);
     }
@@ -189,14 +199,21 @@ public sealed class PgLogFanoutTests
 
         await fanout.PumpAsync(CancellationToken.None);
 
-        Assert.Empty(Drain(first));
-        Assert.Empty(Drain(second));
+        var firstEvents = Drain(first);
+        var secondEvents = Drain(second);
+
+        Assert.Empty(firstEvents);
+        Assert.Empty(secondEvents);
 
         fanout.ResyncAll();
         await fanout.PumpAsync(CancellationToken.None);
 
-        Assert.Equal<PgLogEvent<TestEntry>>([PgLogEvent<TestEntry>.ForResync(3)], Drain(first));
-        Assert.Equal<PgLogEvent<TestEntry>>([PgLogEvent<TestEntry>.ForResync(3)], Drain(second));
+        PgLogEvent<TestEntry>[] expected = [PgLogEvent<TestEntry>.ForResync(3)];
+        var firstResync = Drain(first);
+        var secondResync = Drain(second);
+
+        Assert.Equal<PgLogEvent<TestEntry>>(expected, firstResync);
+        Assert.Equal<PgLogEvent<TestEntry>>(expected, secondResync);
     }
 
     #endregion
@@ -208,8 +225,11 @@ public sealed class PgLogFanoutTests
     {
         var fanout = new PgLogFanout<TestEntry>(new FakeLog(0, 0).ReadAsync);
 
-        Assert.True(fanout.TryMarkWake());
-        Assert.False(fanout.TryMarkWake());
+        var first = fanout.TryMarkWake();
+        var second = fanout.TryMarkWake();
+
+        Assert.True(first);
+        Assert.False(second);
     }
 
     [Fact]
@@ -218,11 +238,15 @@ public sealed class PgLogFanoutTests
         var fanout = new PgLogFanout<TestEntry>(new FakeLog(0, 0).ReadAsync);
         fanout.Add(0, resyncFirst: false);
 
-        Assert.True(fanout.TryMarkWake());
+        var first = fanout.TryMarkWake();
+
+        Assert.True(first);
 
         await fanout.PumpAsync(CancellationToken.None);
 
-        Assert.True(fanout.TryMarkWake());
+        var second = fanout.TryMarkWake();
+
+        Assert.True(second);
     }
 
     #endregion
@@ -236,10 +260,15 @@ public sealed class PgLogFanoutTests
         var first = fanout.Add(0, resyncFirst: false);
         var second = fanout.Add(0, resyncFirst: false);
 
-        Assert.False(fanout.Remove(first));
-        Assert.Equal(1, fanout.Count);
-        Assert.True(fanout.Remove(second));
-        Assert.Equal(0, fanout.Count);
+        var removedFirst = fanout.Remove(first);
+        var countAfterFirst = fanout.Count;
+        var removedSecond = fanout.Remove(second);
+        var countAfterSecond = fanout.Count;
+
+        Assert.False(removedFirst);
+        Assert.Equal(1, countAfterFirst);
+        Assert.True(removedSecond);
+        Assert.Equal(0, countAfterSecond);
     }
 
     #endregion

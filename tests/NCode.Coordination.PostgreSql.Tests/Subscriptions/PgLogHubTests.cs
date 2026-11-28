@@ -25,7 +25,8 @@ public sealed class PgLogHubTests
         var routed = PgLogHub.TryRoute(Channels, Channel, PgChannels.ChangePayload(7), out var id);
 
         Assert.True(routed);
-        Assert.Equal(new PgLogId(KeyspaceId, null), id);
+        var expected = new PgLogId(KeyspaceId, null);
+        Assert.Equal(expected, id);
     }
 
     [Fact]
@@ -39,7 +40,8 @@ public sealed class PgLogHubTests
         );
 
         Assert.True(routed);
-        Assert.Equal(new PgLogId(KeyspaceId, "abc"), id);
+        var expected = new PgLogId(KeyspaceId, "abc");
+        Assert.Equal(expected, id);
     }
 
     [Fact]

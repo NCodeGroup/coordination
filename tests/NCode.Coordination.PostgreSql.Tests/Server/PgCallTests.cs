@@ -50,8 +50,12 @@ public sealed class PgCallTests
     {
         var timeToLive = new TimeToLive(TimeSpan.FromTicks(1));
 
-        Assert.Equal(1, PgCall.ToMicroseconds(timeToLive));
-        Assert.Equal(2, PgCall.ToMicroseconds(TimeSpan.FromTicks(11)));
+        var one = PgCall.ToMicroseconds(timeToLive);
+        var elevenTicks = TimeSpan.FromTicks(11);
+        var two = PgCall.ToMicroseconds(elevenTicks);
+
+        Assert.Equal(1, one);
+        Assert.Equal(2, two);
     }
 
     [Fact]
@@ -59,8 +63,12 @@ public sealed class PgCallTests
     {
         var timeToLive = new TimeToLive(TimeSpan.FromSeconds(2));
 
-        Assert.Equal(2_000_000, PgCall.ToMicroseconds(timeToLive));
-        Assert.Equal(20, PgCall.ToMicroseconds(TimeSpan.FromTicks(200)));
+        var twoSeconds = PgCall.ToMicroseconds(timeToLive);
+        var twoHundredTicks = TimeSpan.FromTicks(200);
+        var twenty = PgCall.ToMicroseconds(twoHundredTicks);
+
+        Assert.Equal(2_000_000, twoSeconds);
+        Assert.Equal(20, twenty);
     }
 
     #endregion
@@ -75,7 +83,8 @@ public sealed class PgCallTests
 
         var deadline = PgCall.DeadlineAfter(now, duration);
 
-        Assert.Equal(now.AddTicks(20), deadline);
+        var expected = now.AddTicks(20);
+        Assert.Equal(expected, deadline);
     }
 
     #endregion
@@ -87,7 +96,8 @@ public sealed class PgCallTests
     {
         var duration = PgCall.FromMicroseconds(3);
 
-        Assert.Equal(TimeSpan.FromTicks(30), duration);
+        var expected = TimeSpan.FromTicks(30);
+        Assert.Equal(expected, duration);
     }
 
     #endregion

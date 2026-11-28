@@ -107,13 +107,15 @@ public sealed class PgChangeLogTests(PgServers servers)
                 Assert.Equal(first.Revision.Value, read.Entries[0].Number);
                 var firstItem = Assert.Single(read.Entries[0].Items);
                 Assert.Equal((short)1, firstItem.Kind);
-                Assert.Equal(PgKeys.KeyText(context.KeyOf("one")), firstItem.Key);
+                var firstKeyText = PgKeys.KeyText(context.KeyOf("one"));
+                Assert.Equal(firstKeyText, firstItem.Key);
                 Assert.Equal(new byte[] { 1 }, firstItem.Value);
 
                 Assert.Equal(second.Revision.Value, read.Entries[1].Number);
                 var secondItem = Assert.Single(read.Entries[1].Items);
                 Assert.Equal((short)1, secondItem.Kind);
-                Assert.Equal(PgKeys.KeyText(context.KeyOf("two")), secondItem.Key);
+                var secondKeyText = PgKeys.KeyText(context.KeyOf("two"));
+                Assert.Equal(secondKeyText, secondItem.Key);
                 Assert.Equal(new byte[] { 2, 3 }, secondItem.Value);
 
                 Assert.All(read.Entries, entry => Assert.Null(entry.EndedSession));
@@ -159,10 +161,11 @@ public sealed class PgChangeLogTests(PgServers servers)
                 Assert.Equal(grant.Id.Value, ended.EndedSession);
                 Assert.Equal(read.Current, ended.Number);
                 Assert.Empty(ended.Items);
-                Assert.Equal(
-                    keys.Select(PgKeys.KeyText).Order(StringComparer.Ordinal),
-                    ended.EndedKeys.Select(item => item.Key).Order(StringComparer.Ordinal)
-                );
+                var expectedKeys = keys.Select(PgKeys.KeyText).Order(StringComparer.Ordinal);
+                var endedKeys = ended
+                    .EndedKeys.Select(item => item.Key)
+                    .Order(StringComparer.Ordinal);
+                Assert.Equal(expectedKeys, endedKeys);
                 Assert.All(ended.EndedKeys, item => Assert.Equal((short)2, item.Kind));
                 Assert.All(ended.EndedKeys, item => Assert.Null(item.Value));
             },
@@ -209,7 +212,8 @@ public sealed class PgChangeLogTests(PgServers servers)
 
                 var ended = Assert.Single(read.Entries, entry => entry.EndedSession is not null);
                 var listed = Assert.Single(ended.EndedKeys);
-                Assert.Equal(PgKeys.KeyText(key), listed.Key);
+                var keyText = PgKeys.KeyText(key);
+                Assert.Equal(keyText, listed.Key);
                 Assert.Equal((short)2, listed.Kind);
             },
             cancellationToken
@@ -266,13 +270,13 @@ public sealed class PgChangeLogTests(PgServers servers)
                 Assert.Equal(count, ended.EndedKeys.Length);
 
                 var listed = ended.EndedKeys.Select(item => item.Key).ToList();
-                Assert.Equal(
-                    keys.Select(PgKeys.KeyText).Order(StringComparer.Ordinal),
-                    listed.Order(StringComparer.Ordinal)
-                );
+                var expectedKeys = keys.Select(PgKeys.KeyText).Order(StringComparer.Ordinal);
+                var orderedListed = listed.Order(StringComparer.Ordinal);
+                Assert.Equal(expectedKeys, orderedListed);
 
                 var indexes = ended.EndedKeys.Select(item => Convert.ToHexString(item.Index));
-                Assert.Equal(indexes.Order(StringComparer.Ordinal), indexes);
+                var orderedIndexes = indexes.Order(StringComparer.Ordinal);
+                Assert.Equal(orderedIndexes, indexes);
             },
             cancellationToken
         );

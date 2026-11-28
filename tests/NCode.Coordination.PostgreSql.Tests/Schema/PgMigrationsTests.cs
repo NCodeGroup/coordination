@@ -12,7 +12,8 @@ public sealed class PgMigrationsTests
     {
         var versions = PgMigrations.All.Select(migration => migration.Version).ToArray();
 
-        Assert.Equal(Enumerable.Range(1, versions.Length), versions);
+        var expectedVersions = Enumerable.Range(1, versions.Length);
+        Assert.Equal(expectedVersions, versions);
         Assert.Equal(versions[^1], PgMigrations.Latest);
     }
 

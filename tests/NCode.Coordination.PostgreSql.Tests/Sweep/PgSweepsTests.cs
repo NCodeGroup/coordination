@@ -159,6 +159,7 @@ public sealed class PgSweepsTests(PgServers servers)
                 await context.RecordAsync(3, Live, cancellationToken);
                 await context.ExpireAsync("occurrences", cancellationToken);
 
+                var keyText = PgKeys.KeyText(context.KeyOf(0));
                 await using var holder = new NpgsqlConnection(context.AdminConnectionString);
                 await holder.OpenAsync(cancellationToken);
                 await using var transaction = await holder.BeginTransactionAsync(cancellationToken);
@@ -168,10 +169,7 @@ public sealed class PgSweepsTests(PgServers servers)
                     transaction
                 )
                 {
-                    Parameters =
-                    {
-                        new NpgsqlParameter { Value = PgKeys.KeyText(context.KeyOf(0)) },
-                    },
+                    Parameters = { new NpgsqlParameter { Value = keyText } },
                 };
                 await hold.ExecuteNonQueryAsync(cancellationToken);
 

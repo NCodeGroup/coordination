@@ -21,7 +21,8 @@ public sealed class PgChannelsTests
 
         Assert.True(channel.Length <= 63);
         Assert.Equal(31, channel.Length);
-        Assert.Matches(new Regex("^[a-z0-9.]+$"), channel);
+        var pattern = new Regex("^[a-z0-9.]+$");
+        Assert.Matches(pattern, channel);
         Assert.StartsWith($"ncode.{PgSchemaName.Default.Hash}.", channel, StringComparison.Ordinal);
     }
 
@@ -48,7 +49,9 @@ public sealed class PgChannelsTests
     [Fact]
     public void ChangePayload_Revision_PrefixesC()
     {
-        Assert.Equal("c:42", PgChannels.ChangePayload(42));
+        var payload = PgChannels.ChangePayload(42);
+
+        Assert.Equal("c:42", payload);
     }
 
     #endregion
@@ -58,7 +61,9 @@ public sealed class PgChannelsTests
     [Fact]
     public void TopicPayload_TokenAndSequence_JoinsThem()
     {
-        Assert.Equal("t:abc:7", PgChannels.TopicPayload("abc", 7));
+        var payload = PgChannels.TopicPayload("abc", 7);
+
+        Assert.Equal("t:abc:7", payload);
     }
 
     #endregion
@@ -68,8 +73,9 @@ public sealed class PgChannelsTests
     [Fact]
     public void TryParseWake_Change_ReadsTheRevision()
     {
-        Assert.True(PgChannels.TryParseWake("c:42", out var wake));
+        var parsed = PgChannels.TryParseWake("c:42", out var wake);
 
+        Assert.True(parsed);
         Assert.Null(wake.TopicToken);
         Assert.Equal(42L, wake.Number);
     }
@@ -77,8 +83,9 @@ public sealed class PgChannelsTests
     [Fact]
     public void TryParseWake_Topic_ReadsTokenAndSequence()
     {
-        Assert.True(PgChannels.TryParseWake("t:abc_-9:7", out var wake));
+        var parsed = PgChannels.TryParseWake("t:abc_-9:7", out var wake);
 
+        Assert.True(parsed);
         Assert.Equal("abc_-9", wake.TopicToken);
         Assert.Equal(7L, wake.Number);
     }
@@ -91,7 +98,9 @@ public sealed class PgChannelsTests
     [InlineData("x:1")]
     public void TryParseWake_Malformed_ReturnsFalse(string payload)
     {
-        Assert.False(PgChannels.TryParseWake(payload, out _));
+        var parsed = PgChannels.TryParseWake(payload, out _);
+
+        Assert.False(parsed);
     }
 
     #endregion
@@ -101,13 +110,19 @@ public sealed class PgChannelsTests
     [Fact]
     public void IsChannel_ForKeyspace_IsTrue()
     {
-        Assert.True(PgChannels.IsChannel(PgChannels.ForKeyspace(PgSchemaName.Default, 5)));
+        var channel = PgChannels.ForKeyspace(PgSchemaName.Default, 5);
+
+        var isChannel = PgChannels.IsChannel(channel);
+
+        Assert.True(isChannel);
     }
 
     [Fact]
     public void IsChannel_Quote_IsFalse()
     {
-        Assert.False(PgChannels.IsChannel("ncode.01234567.0123456789abcdef\""));
+        var isChannel = PgChannels.IsChannel("ncode.01234567.0123456789abcdef\"");
+
+        Assert.False(isChannel);
     }
 
     #endregion
