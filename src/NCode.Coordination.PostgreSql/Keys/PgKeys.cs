@@ -1,6 +1,7 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using System.Buffers;
 using System.Buffers.Text;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
@@ -14,6 +15,12 @@ namespace NCode.Coordination.PostgreSql.Keys;
 /// </summary>
 internal static class PgKeys
 {
+    /// <summary>
+    /// The most UTF-8 bytes of an encoded segment that are hashed from the stack; a longer segment uses a rented
+    /// buffer.
+    /// </summary>
+    private const int MaxStackBytes = 256;
+
     /// <summary>
     /// Gets the UTF-8 encoding that throws on bytes that are not well-formed UTF-8, which
     /// <see cref="TryUnescape"/> uses.
@@ -71,75 +78,13 @@ internal static class PgKeys
         switch (text[0])
         {
             case 't':
-                if (!TryUnescape(rest, out var unescaped))
-                {
-                    return false;
-                }
-
-                if (unescaped.Length == 0 || unescaped.Length > KeySegment.MaxTextLength)
-                {
-                    return false;
-                }
-
-                KeySegment textSegment;
-
-                try
-                {
-                    textSegment = KeySegment.FromString(unescaped);
-                }
-                catch (ArgumentException)
-                {
-                    return false;
-                }
-
-                var canonical = EncodeSegment(textSegment);
-
-                if (!string.Equals(canonical, text, StringComparison.Ordinal))
-                {
-                    return false;
-                }
-
-                segment = textSegment;
-                return true;
+                return TryDecodeTextSegment(text, rest, out segment);
 
             case 'n':
-                if (
-                    !long.TryParse(
-                        rest,
-                        NumberStyles.AllowLeadingSign,
-                        CultureInfo.InvariantCulture,
-                        out var number
-                    )
-                )
-                {
-                    return false;
-                }
-
-                var numberText = number.ToString(CultureInfo.InvariantCulture);
-
-                if (!string.Equals(numberText, rest, StringComparison.Ordinal))
-                {
-                    return false;
-                }
-
-                segment = KeySegment.FromInt64(number);
-                return true;
+                return TryDecodeNumberSegment(rest, out segment);
 
             case 'u':
-                if (!Guid.TryParseExact(rest, "N", out var uuid))
-                {
-                    return false;
-                }
-
-                var uuidText = uuid.ToString("N", CultureInfo.InvariantCulture);
-
-                if (!string.Equals(uuidText, rest, StringComparison.Ordinal))
-                {
-                    return false;
-                }
-
-                segment = KeySegment.FromGuid(uuid);
-                return true;
+                return TryDecodeUuidSegment(rest, out segment);
 
             default:
                 return false;
@@ -259,12 +204,11 @@ internal static class PgKeys
         for (var position = 0; position < key.Segments.Length; position++)
         {
             var encoded = EncodeSegment(key.Segments[position]);
-            var bytes = Encoding.UTF8.GetBytes(encoded);
             var destination = index.AsSpan(
                 position * SHA256.HashSizeInBytes,
                 SHA256.HashSizeInBytes
             );
-            SHA256.HashData(bytes, destination);
+            HashSegment(encoded, destination);
         }
 
         return index;
@@ -347,21 +291,7 @@ internal static class PgKeys
             return false;
         }
 
-        byte[] bytes;
-
-        try
-        {
-            bytes = Base64Url.DecodeFromChars(token);
-        }
-        catch (FormatException)
-        {
-            return false;
-        }
-
-        if (
-            bytes.Length < 1 + SHA256.HashSizeInBytes
-            || (bytes.Length - 1) % SHA256.HashSizeInBytes != 0
-        )
+        if (!TryDecodeTokenBytes(token, out var bytes))
         {
             return false;
         }
@@ -386,6 +316,182 @@ internal static class PgKeys
     }
 
     /// <summary>
+    /// Decodes a token's Base64Url text and checks that it holds a depth and whole index digests.
+    /// </summary>
+    /// <param name="token">The token.</param>
+    /// <param name="bytes">The decoded bytes, when the token has the right shape.</param>
+    /// <returns>False when the token does not decode, or its length is not 1 and a multiple of 32; true
+    /// otherwise.</returns>
+    private static bool TryDecodeTokenBytes(string token, [NotNullWhen(true)] out byte[]? bytes)
+    {
+        bytes = null;
+        byte[] decoded;
+
+        try
+        {
+            decoded = Base64Url.DecodeFromChars(token);
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
+
+        if (
+            decoded.Length < 1 + SHA256.HashSizeInBytes
+            || (decoded.Length - 1) % SHA256.HashSizeInBytes != 0
+        )
+        {
+            return false;
+        }
+
+        bytes = decoded;
+        return true;
+    }
+
+    /// <summary>
+    /// Decodes a text segment: "t" followed by escaped text.
+    /// </summary>
+    /// <param name="text">The whole encoded segment, which the decoded segment must encode back to.</param>
+    /// <param name="rest">The encoded segment without its first letter.</param>
+    /// <param name="segment">The segment, when the text is one that <see cref="EncodeSegment"/> writes.</param>
+    /// <returns>False when the text is not one that <see cref="EncodeSegment"/> writes; true otherwise.</returns>
+    private static bool TryDecodeTextSegment(
+        string text,
+        string rest,
+        [NotNullWhen(true)] out KeySegment? segment
+    )
+    {
+        segment = null;
+
+        if (!TryUnescape(rest, out var unescaped))
+        {
+            return false;
+        }
+
+        if (unescaped.Length == 0 || unescaped.Length > KeySegment.MaxTextLength)
+        {
+            return false;
+        }
+
+        KeySegment textSegment;
+
+        try
+        {
+            textSegment = KeySegment.FromString(unescaped);
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+
+        var canonical = EncodeSegment(textSegment);
+
+        if (!string.Equals(canonical, text, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        segment = textSegment;
+        return true;
+    }
+
+    /// <summary>
+    /// Decodes a number segment: "n" followed by the invariant decimal.
+    /// </summary>
+    /// <param name="rest">The encoded segment without its first letter.</param>
+    /// <param name="segment">The segment, when the text is a number that round-trips.</param>
+    /// <returns>False when the text is not a number that round-trips; true otherwise.</returns>
+    private static bool TryDecodeNumberSegment(
+        string rest,
+        [NotNullWhen(true)] out KeySegment? segment
+    )
+    {
+        segment = null;
+
+        if (
+            !long.TryParse(
+                rest,
+                NumberStyles.AllowLeadingSign,
+                CultureInfo.InvariantCulture,
+                out var number
+            )
+        )
+        {
+            return false;
+        }
+
+        var numberText = number.ToString(CultureInfo.InvariantCulture);
+
+        if (!string.Equals(numberText, rest, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        segment = KeySegment.FromInt64(number);
+        return true;
+    }
+
+    /// <summary>
+    /// Decodes a UUID segment: "u" followed by 32 lowercase hex digits.
+    /// </summary>
+    /// <param name="rest">The encoded segment without its first letter.</param>
+    /// <param name="segment">The segment, when the text is 32 lowercase hex digits.</param>
+    /// <returns>False when the text is not 32 lowercase hex digits; true otherwise.</returns>
+    private static bool TryDecodeUuidSegment(
+        string rest,
+        [NotNullWhen(true)] out KeySegment? segment
+    )
+    {
+        segment = null;
+
+        if (!Guid.TryParseExact(rest, "N", out var uuid))
+        {
+            return false;
+        }
+
+        var uuidText = uuid.ToString("N", CultureInfo.InvariantCulture);
+
+        if (!string.Equals(uuidText, rest, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        segment = KeySegment.FromGuid(uuid);
+        return true;
+    }
+
+    /// <summary>
+    /// Writes the SHA-256 digest of an encoded segment's UTF-8 bytes, without allocating for a short segment.
+    /// </summary>
+    /// <param name="encoded">The encoded segment.</param>
+    /// <param name="destination">Receives the digest, which is 32 bytes.</param>
+    private static void HashSegment(string encoded, Span<byte> destination)
+    {
+        var byteCount = Encoding.UTF8.GetByteCount(encoded);
+
+        if (byteCount <= MaxStackBytes)
+        {
+            Span<byte> buffer = stackalloc byte[MaxStackBytes];
+            var written = Encoding.UTF8.GetBytes(encoded, buffer);
+            SHA256.HashData(buffer[..written], destination);
+            return;
+        }
+
+        var rented = ArrayPool<byte>.Shared.Rent(byteCount);
+
+        try
+        {
+            var writtenToRented = Encoding.UTF8.GetBytes(encoded, rented);
+            var hashed = rented.AsSpan(0, writtenToRented);
+            SHA256.HashData(hashed, destination);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(rented);
+        }
+    }
+
+    /// <summary>
     /// Reverses <see cref="Escape"/>: reads each unreserved character as its own byte and each '%' and two uppercase
     /// hex digits as one byte, then decodes the bytes as strict UTF-8.
     /// </summary>
@@ -399,40 +505,60 @@ internal static class PgKeys
 
         for (var index = 0; index < escaped.Length; index++)
         {
-            var character = escaped[index];
-
-            if (IsUnreserved(character))
-            {
-                bytes.Add((byte)character);
-            }
-            else if (character == '%' && index + 2 < escaped.Length)
-            {
-                var high = HexValue(escaped[index + 1]);
-                var low = HexValue(escaped[index + 2]);
-
-                if (high < 0 || low < 0)
-                {
-                    return false;
-                }
-
-                bytes.Add((byte)((high << 4) | low));
-                index += 2;
-            }
-            else
+            if (!TryReadEscapedByte(escaped, ref index, out var value))
             {
                 return false;
             }
+
+            bytes.Add(value);
         }
 
         try
         {
-            text = StrictUtf8.GetString(bytes.ToArray());
+            var decoded = bytes.ToArray();
+            text = StrictUtf8.GetString(decoded);
             return true;
         }
         catch (DecoderFallbackException)
         {
             return false;
         }
+    }
+
+    /// <summary>
+    /// Reads one byte of an escaped text: an unreserved character as itself, or a '%' and two uppercase hex digits.
+    /// </summary>
+    /// <param name="escaped">The escaped text.</param>
+    /// <param name="index">The position of the byte's first character; on success, the position of its last.</param>
+    /// <param name="value">The byte.</param>
+    /// <returns>False when the character at the position is neither unreserved nor a well-formed escape.</returns>
+    private static bool TryReadEscapedByte(string escaped, ref int index, out byte value)
+    {
+        value = 0;
+        var character = escaped[index];
+
+        if (IsUnreserved(character))
+        {
+            value = (byte)character;
+            return true;
+        }
+
+        if (character != '%' || index + 2 >= escaped.Length)
+        {
+            return false;
+        }
+
+        var high = HexValue(escaped[index + 1]);
+        var low = HexValue(escaped[index + 2]);
+
+        if (high < 0 || low < 0)
+        {
+            return false;
+        }
+
+        value = (byte)((high << 4) | low);
+        index += 2;
+        return true;
     }
 
     /// <summary>

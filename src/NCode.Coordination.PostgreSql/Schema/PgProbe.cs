@@ -1,6 +1,7 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using System.Collections.Immutable;
 using NCode.Coordination.PostgreSql.Server;
 using Npgsql;
 
@@ -20,10 +21,14 @@ internal sealed class PgProbe(
     PgSettings settings
 )
 {
-    /// <summary>The oldest server version number that the provider supports: PostgreSQL 15.</summary>
+    /// <summary>
+    /// The oldest server version number that the provider supports: PostgreSQL 15.
+    /// </summary>
     private const int MinimumVersion = 150000;
 
-    /// <summary>The statement that reads the server's version, role and durability settings.</summary>
+    /// <summary>
+    /// The statement that reads the server's version, role and durability settings.
+    /// </summary>
     private const string ServerSql = """
         SELECT current_setting('server_version_num')::integer,
                pg_is_in_recovery(),
@@ -47,6 +52,122 @@ internal sealed class PgProbe(
     private const string TablePrivilegesSql = """
         SELECT c.relname FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = $1 AND c.relkind IN ('r', 'p') AND ((c.relname = ANY($2::text[]) AND NOT (has_table_privilege(c.oid, 'SELECT') AND has_table_privilege(c.oid, 'INSERT') AND has_table_privilege(c.oid, 'UPDATE') AND has_table_privilege(c.oid, 'DELETE'))) OR (c.relname = 'schema_version' AND NOT has_table_privilege(c.oid, 'SELECT'))) ORDER BY c.relname
         """;
+
+    /// <summary>
+    /// Creates the exception that refuses a server, a schema or a role.
+    /// </summary>
+    /// <param name="message">The reason the probe refuses.</param>
+    /// <returns>The exception, whose code is <c>unsupported</c> and whose outcome is known.</returns>
+    private static CoordinationException Unsupported(string message) =>
+        new(CoordinationErrorCodes.Unsupported, false, message);
+
+    /// <summary>
+    /// Reads the row that <see cref="ServerSql"/> selected.
+    /// </summary>
+    /// <param name="reader">The reader, on the row.</param>
+    /// <returns>The server's version number, whether it is in recovery, and its fsync, synchronous_commit and
+    /// synchronous_standby_names settings.</returns>
+    private static (
+        int Version,
+        bool InRecovery,
+        string Fsync,
+        string Commit,
+        string Names
+    ) ReadServerRow(NpgsqlDataReader reader)
+    {
+        var version = reader.GetInt32(0);
+        var inRecovery = reader.GetBoolean(1);
+        var fsync = reader.GetString(2);
+        var commit = reader.GetString(3);
+        var names = reader.GetString(4);
+        return (version, inRecovery, fsync, commit, names);
+    }
+
+    /// <summary>
+    /// Reads the batch of <see cref="ServerSql"/>.
+    /// </summary>
+    /// <param name="results">The results of the batch.</param>
+    /// <param name="cancellationToken">The token that cancels the read.</param>
+    /// <returns>The server's version number, whether it is in recovery, and its fsync, synchronous_commit and
+    /// synchronous_standby_names settings.</returns>
+    private static async ValueTask<(
+        int Version,
+        bool InRecovery,
+        string Fsync,
+        string Commit,
+        string Names
+    )> ReadServerAsync(PgResults results, CancellationToken cancellationToken)
+    {
+        var rows = await results.ReadAsync(ReadServerRow, cancellationToken).ConfigureAwait(false);
+        return rows[0];
+    }
+
+    /// <summary>
+    /// Reads the batch of <see cref="SchemaPrivilegeSql"/> and <see cref="TablePrivilegesSql"/>.
+    /// </summary>
+    /// <param name="results">The results of the batch.</param>
+    /// <param name="cancellationToken">The token that cancels the read.</param>
+    /// <returns>Whether the role may use the schema, which is empty when the schema doesn't exist, and the tables
+    /// that the role lacks a privilege on.</returns>
+    private static async ValueTask<(
+        ImmutableArray<bool> Usage,
+        ImmutableArray<string> Denied
+    )> ReadPrivilegesAsync(PgResults results, CancellationToken cancellationToken)
+    {
+        var usageRows = await results
+            .ReadAsync(reader => reader.GetBoolean(0), cancellationToken)
+            .ConfigureAwait(false);
+        var deniedRows = await results
+            .ReadAsync(reader => reader.GetString(0), cancellationToken)
+            .ConfigureAwait(false);
+        return (usageRows, deniedRows);
+    }
+
+    /// <summary>
+    /// Refuses a server older than <see cref="MinimumVersion"/> and a server that is a standby.
+    /// </summary>
+    /// <param name="version">The server's version number.</param>
+    /// <param name="inRecovery">Whether the server is in recovery.</param>
+    /// <exception cref="CoordinationException">The server is refused.</exception>
+    private static void CheckVersionAndRole(int version, bool inRecovery)
+    {
+        if (version < MinimumVersion)
+        {
+            throw Unsupported(
+                $"The provider needs PostgreSQL 15 or later, and the server reports {version}."
+            );
+        }
+
+        if (inRecovery)
+        {
+            throw Unsupported(
+                "The server is a standby in recovery; the provider needs the primary."
+            );
+        }
+    }
+
+    /// <summary>
+    /// Refuses a server whose fsync or synchronous_commit setting lets a crash lose acknowledged commits.
+    /// </summary>
+    /// <param name="fsync">The server's fsync setting.</param>
+    /// <param name="commit">The synchronous_commit setting that the provider's sessions see.</param>
+    /// <exception cref="CoordinationException">The server is refused.</exception>
+    private static void CheckCommitsAreDurable(string fsync, string commit)
+    {
+        if (!string.Equals(fsync, "on", StringComparison.OrdinalIgnoreCase))
+        {
+            throw Unsupported(
+                "The server runs with fsync off, so a crash loses commits it acknowledged."
+            );
+        }
+
+        if (string.Equals(commit, "off", StringComparison.OrdinalIgnoreCase))
+        {
+            throw Unsupported(
+                "The provider's sessions see synchronous_commit off, so a crash loses commits it acknowledged."
+            );
+        }
+    }
 
     /// <summary>
     /// Runs the probe: refuses what the provider can't use, and applies the migrations when the settings say so.
@@ -78,73 +199,42 @@ internal sealed class PgProbe(
         await CheckVersionAsync(cancellationToken).ConfigureAwait(false);
     }
 
-    private static CoordinationException Unsupported(string message) =>
-        new(CoordinationErrorCodes.Unsupported, false, message);
-
+    /// <summary>
+    /// Refuses a server that is too old, is a standby, or can lose the commits it acknowledged.
+    /// </summary>
+    /// <param name="cancellationToken">The token that cancels the check.</param>
+    /// <returns>A task that completes when the server is acceptable.</returns>
+    /// <exception cref="CoordinationException">The server is refused, or could not be reached or failed.</exception>
     private async ValueTask CheckServerAsync(CancellationToken cancellationToken)
     {
+        var statement = new PgStatement(ServerSql);
         var (version, inRecovery, fsync, commit, names) = await server
-            .ExecuteAsync(
-                [new PgStatement(ServerSql)],
-                async (results, token) =>
-                {
-                    var rows = await results
-                        .ReadAsync(
-                            reader =>
-                                (
-                                    reader.GetInt32(0),
-                                    reader.GetBoolean(1),
-                                    reader.GetString(2),
-                                    reader.GetString(3),
-                                    reader.GetString(4)
-                                ),
-                            token
-                        )
-                        .ConfigureAwait(false);
-                    return rows[0];
-                },
-                cancellationToken
-            )
+            .ExecuteAsync([statement], ReadServerAsync, cancellationToken)
             .ConfigureAwait(false);
 
-        if (version < MinimumVersion)
+        CheckVersionAndRole(version, inRecovery);
+        CheckCommitsAreDurable(fsync, commit);
+        CheckSynchronousStandby(commit, names);
+    }
+
+    /// <summary>
+    /// Refuses a server without a synchronous standby when the profile requires one.
+    /// </summary>
+    /// <param name="commit">The synchronous_commit setting that the provider's sessions see.</param>
+    /// <param name="names">The server's synchronous_standby_names setting.</param>
+    /// <exception cref="CoordinationException">The server is refused.</exception>
+    private void CheckSynchronousStandby(string commit, string names)
+    {
+        if (!profile.RequiresSynchronousStandby)
         {
-            throw Unsupported(
-                $"The provider needs PostgreSQL 15 or later, and the server reports {version}."
-            );
+            return;
         }
 
-        if (inRecovery)
-        {
-            throw Unsupported(
-                "The server is a standby in recovery; the provider needs the primary."
-            );
-        }
+        var commitWaitsForStandby =
+            string.Equals(commit, "on", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(commit, "remote_apply", StringComparison.OrdinalIgnoreCase);
 
-        if (!string.Equals(fsync, "on", StringComparison.OrdinalIgnoreCase))
-        {
-            throw Unsupported(
-                "The server runs with fsync off, so a crash loses commits it acknowledged."
-            );
-        }
-
-        if (string.Equals(commit, "off", StringComparison.OrdinalIgnoreCase))
-        {
-            throw Unsupported(
-                "The provider's sessions see synchronous_commit off, so a crash loses commits it acknowledged."
-            );
-        }
-
-        if (
-            profile.RequiresSynchronousStandby
-            && (
-                string.IsNullOrWhiteSpace(names)
-                || !(
-                    string.Equals(commit, "on", StringComparison.OrdinalIgnoreCase)
-                    || string.Equals(commit, "remote_apply", StringComparison.OrdinalIgnoreCase)
-                )
-            )
-        )
+        if (string.IsNullOrWhiteSpace(names) || !commitWaitsForStandby)
         {
             throw Unsupported(
                 $"The '{profile.Name}' profile needs synchronous_standby_names to name a standby and synchronous_commit on or remote_apply, and the provider's sessions see '{names}' and '{commit}'."
@@ -152,6 +242,12 @@ internal sealed class PgProbe(
         }
     }
 
+    /// <summary>
+    /// Refuses a schema that is missing, older than the provider's code, or newer than it can run on.
+    /// </summary>
+    /// <param name="cancellationToken">The token that cancels the check.</param>
+    /// <returns>A task that completes when the schema's version is acceptable.</returns>
+    /// <exception cref="CoordinationException">The schema is refused, or the server could not be reached or failed.</exception>
     private async ValueTask CheckVersionAsync(CancellationToken cancellationToken)
     {
         var (version, compatibleFrom) = await PgMigrations
@@ -183,29 +279,25 @@ internal sealed class PgProbe(
         }
     }
 
+    /// <summary>
+    /// Refuses a role that lacks USAGE on the schema or a privilege on one of its tables.
+    /// </summary>
+    /// <param name="cancellationToken">The token that cancels the check.</param>
+    /// <returns>A task that completes when the role's privileges suffice.</returns>
+    /// <exception cref="CoordinationException">The role is refused, or the server could not be reached or failed.</exception>
     private async ValueTask CheckPrivilegesAsync(CancellationToken cancellationToken)
     {
         var name = settings.Schema.Name;
         var tables = PgMigrations.Tables.ToArray();
 
         var tablesArgument = PgArgument.Of(tables);
+        var schemaStatement = new PgStatement(SchemaPrivilegeSql, name);
+        var tablesStatement = new PgStatement(TablePrivilegesSql, name, tablesArgument);
 
         var (usage, denied) = await server
             .ExecuteAsync(
-                [
-                    new PgStatement(SchemaPrivilegeSql, name),
-                    new PgStatement(TablePrivilegesSql, name, tablesArgument),
-                ],
-                async (results, token) =>
-                {
-                    var usageRows = await results
-                        .ReadAsync(reader => reader.GetBoolean(0), token)
-                        .ConfigureAwait(false);
-                    var deniedRows = await results
-                        .ReadAsync(reader => reader.GetString(0), token)
-                        .ConfigureAwait(false);
-                    return (usageRows, deniedRows);
-                },
+                [schemaStatement, tablesStatement],
+                ReadPrivilegesAsync,
                 cancellationToken
             )
             .ConfigureAwait(false);

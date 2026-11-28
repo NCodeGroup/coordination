@@ -12,34 +12,26 @@ namespace NCode.Coordination.PostgreSql.Schema;
 /// </summary>
 internal sealed partial class PgSchemaName
 {
-    /// <summary>The longest schema name, which is PostgreSQL's limit on an identifier.</summary>
+    /// <summary>
+    /// The longest schema name, which is PostgreSQL's limit on an identifier.
+    /// </summary>
     private const int MaxLength = 63;
 
-    /// <summary>The placeholder that a template holds where the schema's quoted name goes.</summary>
+    /// <summary>
+    /// The placeholder that a template holds where the schema's quoted name goes.
+    /// </summary>
     private const string Placeholder = "{schema}";
 
-    /// <summary>Matches a name: lowercase letters, digits and underscores, not starting with a digit.</summary>
+    /// <summary>
+    /// Matches a name: lowercase letters, digits and underscores, not starting with a digit.
+    /// </summary>
     [GeneratedRegex(@"^[a-z_][a-z0-9_]*\z", RegexOptions.CultureInvariant)]
     private static partial Regex NamePattern();
 
-    private PgSchemaName(string name)
-    {
-        Name = name;
-        Quoted = "\"" + name + "\"";
-        Hash = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(name)), 0, 4);
-    }
-
-    /// <summary>Gets the default schema, named <c>coordination</c>.</summary>
+    /// <summary>
+    /// Gets the default schema, named <c>coordination</c>.
+    /// </summary>
     public static PgSchemaName Default { get; } = Create("coordination");
-
-    /// <summary>Gets the schema's name.</summary>
-    public string Name { get; }
-
-    /// <summary>Gets the schema's name in double quotes, as SQL text takes it.</summary>
-    public string Quoted { get; }
-
-    /// <summary>Gets the first 8 lowercase hex digits of the SHA-256 of the name's UTF-8 bytes.</summary>
-    public string Hash { get; }
 
     /// <summary>
     /// Creates a schema name after validating it.
@@ -60,6 +52,35 @@ internal sealed partial class PgSchemaName
 
         return new PgSchemaName(name);
     }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="PgSchemaName"/> class from a validated name.
+    /// </summary>
+    /// <param name="name">The validated name.</param>
+    private PgSchemaName(string name)
+    {
+        var nameBytes = Encoding.UTF8.GetBytes(name);
+        var digest = SHA256.HashData(nameBytes);
+
+        Name = name;
+        Quoted = "\"" + name + "\"";
+        Hash = Convert.ToHexStringLower(digest, 0, 4);
+    }
+
+    /// <summary>
+    /// Gets the schema's name.
+    /// </summary>
+    public string Name { get; }
+
+    /// <summary>
+    /// Gets the schema's name in double quotes, as SQL text takes it.
+    /// </summary>
+    public string Quoted { get; }
+
+    /// <summary>
+    /// Gets the first 8 lowercase hex digits of the SHA-256 of the name's UTF-8 bytes.
+    /// </summary>
+    public string Hash { get; }
 
     /// <summary>
     /// Replaces every <c>{schema}</c> in a SQL template with the schema's quoted name.

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using System.Collections.Concurrent;
+using System.Collections.Immutable;
 using System.Security.Cryptography;
 using NCode.Coordination.PostgreSql.Schema;
 using NCode.Coordination.PostgreSql.Server;
@@ -16,18 +17,75 @@ namespace NCode.Coordination.PostgreSql.Keys;
 /// <param name="schema">The schema that holds the keyspaces' table.</param>
 internal sealed class PgKeyspaces(PgServer server, PgSchemaName schema)
 {
-    /// <summary>The most times that <see cref="ResolveAsync"/> draws an id before it gives up.</summary>
+    /// <summary>
+    /// The most times that <see cref="ResolveAsync"/> draws an id before it gives up.
+    /// </summary>
     private const int MaxAttempts = 3;
 
-    /// <summary>The statement that inserts a keyspace's row unless its id or its name is taken.</summary>
+    /// <summary>
+    /// The statement that inserts a keyspace's row unless its id or its name is taken.
+    /// </summary>
     private const string InsertSql = """
         INSERT INTO {schema}.keyspaces (id, name) VALUES ($1, $2) ON CONFLICT DO NOTHING
         """;
 
-    /// <summary>The statement that reads the id of a keyspace's row.</summary>
+    /// <summary>
+    /// The statement that reads the id of a keyspace's row.
+    /// </summary>
     private const string SelectSql = """
         SELECT id FROM {schema}.keyspaces WHERE name = $1
         """;
+
+    /// <summary>
+    /// Draws a random id that is not zero.
+    /// </summary>
+    /// <returns>The id.</returns>
+    private static long DrawId()
+    {
+        Span<byte> bytes = stackalloc byte[sizeof(long)];
+        while (true)
+        {
+            RandomNumberGenerator.Fill(bytes);
+            var id = BitConverter.ToInt64(bytes);
+            if (id != 0)
+            {
+                return id;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Reads the id that the batch of <see cref="InsertSql"/> and <see cref="SelectSql"/> selected.
+    /// </summary>
+    /// <param name="results">The results of the batch.</param>
+    /// <param name="cancellationToken">The token that cancels the read.</param>
+    /// <returns>The selected ids: one, or none when the insert's row was taken by another id.</returns>
+    private static async ValueTask<ImmutableArray<long>> ReadIdsAsync(
+        PgResults results,
+        CancellationToken cancellationToken
+    )
+    {
+        return await results
+            .ReadAsync(reader => reader.GetInt64(0), cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Runs an operation and ignores that it returns nothing, so the operation can run where a result is wanted.
+    /// </summary>
+    /// <param name="operation">The operation, which takes the keyspace's id.</param>
+    /// <param name="id">The keyspace's id.</param>
+    /// <param name="cancellationToken">The token that cancels the call.</param>
+    /// <returns>True, once the operation has completed.</returns>
+    private static async ValueTask<bool> CompleteAsync(
+        Func<long, CancellationToken, ValueTask> operation,
+        long id,
+        CancellationToken cancellationToken
+    )
+    {
+        await operation(id, cancellationToken).ConfigureAwait(false);
+        return true;
+    }
 
     /// <summary>
     /// Gets the cached id of each keyspace's row.
@@ -71,15 +129,10 @@ internal sealed class PgKeyspaces(PgServer server, PgSchemaName schema)
         for (var attempt = 0; attempt < MaxAttempts; attempt++)
         {
             var candidate = DrawId();
+            var insertStatement = new PgStatement(Insert, candidate, name);
+            var selectStatement = new PgStatement(Select, name);
             var ids = await server
-                .ExecuteAsync(
-                    [new PgStatement(Insert, candidate, name), new PgStatement(Select, name)],
-                    async (results, token) =>
-                        await results
-                            .ReadAsync(reader => reader.GetInt64(0), token)
-                            .ConfigureAwait(false),
-                    cancellationToken
-                )
+                .ExecuteAsync([insertStatement, selectStatement], ReadIdsAsync, cancellationToken)
                 .ConfigureAwait(false);
 
             if (ids.Length > 0)
@@ -157,10 +210,11 @@ internal sealed class PgKeyspaces(PgServer server, PgSchemaName schema)
             catch (PgKeyspaceMissingException)
             {
                 Forget(keyspace);
+                var name = PgKeys.KeyspaceName(keyspace);
                 throw new CoordinationException(
                     CoordinationErrorCodes.Unavailable,
                     false,
-                    $"The keyspace '{PgKeys.KeyspaceName(keyspace)}' row was missing again after it was resolved again.",
+                    $"The keyspace '{name}' row was missing again after it was resolved again.",
                     first
                 );
             }
@@ -187,33 +241,11 @@ internal sealed class PgKeyspaces(PgServer server, PgSchemaName schema)
     {
         ArgumentNullException.ThrowIfNull(operation);
 
-        await RunAsync(
+        await RunAsync<bool>(
                 keyspace,
-                async (id, token) =>
-                {
-                    await operation(id, token).ConfigureAwait(false);
-                    return true;
-                },
+                (id, token) => CompleteAsync(operation, id, token),
                 cancellationToken
             )
             .ConfigureAwait(false);
-    }
-
-    /// <summary>
-    /// Draws a random id that is not zero.
-    /// </summary>
-    /// <returns>The id.</returns>
-    private static long DrawId()
-    {
-        Span<byte> bytes = stackalloc byte[sizeof(long)];
-        while (true)
-        {
-            RandomNumberGenerator.Fill(bytes);
-            var id = BitConverter.ToInt64(bytes);
-            if (id != 0)
-            {
-                return id;
-            }
-        }
     }
 }
