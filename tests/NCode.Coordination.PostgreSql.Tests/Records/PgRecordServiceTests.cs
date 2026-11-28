@@ -27,7 +27,7 @@ public sealed class PgRecordServiceTests
         var key = new Keyspace("prod").CreateKey("k");
         var value = new byte[CoordinationLimits.MaxValueLength + 1];
 
-        await Assert.ThrowsAsync<ArgumentException>(async () =>
+        var exception = await Assert.ThrowsAsync<ArgumentException>(async () =>
             await service.CreateAsync(
                 key,
                 value,
@@ -36,6 +36,30 @@ public sealed class PgRecordServiceTests
                 cancellationToken
             )
         );
+
+        Assert.Equal("value", exception.ParamName);
+    }
+
+    [Fact]
+    public async Task CreateAsync_ValueAtTheLimit_ReachesTheServer()
+    {
+        await using var offline = new PgOfflineServer();
+        var service = CreateService(offline);
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var key = new Keyspace("prod").CreateKey("k");
+        var value = new byte[CoordinationLimits.MaxValueLength];
+
+        var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
+            await service.CreateAsync(
+                key,
+                value,
+                RecordLifetime.Persistent,
+                null,
+                cancellationToken
+            )
+        );
+
+        Assert.Equal(CoordinationErrorCodes.Unavailable, exception.Code);
     }
 
     [Fact]
@@ -68,7 +92,7 @@ public sealed class PgRecordServiceTests
         var cancellationToken = TestContext.Current.CancellationToken;
         var key = new Keyspace("prod").CreateKey("k");
 
-        await Assert.ThrowsAsync<ArgumentNullException>(async () =>
+        var exception = await Assert.ThrowsAsync<ArgumentNullException>(async () =>
             await service.CompareAndSwapAsync(
                 key,
                 null!,
@@ -78,6 +102,8 @@ public sealed class PgRecordServiceTests
                 cancellationToken
             )
         );
+
+        Assert.Equal("expected", exception.ParamName);
     }
 
     #endregion
@@ -157,9 +183,11 @@ public sealed class PgRecordServiceTests
         var cancellationToken = TestContext.Current.CancellationToken;
         var prefix = new Keyspace("prod").CreateKey("a");
 
-        await Assert.ThrowsAsync<ArgumentNullException>(async () =>
+        var exception = await Assert.ThrowsAsync<ArgumentNullException>(async () =>
             await service.ListAsync(prefix, null!, null, cancellationToken)
         );
+
+        Assert.Equal("page", exception.ParamName);
     }
 
     #endregion

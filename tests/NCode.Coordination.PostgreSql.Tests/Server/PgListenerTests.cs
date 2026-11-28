@@ -6,14 +6,12 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging.Testing;
 using Microsoft.Extensions.Time.Testing;
 using NCode.Coordination.PostgreSql.Logging;
+using NCode.Coordination.PostgreSql.Tests;
 
 namespace NCode.Coordination.PostgreSql.Server.Tests;
 
 public sealed class PgListenerTests
 {
-    private const string UnreachableConnectionString =
-        "Host=127.0.0.1;Port=1;Timeout=1;Database=coordination;Username=u;Password=p";
-
     private sealed class ThrowingDisposable : IAsyncDisposable
     {
         public ValueTask DisposeAsync()
@@ -43,18 +41,21 @@ public sealed class PgListenerTests
     [Fact]
     public async Task ListenAsync_ChannelWithAQuote_Throws()
     {
-        await using var source = PgSource.FromConnectionString(UnreachableConnectionString);
+        await using var source = PgSource.FromConnectionString(PgOfflineServer.ConnectionString);
         await using var listener = CreateListener(source);
 
-        await Assert.ThrowsAsync<ArgumentException>(async () =>
+        var exception = await Assert.ThrowsAsync<ArgumentException>(async () =>
             await listener.ListenAsync("ncode.\"; DROP TABLE x; --", CancellationToken.None)
         );
+
+        Assert.Equal("channel", exception.ParamName);
+        Assert.Contains("The name is not a channel of the provider.", exception.Message);
     }
 
     [Fact]
     public async Task ListenAsync_ServerUnreachable_ThrowsUnavailable()
     {
-        await using var source = PgSource.FromConnectionString(UnreachableConnectionString);
+        await using var source = PgSource.FromConnectionString(PgOfflineServer.ConnectionString);
         await using var listener = CreateListener(source);
 
         var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
@@ -69,7 +70,7 @@ public sealed class PgListenerTests
     public async Task ListenAsync_ServerUnreachable_LogsConnectionFailedOnce()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await using var source = PgSource.FromConnectionString(UnreachableConnectionString);
+        await using var source = PgSource.FromConnectionString(PgOfflineServer.ConnectionString);
         var time = new FakeTimeProvider();
         var logger = new FakeLogger<PgListener>();
         await using var listener = CreateListener(source, time, logger);

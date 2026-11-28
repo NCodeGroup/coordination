@@ -46,6 +46,26 @@ public sealed class PgClaimServiceTests
     }
 
     [Fact]
+    public async Task TryClaimAsync_NameBelowTheSegmentLimit_ReachesTheServer()
+    {
+        await using var offline = new PgOfflineServer();
+        var service = CreateService(offline);
+        var cancellationToken = TestContext.Current.CancellationToken;
+        const int count = CoordinationKey.MaxSegments - 1;
+        var segments = Enumerable.Repeat<KeySegment>("a", count);
+        var name = new Keyspace("prod").CreateKey(segments);
+        var window = CreateWindow();
+        var duration = TimeSpan.FromMinutes(1);
+        var timeToLive = new TimeToLive(duration);
+
+        var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
+            await service.TryClaimAsync(name, window, timeToLive, null, cancellationToken)
+        );
+
+        Assert.Equal(CoordinationErrorCodes.Unavailable, exception.Code);
+    }
+
+    [Fact]
     public async Task TryClaimAsync_Extension_ThrowsUnsupported()
     {
         await using var offline = new PgOfflineServer();

@@ -34,9 +34,11 @@ public sealed class PgNotificationServiceTests
         var topic = new Keyspace("prod").CreateKey("t");
         var payload = new byte[CoordinationLimits.MaxPayloadLength + 1];
 
-        await Assert.ThrowsAsync<ArgumentException>(async () =>
+        var exception = await Assert.ThrowsAsync<ArgumentException>(async () =>
             await service.PublishAsync(topic, payload, null, cancellationToken)
         );
+
+        Assert.Equal("payload", exception.ParamName);
     }
 
     [Fact]

@@ -397,6 +397,7 @@ public sealed class PostgreSqlProviderProbeTests(PgServers servers)
 
                     Assert.Equal(CoordinationErrorCodes.AccessDenied, exception.Code);
                     Assert.False(exception.OutcomeUnknown);
+                    Assert.Contains("42501", exception.Message);
                 }),
             cancellationToken
         );

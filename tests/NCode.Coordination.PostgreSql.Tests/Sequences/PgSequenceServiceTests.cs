@@ -27,9 +27,11 @@ public sealed class PgSequenceServiceTests
         var cancellationToken = TestContext.Current.CancellationToken;
         var key = new Keyspace("prod").CreateKey("k");
 
-        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(async () =>
+        var exception = await Assert.ThrowsAsync<ArgumentOutOfRangeException>(async () =>
             await service.ReserveAsync(key, 0, null, cancellationToken)
         );
+
+        Assert.Equal("count", exception.ParamName);
     }
 
     [Fact]
@@ -39,15 +41,30 @@ public sealed class PgSequenceServiceTests
         var service = CreateService(offline);
         var cancellationToken = TestContext.Current.CancellationToken;
         var key = new Keyspace("prod").CreateKey("k");
+        const int count = CoordinationLimits.MaxSequenceBlock + 1;
 
-        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(async () =>
-            await service.ReserveAsync(
-                key,
-                CoordinationLimits.MaxSequenceBlock + 1,
-                null,
-                cancellationToken
-            )
+        var exception = await Assert.ThrowsAsync<ArgumentOutOfRangeException>(async () =>
+            await service.ReserveAsync(key, count, null, cancellationToken)
         );
+
+        Assert.Equal("count", exception.ParamName);
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(CoordinationLimits.MaxSequenceBlock)]
+    public async Task ReserveAsync_CountAtTheBounds_ReachesTheServer(int count)
+    {
+        await using var offline = new PgOfflineServer();
+        var service = CreateService(offline);
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var key = new Keyspace("prod").CreateKey("k");
+
+        var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
+            await service.ReserveAsync(key, count, null, cancellationToken)
+        );
+
+        Assert.Equal(CoordinationErrorCodes.Unavailable, exception.Code);
     }
 
     #endregion
