@@ -108,9 +108,9 @@ public sealed class PgGrantsServerTests(PgServers servers)
                 var probe = new PgProbe(server, source, PostgreSqlProfiles.Standalone, settings);
                 await probe.RunAsync(cancellationToken);
 
-                var keyspaces = new PgKeyspaces(server, schema);
-                var table = new PgRecordTable(server, keyspaces, settings);
                 var tokens = new PgRandomTokens();
+                var keyspaces = new PgKeyspaces(server, schema, tokens);
+                var table = new PgRecordTable(server, keyspaces, settings);
 
                 await test(
                     new Context(

@@ -27,7 +27,7 @@ internal sealed class PgOfflineServer : IAsyncDisposable
         Settings = PgSettings.Default;
         Source = PgSource.FromConnectionString(ConnectionString);
         Server = new PgServer(Source, Settings);
-        Keyspaces = new PgKeyspaces(Server, Settings.Schema);
+        Keyspaces = new PgKeyspaces(Server, Settings.Schema, new PgRandomTokens());
         Table = new PgRecordTable(Server, Keyspaces, Settings);
     }
 

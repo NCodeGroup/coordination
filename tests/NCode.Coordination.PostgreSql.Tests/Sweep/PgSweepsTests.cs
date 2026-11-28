@@ -100,7 +100,7 @@ public sealed class PgSweepsTests(PgServers servers)
                 var probe = new PgProbe(server, source, PostgreSqlProfiles.Standalone, settings);
                 await probe.RunAsync(cancellationToken);
 
-                var keyspaces = new PgKeyspaces(server, schema);
+                var keyspaces = new PgKeyspaces(server, schema, new PgRandomTokens());
                 var table = new PgRecordTable(server, keyspaces, settings);
                 await using var hub = new PgLogHub(
                     source,

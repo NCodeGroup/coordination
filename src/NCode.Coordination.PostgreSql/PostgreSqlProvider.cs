@@ -125,7 +125,8 @@ internal sealed class PostgreSqlProvider : ICoordinationProvider, IAsyncDisposab
         Profile = profile;
         Settings = settings;
         Server = new PgServer(source, settings);
-        Keyspaces = new PgKeyspaces(Server, settings.Schema);
+        Tokens = new PgRandomTokens();
+        Keyspaces = new PgKeyspaces(Server, settings.Schema, Tokens);
         RecordTable = new PgRecordTable(Server, Keyspaces, settings);
         Hub = new PgLogHub(source, Keyspaces, settings, TimeProvider.System);
         ChangeLog = new PgChangeLog(Server, settings.Schema);
@@ -161,6 +162,11 @@ internal sealed class PostgreSqlProvider : ICoordinationProvider, IAsyncDisposab
     /// Gets the seam between the provider and its server.
     /// </summary>
     private PgServer Server { get; }
+
+    /// <summary>
+    /// Gets the source of the session ids, owner tokens and keyspace ids.
+    /// </summary>
+    private IPgTokens Tokens { get; }
 
     /// <summary>
     /// Gets the cache of the keyspaces' row ids.
@@ -235,7 +241,6 @@ internal sealed class PostgreSqlProvider : ICoordinationProvider, IAsyncDisposab
     private FrozenDictionary<Type, object> CreateServices()
     {
         var schema = Settings.Schema;
-        var tokens = new PgRandomTokens();
         var grants = new PgGrants(RecordTable);
 
         var services = new Dictionary<Type, object>
@@ -246,11 +251,11 @@ internal sealed class PostgreSqlProvider : ICoordinationProvider, IAsyncDisposab
             [typeof(ISetService)] = new PgSetService(Server, Keyspaces, schema),
             [typeof(ICounterService)] = new PgCounterService(Server, Keyspaces, schema),
             [typeof(ISequenceService)] = new PgSequenceService(Server, Keyspaces, schema),
-            [typeof(ISessionService)] = new PgSessionService(RecordTable, tokens),
+            [typeof(ISessionService)] = new PgSessionService(RecordTable, Tokens),
             [typeof(IMembershipService)] = new PgMembershipService(RecordTable, ChangeLog, Hub),
-            [typeof(ILeaseService)] = new PgLeaseService(grants, tokens),
-            [typeof(ISemaphoreService)] = new PgSemaphoreService(grants, tokens),
-            [typeof(IElectionService)] = new PgElectionService(grants, tokens),
+            [typeof(ILeaseService)] = new PgLeaseService(grants, Tokens),
+            [typeof(ISemaphoreService)] = new PgSemaphoreService(grants, Tokens),
+            [typeof(IElectionService)] = new PgElectionService(grants, Tokens),
             [typeof(IClaimService)] = new PgClaimService(Server, Keyspaces, schema),
             [typeof(IRecordWatchService)] = new PgRecordWatchService(Keyspaces, ChangeLog, Hub),
             [typeof(INotificationService)] = new PgNotificationService(

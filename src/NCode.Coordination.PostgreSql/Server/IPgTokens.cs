@@ -16,4 +16,10 @@ internal interface IPgTokens
     /// <returns>The prefix followed by 32 lowercase hexadecimal digits.</returns>
     /// <exception cref="ArgumentNullException">The prefix is null.</exception>
     string Next(string prefix);
+
+    /// <summary>
+    /// Draws a random keyspace id that is not zero.
+    /// </summary>
+    /// <returns>The id.</returns>
+    long NextKeyspaceId();
 }

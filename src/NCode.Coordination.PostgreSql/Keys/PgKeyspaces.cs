@@ -3,7 +3,6 @@
 
 using System.Collections.Concurrent;
 using System.Collections.Immutable;
-using System.Security.Cryptography;
 using NCode.Coordination.PostgreSql.Schema;
 using NCode.Coordination.PostgreSql.Server;
 
@@ -15,7 +14,8 @@ namespace NCode.Coordination.PostgreSql.Keys;
 /// </summary>
 /// <param name="server">The seam to the server.</param>
 /// <param name="schema">The schema that holds the keyspaces' table.</param>
-internal sealed class PgKeyspaces(PgServer server, PgSchemaName schema)
+/// <param name="tokens">The source of the keyspace ids.</param>
+internal sealed class PgKeyspaces(PgServer server, PgSchemaName schema, IPgTokens tokens)
 {
     /// <summary>
     /// The most times that <see cref="ResolveAsync"/> draws an id before it gives up.
@@ -35,24 +35,6 @@ internal sealed class PgKeyspaces(PgServer server, PgSchemaName schema)
     private const string SelectSql = """
         SELECT id FROM {schema}.keyspaces WHERE name = $1
         """;
-
-    /// <summary>
-    /// Draws a random id that is not zero.
-    /// </summary>
-    /// <returns>The id.</returns>
-    private static long DrawId()
-    {
-        Span<byte> bytes = stackalloc byte[sizeof(long)];
-        while (true)
-        {
-            RandomNumberGenerator.Fill(bytes);
-            var id = BitConverter.ToInt64(bytes);
-            if (id != 0)
-            {
-                return id;
-            }
-        }
-    }
 
     /// <summary>
     /// Reads the id that the batch of <see cref="InsertSql"/> and <see cref="SelectSql"/> selected.
@@ -128,7 +110,7 @@ internal sealed class PgKeyspaces(PgServer server, PgSchemaName schema)
 
         for (var attempt = 0; attempt < MaxAttempts; attempt++)
         {
-            var candidate = DrawId();
+            var candidate = tokens.NextKeyspaceId();
             var insertStatement = new PgStatement(Insert, candidate, name);
             var selectStatement = new PgStatement(Select, name);
             var ids = await server

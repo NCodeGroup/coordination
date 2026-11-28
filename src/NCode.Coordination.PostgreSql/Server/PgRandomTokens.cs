@@ -22,4 +22,19 @@ internal sealed class PgRandomTokens : IPgTokens
 
         return prefix + RandomNumberGenerator.GetHexString(HexDigits, lowercase: true);
     }
+
+    /// <inheritdoc />
+    public long NextKeyspaceId()
+    {
+        Span<byte> bytes = stackalloc byte[sizeof(long)];
+        while (true)
+        {
+            RandomNumberGenerator.Fill(bytes);
+            var id = BitConverter.ToInt64(bytes);
+            if (id != 0)
+            {
+                return id;
+            }
+        }
+    }
 }

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using System.Globalization;
+using Moq;
 using NCode.Coordination.PostgreSql.Schema;
 using NCode.Coordination.PostgreSql.Server;
 using NCode.Coordination.PostgreSql.Tests.Servers;
@@ -9,10 +10,15 @@ using Npgsql;
 
 namespace NCode.Coordination.PostgreSql.Keys.Tests;
 
-public sealed class PgKeyspacesTests(PgServers servers)
+public sealed class PgKeyspacesTests(PgServers servers) : IDisposable
 {
+    private MockRepository Mocks { get; } = new(MockBehavior.Strict);
+
+    public void Dispose() => Mocks.Verify();
+
     private static async Task WithKeyspacesAsync(
         string connectionString,
+        IPgTokens tokens,
         Func<string, PgKeyspaces, Task> test,
         CancellationToken cancellationToken
     )
@@ -26,7 +32,7 @@ public sealed class PgKeyspacesTests(PgServers servers)
         {
             await PgMigrations.ApplyAsync(server, schema, cancellationToken);
 
-            await test(schemaName, new PgKeyspaces(server, schema));
+            await test(schemaName, new PgKeyspaces(server, schema, tokens));
         }
         finally
         {
@@ -72,6 +78,7 @@ public sealed class PgKeyspacesTests(PgServers servers)
         var cancellationToken = TestContext.Current.CancellationToken;
         await WithKeyspacesAsync(
             servers.Admin19,
+            new PgRandomTokens(),
             async (schema, keyspaces) =>
             {
                 var keyspace = new Keyspace("cell", KeySegment.FromString("orders"));
@@ -98,6 +105,7 @@ public sealed class PgKeyspacesTests(PgServers servers)
         var cancellationToken = TestContext.Current.CancellationToken;
         await WithKeyspacesAsync(
             servers.Admin19,
+            new PgRandomTokens(),
             async (_, keyspaces) =>
             {
                 var first = await keyspaces.ResolveAsync(
@@ -115,6 +123,38 @@ public sealed class PgKeyspacesTests(PgServers servers)
         );
     }
 
+    [PgServerFact]
+    public async Task ResolveAsync_EveryDrawnIdTaken_ThrowsUnavailable()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var tokens = Mocks.Create<IPgTokens>();
+        tokens.Setup(x => x.NextKeyspaceId()).Returns(42).Verifiable();
+        await WithKeyspacesAsync(
+            servers.Admin19,
+            tokens.Object,
+            async (_, keyspaces) =>
+            {
+                var first = await keyspaces.ResolveAsync(
+                    new Keyspace("cell", KeySegment.FromString("orders")),
+                    cancellationToken
+                );
+
+                var failure = await Assert.ThrowsAsync<CoordinationException>(async () =>
+                    await keyspaces.ResolveAsync(
+                        new Keyspace("cell", KeySegment.FromString("invoices")),
+                        cancellationToken
+                    )
+                );
+
+                Assert.Equal(42, first);
+                Assert.Equal(CoordinationErrorCodes.Unavailable, failure.Code);
+                Assert.False(failure.OutcomeUnknown);
+                tokens.Verify(x => x.NextKeyspaceId(), Times.Exactly(4));
+            },
+            cancellationToken
+        );
+    }
+
     #endregion
 
     #region RunAsync Tests
@@ -125,6 +165,7 @@ public sealed class PgKeyspacesTests(PgServers servers)
         var cancellationToken = TestContext.Current.CancellationToken;
         await WithKeyspacesAsync(
             servers.Admin19,
+            new PgRandomTokens(),
             async (schema, keyspaces) =>
             {
                 var keyspace = new Keyspace("cell", KeySegment.FromString("orders"));
@@ -170,6 +211,7 @@ public sealed class PgKeyspacesTests(PgServers servers)
         var cancellationToken = TestContext.Current.CancellationToken;
         await WithKeyspacesAsync(
             servers.Admin19,
+            new PgRandomTokens(),
             async (_, keyspaces) =>
             {
                 var keyspace = new Keyspace("cell", KeySegment.FromString("orders"));

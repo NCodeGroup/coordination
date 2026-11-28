@@ -82,9 +82,10 @@ public sealed class PgRecordServiceServerTests(PgServers servers)
                 var probe = new PgProbe(server, source, PostgreSqlProfiles.Standalone, settings);
                 await probe.RunAsync(cancellationToken);
 
-                var keyspaces = new PgKeyspaces(server, schema);
+                var tokens = new PgRandomTokens();
+                var keyspaces = new PgKeyspaces(server, schema, tokens);
                 var pausedServer = new PgServer(source, settings);
-                var pausedKeyspaces = new PgKeyspaces(pausedServer, schema);
+                var pausedKeyspaces = new PgKeyspaces(pausedServer, schema, tokens);
 
                 await test(
                     new Context(
