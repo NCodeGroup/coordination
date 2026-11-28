@@ -39,7 +39,7 @@ internal static class PgSourceRules
     /// Gets the folder of the PostgreSQL provider's tests, <c>tests/NCode.Coordination.PostgreSql.Tests</c> under
     /// the folder that holds the solution.
     /// </summary>
-    private static string TestRoot { get; } =
+    internal static string TestRoot { get; } =
         FindProjectRoot("tests", "NCode.Coordination.PostgreSql.Tests");
 
     /// <summary>

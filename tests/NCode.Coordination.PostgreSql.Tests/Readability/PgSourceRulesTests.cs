@@ -7,26 +7,7 @@ public sealed class PgSourceRulesTests
 {
     public static TheoryData<string> CheckedPaths => BuildCheckedPaths(PgSourceRules.PackageRoot);
 
-    public static TheoryData<string> CheckedTestPaths
-    {
-        get
-        {
-            var testRoot = FindTestRoot();
-            return BuildCheckedPaths(testRoot);
-        }
-    }
-
-    private static string FindTestRoot()
-    {
-        var relativePath = Path.Combine(
-            PgSourceRules.PackageRoot,
-            "..",
-            "..",
-            "tests",
-            "NCode.Coordination.PostgreSql.Tests"
-        );
-        return Path.GetFullPath(relativePath);
-    }
+    public static TheoryData<string> CheckedTestPaths => BuildCheckedPaths(PgSourceRules.TestRoot);
 
     private static TheoryData<string> BuildCheckedPaths(string root)
     {
