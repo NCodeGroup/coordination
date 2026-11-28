@@ -229,7 +229,7 @@ internal sealed class PgRecordService(PgRecordTable table) : IRecordService
     {
         if (page.ContinuationToken is null)
         {
-            return (prefixIndex, -1);
+            return (prefixIndex, PgKeys.BeforeFirstDepth);
         }
 
         if (

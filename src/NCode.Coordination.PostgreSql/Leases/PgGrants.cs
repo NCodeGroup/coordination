@@ -487,8 +487,10 @@ internal sealed class PgGrants(PgRecordTable table)
         ArgumentNullException.ThrowIfNull(grant);
 
         var fencing = start.Last + 1;
-        var upsert = Upsert(keyspaceId, grant, fencing);
-        var fence = Fence(keyspaceId, grant, fencing);
+        var (index, keyText) = PgKeys.IndexAndText(grant.Resource);
+        var columns = new PgGrantColumns(keyspaceId, index, keyText, fencing);
+        var upsert = Upsert(columns, grant);
+        var fence = Fence(columns, grant);
         start.Change.Write(upsert);
         start.Change.Write(fence);
 
@@ -648,30 +650,27 @@ internal sealed class PgGrants(PgRecordTable table)
     /// <summary>
     /// Builds the statement that writes a grant, replacing the row that holds its slot.
     /// </summary>
-    /// <param name="keyspaceId">The keyspace's id.</param>
+    /// <param name="columns">The columns that the grant's statements share.</param>
     /// <param name="grant">The grant to write.</param>
-    /// <param name="fencing">The fencing token of the grant.</param>
     /// <returns>The statement.</returns>
-    private PgStatement Upsert(long keyspaceId, PgNewGrant grant, long fencing)
+    private PgStatement Upsert(PgGrantColumns columns, PgNewGrant grant)
     {
-        var resource = grant.Resource;
-        var (index, keyText) = PgKeys.IndexAndText(resource);
-        var indexArgument = PgArgument.Typed(index, NpgsqlDbType.Bytea);
-        var depth = (short)resource.PartitionDepth;
+        var indexArgument = PgArgument.Typed(columns.Index, NpgsqlDbType.Bytea);
+        var depth = (short)grant.Resource.PartitionDepth;
         var sessionArgument = PgArgument.Typed(grant.Session, NpgsqlDbType.Text);
         var deadlineArgument = PgArgument.Typed(grant.Deadline, NpgsqlDbType.TimestampTz);
         var valueArgument = PgArgument.Typed(grant.Value, NpgsqlDbType.Bytea);
 
         return new PgStatement(
             UpsertGrantSql,
-            keyspaceId,
+            columns.KeyspaceId,
             grant.Kind,
             indexArgument,
             depth,
-            keyText,
+            columns.Text,
             grant.Slot,
             grant.Capacity,
-            fencing,
+            columns.Fencing,
             grant.Owner,
             sessionArgument,
             deadlineArgument,
@@ -682,25 +681,22 @@ internal sealed class PgGrants(PgRecordTable table)
     /// <summary>
     /// Builds the statement that stores the last fencing token given to a resource.
     /// </summary>
-    /// <param name="keyspaceId">The keyspace's id.</param>
+    /// <param name="columns">The columns that the grant's statements share.</param>
     /// <param name="grant">The grant that was given.</param>
-    /// <param name="fencing">The fencing token that was given.</param>
     /// <returns>The statement.</returns>
-    private PgStatement Fence(long keyspaceId, PgNewGrant grant, long fencing)
+    private PgStatement Fence(PgGrantColumns columns, PgNewGrant grant)
     {
-        var resource = grant.Resource;
-        var (index, keyText) = PgKeys.IndexAndText(resource);
-        var indexArgument = PgArgument.Typed(index, NpgsqlDbType.Bytea);
-        var depth = (short)resource.PartitionDepth;
+        var indexArgument = PgArgument.Typed(columns.Index, NpgsqlDbType.Bytea);
+        var depth = (short)grant.Resource.PartitionDepth;
 
         return new PgStatement(
             UpsertFencingSql,
-            keyspaceId,
+            columns.KeyspaceId,
             grant.Kind,
             indexArgument,
             depth,
-            keyText,
-            fencing
+            columns.Text,
+            columns.Fencing
         );
     }
 

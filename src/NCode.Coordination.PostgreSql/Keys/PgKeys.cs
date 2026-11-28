@@ -37,6 +37,31 @@ internal static class PgKeys
     private const string HexDigits = "0123456789ABCDEF";
 
     /// <summary>
+    /// The letter that starts an encoded text segment.
+    /// </summary>
+    private const char TextKind = 't';
+
+    /// <summary>
+    /// The letter that starts an encoded number segment.
+    /// </summary>
+    private const char NumberKind = 'n';
+
+    /// <summary>
+    /// The letter that starts an encoded UUID segment.
+    /// </summary>
+    private const char UuidKind = 'u';
+
+    /// <summary>
+    /// The format that writes a UUID as 32 lowercase hex digits.
+    /// </summary>
+    private const string UuidFormat = "N";
+
+    /// <summary>
+    /// The depth a cursor or a list start reads after, which is before every row's depth.
+    /// </summary>
+    internal const short BeforeFirstDepth = -1;
+
+    /// <summary>
     /// Gets the UTF-8 encoding that throws on bytes that are not well-formed UTF-8, which
     /// <see cref="TryUnescape"/> uses.
     /// </summary>
@@ -72,17 +97,25 @@ internal static class PgKeys
             { Kind: KeySegmentKind.Text, Text: { } text } => EncodeText(text),
             { Kind: KeySegmentKind.Number, Number: { } number } => string.Create(
                 CultureInfo.InvariantCulture,
-                $"n{number}"
+                $"{NumberKind}{number}"
             ),
-            { Kind: KeySegmentKind.Uuid, Uuid: { } uuid } => string.Create(
-                CultureInfo.InvariantCulture,
-                $"u{uuid:N}"
-            ),
+            { Kind: KeySegmentKind.Uuid, Uuid: { } uuid } => EncodeUuid(uuid),
             _ => throw new ArgumentException(
                 "The segment holds no value for its kind.",
                 nameof(segment)
             ),
         };
+    }
+
+    /// <summary>
+    /// Encodes a UUID segment: the UUID's letter and its 32 lowercase hex digits.
+    /// </summary>
+    /// <param name="uuid">The UUID.</param>
+    /// <returns>The encoded segment.</returns>
+    private static string EncodeUuid(Guid uuid)
+    {
+        var uuidText = uuid.ToString(UuidFormat, CultureInfo.InvariantCulture);
+        return $"{UuidKind}{uuidText}";
     }
 
     /// <summary>
@@ -472,13 +505,13 @@ internal static class PgKeys
 
         switch (text[0])
         {
-            case 't':
+            case TextKind:
                 return TryDecodeTextSegment(text, rest, out segment);
 
-            case 'n':
+            case NumberKind:
                 return TryDecodeNumberSegment(rest, out segment);
 
-            case 'u':
+            case UuidKind:
                 return TryDecodeUuidSegment(rest, out segment);
 
             default:
@@ -582,12 +615,12 @@ internal static class PgKeys
     {
         segment = null;
 
-        if (!Guid.TryParseExact(rest, "N", out var uuid))
+        if (!Guid.TryParseExact(rest, UuidFormat, out var uuid))
         {
             return false;
         }
 
-        var uuidText = uuid.ToString("N", CultureInfo.InvariantCulture);
+        var uuidText = uuid.ToString(UuidFormat, CultureInfo.InvariantCulture);
 
         if (!rest.Equals(uuidText, StringComparison.Ordinal))
         {
@@ -820,7 +853,7 @@ internal static class PgKeys
     /// <param name="bytes">The UTF-8 bytes of a text.</param>
     private static void WriteEncodedText(Span<char> destination, ReadOnlySpan<byte> bytes)
     {
-        destination[0] = 't';
+        destination[0] = TextKind;
         var position = 1;
 
         foreach (var value in bytes)

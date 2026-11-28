@@ -1,6 +1,8 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using NCode.Coordination.PostgreSql.Keys;
+
 namespace NCode.Coordination.PostgreSql.Records;
 
 /// <summary>
@@ -26,7 +28,7 @@ internal readonly record struct PgEndedKeysCursor(
     public static PgEndedKeysCursor First(string session, long revision)
     {
         var noIndex = Array.Empty<byte>();
-        return new PgEndedKeysCursor(session, revision, noIndex, -1);
+        return new PgEndedKeysCursor(session, revision, noIndex, PgKeys.BeforeFirstDepth);
     }
 
     /// <summary>
