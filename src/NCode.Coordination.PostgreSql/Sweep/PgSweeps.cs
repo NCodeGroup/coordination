@@ -576,7 +576,7 @@ internal sealed class PgSweeps(
     /// <param name="cancellationToken">The token that cancels the sweep.</param>
     /// <returns>A task that completes after the pass ran.</returns>
     /// <exception cref="OperationCanceledException">The token was cancelled.</exception>
-    private async ValueTask RunPassAsync(PgSweepPass pass, CancellationToken cancellationToken)
+    internal async ValueTask RunPassAsync(PgSweepPass pass, CancellationToken cancellationToken)
     {
         var statement = new PgStatement(pass.Sql, Settings.SweepBatchSize);
         try

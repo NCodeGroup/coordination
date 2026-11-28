@@ -668,6 +668,35 @@ public sealed class PgSweepsTests(PgServers servers)
 
     #endregion
 
+    #region RunPassAsync Tests
+
+    [PgServerFact]
+    public async Task RunPassAsync_PassFailsUnexpectedly_LogsSweepPassFaultedOnce()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var source = PgSource.FromConnectionString(servers.PostgreSql19);
+        var settings = PgSettings.Default;
+        var server = new PgServer(source, settings);
+        var tokens = new PgRandomTokens();
+        var keyspaces = new PgKeyspaces(server, settings.Schema, tokens);
+        var table = new PgRecordTable(server, keyspaces, settings);
+        var logger = new FakeLogger<PgSweeps>();
+        var sweeps = new PgSweeps(server, settings, table, logger);
+        const string name = "broken pass";
+        var pass = new PgSweepPass(name, "SELECT 'broken'::text WHERE $1::int > 0");
+
+        await sweeps.RunPassAsync(pass, cancellationToken);
+
+        var records = logger.Collector.GetSnapshot();
+        var record = Assert.Single(records);
+        var logged = record.GetStructuredStateValue("Pass");
+        Assert.Equal(EventIds.SweepPassFaulted, record.Id.Id);
+        Assert.Equal(LogLevel.Error, record.Level);
+        Assert.Equal(name, logged);
+    }
+
+    #endregion
+
     #region IgnoreFailureAsync Tests
 
     [Fact]
