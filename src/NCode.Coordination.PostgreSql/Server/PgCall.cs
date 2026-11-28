@@ -9,6 +9,12 @@ namespace NCode.Coordination.PostgreSql.Server;
 internal static class PgCall
 {
     /// <summary>
+    /// Gets the message that refuses a value longer than <see cref="CoordinationLimits.MaxValueLength"/> bytes.
+    /// </summary>
+    public static string ValueTooLongMessage { get; } =
+        $"A value has at most {CoordinationLimits.MaxValueLength} bytes.";
+
+    /// <summary>
     /// Checks the cancellation token and the options of an operation.
     /// </summary>
     /// <param name="options">The options of the operation, or null for the defaults.</param>
@@ -29,6 +35,20 @@ internal static class PgCall
                 outcomeUnknown: false,
                 $"The PostgreSQL provider honors no option extension, and '{name}' was given."
             );
+        }
+    }
+
+    /// <summary>
+    /// Checks that a value is no longer than the largest value.
+    /// </summary>
+    /// <param name="value">The value.</param>
+    /// <param name="paramName">The name of the parameter that holds the value.</param>
+    /// <exception cref="ArgumentException">The value is longer than <see cref="CoordinationLimits.MaxValueLength"/> bytes.</exception>
+    public static void CheckValue(ReadOnlyMemory<byte> value, string paramName)
+    {
+        if (value.Length > CoordinationLimits.MaxValueLength)
+        {
+            throw new ArgumentException(ValueTooLongMessage, paramName);
         }
     }
 

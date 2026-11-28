@@ -67,23 +67,6 @@ internal sealed class PgElectionService(PgGrants grants, IPgTokens tokens, PgPol
     }
 
     /// <summary>
-    /// Checks that a value is no longer than the largest value.
-    /// </summary>
-    /// <param name="value">The value.</param>
-    /// <param name="paramName">The name of the parameter that holds the value.</param>
-    /// <exception cref="ArgumentException">The value is longer than <see cref="CoordinationLimits.MaxValueLength"/> bytes.</exception>
-    private static void CheckValue(ReadOnlyMemory<byte> value, string paramName)
-    {
-        if (value.Length > CoordinationLimits.MaxValueLength)
-        {
-            throw new ArgumentException(
-                $"A value has at most {CoordinationLimits.MaxValueLength} bytes.",
-                paramName
-            );
-        }
-    }
-
-    /// <summary>
     /// Decides an attempt to lead a role that a live leader holds: the attempt's own session is the leader's when the
     /// grant is bound to it.
     /// </summary>
@@ -148,7 +131,7 @@ internal sealed class PgElectionService(PgGrants grants, IPgTokens tokens, PgPol
     {
         ArgumentNullException.ThrowIfNull(role);
         ArgumentNullException.ThrowIfNull(terms);
-        CheckValue(value, nameof(value));
+        PgCall.CheckValue(value, nameof(value));
         PgCall.Check(options, cancellationToken);
 
         var bytes = value.ToArray();

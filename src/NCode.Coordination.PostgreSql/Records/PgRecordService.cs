@@ -34,23 +34,6 @@ internal sealed class PgRecordService(PgRecordTable table) : IRecordService
         """;
 
     /// <summary>
-    /// Checks that a value is no longer than the largest value.
-    /// </summary>
-    /// <param name="value">The value.</param>
-    /// <param name="paramName">The name of the parameter that holds the value.</param>
-    /// <exception cref="ArgumentException">The value is longer than <see cref="CoordinationLimits.MaxValueLength"/> bytes.</exception>
-    private static void CheckValue(ReadOnlyMemory<byte> value, string paramName)
-    {
-        if (value.Length > CoordinationLimits.MaxValueLength)
-        {
-            throw new ArgumentException(
-                $"A value has at most {CoordinationLimits.MaxValueLength} bytes.",
-                paramName
-            );
-        }
-    }
-
-    /// <summary>
     /// Gets the id of the session that a lifetime binds a record to, when the session lives in the record's keyspace.
     /// </summary>
     /// <param name="key">The record's key.</param>
@@ -398,7 +381,7 @@ internal sealed class PgRecordService(PgRecordTable table) : IRecordService
     {
         ArgumentNullException.ThrowIfNull(key);
         ArgumentNullException.ThrowIfNull(lifetime);
-        CheckValue(value, nameof(value));
+        PgCall.CheckValue(value, nameof(value));
         PgCall.Check(options, cancellationToken);
 
         var copy = value.ToArray();
@@ -497,7 +480,7 @@ internal sealed class PgRecordService(PgRecordTable table) : IRecordService
         ArgumentNullException.ThrowIfNull(key);
         ArgumentNullException.ThrowIfNull(expected);
         ArgumentNullException.ThrowIfNull(lifetime);
-        CheckValue(value, nameof(value));
+        PgCall.CheckValue(value, nameof(value));
         PgCall.Check(options, cancellationToken);
 
         var copy = value.ToArray();

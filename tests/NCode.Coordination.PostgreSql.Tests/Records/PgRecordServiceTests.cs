@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using NCode.Coordination.PostgreSql.Keys;
+using NCode.Coordination.PostgreSql.Server;
 using NCode.Coordination.PostgreSql.Tests;
 
 namespace NCode.Coordination.PostgreSql.Records.Tests;
@@ -37,6 +38,7 @@ public sealed class PgRecordServiceTests
         );
 
         Assert.Equal("value", exception.ParamName);
+        Assert.StartsWith(PgCall.ValueTooLongMessage, exception.Message);
     }
 
     [Fact]

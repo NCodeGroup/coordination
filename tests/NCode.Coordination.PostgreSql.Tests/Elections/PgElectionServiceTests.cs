@@ -37,6 +37,26 @@ public sealed class PgElectionServiceTests
         );
 
         Assert.Equal("value", exception.ParamName);
+        Assert.StartsWith(PgCall.ValueTooLongMessage, exception.Message);
+    }
+
+    [Fact]
+    public async Task TryLeadAsync_ValueAtTheLimit_ReachesTheServer()
+    {
+        await using var offline = new PgOfflineServer();
+        var service = CreateService(offline);
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var role = new Keyspace("prod").CreateKey("r");
+        var duration = TimeSpan.FromSeconds(5);
+        var timeToLive = new TimeToLive(duration);
+        var terms = LeaseTerms.ForTimeToLive(timeToLive);
+        var value = new byte[CoordinationLimits.MaxValueLength];
+
+        var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
+            await service.TryLeadAsync(role, value, terms, null, cancellationToken)
+        );
+
+        Assert.Equal(CoordinationErrorCodes.Unavailable, exception.Code);
     }
 
     #endregion
