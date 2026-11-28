@@ -51,10 +51,8 @@ public sealed class PgMembershipServiceTests
         var service = CreateService(offline);
         var cancellationToken = TestContext.Current.CancellationToken;
         var group = new Keyspace("prod").CreateKey("g");
-        var options = new OperationOptions
-        {
-            Extensions = ImmutableDictionary<string, string>.Empty.Add("consul.lock-delay", "15s"),
-        };
+        var extensions = ImmutableDictionary<string, string>.Empty.Add("consul.lock-delay", "15s");
+        var options = new OperationOptions { Extensions = extensions };
 
         var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
             await service.ReadAsync(group, options, cancellationToken)

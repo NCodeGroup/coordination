@@ -32,7 +32,15 @@ internal static class PgSourceRules
     /// Gets the folder of the PostgreSQL provider's package, <c>src/NCode.Coordination.PostgreSql</c> under the
     /// folder that holds the solution.
     /// </summary>
-    internal static string PackageRoot { get; } = FindPackageRoot();
+    internal static string PackageRoot { get; } =
+        FindProjectRoot("src", "NCode.Coordination.PostgreSql");
+
+    /// <summary>
+    /// Gets the folder of the PostgreSQL provider's tests, <c>tests/NCode.Coordination.PostgreSql.Tests</c> under
+    /// the folder that holds the solution.
+    /// </summary>
+    private static string TestRoot { get; } =
+        FindProjectRoot("tests", "NCode.Coordination.PostgreSql.Tests");
 
     /// <summary>
     /// Checks one source text.
@@ -46,10 +54,14 @@ internal static class PgSourceRules
         var tree = CSharpSyntaxTree.ParseText(source);
         var root = tree.GetRoot();
 
+        var nestedCalls = FindNestedCalls(root);
+        var nestedLambdas = FindNestedLambdas(root);
+        var longMembers = FindLongMembers(tree, root);
+
         var violations = new List<(SyntaxNode Node, string Rule)>();
-        violations.AddRange(FindNestedCalls(root));
-        violations.AddRange(FindNestedLambdas(root));
-        violations.AddRange(FindLongMembers(tree, root));
+        violations.AddRange(nestedCalls);
+        violations.AddRange(nestedLambdas);
+        violations.AddRange(longMembers);
 
         return DescribeAll(tree, violations);
     }
@@ -67,10 +79,14 @@ internal static class PgSourceRules
         var tree = CSharpSyntaxTree.ParseText(source);
         var root = tree.GetRoot();
 
+        var misplacedStatics = FindMisplacedStatics(root);
+        var undocumentedMembers = FindUndocumentedMembers(root);
+        var capturedParameters = FindCapturedParameters(root);
+
         var violations = new List<(SyntaxNode Node, string Rule)>();
-        violations.AddRange(FindMisplacedStatics(root));
-        violations.AddRange(FindUndocumentedMembers(root));
-        violations.AddRange(FindCapturedParameters(root));
+        violations.AddRange(misplacedStatics);
+        violations.AddRange(undocumentedMembers);
+        violations.AddRange(capturedParameters);
 
         return DescribeAll(tree, violations);
     }
@@ -85,17 +101,58 @@ internal static class PgSourceRules
     /// <returns>
     /// The violations of every file, each prefixed with the file's path relative to the package and a colon.
     /// </returns>
-    public static ImmutableArray<string> CheckPath(string path)
+    public static ImmutableArray<string> CheckPath(string path) =>
+        CheckFiles(PackageRoot, path, CheckSource);
+
+    private static ImmutableArray<string> CheckSource(string source)
     {
-        var files = ResolveFiles(path);
+        var violations = Check(source);
+        var layoutViolations = CheckLayout(source);
+        return violations.AddRange(layoutViolations);
+    }
+
+    /// <summary>
+    /// Checks the source files at a path in the PostgreSQL provider's tests, for a call inside another call's
+    /// arguments only: a test's block lambda passed to an assertion and a long test body stay allowed.
+    /// </summary>
+    /// <param name="path">
+    /// A <c>.cs</c> file, a folder (every <c>.cs</c> file under it), or <c>.</c> (the test project's own files),
+    /// relative to <c>tests/NCode.Coordination.PostgreSql.Tests</c>.
+    /// </param>
+    /// <returns>
+    /// The <c>nested-call</c> violations of every file, each prefixed with the file's path relative to the test
+    /// project and a colon.
+    /// </returns>
+    public static ImmutableArray<string> CheckTestPath(string path) =>
+        CheckFiles(TestRoot, path, CheckNestedCalls);
+
+    private static ImmutableArray<string> CheckNestedCalls(string source)
+    {
+        var tree = CSharpSyntaxTree.ParseText(source);
+        var root = tree.GetRoot();
+
+        var nestedCalls = FindNestedCalls(root);
+
+        var violations = new List<(SyntaxNode Node, string Rule)>();
+        violations.AddRange(nestedCalls);
+
+        return DescribeAll(tree, violations);
+    }
+
+    private static ImmutableArray<string> CheckFiles(
+        string projectRoot,
+        string path,
+        Func<string, ImmutableArray<string>> checkSource
+    )
+    {
+        var files = ResolveFiles(projectRoot, path);
 
         var violations = ImmutableArray.CreateBuilder<string>();
         foreach (var file in files)
         {
-            var relativePath = Path.GetRelativePath(PackageRoot, file).Replace('\\', '/');
+            var relativePath = Path.GetRelativePath(projectRoot, file).Replace('\\', '/');
             var source = File.ReadAllText(file);
-            var fileViolations = Check(source).AddRange(CheckLayout(source));
-            foreach (var violation in fileViolations)
+            foreach (var violation in checkSource(source))
             {
                 violations.Add($"{relativePath}:{violation}");
             }
@@ -385,8 +442,9 @@ internal static class PgSourceRules
     {
         var span = tree.GetLineSpan(node.Span);
         var line = span.StartLinePosition.Line + 1;
-        var text = ToOneLine(node.ToString());
-        return $"{line}: {rule}: {text}";
+        var text = node.ToString();
+        var oneLine = ToOneLine(text);
+        return $"{line}: {rule}: {oneLine}";
     }
 
     private static string ToOneLine(string text)
@@ -400,7 +458,7 @@ internal static class PgSourceRules
 
     #region Files
 
-    private static string FindPackageRoot()
+    private static string FindProjectRoot(string group, string project)
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
         while (directory is not null && !ContainsSolution(directory))
@@ -413,7 +471,7 @@ internal static class PgSourceRules
                 $"No folder above the tests holds {SolutionFileName}."
             );
 
-        return Path.Combine(directory.FullName, "src", "NCode.Coordination.PostgreSql");
+        return Path.Combine(directory.FullName, group, project);
     }
 
     private static bool ContainsSolution(DirectoryInfo directory)
@@ -422,34 +480,34 @@ internal static class PgSourceRules
         return File.Exists(solutionPath);
     }
 
-    private static IEnumerable<string> ResolveFiles(string path)
+    private static IEnumerable<string> ResolveFiles(string projectRoot, string path)
     {
         if (path == ".")
-            return Directory.GetFiles(PackageRoot, "*.cs", SearchOption.TopDirectoryOnly);
+            return Directory.GetFiles(projectRoot, "*.cs", SearchOption.TopDirectoryOnly);
 
-        var fullPath = Path.GetFullPath(path, PackageRoot);
+        var fullPath = Path.GetFullPath(path, projectRoot);
         if (fullPath.EndsWith(".cs", StringComparison.Ordinal) && File.Exists(fullPath))
             return [fullPath];
 
         if (Directory.Exists(fullPath))
-            return GetFolderFiles(fullPath);
+            return GetFolderFiles(projectRoot, fullPath);
 
         throw new ArgumentException(
-            $"'{path}' is not a .cs file or folder of the package.",
+            $"'{path}' is not a .cs file or folder of the project.",
             nameof(path)
         );
     }
 
-    private static IEnumerable<string> GetFolderFiles(string folder)
+    private static IEnumerable<string> GetFolderFiles(string projectRoot, string folder)
     {
         var files = Directory.EnumerateFiles(folder, "*.cs", SearchOption.AllDirectories);
-        var sources = files.Where(file => !IsBuildOutput(file));
+        var sources = files.Where(file => !IsBuildOutput(projectRoot, file));
         return sources.Order(StringComparer.Ordinal);
     }
 
-    private static bool IsBuildOutput(string file)
+    private static bool IsBuildOutput(string projectRoot, string file)
     {
-        var relativePath = Path.GetRelativePath(PackageRoot, file);
+        var relativePath = Path.GetRelativePath(projectRoot, file);
         var segments = relativePath.Split(
             Path.DirectorySeparatorChar,
             Path.AltDirectorySeparatorChar

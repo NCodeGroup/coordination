@@ -20,16 +20,18 @@ public sealed class PostgreSqlProviderProbeTests(PgServers servers)
         PostgreSqlProfile profile,
         string schema,
         bool applyMigrations = true
-    ) =>
-        new(
-            PgSource.FromConnectionString(connectionString),
-            profile,
-            PgSettings.Default with
-            {
-                Schema = PgSchemaName.Create(schema),
-                ApplyMigrations = applyMigrations,
-            }
-        );
+    )
+    {
+        var source = PgSource.FromConnectionString(connectionString);
+        var schemaName = PgSchemaName.Create(schema);
+        var settings = PgSettings.Default with
+        {
+            Schema = schemaName,
+            ApplyMigrations = applyMigrations,
+        };
+
+        return new PostgreSqlProvider(source, profile, settings);
+    }
 
     private static async Task ProbeAsync(
         string connectionString,
@@ -101,7 +103,8 @@ public sealed class PostgreSqlProviderProbeTests(PgServers servers)
 
         try
         {
-            await test(role, PgServers.AsRole(adminConnectionString, role, RolePassword));
+            var roleConnectionString = PgServers.AsRole(adminConnectionString, role, RolePassword);
+            await test(role, roleConnectionString);
         }
         finally
         {
@@ -366,15 +369,12 @@ public sealed class PostgreSqlProviderProbeTests(PgServers servers)
     {
         var cancellationToken = TestContext.Current.CancellationToken;
 
-        var exception = await ProbeAsRoleWithGrantsAsync(
-            [
-                "GRANT SELECT ON {0}.schema_version TO {1}",
-                .. PgMigrations.Tables.Select(table =>
-                    "GRANT SELECT, INSERT, UPDATE, DELETE ON {0}." + table + " TO {1}"
-                ),
-            ],
-            cancellationToken
+        var tableGrants = PgMigrations.Tables.Select(table =>
+            "GRANT SELECT, INSERT, UPDATE, DELETE ON {0}." + table + " TO {1}"
         );
+        string[] grants = ["GRANT SELECT ON {0}.schema_version TO {1}", .. tableGrants];
+
+        var exception = await ProbeAsRoleWithGrantsAsync(grants, cancellationToken);
 
         Assert.Null(exception);
     }
@@ -429,14 +429,15 @@ public sealed class PostgreSqlProviderProbeTests(PgServers servers)
                     );
                     foreach (var grant in grants)
                     {
+                        var statement = string.Format(
+                            CultureInfo.InvariantCulture,
+                            grant,
+                            $"\"{schema}\"",
+                            role
+                        );
                         await PgServers.ExecuteAsAdminAsync(
                             servers.Admin19,
-                            string.Format(
-                                CultureInfo.InvariantCulture,
-                                grant,
-                                $"\"{schema}\"",
-                                role
-                            ),
+                            statement,
                             cancellationToken
                         );
                     }

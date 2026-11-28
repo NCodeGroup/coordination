@@ -19,6 +19,20 @@ public sealed class PgSourceRulesTests
         }
     }
 
+    public static TheoryData<string> CheckedTestPaths { get; } =
+    [
+        ".",
+        "Readability",
+        "Servers",
+        "Conformance",
+        "Schema",
+        "Transactions",
+        "Sets",
+        "Sequences",
+        "Notifications",
+        "Membership",
+    ];
+
     private static List<string> FindPackageFolders()
     {
         var packageRoot = PgSourceRules.PackageRoot;
@@ -311,7 +325,22 @@ public sealed class PgSourceRulesTests
     {
         var violations = PgSourceRules.CheckPath(path);
 
-        Assert.True(violations.IsEmpty, string.Join(Environment.NewLine, violations));
+        var message = string.Join(Environment.NewLine, violations);
+        Assert.True(violations.IsEmpty, message);
+    }
+
+    #endregion
+
+    #region CheckTestPath Tests
+
+    [Theory]
+    [MemberData(nameof(CheckedTestPaths))]
+    public void CheckTestPath_CheckedPath_NestsNoCall(string path)
+    {
+        var violations = PgSourceRules.CheckTestPath(path);
+
+        var message = string.Join(Environment.NewLine, violations);
+        Assert.True(violations.IsEmpty, message);
     }
 
     #endregion

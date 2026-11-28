@@ -11,6 +11,9 @@ public sealed class PostgreSqlCoordinationBuilderExtensionsTests : IDisposable
 {
     private const string ConnectionString = PgOfflineServer.ConnectionString;
 
+    private static Func<IServiceProvider, ICoordinationProvider> AnyFactory =>
+        It.IsAny<Func<IServiceProvider, ICoordinationProvider>>();
+
     private MockRepository Mocks { get; } = new(MockBehavior.Strict);
 
     public void Dispose() => Mocks.Verify();
@@ -23,9 +26,7 @@ public sealed class PostgreSqlCoordinationBuilderExtensionsTests : IDisposable
         if (capture is not null)
         {
             builder
-                .Setup(x =>
-                    x.AddProvider(It.IsAny<Func<IServiceProvider, ICoordinationProvider>>())
-                )
+                .Setup(x => x.AddProvider(AnyFactory))
                 .Callback(capture)
                 .Returns(builder.Object)
                 .Verifiable();

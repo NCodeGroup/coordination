@@ -70,7 +70,8 @@ internal static class PgTestSupport
         CancellationToken cancellationToken
     )
     {
-        var schema = PgSchemaName.Create($"t_{Guid.NewGuid():N}");
+        var name = $"t_{Guid.NewGuid():N}";
+        var schema = PgSchemaName.Create(name);
 
         return CreateProviderAsync(connectionString, profile, schema, cancellationToken);
     }
@@ -92,11 +93,8 @@ internal static class PgTestSupport
     )
     {
         var settings = PgConformance.Settings with { Schema = schema };
-        var provider = new PostgreSqlProvider(
-            PgSource.FromConnectionString(connectionString),
-            profile,
-            settings
-        );
+        var source = PgSource.FromConnectionString(connectionString);
+        var provider = new PostgreSqlProvider(source, profile, settings);
 
         try
         {

@@ -93,10 +93,11 @@ internal sealed class PgFailoverServer(IContainer container, int primaryPort, in
         var primaryPort = ports[0];
         var standbyPort = ports[1];
         var waitStrategy = Wait.ForUnixContainer().UntilMessageIsLogged(StandbyReadyMessage);
+        var script = Script(synchronous);
         var container = new ContainerBuilder(PgServers.Image19)
             .WithEnvironment("POSTGRES_PASSWORD", Password)
             .WithEntrypoint("bash", "-c")
-            .WithCommand(Script(synchronous))
+            .WithCommand(script)
             .WithPortBinding(primaryPort, PrimaryContainerPort)
             .WithPortBinding(standbyPort, StandbyContainerPort)
             .WithWaitStrategy(waitStrategy)
@@ -187,7 +188,8 @@ internal sealed class PgFailoverServer(IContainer container, int primaryPort, in
         await using var command = new NpgsqlCommand(sql, connection);
         foreach (var argument in arguments)
         {
-            command.Parameters.Add(new NpgsqlParameter { Value = argument });
+            var parameter = new NpgsqlParameter { Value = argument };
+            command.Parameters.Add(parameter);
         }
 
         return await command.ExecuteScalarAsync(cancellationToken);

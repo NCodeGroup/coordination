@@ -23,15 +23,17 @@ public sealed class PgFailoverServerTests
         );
 
         var state = "";
+        var limitDuration = TimeSpan.FromSeconds(30);
+        var pollInterval = TimeSpan.FromMilliseconds(100);
         using var limit = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        limit.CancelAfter(TimeSpan.FromSeconds(30));
+        limit.CancelAfter(limitDuration);
         while (state != expected && !limit.IsCancellationRequested)
         {
             var value = await command.ExecuteScalarAsync(cancellationToken);
             state = value as string ?? "";
             if (state != expected)
             {
-                await Task.Delay(TimeSpan.FromMilliseconds(100), cancellationToken);
+                await Task.Delay(pollInterval, cancellationToken);
             }
         }
 

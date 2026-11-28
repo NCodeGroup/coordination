@@ -237,11 +237,10 @@ public sealed class PgServers : IAsyncLifetime
 
         try
         {
-            await Task.WhenAll(
-                container19.StartAsync(CancellationToken.None),
-                container15.StartAsync(CancellationToken.None),
-                unsafeContainer19.StartAsync(CancellationToken.None)
-            );
+            var start19 = container19.StartAsync(CancellationToken.None);
+            var start15 = container15.StartAsync(CancellationToken.None);
+            var startUnsafe19 = unsafeContainer19.StartAsync(CancellationToken.None);
+            await Task.WhenAll(start19, start15, startUnsafe19);
 
             var admin19 = container19.GetConnectionString();
             var admin15 = container15.GetConnectionString();

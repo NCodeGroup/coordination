@@ -10,12 +10,12 @@ public sealed class PostgreSqlProviderTests
     public static TheoryData<PostgreSqlProfile> Profiles =>
         [PostgreSqlProfiles.Standalone, PostgreSqlProfiles.Asynchronous];
 
-    private static PostgreSqlProvider CreateProvider(string connectionString) =>
-        new(
-            PgSource.FromConnectionString(connectionString),
-            PostgreSqlProfiles.Asynchronous,
-            PgSettings.Default
-        );
+    private static PostgreSqlProvider CreateProvider(string connectionString)
+    {
+        var source = PgSource.FromConnectionString(connectionString);
+
+        return new PostgreSqlProvider(source, PostgreSqlProfiles.Asynchronous, PgSettings.Default);
+    }
 
     #region Declaration Property Tests
 

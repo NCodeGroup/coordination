@@ -61,10 +61,8 @@ public sealed class PgSequenceServiceTests
         var service = CreateService(offline);
         var cancellationToken = TestContext.Current.CancellationToken;
         var key = new Keyspace("prod").CreateKey("k");
-        var options = new OperationOptions
-        {
-            Extensions = ImmutableDictionary<string, string>.Empty.Add("consul.lock-delay", "15s"),
-        };
+        var extensions = ImmutableDictionary<string, string>.Empty.Add("consul.lock-delay", "15s");
+        var options = new OperationOptions { Extensions = extensions };
 
         var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
             await service.NextAsync(key, options, cancellationToken)

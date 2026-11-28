@@ -112,7 +112,8 @@ public sealed class PgServersTests(PgServers servers)
             TestContext.Current.CancellationToken
         );
 
-        Assert.False(Assert.IsType<bool>(value));
+        var isSuperuser = Assert.IsType<bool>(value);
+        Assert.False(isSuperuser);
     }
 
     #endregion

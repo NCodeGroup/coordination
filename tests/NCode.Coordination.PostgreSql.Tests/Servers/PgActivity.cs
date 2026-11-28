@@ -125,7 +125,8 @@ internal static class PgActivity
     {
         var sql = "SELECT count(*) FROM pg_stat_activity WHERE " + wait.Condition;
         await using var command = new NpgsqlCommand(sql, connection);
-        command.Parameters.Add(new NpgsqlParameter { Value = wait.Argument });
+        var parameter = new NpgsqlParameter { Value = wait.Argument };
+        command.Parameters.Add(parameter);
 
         var scalar = await command.ExecuteScalarAsync(cancellationToken);
         return Convert.ToInt64(scalar, CultureInfo.InvariantCulture);

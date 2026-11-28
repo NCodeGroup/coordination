@@ -48,7 +48,9 @@ public sealed class PgMigrationsServerTests(PgServers servers)
         var rows = new List<(int Version, int CompatibleFrom)>();
         while (await reader.ReadAsync(cancellationToken))
         {
-            rows.Add((reader.GetInt32(0), reader.GetInt32(1)));
+            var version = reader.GetInt32(0);
+            var compatibleFrom = reader.GetInt32(1);
+            rows.Add((version, compatibleFrom));
         }
 
         return rows;
@@ -77,7 +79,9 @@ public sealed class PgMigrationsServerTests(PgServers servers)
         await using var source = PgSource.FromConnectionString(connectionString);
         var server = new PgServer(source, PgSettings.Default);
 
-        await PgMigrations.ApplyAsync(server, PgSchemaName.Create(schema), cancellationToken);
+        var schemaName = PgSchemaName.Create(schema);
+
+        await PgMigrations.ApplyAsync(server, schemaName, cancellationToken);
     }
 
     private static async Task<(int Version, int CompatibleFrom)> ReadVersionAsAsync(
@@ -89,11 +93,9 @@ public sealed class PgMigrationsServerTests(PgServers servers)
         await using var source = PgSource.FromConnectionString(connectionString);
         var server = new PgServer(source, PgSettings.Default);
 
-        return await PgMigrations.ReadVersionAsync(
-            server,
-            PgSchemaName.Create(schema),
-            cancellationToken
-        );
+        var schemaName = PgSchemaName.Create(schema);
+
+        return await PgMigrations.ReadVersionAsync(server, schemaName, cancellationToken);
     }
 
     #region ApplyAsync Tests
@@ -145,11 +147,11 @@ public sealed class PgMigrationsServerTests(PgServers servers)
         var cancellationToken = TestContext.Current.CancellationToken;
         await WithSchemaAsync(servers.Admin19, async schema =>
         {
-            await Task.WhenAll(
-                Enumerable
-                    .Range(0, 4)
-                    .Select(_ => ApplyAsAsync(servers.PostgreSql19, schema, cancellationToken))
+            var range = Enumerable.Range(0, 4);
+            var applies = range.Select(_ =>
+                ApplyAsAsync(servers.PostgreSql19, schema, cancellationToken)
             );
+            await Task.WhenAll(applies);
 
             await AssertEachVersionOnceAsync(servers.PostgreSql19, schema, cancellationToken);
         });
@@ -230,11 +232,9 @@ public sealed class PgMigrationsServerTests(PgServers servers)
     {
         var cancellationToken = TestContext.Current.CancellationToken;
 
-        var version = await ReadVersionAsAsync(
-            servers.PostgreSql19,
-            NewSchemaName(),
-            cancellationToken
-        );
+        var schema = NewSchemaName();
+
+        var version = await ReadVersionAsAsync(servers.PostgreSql19, schema, cancellationToken);
 
         Assert.Equal((0, 0), version);
     }

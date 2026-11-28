@@ -37,20 +37,12 @@ public sealed class PgTransactionServiceTests
         var keyspace = new Keyspace("prod");
         var key = keyspace.CreateKey("k");
         var other = keyspace.CreateKey("other");
-        var transaction = new RecordTransaction(
-            [RecordCondition.Absent(key)],
-            [RecordWrite.Put(key, new byte[1], RecordLifetime.Persistent)]
-        )
-        {
-            OnFailure =
-            [
-                RecordWrite.Put(
-                    other,
-                    new byte[1],
-                    RecordLifetime.ForSession(new SessionId(keyspace, "s1"))
-                ),
-            ],
-        };
+        var absent = RecordCondition.Absent(key);
+        var put = RecordWrite.Put(key, new byte[1], RecordLifetime.Persistent);
+        var session = new SessionId(keyspace, "s1");
+        var sessionLifetime = RecordLifetime.ForSession(session);
+        var failurePut = RecordWrite.Put(other, new byte[1], sessionLifetime);
+        var transaction = new RecordTransaction([absent], [put]) { OnFailure = [failurePut] };
 
         var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
             await service.ExecuteAsync(transaction, null, cancellationToken)

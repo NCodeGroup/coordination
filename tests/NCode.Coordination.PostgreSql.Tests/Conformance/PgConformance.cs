@@ -36,12 +36,22 @@ internal static class PgConformance
     /// Gets the settings of the provider under test: the module's defaults with a sweep and a log check every second,
     /// so the tests that wait for expiry see rows removed soon.
     /// </summary>
-    internal static PgSettings Settings { get; } =
-        PgSettings.Default with
+    internal static PgSettings Settings { get; } = CreateSettings();
+
+    /// <summary>
+    /// Builds the settings of the provider under test.
+    /// </summary>
+    /// <returns>The module's defaults with a sweep and a log check every second.</returns>
+    private static PgSettings CreateSettings()
+    {
+        var interval = TimeSpan.FromSeconds(1);
+
+        return PgSettings.Default with
         {
-            SweepInterval = TimeSpan.FromSeconds(1),
-            CheckInterval = TimeSpan.FromSeconds(1),
+            SweepInterval = interval,
+            CheckInterval = interval,
         };
+    }
 
     /// <summary>
     /// Creates the target of one conformance test: a provider connected to a server under an application name of its
@@ -68,11 +78,8 @@ internal static class PgConformance
             ApplicationName = applicationName,
         };
 
-        var provider = new PostgreSqlProvider(
-            PgSource.FromConnectionString(builder.ConnectionString),
-            profile,
-            Settings
-        );
+        var source = PgSource.FromConnectionString(builder.ConnectionString);
+        var provider = new PostgreSqlProvider(source, profile, Settings);
 
         try
         {
@@ -115,7 +122,8 @@ internal static class PgConformance
         await connection.OpenAsync(cancellationToken);
 
         await using var select = new NpgsqlCommand(SelectPidsSql, connection);
-        select.Parameters.Add(new NpgsqlParameter { Value = applicationName });
+        var applicationParameter = new NpgsqlParameter { Value = applicationName };
+        select.Parameters.Add(applicationParameter);
         var pids = await select.ExecuteScalarAsync(cancellationToken) as int[];
 
         Assert.True(
@@ -124,21 +132,24 @@ internal static class PgConformance
         );
 
         await using var terminate = new NpgsqlCommand(TerminateSql, connection);
-        terminate.Parameters.Add(new NpgsqlParameter { Value = pids });
+        var terminateParameter = new NpgsqlParameter { Value = pids };
+        terminate.Parameters.Add(terminateParameter);
         await terminate.ExecuteScalarAsync(cancellationToken);
 
         var deadline = Stopwatch.StartNew();
+        var pollInterval = TimeSpan.FromMilliseconds(50);
         while (deadline.Elapsed < TimeSpan.FromSeconds(10))
         {
             await using var count = new NpgsqlCommand(CountSql, connection);
-            count.Parameters.Add(new NpgsqlParameter { Value = pids });
+            var countParameter = new NpgsqlParameter { Value = pids };
+            count.Parameters.Add(countParameter);
             var remaining = await count.ExecuteScalarAsync(cancellationToken);
             if (Convert.ToInt64(remaining, CultureInfo.InvariantCulture) == 0)
             {
                 return;
             }
 
-            await Task.Delay(TimeSpan.FromMilliseconds(50), cancellationToken);
+            await Task.Delay(pollInterval, cancellationToken);
         }
 
         Assert.Fail(

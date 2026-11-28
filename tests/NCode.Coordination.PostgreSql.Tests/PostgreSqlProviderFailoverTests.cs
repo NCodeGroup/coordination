@@ -58,6 +58,7 @@ public sealed class PostgreSqlProviderFailoverTests
         await connection.OpenAsync(cancellationToken);
 
         var stopwatch = Stopwatch.StartNew();
+        var pollInterval = TimeSpan.FromMilliseconds(100);
         while (true)
         {
             await using var command = new NpgsqlCommand(
@@ -71,7 +72,7 @@ public sealed class PostgreSqlProviderFailoverTests
             if (stopwatch.Elapsed > PgTestSupport.WaitLimit)
                 Assert.Fail("No commit waited for the standby.");
 
-            await Task.Delay(TimeSpan.FromMilliseconds(100), cancellationToken);
+            await Task.Delay(pollInterval, cancellationToken);
         }
     }
 
@@ -207,14 +208,9 @@ public sealed class PostgreSqlProviderFailoverTests
         await server.WaitForStandbyAsync(cancellationToken);
         await server.CutReplicationAsync(cancellationToken);
 
+        var lostKey = keyspace.CreateKey(LostName);
         var pending = records
-            .CreateAsync(
-                keyspace.CreateKey(LostName),
-                value,
-                RecordLifetime.Persistent,
-                null,
-                cancellationToken
-            )
+            .CreateAsync(lostKey, value, RecordLifetime.Persistent, null, cancellationToken)
             .AsTask();
         await WaitForCommitWaitingAsync(server.PrimaryAdmin, cancellationToken);
 
@@ -249,7 +245,8 @@ public sealed class PostgreSqlProviderFailoverTests
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var server = await PgFailoverServer.StartAsync(true, cancellationToken);
-        var schema = PgSchemaName.Create($"t_{Guid.NewGuid():N}");
+        var schemaName = $"t_{Guid.NewGuid():N}";
+        var schema = PgSchemaName.Create(schemaName);
         await using var oldPrimary = await PgTestSupport.CreateProviderAsync(
             server.PrimaryAdmin,
             PostgreSqlProfiles.Synchronous,
