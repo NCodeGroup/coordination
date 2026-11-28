@@ -25,6 +25,12 @@ public sealed class PgServers : IAsyncLifetime
     public const string Image15 =
         "postgres:15.20@sha256:868b5ee219026c0f34c99d696d4494ccb3705cf1a18bed1e0b9de64d9c011ccd";
 
+    /// <summary>The data volume of the PostgreSQL 19 image, which from PostgreSQL 18 holds a directory per major version.</summary>
+    private const string DataPath19 = "/var/lib/postgresql";
+
+    /// <summary>The data volume of the PostgreSQL 15 image, which is its data directory.</summary>
+    private const string DataPath15 = "/var/lib/postgresql/data";
+
     /// <summary>The name of the non-superuser role that the conformance tests connect as.</summary>
     public const string Role = "coordinator";
 
@@ -114,13 +120,12 @@ public sealed class PgServers : IAsyncLifetime
     /// fails a server over needs its data on disk and starts a server of its own.
     /// </summary>
     /// <param name="image">The image of the server.</param>
+    /// <param name="dataPath">The image's data volume, which the in-memory mount replaces.</param>
     /// <param name="durable">Whether the server runs with <see cref="DurableCommand"/>.</param>
     /// <returns>The container, not yet started.</returns>
-    private static PostgreSqlContainer CreateContainer(string image, bool durable)
+    private static PostgreSqlContainer CreateContainer(string image, string dataPath, bool durable)
     {
-        var builder = new PostgreSqlBuilder(image)
-            .WithDatabase(Database)
-            .WithTmpfsMount("/var/lib/postgresql");
+        var builder = new PostgreSqlBuilder(image).WithDatabase(Database).WithTmpfsMount(dataPath);
         if (durable)
         {
             builder = builder.WithCommand([.. DurableCommand]);
@@ -154,9 +159,9 @@ public sealed class PgServers : IAsyncLifetime
             return;
         }
 
-        var container19 = CreateContainer(Image19, durable: true);
-        var container15 = CreateContainer(Image15, durable: true);
-        var unsafeContainer19 = CreateContainer(Image19, durable: false);
+        var container19 = CreateContainer(Image19, DataPath19, durable: true);
+        var container15 = CreateContainer(Image15, DataPath15, durable: true);
+        var unsafeContainer19 = CreateContainer(Image19, DataPath19, durable: false);
         Container19 = container19;
         Container15 = container15;
         UnsafeContainer19 = unsafeContainer19;

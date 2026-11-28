@@ -12,9 +12,10 @@ namespace NCode.Coordination.PostgreSql.Tests.Servers;
 internal static class PgPorts
 {
     /// <summary>
-    /// The number of times a server start tries freshly reserved ports before it fails.
+    /// The number of times a server start tries freshly reserved ports before it fails: a whole run starts many
+    /// containers at once, and each can take a port between another start's reservation and its bind.
     /// </summary>
-    private const int StartAttempts = 3;
+    private const int StartAttempts = 10;
 
     /// <summary>
     /// Reserves host ports that are free at the moment, for containers that publish a port as itself.
