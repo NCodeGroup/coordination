@@ -1,6 +1,6 @@
 # NCode.Coordination.PostgreSql
 
-The PostgreSQL provider of [NCode.Coordination](https://github.com/NCodeGroup/coordination): coordination over
+The PostgreSQL provider of [NCode.Coordination](https://github.com/NCodeGroup/Coordination): coordination over
 PostgreSQL 15 or later, through Npgsql, in tables of one schema that it migrates.
 
 ## Adding it
@@ -150,7 +150,7 @@ It logs each failure its background work catches and goes on from, once per fail
 
 Each entry carries the failure as its exception. No entry carries a keyspace, key, channel, topic or connection string,
 since they can name a tenant or hold a secret, so an entry shows that something failed, not for whom. See
-[ADR-1035](https://github.com/NCodeGroup/coordination/blob/main/docs/decisions/1035-the-providers-log-every-failure-their-background-work-catches-with-event-ids-of-their-own.md).
+[ADR-1035](https://github.com/NCodeGroup/Coordination/blob/main/docs/decisions/1035-the-providers-log-every-failure-their-background-work-catches-with-event-ids-of-their-own.md).
 
 ## Verification
 

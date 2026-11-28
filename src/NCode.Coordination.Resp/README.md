@@ -1,6 +1,6 @@
 # NCode.Coordination.Resp
 
-The RESP provider of [NCode.Coordination](https://github.com/NCodeGroup/coordination): coordination over Valkey or
+The RESP provider of [NCode.Coordination](https://github.com/NCodeGroup/Coordination): coordination over Valkey or
 Garnet, through StackExchange.Redis.
 
 ## Adding it
@@ -110,7 +110,7 @@ It logs each failure its background work catches and goes on from, once per fail
 
 Each entry carries the failure as its exception. No entry carries a keyspace, key, channel or topic, since they can name
 a tenant, so an entry shows that something failed, not for whom. See
-[ADR-1035](https://github.com/NCodeGroup/coordination/blob/main/docs/decisions/1035-the-providers-log-every-failure-their-background-work-catches-with-event-ids-of-their-own.md).
+[ADR-1035](https://github.com/NCodeGroup/Coordination/blob/main/docs/decisions/1035-the-providers-log-every-failure-their-background-work-catches-with-event-ids-of-their-own.md).
 
 ## Verification
 
