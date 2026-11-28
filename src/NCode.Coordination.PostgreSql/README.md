@@ -116,3 +116,24 @@ watches and notifications declares the server's clock.
 in every operation's transaction, so they bind that operation and not the connection that the pool keeps. Each is at
 least a millisecond and less than an hour. A call that exceeds one fails as `unavailable`, and says whether it may have
 taken effect.
+
+## Verification
+
+The provider passes every suite of the conformance kit against PostgreSQL 19 and PostgreSQL 15: concurrent runs of
+every primitive checked for linearizability and declared delivery, and runs that end its own connections mid-run. The
+suites' servers keep their data in memory, with `fsync` and `synchronous_commit` on as the probe requires. Its own
+tests restart a PostgreSQL 19 server mid-run, with its data on disk: every failure is `unavailable`, a call that fails
+as not applied never applies, and every subscription and watch resyncs and goes on delivering. When a server ends its
+connections, the provider clears its data source's idle pool, so one lost connection doesn't cost a call for each
+connection the pool held.
+
+They also promote a standby of a PostgreSQL 19 primary and standby that share one container. When the standby is
+promoted after asynchronous replication is cut, the writes the old primary acknowledged after the cut are lost, as
+linearizable until a failover allows, and every subscription and watch resyncs on the new server when the failover
+takes its numbers back. When a synchronous standby is promoted, no acknowledged write is lost, but the old primary
+still answers reads until it stops, and it misses a write of the new primary, so every profile declares linearizable
+until a failover.
+
+Npgsql rechecks the hosts of a multi-host connection string every `Host Recheck Seconds`, 10 by default, and learns of
+a promotion only then; until it does, a write fails as `unavailable`. Lower it in the connection string to shorten that
+outage.
