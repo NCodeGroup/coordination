@@ -4,15 +4,17 @@
 namespace NCode.Coordination.PostgreSql.Sweep;
 
 /// <summary>
-/// Runs the sweep passes on an interval until it is disposed.
+/// Runs the sweep on a periodic timer until it is disposed, and sweeps again after a sweep fails.
 /// </summary>
-/// <param name="sweeps">The passes to run.</param>
-/// <param name="interval">The time between the passes.</param>
+/// <param name="sweep">The sweep to run at each tick.</param>
+/// <param name="interval">The time between the sweeps.</param>
 /// <param name="time">The clock that times the interval.</param>
-/// <exception cref="ArgumentNullException">The sweeps or the clock are null.</exception>
-internal sealed class PgSweeper(PgSweeps sweeps, TimeSpan interval, TimeProvider time)
-    : IAsyncDisposable,
-        IDisposable
+/// <exception cref="ArgumentNullException">The sweep or the clock are null.</exception>
+internal sealed class PgSweeper(
+    Func<CancellationToken, ValueTask> sweep,
+    TimeSpan interval,
+    TimeProvider time
+) : IAsyncDisposable, IDisposable
 {
     /// <summary>
     /// Gets the lock that orders starting, cancelling and reading the loop.
@@ -40,9 +42,15 @@ internal sealed class PgSweeper(PgSweeps sweeps, TimeSpan interval, TimeProvider
     private Task Loop { get; set; } = Task.CompletedTask;
 
     /// <summary>
-    /// Gets the passes to run.
+    /// Gets or sets the timer that ticks the sweeps, which <see cref="Start" /> creates.
     /// </summary>
-    private PgSweeps Sweeps { get; } = sweeps ?? throw new ArgumentNullException(nameof(sweeps));
+    private PeriodicTimer? Timer { get; set; }
+
+    /// <summary>
+    /// Gets the sweep to run at each tick.
+    /// </summary>
+    private Func<CancellationToken, ValueTask> Sweep { get; } =
+        sweep ?? throw new ArgumentNullException(nameof(sweep));
 
     /// <summary>
     /// Gets the clock that times the interval.
@@ -50,7 +58,7 @@ internal sealed class PgSweeper(PgSweeps sweeps, TimeSpan interval, TimeProvider
     private TimeProvider Time { get; } = time ?? throw new ArgumentNullException(nameof(time));
 
     /// <summary>
-    /// Starts the loop that waits the interval and runs the passes, unless it was already started or disposed.
+    /// Starts the loop that sweeps at each tick of a periodic timer, unless it was already started or disposed.
     /// </summary>
     public void Start()
     {
@@ -62,8 +70,10 @@ internal sealed class PgSweeper(PgSweeps sweeps, TimeSpan interval, TimeProvider
             }
 
             Started = true;
+            var timer = new PeriodicTimer(interval, Time);
+            Timer = timer;
             var token = Cancellation.Token;
-            Loop = Task.Run(() => RunAsync(token), CancellationToken.None);
+            Loop = Task.Run(() => RunAsync(timer, token), CancellationToken.None);
         }
     }
 
@@ -71,10 +81,12 @@ internal sealed class PgSweeper(PgSweeps sweeps, TimeSpan interval, TimeProvider
     public async ValueTask DisposeAsync()
     {
         Task loop;
+        PeriodicTimer? timer;
         lock (Gate)
         {
             Cancel();
             loop = Loop;
+            timer = Timer;
         }
 
         try
@@ -86,6 +98,7 @@ internal sealed class PgSweeper(PgSweeps sweeps, TimeSpan interval, TimeProvider
             // The sweeper is stopped, and the loop ended with its cancellation.
         }
 
+        timer?.Dispose();
         Cancellation.Dispose();
     }
 
@@ -95,6 +108,7 @@ internal sealed class PgSweeper(PgSweeps sweeps, TimeSpan interval, TimeProvider
         lock (Gate)
         {
             Cancel();
+            Timer?.Dispose();
         }
     }
 
@@ -113,23 +127,40 @@ internal sealed class PgSweeper(PgSweeps sweeps, TimeSpan interval, TimeProvider
     }
 
     /// <summary>
-    /// Waits the interval and runs the passes, until the token is cancelled.
+    /// Sweeps at each tick of the timer, until the token is cancelled.
     /// </summary>
+    /// <param name="timer">The timer that ticks the sweeps.</param>
     /// <param name="cancellationToken">The token that ends the loop, which is the sweeper's own.</param>
     /// <returns>A task that completes when the loop ends; its own cancellation ends it quietly.</returns>
-    private async Task RunAsync(CancellationToken cancellationToken)
+    private async Task RunAsync(PeriodicTimer timer, CancellationToken cancellationToken)
     {
         try
         {
-            while (!cancellationToken.IsCancellationRequested)
+            while (await timer.WaitForNextTickAsync(cancellationToken).ConfigureAwait(false))
             {
-                await Task.Delay(interval, Time, cancellationToken).ConfigureAwait(false);
-                await Sweeps.SweepAsync(cancellationToken).ConfigureAwait(false);
+                await SweepQuietlyAsync(cancellationToken).ConfigureAwait(false);
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             // The sweeper is stopped.
+        }
+    }
+
+    /// <summary>
+    /// Runs one sweep and swallows its failure, unless the sweeper was cancelled.
+    /// </summary>
+    /// <param name="cancellationToken">The token that ends the loop, which is the sweeper's own.</param>
+    /// <returns>A task that completes when the sweep ends, or fails when it was cancelled.</returns>
+    private async ValueTask SweepQuietlyAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Sweep(cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception) when (!cancellationToken.IsCancellationRequested)
+        {
+            // The next tick sweeps again, and one failed sweep must not end the sweeping; the package has no logger to report it to.
         }
     }
 }

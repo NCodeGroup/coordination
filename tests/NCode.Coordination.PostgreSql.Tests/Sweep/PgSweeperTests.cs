@@ -1,11 +1,7 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
-using System.Diagnostics;
 using Microsoft.Extensions.Time.Testing;
-using NCode.Coordination.PostgreSql.Keys;
-using NCode.Coordination.PostgreSql.Records;
-using NCode.Coordination.PostgreSql.Server;
 
 namespace NCode.Coordination.PostgreSql.Sweep.Tests;
 
@@ -15,14 +11,9 @@ public sealed class PgSweeperTests
 
     private sealed class CountingTimeProvider : FakeTimeProvider
     {
-        private readonly TaskCompletionSource _first = new(
-            TaskCreationOptions.RunContinuationsAsynchronously
-        );
         private int _timers;
 
         public int Timers => Volatile.Read(ref _timers);
-
-        public Task FirstTimer => _first.Task;
 
         public override ITimer CreateTimer(
             TimerCallback callback,
@@ -32,25 +23,52 @@ public sealed class PgSweeperTests
         )
         {
             Interlocked.Increment(ref _timers);
-            var timer = base.CreateTimer(callback, state, dueTime, period);
-            _first.TrySetResult();
-            return timer;
+            return base.CreateTimer(callback, state, dueTime, period);
         }
     }
 
-    private static async Task WithSweeperAsync(Func<PgSweeper, CountingTimeProvider, Task> test)
+    private sealed class CountingSweep(bool failFirst)
     {
-        await using var source = PgSource.FromConnectionString(
-            "Host=127.0.0.1;Port=1;Database=coordination;Username=u;Password=p;Timeout=1"
+        private readonly TaskCompletionSource _first = new(
+            TaskCreationOptions.RunContinuationsAsynchronously
         );
-        var server = new PgServer(source, PgSettings.Default);
-        var keyspaces = new PgKeyspaces(server, PgSettings.Default.Schema);
-        var table = new PgRecordTable(server, keyspaces, PgSettings.Default);
-        var sweeps = new PgSweeps(server, PgSettings.Default, table);
+        private readonly TaskCompletionSource _second = new(
+            TaskCreationOptions.RunContinuationsAsynchronously
+        );
+        private int _calls;
+
+        public int Calls => Volatile.Read(ref _calls);
+
+        public Task FirstCall => _first.Task;
+
+        public Task SecondCall => _second.Task;
+
+        public ValueTask SweepAsync(CancellationToken cancellationToken)
+        {
+            var call = Interlocked.Increment(ref _calls);
+            if (call == 1)
+            {
+                _first.TrySetResult();
+                return failFirst
+                    ? ValueTask.FromException(new InvalidOperationException())
+                    : ValueTask.CompletedTask;
+            }
+
+            _second.TrySetResult();
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    private static async Task WithSweeperAsync(
+        bool failFirst,
+        Func<PgSweeper, CountingTimeProvider, CountingSweep, Task> test
+    )
+    {
+        var sweep = new CountingSweep(failFirst);
         var time = new CountingTimeProvider();
 
-        await using var sweeper = new PgSweeper(sweeps, Interval, time);
-        await test(sweeper, time);
+        await using var sweeper = new PgSweeper(sweep.SweepAsync, Interval, time);
+        await test(sweeper, time, sweep);
     }
 
     #region Start Tests
@@ -58,46 +76,58 @@ public sealed class PgSweeperTests
     [Fact]
     public async Task Start_Twice_StartsOneLoop()
     {
-        var cancellationToken = TestContext.Current.CancellationToken;
-        await WithSweeperAsync(
-            async (sweeper, time) =>
-            {
-                sweeper.Start();
-                sweeper.Start();
+        await WithSweeperAsync(failFirst: false, (sweeper, time, _) =>
+        {
+            sweeper.Start();
+            sweeper.Start();
 
-                await time.FirstTimer.WaitAsync(TimeSpan.FromSeconds(10), cancellationToken);
-                time.Advance(Interval);
-
-                var elapsed = Stopwatch.StartNew();
-                while (time.Timers < 2)
-                {
-                    Assert.True(
-                        elapsed.Elapsed < TimeSpan.FromSeconds(60),
-                        "The loop did not wait for its next pass."
-                    );
-                    await Task.Delay(TimeSpan.FromMilliseconds(50), cancellationToken);
-                }
-
-                await sweeper.DisposeAsync();
-
-                Assert.Equal(2, time.Timers);
-            }
-        );
+            Assert.Equal(1, time.Timers);
+            return Task.CompletedTask;
+        });
     }
 
     [Fact]
     public async Task Start_AfterDispose_StartsNoLoop()
     {
-        await WithSweeperAsync(
-            async (sweeper, time) =>
-            {
-                await sweeper.DisposeAsync();
+        await WithSweeperAsync(failFirst: false, async (sweeper, time, _) =>
+        {
+            await sweeper.DisposeAsync();
 
-                sweeper.Start();
+            sweeper.Start();
 
-                Assert.Equal(0, time.Timers);
-            }
-        );
+            Assert.Equal(0, time.Timers);
+        });
+    }
+
+    [Fact]
+    public async Task Start_IntervalPassed_Sweeps()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await WithSweeperAsync(failFirst: false, async (sweeper, time, sweep) =>
+        {
+            sweeper.Start();
+
+            time.Advance(Interval);
+
+            await sweep.FirstCall.WaitAsync(TimeSpan.FromSeconds(10), cancellationToken);
+            Assert.Equal(1, sweep.Calls);
+        });
+    }
+
+    [Fact]
+    public async Task Start_SweepThrowsUnexpectedly_SweepsAgainAtTheNextTick()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await WithSweeperAsync(failFirst: true, async (sweeper, time, sweep) =>
+        {
+            sweeper.Start();
+            time.Advance(Interval);
+            await sweep.FirstCall.WaitAsync(TimeSpan.FromSeconds(10), cancellationToken);
+
+            time.Advance(Interval);
+
+            await sweep.SecondCall.WaitAsync(TimeSpan.FromSeconds(10), cancellationToken);
+        });
     }
 
     #endregion
@@ -108,23 +138,21 @@ public sealed class PgSweeperTests
     public async Task DisposeAsync_Started_StopsTheLoop()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        await WithSweeperAsync(
-            async (sweeper, time) =>
-            {
-                sweeper.Start();
-                await time.FirstTimer.WaitAsync(TimeSpan.FromSeconds(10), cancellationToken);
+        await WithSweeperAsync(failFirst: false, async (sweeper, time, sweep) =>
+        {
+            sweeper.Start();
+            time.Advance(Interval);
+            await sweep.FirstCall.WaitAsync(TimeSpan.FromSeconds(10), cancellationToken);
 
-                await sweeper
-                    .DisposeAsync()
-                    .AsTask()
-                    .WaitAsync(TimeSpan.FromSeconds(10), cancellationToken);
+            await sweeper
+                .DisposeAsync()
+                .AsTask()
+                .WaitAsync(TimeSpan.FromSeconds(10), cancellationToken);
 
-                var timers = time.Timers;
-                time.Advance(Interval);
+            time.Advance(Interval);
 
-                Assert.Equal(timers, time.Timers);
-            }
-        );
+            Assert.Equal(1, sweep.Calls);
+        });
     }
 
     #endregion

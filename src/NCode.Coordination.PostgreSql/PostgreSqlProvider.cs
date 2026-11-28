@@ -138,7 +138,7 @@ internal sealed class PostgreSqlProvider : ICoordinationProvider, IAsyncDisposab
             Profile = profile.Name,
         };
         var sweeps = new PgSweeps(Server, settings, RecordTable);
-        Sweeper = new PgSweeper(sweeps, settings.SweepInterval, TimeProvider.System);
+        Sweeper = new PgSweeper(sweeps.SweepAsync, settings.SweepInterval, TimeProvider.System);
         Services = CreateServices();
     }
 
