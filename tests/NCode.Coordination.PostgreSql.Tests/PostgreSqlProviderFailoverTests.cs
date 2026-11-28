@@ -45,29 +45,6 @@ public sealed class PostgreSqlProviderFailoverTests
     private const string LostName = "lost";
 
     /// <summary>
-    /// Moves an enumerator to its next item that is not a resync, so that a periodic check between two writes doesn't
-    /// fail a test that counts deliveries.
-    /// </summary>
-    /// <typeparam name="T">The type of the items.</typeparam>
-    /// <param name="enumerator">The enumerator to move.</param>
-    /// <param name="isResync">The function that tells whether an item is a resync.</param>
-    /// <param name="cancellationToken">The token that cancels the wait.</param>
-    /// <returns>The next item that is not a resync.</returns>
-    private static async ValueTask<T> NextDeliveryAsync<T>(
-        IAsyncEnumerator<T> enumerator,
-        Func<T, bool> isResync,
-        CancellationToken cancellationToken
-    )
-    {
-        while (true)
-        {
-            var item = await PgTestSupport.NextAsync(enumerator, cancellationToken);
-            if (!isResync(item))
-                return item;
-        }
-    }
-
-    /// <summary>
     /// Polls the primary until a backend waits for a synchronous standby to confirm its commit.
     /// </summary>
     /// <param name="connectionString">The connection string of the primary.</param>
@@ -405,19 +382,13 @@ public sealed class PostgreSqlProviderFailoverTests
                 cancellationToken
             );
 
-            var message = await NextDeliveryAsync(
-                messageEnumerator,
-                notification => notification.IsResync,
-                cancellationToken
-            );
+            var message = await PgTestSupport.NextAsync(messageEnumerator, cancellationToken);
+            Assert.False(message.IsResync);
             Assert.Equal(NotificationKind.Message, message.Kind);
             var received = message.Payload.ToArray();
             Assert.Equal(payload, received);
-            var change = await NextDeliveryAsync(
-                changeEnumerator,
-                recordChange => recordChange.IsResync,
-                cancellationToken
-            );
+            var change = await PgTestSupport.NextAsync(changeEnumerator, cancellationToken);
+            Assert.False(change.IsResync);
             Assert.Equal(RecordChangeKind.Written, change.Kind);
             Assert.Equal(key, change.Key);
         }
@@ -438,19 +409,13 @@ public sealed class PostgreSqlProviderFailoverTests
                 cancellationToken
             );
 
-            var message = await NextDeliveryAsync(
-                messageEnumerator,
-                notification => notification.IsResync,
-                cancellationToken
-            );
+            var message = await PgTestSupport.NextAsync(messageEnumerator, cancellationToken);
+            Assert.False(message.IsResync);
             Assert.Equal(NotificationKind.Message, message.Kind);
             var received = message.Payload.ToArray();
             Assert.Equal(payload, received);
-            var change = await NextDeliveryAsync(
-                changeEnumerator,
-                recordChange => recordChange.IsResync,
-                cancellationToken
-            );
+            var change = await PgTestSupport.NextAsync(changeEnumerator, cancellationToken);
+            Assert.False(change.IsResync);
             Assert.Equal(RecordChangeKind.Written, change.Kind);
             Assert.Equal(key, change.Key);
         }
