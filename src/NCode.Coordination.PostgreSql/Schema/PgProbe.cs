@@ -50,7 +50,27 @@ internal sealed class PgProbe(
     /// checked on its own, because a list of privileges is true when the role holds any one of them.
     /// </summary>
     private const string TablePrivilegesSql = """
-        SELECT c.relname FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname = $1 AND c.relkind IN ('r', 'p') AND ((c.relname = ANY($2::text[]) AND NOT (has_table_privilege(c.oid, 'SELECT') AND has_table_privilege(c.oid, 'INSERT') AND has_table_privilege(c.oid, 'UPDATE') AND has_table_privilege(c.oid, 'DELETE'))) OR (c.relname = 'schema_version' AND NOT has_table_privilege(c.oid, 'SELECT'))) ORDER BY c.relname
+        SELECT c.relname
+        FROM pg_catalog.pg_class c
+        JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace
+        WHERE n.nspname = $1
+          AND c.relkind IN ('r', 'p')
+          AND (
+            (
+              c.relname = ANY($2::text[])
+              AND NOT (
+                has_table_privilege(c.oid, 'SELECT')
+                AND has_table_privilege(c.oid, 'INSERT')
+                AND has_table_privilege(c.oid, 'UPDATE')
+                AND has_table_privilege(c.oid, 'DELETE')
+              )
+            )
+            OR (
+              c.relname = 'schema_version'
+              AND NOT has_table_privilege(c.oid, 'SELECT')
+            )
+          )
+        ORDER BY c.relname
         """;
 
     /// <summary>
