@@ -302,42 +302,42 @@ internal sealed class PgGrants(PgRecordTable table)
     /// <summary>
     /// Gets the statement that reads a resource's grant rows.
     /// </summary>
-    private string SelectGrantsSql { get; } = table.Settings.Schema.Apply(SelectGrants);
+    private string SelectGrantsSql { get; } = table.Apply(SelectGrants);
 
     /// <summary>
     /// Gets the statement that reads the last fencing token of a resource.
     /// </summary>
-    private string SelectLastSql { get; } = table.Settings.Schema.Apply(SelectLast);
+    private string SelectLastSql { get; } = table.Apply(SelectLast);
 
     /// <summary>
     /// Gets the statement that reads the deadline of a session's row.
     /// </summary>
-    private string SelectSessionSql { get; } = table.Settings.Schema.Apply(SelectSession);
+    private string SelectSessionSql { get; } = table.Apply(SelectSession);
 
     /// <summary>
     /// Gets the statement that reads the server's instant and a resource's grant rows.
     /// </summary>
-    private string SelectNowSql { get; } = table.Settings.Schema.Apply(SelectNow);
+    private string SelectNowSql { get; } = table.Apply(SelectNow);
 
     /// <summary>
     /// Gets the statement that writes a grant.
     /// </summary>
-    private string UpsertGrantSql { get; } = table.Settings.Schema.Apply(UpsertGrant);
+    private string UpsertGrantSql { get; } = table.Apply(UpsertGrant);
 
     /// <summary>
     /// Gets the statement that stores the last fencing token of a resource.
     /// </summary>
-    private string UpsertFencingSql { get; } = table.Settings.Schema.Apply(UpsertFencing);
+    private string UpsertFencingSql { get; } = table.Apply(UpsertFencing);
 
     /// <summary>
     /// Gets the statement that moves the deadline of a grant.
     /// </summary>
-    private string RenewGrantSql { get; } = table.Settings.Schema.Apply(RenewGrant);
+    private string RenewGrantSql { get; } = table.Apply(RenewGrant);
 
     /// <summary>
     /// Gets the statement that deletes a grant.
     /// </summary>
-    private string DeleteGrantSql { get; } = table.Settings.Schema.Apply(DeleteGrant);
+    private string DeleteGrantSql { get; } = table.Apply(DeleteGrant);
 
     /// <summary>
     /// Runs an operation with a keyspace's id; when the operation finds the keyspace's row missing, resolves the id

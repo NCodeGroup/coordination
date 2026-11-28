@@ -385,7 +385,7 @@ internal sealed class PgRecordService(PgRecordTable table) : IRecordService
     /// <summary>
     /// Gets the statement that lists the rows under a prefix after a position.
     /// </summary>
-    private string ListSql { get; } = table.Settings.Schema.Apply(ListRows);
+    private string ListSql { get; } = table.Apply(ListRows);
 
     /// <inheritdoc />
     public async ValueTask<RecordWriteResult> CreateAsync(

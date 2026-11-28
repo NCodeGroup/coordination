@@ -414,6 +414,13 @@ internal sealed class PgRecordTable(PgServer server, PgKeyspaces keyspaces, PgSe
     public PgKeyspaceChange NewChange(PgChangeOrigin origin) => new(Settings, origin);
 
     /// <summary>
+    /// Formats a statement's text for the provider's schema.
+    /// </summary>
+    /// <param name="sql">The statement's text, with <c>{schema}</c> where the schema's quoted name goes.</param>
+    /// <returns>The statement's text for the provider's schema.</returns>
+    public string Apply(string sql) => Settings.Schema.Apply(sql);
+
+    /// <summary>
     /// Runs an operation with a keyspace's id; when the operation finds the keyspace's row missing, resolves the id
     /// again and runs it once more.
     /// </summary>

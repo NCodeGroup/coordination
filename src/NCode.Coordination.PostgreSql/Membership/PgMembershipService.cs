@@ -453,27 +453,27 @@ internal sealed class PgMembershipService(PgRecordTable table, PgChangeLog chang
     /// <summary>
     /// Gets the statement that reads a group's rows beside the deadlines of their sessions.
     /// </summary>
-    private string SelectGroupSql { get; } = table.Settings.Schema.Apply(SelectGroup);
+    private string SelectGroupSql { get; } = table.Apply(SelectGroup);
 
     /// <summary>
     /// Gets the statement that reads the deadline of a session's row.
     /// </summary>
-    private string SelectSessionSql { get; } = table.Settings.Schema.Apply(SelectSession);
+    private string SelectSessionSql { get; } = table.Apply(SelectSession);
 
     /// <summary>
     /// Gets the statement that adds a member to a group.
     /// </summary>
-    private string UpsertMemberSql { get; } = table.Settings.Schema.Apply(UpsertMember);
+    private string UpsertMemberSql { get; } = table.Apply(UpsertMember);
 
     /// <summary>
     /// Gets the statement that removes a session's member from a group.
     /// </summary>
-    private string DeleteMemberSql { get; } = table.Settings.Schema.Apply(DeleteMember);
+    private string DeleteMemberSql { get; } = table.Apply(DeleteMember);
 
     /// <summary>
     /// Gets the statement that reads a group's live members.
     /// </summary>
-    private string SelectMembersSql { get; } = table.Settings.Schema.Apply(SelectMembers);
+    private string SelectMembersSql { get; } = table.Apply(SelectMembers);
 
     /// <inheritdoc />
     public async ValueTask<MembershipJoinStatus> JoinAsync(

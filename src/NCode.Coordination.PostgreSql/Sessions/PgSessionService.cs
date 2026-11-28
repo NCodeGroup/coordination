@@ -133,17 +133,17 @@ internal sealed class PgSessionService(PgRecordTable table, IPgTokens tokens, Pg
     /// <summary>
     /// Gets the statement that inserts a session's row.
     /// </summary>
-    private string InsertSql { get; } = table.Settings.Schema.Apply(InsertSession);
+    private string InsertSql { get; } = table.Apply(InsertSession);
 
     /// <summary>
     /// Gets the statement that renews a live session's deadline.
     /// </summary>
-    private string RenewSql { get; } = table.Settings.Schema.Apply(RenewSession);
+    private string RenewSql { get; } = table.Apply(RenewSession);
 
     /// <summary>
     /// Gets the statement that tells whether a session is no longer live.
     /// </summary>
-    private string EndedSql { get; } = table.Settings.Schema.Apply(SelectEnded);
+    private string EndedSql { get; } = table.Apply(SelectEnded);
 
     /// <inheritdoc />
     public async ValueTask<SessionGrant> OpenAsync(
