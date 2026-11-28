@@ -46,7 +46,8 @@ public sealed class PgRecordServiceTests
         var cancellationToken = TestContext.Current.CancellationToken;
         var keyspace = new Keyspace("prod");
         var key = keyspace.CreateKey("k");
-        var lifetime = RecordLifetime.ForSession(new SessionId(keyspace, "s1"));
+        var sessionId = new SessionId(keyspace, "s1");
+        var lifetime = RecordLifetime.ForSession(sessionId);
 
         var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
             await service.CreateAsync(key, new byte[1], lifetime, null, cancellationToken)
@@ -90,13 +91,12 @@ public sealed class PgRecordServiceTests
         var service = CreateService(offline);
         var cancellationToken = TestContext.Current.CancellationToken;
         var key = new Keyspace("prod").CreateKey("k");
-        var options = new OperationOptions
-        {
-            Extensions = ImmutableDictionary<string, string>.Empty.Add("consul.lock-delay", "15s"),
-        };
+        var revision = new Revision(1);
+        var extensions = ImmutableDictionary<string, string>.Empty.Add("consul.lock-delay", "15s");
+        var options = new OperationOptions { Extensions = extensions };
 
         var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
-            await service.CompareAndDeleteAsync(key, new Revision(1), options, cancellationToken)
+            await service.CompareAndDeleteAsync(key, revision, options, cancellationToken)
         );
 
         Assert.Equal(CoordinationErrorCodes.Unsupported, exception.Code);
@@ -114,10 +114,8 @@ public sealed class PgRecordServiceTests
         var service = CreateService(offline);
         var cancellationToken = TestContext.Current.CancellationToken;
         var key = new Keyspace("prod").CreateKey("k");
-        var options = new OperationOptions
-        {
-            Extensions = ImmutableDictionary<string, string>.Empty.Add("consul.lock-delay", "15s"),
-        };
+        var extensions = ImmutableDictionary<string, string>.Empty.Add("consul.lock-delay", "15s");
+        var options = new OperationOptions { Extensions = extensions };
 
         var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
             await service.ReadAsync(key, options, cancellationToken)
@@ -140,10 +138,9 @@ public sealed class PgRecordServiceTests
         var keyspace = new Keyspace("prod");
         var prefix = keyspace.CreateKey("a");
         var other = keyspace.CreateKey("b");
-        var page = new RecordPageRequest(10)
-        {
-            ContinuationToken = PgKeys.PageToken(PgKeys.Index(other), 1),
-        };
+        var otherIndex = PgKeys.Index(other);
+        var token = PgKeys.PageToken(otherIndex, 1);
+        var page = new RecordPageRequest(10) { ContinuationToken = token };
 
         var exception = await Assert.ThrowsAsync<ArgumentException>(async () =>
             await service.ListAsync(prefix, page, null, cancellationToken)

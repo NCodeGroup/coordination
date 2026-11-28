@@ -40,6 +40,7 @@ public sealed class PgSourceRulesTests
         "Leases",
         "Sessions",
         "Subscriptions",
+        "Records",
     ];
 
     private static List<string> FindPackageFolders()

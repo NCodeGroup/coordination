@@ -15,7 +15,9 @@ public sealed class PgRecordWatchServerTests(PgServers servers)
 {
     private static readonly TimeSpan Patience = TimeSpan.FromSeconds(30);
 
-    private static readonly TimeToLive OneMinute = new(TimeSpan.FromMinutes(1));
+    private static TimeSpan OneMinuteSpan { get; } = TimeSpan.FromMinutes(1);
+
+    private static readonly TimeToLive OneMinute = new(OneMinuteSpan);
 
     private static async Task<T> NextAsync<T>(
         IAsyncEnumerator<T> enumerator,
@@ -80,25 +82,20 @@ public sealed class PgRecordWatchServerTests(PgServers servers)
     {
         public Keyspace Keyspace { get; } = new("watch-server");
 
-        public IRecordService Records =>
-            Assert.IsAssignableFrom<IRecordService>(
-                Provider.GetPrimitiveService(typeof(IRecordService))
-            );
+        public IRecordService Records => ServiceOf<IRecordService>();
 
-        public IRecordWatchService Watches =>
-            Assert.IsAssignableFrom<IRecordWatchService>(
-                Provider.GetPrimitiveService(typeof(IRecordWatchService))
-            );
+        public IRecordWatchService Watches => ServiceOf<IRecordWatchService>();
 
-        public ISessionService Sessions =>
-            Assert.IsAssignableFrom<ISessionService>(
-                Provider.GetPrimitiveService(typeof(ISessionService))
-            );
+        public ISessionService Sessions => ServiceOf<ISessionService>();
 
-        public INotificationService Notifications =>
-            Assert.IsAssignableFrom<INotificationService>(
-                Provider.GetPrimitiveService(typeof(INotificationService))
-            );
+        public INotificationService Notifications => ServiceOf<INotificationService>();
+
+        private T ServiceOf<T>()
+            where T : class
+        {
+            var service = Provider.GetPrimitiveService(typeof(T));
+            return Assert.IsAssignableFrom<T>(service);
+        }
 
         public async Task<long> LogRemovedAsync(CancellationToken cancellationToken)
         {
@@ -192,14 +189,16 @@ public sealed class PgRecordWatchServerTests(PgServers servers)
 
         try
         {
+            var source = PgSource.FromConnectionString(servers.PostgreSql19);
             await using var provider = new PostgreSqlProvider(
-                PgSource.FromConnectionString(servers.PostgreSql19),
+                source,
                 PostgreSqlProfiles.Standalone,
                 settings
             );
             await provider.ProbeAsync(cancellationToken);
 
-            await test(new Context(servers.Admin19, schemaName, provider));
+            var context = new Context(servers.Admin19, schemaName, provider);
+            await test(context);
         }
         finally
         {
@@ -257,6 +256,7 @@ public sealed class PgRecordWatchServerTests(PgServers servers)
     public async Task WatchKeyAsync_AfterARevisionTheLogDropped_StartsWithAResync()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
+        var oneSecond = TimeSpan.FromSeconds(1);
         await WithProviderAsync(
             async context =>
             {
@@ -274,9 +274,10 @@ public sealed class PgRecordWatchServerTests(PgServers servers)
                     cancellationToken
                 );
                 patience.CancelAfter(Patience);
+                var pollInterval = TimeSpan.FromMilliseconds(200);
                 while (await context.LogRemovedAsync(patience.Token) <= first.Value)
                 {
-                    await Task.Delay(TimeSpan.FromMilliseconds(200), patience.Token);
+                    await Task.Delay(pollInterval, patience.Token);
                 }
 
                 await using var changes = context
@@ -288,7 +289,7 @@ public sealed class PgRecordWatchServerTests(PgServers servers)
                 Assert.True(change.Revision >= second);
             },
             cancellationToken,
-            TimeSpan.FromSeconds(1)
+            oneSecond
         );
     }
 
@@ -335,18 +336,16 @@ public sealed class PgRecordWatchServerTests(PgServers servers)
 
                 await context.Sessions.CloseAsync(grant.Id, null, cancellationToken);
 
-                var deleted = new List<RecordChange>
-                {
-                    await NextAsync(changes, cancellationToken),
-                    await NextAsync(changes, cancellationToken),
-                };
+                var firstDeleted = await NextAsync(changes, cancellationToken);
+                var secondDeleted = await NextAsync(changes, cancellationToken);
+                var deleted = new List<RecordChange> { firstDeleted, secondDeleted };
 
                 Assert.All(deleted, item => Assert.Equal(RecordChangeKind.Deleted, item.Kind));
                 Assert.All(deleted, item => Assert.True(item.Revision > revisionB));
-                Assert.Equal(
-                    new HashSet<CoordinationKey> { keyA, keyB },
-                    deleted.Select(item => item.Key).OfType<CoordinationKey>().ToHashSet()
-                );
+                var expectedKeys = new HashSet<CoordinationKey> { keyA, keyB };
+                var deletedKeys = deleted.Select(item => item.Key).OfType<CoordinationKey>();
+                var deletedSet = deletedKeys.ToHashSet();
+                Assert.Equal(expectedKeys, deletedSet);
             },
             cancellationToken
         );

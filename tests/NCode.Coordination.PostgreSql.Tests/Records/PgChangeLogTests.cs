@@ -13,7 +13,9 @@ namespace NCode.Coordination.PostgreSql.Records.Tests;
 
 public sealed class PgChangeLogTests(PgServers servers)
 {
-    private static readonly TimeToLive OneMinute = new(TimeSpan.FromMinutes(1));
+    private static TimeSpan OneMinuteSpan { get; } = TimeSpan.FromMinutes(1);
+
+    private static readonly TimeToLive OneMinute = new(OneMinuteSpan);
 
     private sealed record Context(
         PgKeyspaces Keyspaces,
@@ -24,8 +26,11 @@ public sealed class PgChangeLogTests(PgServers servers)
     {
         public Keyspace Keyspace { get; } = new("change-log");
 
-        public CoordinationKey KeyOf(string name) =>
-            Keyspace.CreateKey(KeySegment.FromString(name));
+        public CoordinationKey KeyOf(string name)
+        {
+            var segment = KeySegment.FromString(name);
+            return Keyspace.CreateKey(segment);
+        }
 
         public async Task<PgLogRead<PgChange>> ReadAsync(CancellationToken cancellationToken)
         {
@@ -50,18 +55,17 @@ public sealed class PgChangeLogTests(PgServers servers)
             var probe = new PgProbe(server, source, PostgreSqlProfiles.Standalone, settings);
             await probe.RunAsync(cancellationToken);
 
-            var keyspaces = new PgKeyspaces(server, schema, new PgRandomTokens());
+            var keyspaceTokens = new PgRandomTokens();
+            var keyspaces = new PgKeyspaces(server, schema, keyspaceTokens);
             var table = new PgRecordTable(server, keyspaces, settings);
             var polling = new PgPolling(TimeProvider.System);
+            var log = new PgChangeLog(server, schema);
+            var sessionTokens = new PgRandomTokens();
+            var sessions = new PgSessionService(table, sessionTokens, polling);
+            var records = new PgRecordService(table);
+            var context = new Context(keyspaces, log, sessions, records);
 
-            await test(
-                new Context(
-                    keyspaces,
-                    new PgChangeLog(server, schema),
-                    new PgSessionService(table, new PgRandomTokens(), polling),
-                    new PgRecordService(table)
-                )
-            );
+            await test(context);
         }
         finally
         {
@@ -82,15 +86,17 @@ public sealed class PgChangeLogTests(PgServers servers)
         await WithServicesAsync(
             async context =>
             {
+                var keyOne = context.KeyOf("one");
+                var keyTwo = context.KeyOf("two");
                 var first = await context.Records.CreateAsync(
-                    context.KeyOf("one"),
+                    keyOne,
                     new byte[] { 1 },
                     RecordLifetime.Persistent,
                     null,
                     cancellationToken
                 );
                 var second = await context.Records.CreateAsync(
-                    context.KeyOf("two"),
+                    keyTwo,
                     new byte[] { 2, 3 },
                     RecordLifetime.Persistent,
                     null,
@@ -108,14 +114,14 @@ public sealed class PgChangeLogTests(PgServers servers)
                 Assert.Equal(first.Revision.Value, read.Entries[0].Number);
                 var firstItem = Assert.Single(read.Entries[0].Items);
                 Assert.Equal((short)1, firstItem.Kind);
-                var firstKeyText = PgKeys.KeyText(context.KeyOf("one"));
+                var firstKeyText = PgKeys.KeyText(keyOne);
                 Assert.Equal(firstKeyText, firstItem.Key);
                 Assert.Equal(new byte[] { 1 }, firstItem.Value);
 
                 Assert.Equal(second.Revision.Value, read.Entries[1].Number);
                 var secondItem = Assert.Single(read.Entries[1].Items);
                 Assert.Equal((short)1, secondItem.Kind);
-                var secondKeyText = PgKeys.KeyText(context.KeyOf("two"));
+                var secondKeyText = PgKeys.KeyText(keyTwo);
                 Assert.Equal(secondKeyText, secondItem.Key);
                 Assert.Equal(new byte[] { 2, 3 }, secondItem.Value);
 
@@ -193,11 +199,12 @@ public sealed class PgChangeLogTests(PgServers servers)
                     cancellationToken
                 );
                 var key = context.KeyOf("replaced");
+                var sessionLifetime = RecordLifetime.ForSession(grant.Id);
 
                 var first = await context.Records.CreateAsync(
                     key,
                     new byte[] { 1 },
-                    RecordLifetime.ForSession(grant.Id),
+                    sessionLifetime,
                     null,
                     cancellationToken
                 );

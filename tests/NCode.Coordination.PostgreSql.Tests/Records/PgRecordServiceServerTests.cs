@@ -13,26 +13,35 @@ namespace NCode.Coordination.PostgreSql.Records.Tests;
 
 public sealed class PgRecordServiceServerTests(PgServers servers)
 {
-    private static readonly TimeToLive OneMinute = new(TimeSpan.FromMinutes(1));
+    private static TimeSpan OneMinuteSpan { get; } = TimeSpan.FromMinutes(1);
+
+    private static TimeSpan TenSeconds { get; } = TimeSpan.FromSeconds(10);
+
+    private static readonly TimeToLive OneMinute = new(OneMinuteSpan);
 
     private static CoordinationKey LongKey(Keyspace keyspace, int number)
     {
         var segments = new List<KeySegment> { LongPrefixSegment() };
         for (var index = 0; index < 14; index++)
         {
-            segments.Add(KeySegment.FromString(new string((char)('a' + index), 256)));
+            var text = new string((char)('a' + index), 256);
+            var segment = KeySegment.FromString(text);
+            segments.Add(segment);
         }
 
-        segments.Add(
-            KeySegment.FromString(
-                number.ToString("D3", CultureInfo.InvariantCulture).PadRight(256, 'z')
-            )
-        );
+        var digits = number.ToString("D3", CultureInfo.InvariantCulture);
+        var lastText = digits.PadRight(256, 'z');
+        var lastSegment = KeySegment.FromString(lastText);
+        segments.Add(lastSegment);
 
         return keyspace.CreateKey(segments);
     }
 
-    private static KeySegment LongPrefixSegment() => KeySegment.FromString(new string('p', 256));
+    private static KeySegment LongPrefixSegment()
+    {
+        var text = new string('p', 256);
+        return KeySegment.FromString(text);
+    }
 
     private sealed record Context(
         string AdminConnectionString,
@@ -46,8 +55,11 @@ public sealed class PgRecordServiceServerTests(PgServers servers)
     {
         public Keyspace Keyspace { get; } = new("records-server");
 
-        public CoordinationKey KeyOf(string name) =>
-            Keyspace.CreateKey(KeySegment.FromString(name));
+        public CoordinationKey KeyOf(string name)
+        {
+            var segment = KeySegment.FromString(name);
+            return Keyspace.CreateKey(segment);
+        }
 
         public async Task<List<T>> QueryAsync<T>(
             string sql,
@@ -58,16 +70,19 @@ public sealed class PgRecordServiceServerTests(PgServers servers)
             await using var connection = new NpgsqlConnection(AdminConnectionString);
             await connection.OpenAsync(cancellationToken);
 
-            await using var command = new NpgsqlCommand(
-                sql.Replace("{schema}", $"\"{SchemaName}\"", StringComparison.Ordinal),
-                connection
+            var commandText = sql.Replace(
+                "{schema}",
+                $"\"{SchemaName}\"",
+                StringComparison.Ordinal
             );
+            await using var command = new NpgsqlCommand(commandText, connection);
             await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
             var rows = new List<T>();
             while (await reader.ReadAsync(cancellationToken))
             {
-                rows.Add(read(reader));
+                var row = read(reader);
+                rows.Add(row);
             }
 
             return rows;
@@ -105,17 +120,21 @@ public sealed class PgRecordServiceServerTests(PgServers servers)
             var pausedServer = new PgServer(source, settings);
             var pausedKeyspaces = new PgKeyspaces(pausedServer, schema, tokens);
 
-            await test(
-                new Context(
-                    servers.Admin19,
-                    schemaName,
-                    schema,
-                    keyspaces,
-                    pausedServer,
-                    new PgRecordService(new PgRecordTable(server, keyspaces, settings)),
-                    new PgRecordService(new PgRecordTable(pausedServer, pausedKeyspaces, settings))
-                )
+            var table = new PgRecordTable(server, keyspaces, settings);
+            var pausedTable = new PgRecordTable(pausedServer, pausedKeyspaces, settings);
+            var records = new PgRecordService(table);
+            var pausedRecords = new PgRecordService(pausedTable);
+            var context = new Context(
+                servers.Admin19,
+                schemaName,
+                schema,
+                keyspaces,
+                pausedServer,
+                records,
+                pausedRecords
             );
+
+            await test(context);
         }
         finally
         {
@@ -159,16 +178,11 @@ public sealed class PgRecordServiceServerTests(PgServers servers)
                 );
                 Assert.True(result.IsWritten);
 
-                var notified = await listener.WaitAsync(
-                    TimeSpan.FromSeconds(10),
-                    cancellationToken
-                );
+                var notified = await listener.WaitAsync(TenSeconds, cancellationToken);
                 Assert.True(notified);
 
-                var notifiedAgain = await listener.WaitAsync(
-                    TimeSpan.FromMilliseconds(500),
-                    cancellationToken
-                );
+                var halfSecond = TimeSpan.FromMilliseconds(500);
+                var notifiedAgain = await listener.WaitAsync(halfSecond, cancellationToken);
                 Assert.False(notifiedAgain);
 
                 var expectedPayload = PgChannels.ChangePayload(result.Revision.Value);
@@ -209,10 +223,11 @@ public sealed class PgRecordServiceServerTests(PgServers servers)
             async context =>
             {
                 var key = context.KeyOf("expiring");
+                var oneMinuteLifetime = RecordLifetime.ForTimeToLive(OneMinute);
                 var first = await context.Records.CreateAsync(
                     key,
                     new byte[] { 1 },
-                    RecordLifetime.ForTimeToLive(OneMinute),
+                    oneMinuteLifetime,
                     null,
                     cancellationToken
                 );
@@ -234,10 +249,13 @@ public sealed class PgRecordServiceServerTests(PgServers servers)
                 );
                 Assert.True(second.IsWritten);
 
-                var items = await context.QueryAsync(
+                var firstRevision = first.Revision.Value.ToString(CultureInfo.InvariantCulture);
+                var sql =
                     "SELECT revision, kind FROM {schema}.change_items WHERE revision > "
-                        + first.Revision.Value.ToString(CultureInfo.InvariantCulture)
-                        + " ORDER BY revision, ordinal",
+                    + firstRevision
+                    + " ORDER BY revision, ordinal";
+                var items = await context.QueryAsync(
+                    sql,
                     reader => (Revision: reader.GetInt64(0), Kind: reader.GetInt16(1)),
                     cancellationToken
                 );
@@ -265,10 +283,11 @@ public sealed class PgRecordServiceServerTests(PgServers servers)
             async context =>
             {
                 var key = context.KeyOf("swapped");
+                var oneMinuteLifetime = RecordLifetime.ForTimeToLive(OneMinute);
                 var created = await context.Records.CreateAsync(
                     key,
                     new byte[] { 1 },
-                    RecordLifetime.ForTimeToLive(OneMinute),
+                    oneMinuteLifetime,
                     null,
                     cancellationToken
                 );
@@ -299,7 +318,7 @@ public sealed class PgRecordServiceServerTests(PgServers servers)
                         )
                         .AsTask();
 
-                    await reached.Task.WaitAsync(TimeSpan.FromSeconds(10), cancellationToken);
+                    await reached.Task.WaitAsync(TenSeconds, cancellationToken);
 
                     await PgServers.ExpireRowsAsync(
                         context.AdminConnectionString,
@@ -319,10 +338,10 @@ public sealed class PgRecordServiceServerTests(PgServers servers)
 
                     gate.TrySetResult();
 
-                    var swapped = await swap.WaitAsync(TimeSpan.FromSeconds(10), cancellationToken);
+                    var swapped = await swap.WaitAsync(TenSeconds, cancellationToken);
                     Assert.True(swapped.IsWritten);
 
-                    var record = await read.WaitAsync(TimeSpan.FromSeconds(10), cancellationToken);
+                    var record = await read.WaitAsync(TenSeconds, cancellationToken);
                     Assert.NotNull(record);
                     var recordValue = record.Value.ToArray();
                     Assert.Equal(new byte[] { 2 }, recordValue);
@@ -360,23 +379,27 @@ public sealed class PgRecordServiceServerTests(PgServers servers)
                         cancellationToken
                     );
                     Assert.True(result.IsWritten);
-                    expected.Add(PgKeys.KeyText(key));
+                    var keyText = PgKeys.KeyText(key);
+                    expected.Add(keyText);
                 }
 
-                var prefix = context.Keyspace.CreateKey(LongPrefixSegment());
+                var prefixSegment = LongPrefixSegment();
+                var prefix = context.Keyspace.CreateKey(prefixSegment);
                 var listed = new List<string>();
                 string? token = null;
                 do
                 {
+                    var request = new RecordPageRequest(7) { ContinuationToken = token };
                     var page = await context.Records.ListAsync(
                         prefix,
-                        new RecordPageRequest(7) { ContinuationToken = token },
+                        request,
                         null,
                         cancellationToken
                     );
 
                     Assert.True(page.Records.Length <= 7);
-                    listed.AddRange(page.Records.Select(record => PgKeys.KeyText(record.Key)));
+                    var pageKeyTexts = page.Records.Select(record => PgKeys.KeyText(record.Key));
+                    listed.AddRange(pageKeyTexts);
 
                     token = page.ContinuationToken;
                     if (token is not null)

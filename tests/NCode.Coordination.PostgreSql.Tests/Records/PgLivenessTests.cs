@@ -28,12 +28,9 @@ public sealed class PgLivenessTests
             ? Now.AddSeconds(seconds)
             : null;
 
-        var state = PgLiveness.StateOf(
-            Now.AddSeconds(deadlineSeconds),
-            session,
-            sessionDeadline,
-            Now
-        );
+        var deadline = Now.AddSeconds(deadlineSeconds);
+
+        var state = PgLiveness.StateOf(deadline, session, sessionDeadline, Now);
 
         var stateName = state.ToString();
         Assert.Equal(expected, stateName);

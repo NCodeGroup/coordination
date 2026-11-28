@@ -21,19 +21,27 @@ public sealed class PgKeyspaceChangeTests
     private static PgRecordPut CreatePut(CoordinationKey key, DateTime? deadline) =>
         new(key, new byte[] { 9 }, deadline, null);
 
-    private static CoordinationKey CreateKey(string name) =>
-        new(new Keyspace("prod", "records"), name);
+    private static CoordinationKey CreateKey(string name)
+    {
+        var keyspace = new Keyspace("prod", "records");
+        return new CoordinationKey(keyspace, name);
+    }
 
-    private static PgRecordRow CreateRow(CoordinationKey key) =>
-        new(
-            PgKeys.Index(key),
+    private static PgRecordRow CreateRow(CoordinationKey key)
+    {
+        var index = PgKeys.Index(key);
+        var keyText = PgKeys.KeyText(key);
+        var deadline = Now.AddSeconds(-1);
+        return new PgRecordRow(
+            index,
             (short)key.PartitionDepth,
-            PgKeys.KeyText(key),
+            keyText,
             [1, 2, 3],
             4,
-            Now.AddSeconds(-1),
+            deadline,
             null
         );
+    }
 
     #region Begin Tests
 
@@ -84,7 +92,8 @@ public sealed class PgKeyspaceChangeTests
     public void Statements_OneWrite_UpdatesTheRevisionAndNotifiesOnce()
     {
         var key = CreateKey("a");
-        var put = CreatePut(key, Now.AddMinutes(1));
+        var deadline = Now.AddMinutes(1);
+        var put = CreatePut(key, deadline);
         var change = CreateChange(5);
         var revision = change.Begin();
         change.Put(put);
@@ -113,7 +122,8 @@ public sealed class PgKeyspaceChangeTests
         var key = CreateKey("a");
         var put = CreatePut(key, null);
         var change = CreateChange(5);
-        change.Expire([CreateRow(key)]);
+        var row = CreateRow(key);
+        change.Expire([row]);
         var revision = change.Begin();
         change.Put(put);
 
@@ -184,7 +194,9 @@ public sealed class PgKeyspaceChangeTests
     {
         var change = CreateChange(5);
 
-        change.Write(new PgStatement("SELECT 1"));
+        var statement = new PgStatement("SELECT 1");
+
+        change.Write(statement);
 
         Assert.Equal(5, change.Revision);
         Assert.False(change.IsEmpty);
