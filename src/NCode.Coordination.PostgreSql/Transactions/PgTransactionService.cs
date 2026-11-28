@@ -17,143 +17,6 @@ namespace NCode.Coordination.PostgreSql.Transactions;
 internal sealed class PgTransactionService(PgRecordTable table) : ITransactionService
 {
     /// <summary>
-    /// Gets the record table that the record service shares.
-    /// </summary>
-    private PgRecordTable Table { get; } = table ?? throw new ArgumentNullException(nameof(table));
-
-    /// <inheritdoc />
-    public async ValueTask<TransactionResult> ExecuteAsync(
-        RecordTransaction transaction,
-        OperationOptions? options,
-        CancellationToken cancellationToken
-    )
-    {
-        ArgumentNullException.ThrowIfNull(transaction);
-        PgCall.Check(options, cancellationToken);
-
-        var keys = transaction
-            .Conditions.Select(condition => condition.Key)
-            .Concat(transaction.OnSuccess.Select(write => write.Key))
-            .Concat(transaction.OnFailure.Select(write => write.Key))
-            .Distinct()
-            .ToArray();
-
-        var sessions = transaction
-            .OnSuccess.Concat(transaction.OnFailure)
-            .Select(write => write.Lifetime?.Session)
-            .OfType<SessionId>()
-            .Where(session => session.Keyspace == transaction.Keyspace)
-            .Select(session => session.Value)
-            .Distinct(StringComparer.Ordinal)
-            .ToArray();
-
-        return await Table
-            .Keyspaces.RunAsync<TransactionResult>(
-                transaction.Keyspace,
-                async (id, token) =>
-                    await Table
-                        .Server.TransactAsync(
-                            PgIsolation.ReadCommitted,
-                            async (pgTransaction, transactionToken) =>
-                            {
-                                var start = await Table
-                                    .BeginAsync(pgTransaction, id, keys, sessions, transactionToken)
-                                    .ConfigureAwait(false);
-
-                                var change = start.Change;
-                                var ended = start.EndExpiredSessions();
-                                var live = new Dictionary<CoordinationKey, PgRecordRow>();
-                                var replaceable = new Dictionary<CoordinationKey, PgRecordRow>();
-                                var expired = new List<PgRecordRow>();
-                                foreach (var (key, row) in start.Rows)
-                                {
-                                    switch (row.StateAt(change.Now))
-                                    {
-                                        case PgRecordState.Live:
-                                            live[key] = row;
-                                            break;
-                                        case PgRecordState.Expired:
-                                            expired.Add(row);
-                                            break;
-                                        default:
-                                            replaceable[key] = row;
-                                            break;
-                                    }
-                                }
-
-                                change.Expire(expired);
-
-                                var succeeded = ConditionsHold(transaction, live);
-                                var writes = succeeded
-                                    ? transaction.OnSuccess
-                                    : transaction.OnFailure;
-                                var status = succeeded
-                                    ? TransactionStatus.Succeeded
-                                    : TransactionStatus.Failed;
-
-                                if (
-                                    writes.Any(write =>
-                                        write.Lifetime?.Session is { } session
-                                        && IsEnded(start, ended, transaction.Keyspace, session)
-                                    )
-                                )
-                                {
-                                    await Table
-                                        .CommitAsync(pgTransaction, change, id, transactionToken)
-                                        .ConfigureAwait(false);
-                                    return new TransactionResult(
-                                        TransactionStatus.SessionEnded,
-                                        new Revision(change.Revision)
-                                    );
-                                }
-
-                                if (!writes.IsEmpty)
-                                {
-                                    change.Begin();
-
-                                    foreach (var write in writes)
-                                    {
-                                        if (write.Lifetime is { } lifetime)
-                                        {
-                                            var timeToLive = lifetime.TimeToLive;
-                                            DateTime? deadline = timeToLive is null
-                                                ? null
-                                                : change.Now.AddTicks(
-                                                    PgCall.ToMicroseconds(timeToLive) * 10
-                                                );
-                                            change.Put(
-                                                write.Key,
-                                                write.Value,
-                                                deadline,
-                                                lifetime.Session?.Value,
-                                                replaceable.Remove(write.Key, out var replaced)
-                                                    ? replaced.Session
-                                                    : null
-                                            );
-                                            continue;
-                                        }
-
-                                        if (live.Remove(write.Key, out var row))
-                                        {
-                                            change.Delete(row);
-                                        }
-                                    }
-                                }
-
-                                await Table
-                                    .CommitAsync(pgTransaction, change, id, transactionToken)
-                                    .ConfigureAwait(false);
-                                return new TransactionResult(status, new Revision(change.Revision));
-                            },
-                            token
-                        )
-                        .ConfigureAwait(false),
-                cancellationToken
-            )
-            .ConfigureAwait(false);
-    }
-
-    /// <summary>
     /// Tells whether a write's session has ended, was never opened in the transaction's keyspace, or was ended by
     /// this transaction because it had expired.
     /// </summary>
@@ -209,5 +72,261 @@ internal sealed class PgTransactionService(PgRecordTable table) : ITransactionSe
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// Gets the distinct keys that the conditions and the writes of both branches name.
+    /// </summary>
+    /// <param name="transaction">The transaction.</param>
+    /// <returns>The keys.</returns>
+    private static CoordinationKey[] KeysOf(RecordTransaction transaction)
+    {
+        var conditionKeys = transaction.Conditions.Select(condition => condition.Key);
+        var successKeys = transaction.OnSuccess.Select(write => write.Key);
+        var failureKeys = transaction.OnFailure.Select(write => write.Key);
+
+        return conditionKeys.Concat(successKeys).Concat(failureKeys).Distinct().ToArray();
+    }
+
+    /// <summary>
+    /// Gets the ids of the distinct sessions of the transaction's keyspace that the writes of both branches bind
+    /// records to.
+    /// </summary>
+    /// <param name="transaction">The transaction.</param>
+    /// <returns>The sessions' ids.</returns>
+    private static string[] SessionsOf(RecordTransaction transaction)
+    {
+        return transaction
+            .OnSuccess.Concat(transaction.OnFailure)
+            .Select(write => write.Lifetime?.Session)
+            .OfType<SessionId>()
+            .Where(session => session.Keyspace == transaction.Keyspace)
+            .Select(session => session.Value)
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    /// <summary>
+    /// Sorts the rows that the first batch read by what the transaction may do with each.
+    /// </summary>
+    /// <param name="start">What the transaction's first batch read.</param>
+    /// <returns>The live rows, the rows that a write may replace and the rows that have expired.</returns>
+    private static PgTransactionRows ClassifyRows(PgChangeStart start)
+    {
+        var live = new Dictionary<CoordinationKey, PgRecordRow>();
+        var replaceable = new Dictionary<CoordinationKey, PgRecordRow>();
+        var expired = new List<PgRecordRow>();
+
+        foreach (var (key, row) in start.Rows)
+        {
+            switch (row.StateAt(start.Change.Now))
+            {
+                case PgRecordState.Live:
+                    live[key] = row;
+                    break;
+                case PgRecordState.Expired:
+                    expired.Add(row);
+                    break;
+                default:
+                    replaceable[key] = row;
+                    break;
+            }
+        }
+
+        return new PgTransactionRows(live, replaceable, expired);
+    }
+
+    /// <summary>
+    /// Tells whether a branch's writes bind a record to a session that is not live.
+    /// </summary>
+    /// <param name="writes">The writes of the branch.</param>
+    /// <param name="start">What the transaction's first batch read.</param>
+    /// <param name="ended">The sessions that the transaction ended because they had expired.</param>
+    /// <param name="keyspace">The transaction's keyspace.</param>
+    /// <returns>True when a write binds to a session that is not live.</returns>
+    private static bool WritesBindToEndedSession(
+        ImmutableArray<RecordWrite> writes,
+        PgChangeStart start,
+        ImmutableHashSet<string> ended,
+        Keyspace keyspace
+    )
+    {
+        return writes.Any(write =>
+            write.Lifetime?.Session is { } session && IsEnded(start, ended, keyspace, session)
+        );
+    }
+
+    /// <summary>
+    /// Gets the instant a record written now expires.
+    /// </summary>
+    /// <param name="change">The change that the transaction builds.</param>
+    /// <param name="lifetime">The record's lifetime.</param>
+    /// <returns>The deadline, or null when the lifetime has no time to live.</returns>
+    private static DateTime? DeadlineOf(PgKeyspaceChange change, RecordLifetime lifetime)
+    {
+        if (lifetime.TimeToLive is not { } timeToLive)
+        {
+            return null;
+        }
+
+        return PgCall.DeadlineAfter(change.Now, timeToLive);
+    }
+
+    /// <summary>
+    /// Takes the row that a write replaces out of the replaceable rows, and gets the session it was bound to.
+    /// </summary>
+    /// <param name="replaceable">The rows that a write may replace, by key.</param>
+    /// <param name="key">The key that the write names.</param>
+    /// <returns>The id of the ended session whose row the write replaces, or null.</returns>
+    private static string? TakeReplacedSession(
+        Dictionary<CoordinationKey, PgRecordRow> replaceable,
+        CoordinationKey key
+    )
+    {
+        return replaceable.Remove(key, out var replaced) ? replaced.Session : null;
+    }
+
+    /// <summary>
+    /// Writes a record that a write puts, in the current entry of the change.
+    /// </summary>
+    /// <param name="change">The change that the transaction builds.</param>
+    /// <param name="write">The write.</param>
+    /// <param name="lifetime">The write's lifetime.</param>
+    /// <param name="replaceable">The rows that a write may replace, by key.</param>
+    private static void PutRecord(
+        PgKeyspaceChange change,
+        RecordWrite write,
+        RecordLifetime lifetime,
+        Dictionary<CoordinationKey, PgRecordRow> replaceable
+    )
+    {
+        var deadline = DeadlineOf(change, lifetime);
+        var session = lifetime.Session?.Value;
+        var replacedSession = TakeReplacedSession(replaceable, write.Key);
+
+        change.Put(write.Key, write.Value, deadline, session, replacedSession);
+    }
+
+    /// <summary>
+    /// Takes a revision and makes a branch's writes in the change.
+    /// </summary>
+    /// <param name="change">The change that the transaction builds.</param>
+    /// <param name="writes">The writes of the branch, which has at least one.</param>
+    /// <param name="rows">The rows that the first batch read.</param>
+    private static void ApplyWrites(
+        PgKeyspaceChange change,
+        ImmutableArray<RecordWrite> writes,
+        PgTransactionRows rows
+    )
+    {
+        change.Begin();
+
+        foreach (var write in writes)
+        {
+            if (write.Lifetime is { } lifetime)
+            {
+                PutRecord(change, write, lifetime, rows.Replaceable);
+            }
+            else if (rows.Live.Remove(write.Key, out var row))
+            {
+                change.Delete(row);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets the record table that the record service shares.
+    /// </summary>
+    private PgRecordTable Table { get; } = table ?? throw new ArgumentNullException(nameof(table));
+
+    /// <inheritdoc />
+    public async ValueTask<TransactionResult> ExecuteAsync(
+        RecordTransaction transaction,
+        OperationOptions? options,
+        CancellationToken cancellationToken
+    )
+    {
+        ArgumentNullException.ThrowIfNull(transaction);
+        PgCall.Check(options, cancellationToken);
+
+        var keys = KeysOf(transaction);
+        var sessions = SessionsOf(transaction);
+        var request = new PgTransactionRequest(transaction, keys, sessions);
+
+        return await Table
+            .Keyspaces.RunAsync<TransactionResult>(
+                transaction.Keyspace,
+                (id, token) => ExecuteInKeyspaceAsync(id, request, token),
+                cancellationToken
+            )
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Executes a transaction in a keyspace, in a server transaction.
+    /// </summary>
+    /// <param name="id">The keyspace's id.</param>
+    /// <param name="request">The transaction and what its first batch asks.</param>
+    /// <param name="cancellationToken">The token that cancels the call.</param>
+    /// <returns>The result of the transaction.</returns>
+    private async ValueTask<TransactionResult> ExecuteInKeyspaceAsync(
+        long id,
+        PgTransactionRequest request,
+        CancellationToken cancellationToken
+    )
+    {
+        return await Table
+            .Server.TransactAsync(
+                PgIsolation.ReadCommitted,
+                (pgTransaction, token) =>
+                    ExecuteInTransactionAsync(pgTransaction, id, request, token),
+                cancellationToken
+            )
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Begins a change, evaluates the conditions over the rows that were read, makes the branch's writes and commits
+    /// the change.
+    /// </summary>
+    /// <param name="pgTransaction">The server transaction, which has not run a batch.</param>
+    /// <param name="id">The keyspace's id.</param>
+    /// <param name="request">The transaction and what its first batch asks.</param>
+    /// <param name="cancellationToken">The token that cancels the call.</param>
+    /// <returns>The result of the transaction.</returns>
+    private async ValueTask<TransactionResult> ExecuteInTransactionAsync(
+        PgTransaction pgTransaction,
+        long id,
+        PgTransactionRequest request,
+        CancellationToken cancellationToken
+    )
+    {
+        var transaction = request.Transaction;
+        var start = await Table
+            .BeginAsync(pgTransaction, id, request.Keys, request.Sessions, cancellationToken)
+            .ConfigureAwait(false);
+
+        var change = start.Change;
+        var ended = start.EndExpiredSessions();
+        var rows = ClassifyRows(start);
+        change.Expire(rows.Expired);
+
+        var succeeded = ConditionsHold(transaction, rows.Live);
+        var writes = succeeded ? transaction.OnSuccess : transaction.OnFailure;
+        var status = succeeded ? TransactionStatus.Succeeded : TransactionStatus.Failed;
+
+        if (WritesBindToEndedSession(writes, start, ended, transaction.Keyspace))
+        {
+            status = TransactionStatus.SessionEnded;
+        }
+        else if (!writes.IsEmpty)
+        {
+            ApplyWrites(change, writes, rows);
+        }
+
+        await Table.CommitAsync(pgTransaction, change, id, cancellationToken).ConfigureAwait(false);
+
+        var revision = new Revision(change.Revision);
+        return new TransactionResult(status, revision);
     }
 }

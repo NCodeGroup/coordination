@@ -21,14 +21,133 @@ namespace NCode.Coordination.PostgreSql.Elections;
 /// <exception cref="ArgumentNullException">The grants or the tokens are null.</exception>
 internal sealed class PgElectionService(PgGrants grants, IPgTokens tokens) : IElectionService
 {
-    /// <summary>The kind of the grant rows of elections.</summary>
+    /// <summary>
+    /// The kind of the grant rows of elections.
+    /// </summary>
     private const short Kind = 3;
 
-    /// <summary>The slot that a leadership's grant holds.</summary>
+    /// <summary>
+    /// The slot that a leadership's grant holds.
+    /// </summary>
     private const int Slot = 0;
 
-    /// <summary>The capacity that a leadership's grant records.</summary>
+    /// <summary>
+    /// The capacity that a leadership's grant records.
+    /// </summary>
     private const int Capacity = 1;
+
+    /// <summary>
+    /// Checks that a value is no longer than the largest value.
+    /// </summary>
+    /// <param name="value">The value.</param>
+    /// <param name="paramName">The name of the parameter that holds the value.</param>
+    /// <exception cref="ArgumentException">The value is longer than <see cref="CoordinationLimits.MaxValueLength"/> bytes.</exception>
+    private static void CheckValue(ReadOnlyMemory<byte> value, string paramName)
+    {
+        if (value.Length > CoordinationLimits.MaxValueLength)
+        {
+            throw new ArgumentException(
+                $"A value has at most {CoordinationLimits.MaxValueLength} bytes.",
+                paramName
+            );
+        }
+    }
+
+    /// <summary>
+    /// Tells whether the session of a leadership's terms has ended: the terms bind to a session whose row is gone or
+    /// past its deadline.
+    /// </summary>
+    /// <param name="start">What the transaction's first batch read.</param>
+    /// <param name="terms">The terms of the leadership.</param>
+    /// <returns>True when the terms' session is not live.</returns>
+    private static bool SessionHasEnded(PgGrantStart start, LeaseTerms terms)
+    {
+        if (!terms.IsBoundToSession)
+        {
+            return false;
+        }
+
+        return start.SessionDeadline is not { } deadline || deadline <= start.Change.Now;
+    }
+
+    /// <summary>
+    /// Decides an attempt to lead a role that a live leader holds: the attempt's own session is the leader's when the
+    /// grant is bound to it.
+    /// </summary>
+    /// <param name="live">The live grant row of the role.</param>
+    /// <param name="request">What the attempt needs.</param>
+    /// <returns>The result that says the role is led by another, or that the attempt's session already leads it.</returns>
+    private static ElectionResult DecideLed(PgGrantRow live, PgLeadRequest request)
+    {
+        var isOwnSession =
+            request.SessionId is not null
+            && string.Equals(live.Session, request.SessionId, StringComparison.Ordinal);
+
+        if (!isOwnSession)
+        {
+            return ElectionResult.Led;
+        }
+
+        var fencingToken = new FencingToken(live.Fencing);
+        var leader = new Leader(request.Role, fencingToken, live.Value ?? []);
+        var ownerToken = new OwnerToken(live.Owner);
+        var leadership = new Leadership(leader, ownerToken, request.Terms);
+        return ElectionResult.Elected(leadership);
+    }
+
+    /// <summary>
+    /// Gets the instant a new leadership's grant expires.
+    /// </summary>
+    /// <param name="now">The instant the transaction read on the server's clock.</param>
+    /// <param name="terms">The terms of the leadership.</param>
+    /// <returns>The deadline, or null when the leadership is bound to a session and lives as it does.</returns>
+    private static DateTime? GrantDeadlineOf(DateTime now, LeaseTerms terms)
+    {
+        if (terms.IsBoundToSession)
+        {
+            return null;
+        }
+
+        return PgCall.DeadlineAfter(now, terms.TimeToLive);
+    }
+
+    /// <summary>
+    /// Finds the grant row of a leadership when the leadership is still the live one: the slot, the fencing token and
+    /// the owner token all match.
+    /// </summary>
+    /// <param name="start">What the transaction's first batch read.</param>
+    /// <param name="leadership">The leadership.</param>
+    /// <returns>The row, or null when the leadership has ended.</returns>
+    private static PgGrantRow? FindHeld(PgGrantStart start, Leadership leadership)
+    {
+        var now = start.Change.Now;
+        var fencing = leadership.Leader.Term.Value;
+        var owner = leadership.Owner.Value;
+
+        return start.Rows.FirstOrDefault(row =>
+            row.Slot == Slot
+            && row.Fencing == fencing
+            && string.Equals(row.Owner, owner, StringComparison.Ordinal)
+            && row.StateAt(now) == PgRecordState.Live
+        );
+    }
+
+    /// <summary>
+    /// Gets the leader that a grant row holds.
+    /// </summary>
+    /// <param name="role">The role.</param>
+    /// <param name="row">The role's grant row, or null when it has none.</param>
+    /// <returns>The leader, or null when the role has none.</returns>
+    private static Leader? ToLeader(CoordinationKey role, PgGrantRow? row)
+    {
+        if (row is null)
+        {
+            return null;
+        }
+
+        var fencingToken = new FencingToken(row.Fencing);
+        return new Leader(role, fencingToken, row.Value ?? []);
+    }
 
     /// <summary>
     /// Gets the reads and writes that the grants share.
@@ -56,114 +175,12 @@ internal sealed class PgElectionService(PgGrants grants, IPgTokens tokens) : IEl
 
         var bytes = value.ToArray();
         var sessionId = terms.IsBoundToSession ? terms.Session.Value : null;
+        var request = new PgLeadRequest(role, bytes, terms, sessionId);
 
         return await Grants
             .Table.Keyspaces.RunAsync<ElectionResult>(
                 role.Keyspace,
-                async (id, token) =>
-                    await Grants
-                        .Table.Server.TransactAsync(
-                            PgIsolation.ReadCommitted,
-                            async (transaction, transactionToken) =>
-                            {
-                                var start = await Grants
-                                    .BeginAsync(
-                                        transaction,
-                                        id,
-                                        Kind,
-                                        role,
-                                        sessionId,
-                                        transactionToken
-                                    )
-                                    .ConfigureAwait(false);
-
-                                start.EndExpiredSessions(sessionId);
-
-                                var now = start.Change.Now;
-                                var live = start.Rows.FirstOrDefault(row =>
-                                    row.Slot == Slot && row.StateAt(now) == PgRecordState.Live
-                                );
-
-                                ElectionResult result;
-                                if (
-                                    terms.IsBoundToSession
-                                    && (
-                                        start.SessionDeadline is not { } deadline || deadline <= now
-                                    )
-                                )
-                                {
-                                    result = ElectionResult.SessionEnded;
-                                }
-                                else if (live is not null)
-                                {
-                                    result =
-                                        sessionId is not null
-                                        && string.Equals(
-                                            live.Session,
-                                            sessionId,
-                                            StringComparison.Ordinal
-                                        )
-                                            ? ElectionResult.Elected(
-                                                new Leadership(
-                                                    new Leader(
-                                                        role,
-                                                        new FencingToken(live.Fencing),
-                                                        live.Value ?? []
-                                                    ),
-                                                    new OwnerToken(live.Owner),
-                                                    terms
-                                                )
-                                            )
-                                            : ElectionResult.Led;
-                                }
-                                else
-                                {
-                                    var fencing = start.Last + 1;
-                                    var owner = Tokens.Next(PgTokenPrefixes.Owner);
-                                    DateTime? grantDeadline = terms.IsBoundToSession
-                                        ? null
-                                        : now.AddTicks(
-                                            PgCall.ToMicroseconds(terms.TimeToLive) * 10
-                                        );
-
-                                    start.Change.Write(
-                                        Grants.Upsert(
-                                            id,
-                                            Kind,
-                                            role,
-                                            Slot,
-                                            Capacity,
-                                            fencing,
-                                            owner,
-                                            sessionId,
-                                            grantDeadline,
-                                            bytes
-                                        )
-                                    );
-                                    start.Change.Write(Grants.Fence(id, Kind, role, fencing));
-
-                                    result = ElectionResult.Elected(
-                                        new Leadership(
-                                            new Leader(role, new FencingToken(fencing), bytes),
-                                            new OwnerToken(owner),
-                                            terms
-                                        )
-                                    );
-                                }
-
-                                await Grants
-                                    .Table.CommitAsync(
-                                        transaction,
-                                        start.Change,
-                                        id,
-                                        transactionToken
-                                    )
-                                    .ConfigureAwait(false);
-                                return result;
-                            },
-                            token
-                        )
-                        .ConfigureAwait(false),
+                (id, token) => LeadInKeyspaceAsync(id, request, token),
                 cancellationToken
             )
             .ConfigureAwait(false);
@@ -189,20 +206,11 @@ internal sealed class PgElectionService(PgGrants grants, IPgTokens tokens) : IEl
             );
         }
 
-        var microseconds = PgCall.ToMicroseconds(timeToLive);
         var role = leadership.Leader.Role;
 
         return await ChangeHeldAsync(
                 leadership,
-                (id, row, now) =>
-                    Grants.Renew(
-                        id,
-                        Kind,
-                        role,
-                        Slot,
-                        row.Fencing,
-                        now.AddTicks(microseconds * 10)
-                    ),
+                (id, row, now) => RenewStatement(id, role, row, now, timeToLive),
                 cancellationToken
             )
             .ConfigureAwait(false);
@@ -241,18 +249,15 @@ internal sealed class PgElectionService(PgGrants grants, IPgTokens tokens) : IEl
         var rows = await Grants
             .Table.Keyspaces.RunAsync<ImmutableArray<PgGrantRow>>(
                 role.Keyspace,
-                async (id, token) =>
-                    await Grants.ReadAsync(id, Kind, role, token).ConfigureAwait(false),
+                (id, token) => Grants.ReadAsync(id, Kind, role, token),
                 cancellationToken
             )
             .ConfigureAwait(false);
 
         var row = rows.FirstOrDefault(candidate => candidate.Slot == Slot);
+        var leader = ToLeader(role, row);
 
-        return new ElectionView(
-            role,
-            row is null ? null : new Leader(role, new FencingToken(row.Fencing), row.Value ?? [])
-        );
+        return new ElectionView(role, leader);
     }
 
     /// <inheritdoc />
@@ -282,6 +287,142 @@ internal sealed class PgElectionService(PgGrants grants, IPgTokens tokens) : IEl
     }
 
     /// <summary>
+    /// Builds the statement that renews the grant of a leadership.
+    /// </summary>
+    /// <param name="id">The keyspace's id.</param>
+    /// <param name="role">The role.</param>
+    /// <param name="row">The leadership's grant row.</param>
+    /// <param name="now">The instant the transaction read on the server's clock.</param>
+    /// <param name="timeToLive">The time to live that the grant is renewed for.</param>
+    /// <returns>The statement.</returns>
+    private PgStatement RenewStatement(
+        long id,
+        CoordinationKey role,
+        PgGrantRow row,
+        DateTime now,
+        TimeToLive timeToLive
+    )
+    {
+        var deadline = PgCall.DeadlineAfter(now, timeToLive);
+        return Grants.Renew(id, Kind, role, Slot, row.Fencing, deadline);
+    }
+
+    /// <summary>
+    /// Attempts to lead a role in a keyspace, in a transaction.
+    /// </summary>
+    /// <param name="id">The keyspace's id.</param>
+    /// <param name="request">What the attempt needs.</param>
+    /// <param name="cancellationToken">The token that cancels the call.</param>
+    /// <returns>The result of the attempt.</returns>
+    private async ValueTask<ElectionResult> LeadInKeyspaceAsync(
+        long id,
+        PgLeadRequest request,
+        CancellationToken cancellationToken
+    )
+    {
+        return await Grants
+            .Table.Server.TransactAsync(
+                PgIsolation.ReadCommitted,
+                (transaction, token) => LeadInTransactionAsync(transaction, id, request, token),
+                cancellationToken
+            )
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Begins a change, decides the attempt from the role's grant rows and commits the change.
+    /// </summary>
+    /// <param name="transaction">The transaction, which has not run a batch.</param>
+    /// <param name="id">The keyspace's id.</param>
+    /// <param name="request">What the attempt needs.</param>
+    /// <param name="cancellationToken">The token that cancels the call.</param>
+    /// <returns>The result of the attempt.</returns>
+    private async ValueTask<ElectionResult> LeadInTransactionAsync(
+        PgTransaction transaction,
+        long id,
+        PgLeadRequest request,
+        CancellationToken cancellationToken
+    )
+    {
+        var start = await Grants
+            .BeginAsync(transaction, id, Kind, request.Role, request.SessionId, cancellationToken)
+            .ConfigureAwait(false);
+
+        start.EndExpiredSessions(request.SessionId);
+
+        var result = DecideLead(id, start, request);
+
+        await Grants
+            .Table.CommitAsync(transaction, start.Change, id, cancellationToken)
+            .ConfigureAwait(false);
+        return result;
+    }
+
+    /// <summary>
+    /// Decides an attempt to lead a role from the grant rows that were read, having made its writes in the change.
+    /// </summary>
+    /// <param name="id">The keyspace's id.</param>
+    /// <param name="start">What the transaction's first batch read.</param>
+    /// <param name="request">What the attempt needs.</param>
+    /// <returns>The result of the attempt.</returns>
+    private ElectionResult DecideLead(long id, PgGrantStart start, PgLeadRequest request)
+    {
+        if (SessionHasEnded(start, request.Terms))
+        {
+            return ElectionResult.SessionEnded;
+        }
+
+        var now = start.Change.Now;
+        var live = start.Rows.FirstOrDefault(row =>
+            row.Slot == Slot && row.StateAt(now) == PgRecordState.Live
+        );
+
+        if (live is not null)
+        {
+            return DecideLed(live, request);
+        }
+
+        return GrantLeadership(id, start, request);
+    }
+
+    /// <summary>
+    /// Gives the role a new leader: writes its grant and the role's fencing token in the change.
+    /// </summary>
+    /// <param name="id">The keyspace's id.</param>
+    /// <param name="start">What the transaction's first batch read.</param>
+    /// <param name="request">What the attempt needs.</param>
+    /// <returns>The result that says the attempt's leadership was elected.</returns>
+    private ElectionResult GrantLeadership(long id, PgGrantStart start, PgLeadRequest request)
+    {
+        var role = request.Role;
+        var fencing = start.Last + 1;
+        var owner = Tokens.Next(PgTokenPrefixes.Owner);
+        var deadline = GrantDeadlineOf(start.Change.Now, request.Terms);
+
+        var upsert = Grants.Upsert(
+            id,
+            Kind,
+            role,
+            Slot,
+            Capacity,
+            fencing,
+            owner,
+            request.SessionId,
+            deadline,
+            request.Value
+        );
+        var fence = Grants.Fence(id, Kind, role, fencing);
+        start.Change.Write(upsert);
+        start.Change.Write(fence);
+
+        var fencingToken = new FencingToken(fencing);
+        var leader = new Leader(role, fencingToken, request.Value);
+        var ownerToken = new OwnerToken(owner);
+        var leadership = new Leadership(leader, ownerToken, request.Terms);
+        return ElectionResult.Elected(leadership);
+    }
+
+    /// <summary>
     /// Applies a write to the grant of a leadership when the leadership is still the live one: the owner token and the
     /// fencing token both match.
     /// </summary>
@@ -296,72 +437,72 @@ internal sealed class PgElectionService(PgGrants grants, IPgTokens tokens) : IEl
         CancellationToken cancellationToken
     )
     {
-        var role = leadership.Leader.Role;
+        var change = new PgHeldChange(leadership, write);
 
         return await Grants
             .Table.Keyspaces.RunAsync<bool>(
-                role.Keyspace,
-                async (id, token) =>
-                    await Grants
-                        .Table.Server.TransactAsync(
-                            PgIsolation.ReadCommitted,
-                            async (transaction, transactionToken) =>
-                            {
-                                var start = await Grants
-                                    .BeginAsync(transaction, id, Kind, role, null, transactionToken)
-                                    .ConfigureAwait(false);
-
-                                start.EndExpiredSessions(null);
-
-                                var now = start.Change.Now;
-                                var held = start.Rows.FirstOrDefault(row =>
-                                    row.Slot == Slot
-                                    && row.Fencing == leadership.Leader.Term.Value
-                                    && string.Equals(
-                                        row.Owner,
-                                        leadership.Owner.Value,
-                                        StringComparison.Ordinal
-                                    )
-                                    && row.StateAt(now) == PgRecordState.Live
-                                );
-
-                                if (held is not null)
-                                {
-                                    start.Change.Write(write(id, held, now));
-                                }
-
-                                await Grants
-                                    .Table.CommitAsync(
-                                        transaction,
-                                        start.Change,
-                                        id,
-                                        transactionToken
-                                    )
-                                    .ConfigureAwait(false);
-                                return held is not null;
-                            },
-                            token
-                        )
-                        .ConfigureAwait(false),
+                leadership.Leader.Role.Keyspace,
+                (id, token) => ChangeHeldInKeyspaceAsync(id, change, token),
                 cancellationToken
             )
             .ConfigureAwait(false);
     }
 
     /// <summary>
-    /// Checks that a value is no longer than the largest value.
+    /// Changes the grant of a leadership in a keyspace, in a transaction.
     /// </summary>
-    /// <param name="value">The value.</param>
-    /// <param name="paramName">The name of the parameter that holds the value.</param>
-    /// <exception cref="ArgumentException">The value is longer than <see cref="CoordinationLimits.MaxValueLength"/> bytes.</exception>
-    private static void CheckValue(ReadOnlyMemory<byte> value, string paramName)
+    /// <param name="id">The keyspace's id.</param>
+    /// <param name="change">The leadership and how to build the write.</param>
+    /// <param name="cancellationToken">The token that cancels the call.</param>
+    /// <returns><see langword="true"/> when the write was made; <see langword="false"/> when the leadership has ended.</returns>
+    private async ValueTask<bool> ChangeHeldInKeyspaceAsync(
+        long id,
+        PgHeldChange change,
+        CancellationToken cancellationToken
+    )
     {
-        if (value.Length > CoordinationLimits.MaxValueLength)
+        return await Grants
+            .Table.Server.TransactAsync(
+                PgIsolation.ReadCommitted,
+                (transaction, token) =>
+                    ChangeHeldInTransactionAsync(transaction, id, change, token),
+                cancellationToken
+            )
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Begins a change, makes the write when the leadership is still the live one and commits the change.
+    /// </summary>
+    /// <param name="transaction">The transaction, which has not run a batch.</param>
+    /// <param name="id">The keyspace's id.</param>
+    /// <param name="change">The leadership and how to build the write.</param>
+    /// <param name="cancellationToken">The token that cancels the call.</param>
+    /// <returns><see langword="true"/> when the write was made; <see langword="false"/> when the leadership has ended.</returns>
+    private async ValueTask<bool> ChangeHeldInTransactionAsync(
+        PgTransaction transaction,
+        long id,
+        PgHeldChange change,
+        CancellationToken cancellationToken
+    )
+    {
+        var role = change.Leadership.Leader.Role;
+        var start = await Grants
+            .BeginAsync(transaction, id, Kind, role, null, cancellationToken)
+            .ConfigureAwait(false);
+
+        start.EndExpiredSessions(null);
+
+        var held = FindHeld(start, change.Leadership);
+        if (held is not null)
         {
-            throw new ArgumentException(
-                $"A value has at most {CoordinationLimits.MaxValueLength} bytes.",
-                paramName
-            );
+            var statement = change.Write(id, held, start.Change.Now);
+            start.Change.Write(statement);
         }
+
+        await Grants
+            .Table.CommitAsync(transaction, start.Change, id, cancellationToken)
+            .ConfigureAwait(false);
+        return held is not null;
     }
 }

@@ -1,8 +1,10 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using System.Collections.Immutable;
 using NCode.Coordination.PostgreSql.Records;
 using NCode.Coordination.PostgreSql.Server;
+using Npgsql;
 
 namespace NCode.Coordination.PostgreSql.Sessions;
 
@@ -17,13 +19,17 @@ namespace NCode.Coordination.PostgreSql.Sessions;
 /// <exception cref="ArgumentNullException">The table or the tokens are null.</exception>
 internal sealed class PgSessionService(PgRecordTable table, IPgTokens tokens) : ISessionService
 {
-    /// <summary>The template of the statement that inserts a session's row.</summary>
+    /// <summary>
+    /// The template of the statement that inserts a session's row.
+    /// </summary>
     private const string InsertSession = """
         INSERT INTO {schema}.sessions (keyspace_id, id, ttl_us, deadline)
         VALUES ($1, $2, $3, clock_timestamp() + $3 * interval '1 microsecond')
         """;
 
-    /// <summary>The template of the statement that renews a live session's deadline by its whole time to live.</summary>
+    /// <summary>
+    /// The template of the statement that renews a live session's deadline by its whole time to live.
+    /// </summary>
     private const string RenewSession = """
         WITH now AS (SELECT clock_timestamp() AS t)
         UPDATE {schema}.sessions
@@ -32,12 +38,79 @@ internal sealed class PgSessionService(PgRecordTable table, IPgTokens tokens) : 
         RETURNING ttl_us
         """;
 
-    /// <summary>The template of the statement that tells whether a session is no longer live.</summary>
+    /// <summary>
+    /// The template of the statement that tells whether a session is no longer live.
+    /// </summary>
     private const string SelectEnded = """
         SELECT NOT EXISTS (
             SELECT 1 FROM {schema}.sessions
             WHERE keyspace_id = $1 AND id = $2 AND deadline > clock_timestamp())
         """;
+
+    /// <summary>
+    /// Reads the time to live of a renewed session's row, in whole microseconds.
+    /// </summary>
+    /// <param name="reader">The reader, on a row.</param>
+    /// <returns>The session's whole time to live in microseconds.</returns>
+    private static long ReadMicroseconds(NpgsqlDataReader reader)
+    {
+        return reader.GetInt64(0);
+    }
+
+    /// <summary>
+    /// Reads whether a session is no longer live.
+    /// </summary>
+    /// <param name="reader">The reader, on a row.</param>
+    /// <returns>True when the session is not live.</returns>
+    private static bool ReadEnded(NpgsqlDataReader reader)
+    {
+        return reader.GetBoolean(0);
+    }
+
+    /// <summary>
+    /// Reads the result of <see cref="RenewSession"/>.
+    /// </summary>
+    /// <param name="results">The results of the batch.</param>
+    /// <param name="cancellationToken">The token that cancels the call.</param>
+    /// <returns>The time to live in microseconds of each session that was renewed.</returns>
+    private static async ValueTask<ImmutableArray<long>> ReadRenewedAsync(
+        PgResults results,
+        CancellationToken cancellationToken
+    )
+    {
+        return await results.ReadAsync(ReadMicroseconds, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Reads the result of <see cref="SelectEnded"/>.
+    /// </summary>
+    /// <param name="results">The results of the batch.</param>
+    /// <param name="cancellationToken">The token that cancels the call.</param>
+    /// <returns>Whether the session is not live, in a single item.</returns>
+    private static async ValueTask<ImmutableArray<bool>> ReadEndedAsync(
+        PgResults results,
+        CancellationToken cancellationToken
+    )
+    {
+        return await results.ReadAsync(ReadEnded, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Builds the result of a keep-alive from the rows that the renewal returned.
+    /// </summary>
+    /// <param name="renewed">The time to live in microseconds of each session that was renewed.</param>
+    /// <returns>The result that says the session ended, or that it was renewed for its time to live.</returns>
+    private static KeepAliveResult ToKeepAliveResult(ImmutableArray<long> renewed)
+    {
+        if (renewed.Length == 0)
+        {
+            return KeepAliveResult.Ended;
+        }
+
+        var renewedFor = PgCall.FromMicroseconds(renewed[0]);
+        var timeToLive = new TimeToLive(renewedFor);
+        return KeepAliveResult.Renewed(timeToLive);
+    }
 
     /// <summary>
     /// Gets the record table, whose keyspaces' ids and transactions the service shares.
@@ -49,13 +122,19 @@ internal sealed class PgSessionService(PgRecordTable table, IPgTokens tokens) : 
     /// </summary>
     private IPgTokens Tokens { get; } = tokens ?? throw new ArgumentNullException(nameof(tokens));
 
-    /// <summary>Gets the statement that inserts a session's row.</summary>
+    /// <summary>
+    /// Gets the statement that inserts a session's row.
+    /// </summary>
     private string InsertSql { get; } = table.Settings.Schema.Apply(InsertSession);
 
-    /// <summary>Gets the statement that renews a live session's deadline.</summary>
+    /// <summary>
+    /// Gets the statement that renews a live session's deadline.
+    /// </summary>
     private string RenewSql { get; } = table.Settings.Schema.Apply(RenewSession);
 
-    /// <summary>Gets the statement that tells whether a session is no longer live.</summary>
+    /// <summary>
+    /// Gets the statement that tells whether a session is no longer live.
+    /// </summary>
     private string EndedSql { get; } = table.Settings.Schema.Apply(SelectEnded);
 
     /// <inheritdoc />
@@ -70,25 +149,19 @@ internal sealed class PgSessionService(PgRecordTable table, IPgTokens tokens) : 
         ArgumentNullException.ThrowIfNull(timeToLive);
         PgCall.Check(options, cancellationToken);
 
-        var token = Tokens.Next(PgTokenPrefixes.Session);
+        var sessionToken = Tokens.Next(PgTokenPrefixes.Session);
         var microseconds = PgCall.ToMicroseconds(timeToLive);
 
         await Table
             .Keyspaces.RunAsync(
                 keyspace,
-                async (id, runToken) =>
-                    await Table
-                        .Server.ExecuteAsync(
-                            [new PgStatement(InsertSql, id, token, microseconds)],
-                            static (_, _) => ValueTask.FromResult(true),
-                            runToken
-                        )
-                        .ConfigureAwait(false),
+                (id, token) => InsertInKeyspaceAsync(id, sessionToken, microseconds, token),
                 cancellationToken
             )
             .ConfigureAwait(false);
 
-        return new SessionGrant(new SessionId(keyspace, token), timeToLive);
+        var sessionId = new SessionId(keyspace, sessionToken);
+        return new SessionGrant(sessionId, timeToLive);
     }
 
     /// <inheritdoc />
@@ -104,25 +177,7 @@ internal sealed class PgSessionService(PgRecordTable table, IPgTokens tokens) : 
         return await Table
             .Keyspaces.RunAsync<KeepAliveResult>(
                 session.Keyspace,
-                async (id, token) =>
-                {
-                    var renewed = await Table
-                        .Server.ExecuteAsync(
-                            [new PgStatement(RenewSql, id, session.Value)],
-                            async (results, readToken) =>
-                                await results
-                                    .ReadAsync(reader => reader.GetInt64(0), readToken)
-                                    .ConfigureAwait(false),
-                            token
-                        )
-                        .ConfigureAwait(false);
-
-                    return renewed.Length == 0
-                        ? KeepAliveResult.Ended
-                        : KeepAliveResult.Renewed(
-                            new TimeToLive(TimeSpan.FromTicks(renewed[0] * 10))
-                        );
-                },
+                (id, token) => RenewInKeyspaceAsync(id, session, token),
                 cancellationToken
             )
             .ConfigureAwait(false);
@@ -141,36 +196,7 @@ internal sealed class PgSessionService(PgRecordTable table, IPgTokens tokens) : 
         await Table
             .Keyspaces.RunAsync(
                 session.Keyspace,
-                async (id, token) =>
-                    await Table
-                        .Server.TransactAsync(
-                            PgIsolation.ReadCommitted,
-                            async (transaction, transactionToken) =>
-                            {
-                                var start = await Table
-                                    .BeginAsync(
-                                        transaction,
-                                        id,
-                                        [],
-                                        [session.Value],
-                                        transactionToken
-                                    )
-                                    .ConfigureAwait(false);
-
-                                var change = start.Change;
-                                if (start.Sessions.ContainsKey(session.Value))
-                                {
-                                    change.EndSession(session.Value);
-                                }
-
-                                await Table
-                                    .CommitAsync(transaction, change, id, transactionToken)
-                                    .ConfigureAwait(false);
-                                return true;
-                            },
-                            token
-                        )
-                        .ConfigureAwait(false),
+                (id, token) => CloseInKeyspaceAsync(id, session, token),
                 cancellationToken
             )
             .ConfigureAwait(false);
@@ -192,6 +218,103 @@ internal sealed class PgSessionService(PgRecordTable table, IPgTokens tokens) : 
     }
 
     /// <summary>
+    /// Inserts a session's row in a keyspace.
+    /// </summary>
+    /// <param name="id">The keyspace's id.</param>
+    /// <param name="sessionToken">The new session's id.</param>
+    /// <param name="microseconds">The session's time to live in whole microseconds.</param>
+    /// <param name="cancellationToken">The token that cancels the call.</param>
+    private async ValueTask InsertInKeyspaceAsync(
+        long id,
+        string sessionToken,
+        long microseconds,
+        CancellationToken cancellationToken
+    )
+    {
+        var statement = new PgStatement(InsertSql, id, sessionToken, microseconds);
+
+        await Table
+            .Server.ExecuteAsync(
+                [statement],
+                static (_, _) => ValueTask.FromResult(true),
+                cancellationToken
+            )
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Renews a session's deadline in a keyspace.
+    /// </summary>
+    /// <param name="id">The keyspace's id.</param>
+    /// <param name="session">The session.</param>
+    /// <param name="cancellationToken">The token that cancels the call.</param>
+    /// <returns>The result that says the session ended, or that it was renewed.</returns>
+    private async ValueTask<KeepAliveResult> RenewInKeyspaceAsync(
+        long id,
+        SessionId session,
+        CancellationToken cancellationToken
+    )
+    {
+        var statement = new PgStatement(RenewSql, id, session.Value);
+
+        var renewed = await Table
+            .Server.ExecuteAsync([statement], ReadRenewedAsync, cancellationToken)
+            .ConfigureAwait(false);
+
+        return ToKeepAliveResult(renewed);
+    }
+
+    /// <summary>
+    /// Ends a session in a keyspace, in a transaction.
+    /// </summary>
+    /// <param name="id">The keyspace's id.</param>
+    /// <param name="session">The session.</param>
+    /// <param name="cancellationToken">The token that cancels the call.</param>
+    private async ValueTask CloseInKeyspaceAsync(
+        long id,
+        SessionId session,
+        CancellationToken cancellationToken
+    )
+    {
+        await Table
+            .Server.TransactAsync(
+                PgIsolation.ReadCommitted,
+                (transaction, token) => CloseInTransactionAsync(transaction, id, session, token),
+                cancellationToken
+            )
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Begins a change, ends the session when its row exists and commits the change.
+    /// </summary>
+    /// <param name="transaction">The transaction, which has not run a batch.</param>
+    /// <param name="id">The keyspace's id.</param>
+    /// <param name="session">The session.</param>
+    /// <param name="cancellationToken">The token that cancels the call.</param>
+    /// <returns>True, once the change has committed.</returns>
+    private async ValueTask<bool> CloseInTransactionAsync(
+        PgTransaction transaction,
+        long id,
+        SessionId session,
+        CancellationToken cancellationToken
+    )
+    {
+        var start = await Table
+            .BeginAsync(transaction, id, [], [session.Value], cancellationToken)
+            .ConfigureAwait(false);
+
+        var change = start.Change;
+        if (start.Sessions.ContainsKey(session.Value))
+        {
+            change.EndSession(session.Value);
+        }
+
+        await Table.CommitAsync(transaction, change, id, cancellationToken).ConfigureAwait(false);
+        return true;
+    }
+
+    /// <summary>
     /// Asks the server whether a session has ended.
     /// </summary>
     /// <param name="session">The session.</param>
@@ -204,25 +327,33 @@ internal sealed class PgSessionService(PgRecordTable table, IPgTokens tokens) : 
     )
     {
         return await Table
-            .Keyspaces.RunAsync(
+            .Keyspaces.RunAsync<bool>(
                 session.Keyspace,
-                async (id, token) =>
-                {
-                    var ended = await Table
-                        .Server.ExecuteAsync(
-                            [new PgStatement(EndedSql, id, session.Value)],
-                            async (results, readToken) =>
-                                await results
-                                    .ReadAsync(reader => reader.GetBoolean(0), readToken)
-                                    .ConfigureAwait(false),
-                            token
-                        )
-                        .ConfigureAwait(false);
-
-                    return ended.Length > 0 && ended[0];
-                },
+                (id, token) => ReadEndedInKeyspaceAsync(id, session, token),
                 cancellationToken
             )
             .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Asks the server whether a session of a keyspace has ended.
+    /// </summary>
+    /// <param name="id">The keyspace's id.</param>
+    /// <param name="session">The session.</param>
+    /// <param name="cancellationToken">The token that cancels the call.</param>
+    /// <returns><see langword="true"/> when the session is not live.</returns>
+    private async ValueTask<bool> ReadEndedInKeyspaceAsync(
+        long id,
+        SessionId session,
+        CancellationToken cancellationToken
+    )
+    {
+        var statement = new PgStatement(EndedSql, id, session.Value);
+
+        var ended = await Table
+            .Server.ExecuteAsync([statement], ReadEndedAsync, cancellationToken)
+            .ConfigureAwait(false);
+
+        return ended.Length > 0 && ended[0];
     }
 }
