@@ -16,10 +16,15 @@ namespace NCode.Coordination.PostgreSql.Keys;
 internal static class PgKeys
 {
     /// <summary>
-    /// The most UTF-8 bytes of an encoded segment that are hashed from the stack; a longer segment uses a rented
-    /// buffer.
+    /// The most UTF-8 bytes of an encoded segment that are hashed, escaped or unescaped on the stack; a longer
+    /// segment uses a rented buffer.
     /// </summary>
     private const int MaxStackBytes = 256;
+
+    /// <summary>
+    /// The character that separates the encoded segments of a key's text.
+    /// </summary>
+    private const char SegmentSeparator = '/';
 
     /// <summary>
     /// Gets the UTF-8 encoding that throws on bytes that are not well-formed UTF-8, which
@@ -66,29 +71,8 @@ internal static class PgKeys
     /// </returns>
     public static bool TryDecodeSegment(string? text, [NotNullWhen(true)] out KeySegment? segment)
     {
-        segment = null;
-
-        if (string.IsNullOrEmpty(text))
-        {
-            return false;
-        }
-
-        var rest = text[1..];
-
-        switch (text[0])
-        {
-            case 't':
-                return TryDecodeTextSegment(text, rest, out segment);
-
-            case 'n':
-                return TryDecodeNumberSegment(rest, out segment);
-
-            case 'u':
-                return TryDecodeUuidSegment(rest, out segment);
-
-            default:
-                return false;
-        }
+        var span = text.AsSpan();
+        return TryDecodeSegment(span, out segment);
     }
 
     /// <summary>
@@ -163,11 +147,14 @@ internal static class PgKeys
             return false;
         }
 
-        var parts = text.Split('/');
-        var segments = new List<KeySegment>(parts.Length);
+        var span = text.AsSpan();
+        var capacity = span.Count(SegmentSeparator) + 1;
+        var segments = new List<KeySegment>(capacity);
 
-        foreach (var part in parts)
+        foreach (var range in span.Split(SegmentSeparator))
         {
+            var part = span[range];
+
             if (!TryDecodeSegment(part, out var segment))
             {
                 return false;
@@ -176,16 +163,7 @@ internal static class PgKeys
             segments.Add(segment);
         }
 
-        try
-        {
-            key = new CoordinationKey(keyspace, segments) { PartitionDepth = depth };
-            return true;
-        }
-        catch (ArgumentException)
-        {
-            key = null;
-            return false;
-        }
+        return TryBuildKey(keyspace, segments, depth, out key);
     }
 
     /// <summary>
@@ -349,6 +327,69 @@ internal static class PgKeys
     }
 
     /// <summary>
+    /// Builds a key from decoded segments.
+    /// </summary>
+    /// <param name="keyspace">The keyspace the key belongs to.</param>
+    /// <param name="segments">The decoded segments.</param>
+    /// <param name="depth">The key's partition depth.</param>
+    /// <param name="key">The key, when the segments and the depth make one.</param>
+    /// <returns>False when the key cannot be built; true otherwise.</returns>
+    private static bool TryBuildKey(
+        Keyspace keyspace,
+        List<KeySegment> segments,
+        int depth,
+        [NotNullWhen(true)] out CoordinationKey? key
+    )
+    {
+        try
+        {
+            key = new CoordinationKey(keyspace, segments) { PartitionDepth = depth };
+            return true;
+        }
+        catch (ArgumentException)
+        {
+            key = null;
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Decodes one encoded segment without allocating a string for it.
+    /// </summary>
+    /// <param name="text">The encoded segment.</param>
+    /// <param name="segment">The segment, when the text is one that <see cref="EncodeSegment"/> writes.</param>
+    /// <returns>False when the text is not one that <see cref="EncodeSegment"/> writes; true otherwise.</returns>
+    private static bool TryDecodeSegment(
+        ReadOnlySpan<char> text,
+        [NotNullWhen(true)] out KeySegment? segment
+    )
+    {
+        segment = null;
+
+        if (text.IsEmpty)
+        {
+            return false;
+        }
+
+        var rest = text[1..];
+
+        switch (text[0])
+        {
+            case 't':
+                return TryDecodeTextSegment(text, rest, out segment);
+
+            case 'n':
+                return TryDecodeNumberSegment(rest, out segment);
+
+            case 'u':
+                return TryDecodeUuidSegment(rest, out segment);
+
+            default:
+                return false;
+        }
+    }
+
+    /// <summary>
     /// Decodes a text segment: "t" followed by escaped text.
     /// </summary>
     /// <param name="text">The whole encoded segment, which the decoded segment must encode back to.</param>
@@ -356,8 +397,8 @@ internal static class PgKeys
     /// <param name="segment">The segment, when the text is one that <see cref="EncodeSegment"/> writes.</param>
     /// <returns>False when the text is not one that <see cref="EncodeSegment"/> writes; true otherwise.</returns>
     private static bool TryDecodeTextSegment(
-        string text,
-        string rest,
+        ReadOnlySpan<char> text,
+        ReadOnlySpan<char> rest,
         [NotNullWhen(true)] out KeySegment? segment
     )
     {
@@ -386,7 +427,7 @@ internal static class PgKeys
 
         var canonical = EncodeSegment(textSegment);
 
-        if (!string.Equals(canonical, text, StringComparison.Ordinal))
+        if (!text.Equals(canonical, StringComparison.Ordinal))
         {
             return false;
         }
@@ -402,7 +443,7 @@ internal static class PgKeys
     /// <param name="segment">The segment, when the text is a number that round-trips.</param>
     /// <returns>False when the text is not a number that round-trips; true otherwise.</returns>
     private static bool TryDecodeNumberSegment(
-        string rest,
+        ReadOnlySpan<char> rest,
         [NotNullWhen(true)] out KeySegment? segment
     )
     {
@@ -422,7 +463,7 @@ internal static class PgKeys
 
         var numberText = number.ToString(CultureInfo.InvariantCulture);
 
-        if (!string.Equals(numberText, rest, StringComparison.Ordinal))
+        if (!rest.Equals(numberText, StringComparison.Ordinal))
         {
             return false;
         }
@@ -438,7 +479,7 @@ internal static class PgKeys
     /// <param name="segment">The segment, when the text is 32 lowercase hex digits.</param>
     /// <returns>False when the text is not 32 lowercase hex digits; true otherwise.</returns>
     private static bool TryDecodeUuidSegment(
-        string rest,
+        ReadOnlySpan<char> rest,
         [NotNullWhen(true)] out KeySegment? segment
     )
     {
@@ -451,7 +492,7 @@ internal static class PgKeys
 
         var uuidText = uuid.ToString("N", CultureInfo.InvariantCulture);
 
-        if (!string.Equals(uuidText, rest, StringComparison.Ordinal))
+        if (!rest.Equals(uuidText, StringComparison.Ordinal))
         {
             return false;
         }
@@ -498,10 +539,45 @@ internal static class PgKeys
     /// <param name="escaped">The escaped text.</param>
     /// <param name="text">The text, when the escaped text is well formed.</param>
     /// <returns>False when the text is not one that <see cref="Escape"/> writes, or its bytes are not UTF-8.</returns>
-    private static bool TryUnescape(string escaped, [NotNullWhen(true)] out string? text)
+    private static bool TryUnescape(
+        ReadOnlySpan<char> escaped,
+        [NotNullWhen(true)] out string? text
+    )
+    {
+        if (escaped.Length <= MaxStackBytes)
+        {
+            Span<byte> buffer = stackalloc byte[MaxStackBytes];
+            return TryUnescapeInto(escaped, buffer, out text);
+        }
+
+        var rented = ArrayPool<byte>.Shared.Rent(escaped.Length);
+
+        try
+        {
+            return TryUnescapeInto(escaped, rented, out text);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(rented);
+        }
+    }
+
+    /// <summary>
+    /// Reads an escaped text into a buffer that holds at least one byte for each of its characters, then decodes
+    /// the bytes it wrote as strict UTF-8.
+    /// </summary>
+    /// <param name="escaped">The escaped text.</param>
+    /// <param name="buffer">The buffer that receives the bytes.</param>
+    /// <param name="text">The text, when the escaped text is well formed.</param>
+    /// <returns>False when the text is not one that <see cref="Escape"/> writes, or its bytes are not UTF-8.</returns>
+    private static bool TryUnescapeInto(
+        ReadOnlySpan<char> escaped,
+        Span<byte> buffer,
+        [NotNullWhen(true)] out string? text
+    )
     {
         text = null;
-        var bytes = new List<byte>(escaped.Length);
+        var written = 0;
 
         for (var index = 0; index < escaped.Length; index++)
         {
@@ -510,12 +586,13 @@ internal static class PgKeys
                 return false;
             }
 
-            bytes.Add(value);
+            buffer[written] = value;
+            written++;
         }
 
         try
         {
-            var decoded = bytes.ToArray();
+            var decoded = buffer[..written];
             text = StrictUtf8.GetString(decoded);
             return true;
         }
@@ -532,7 +609,11 @@ internal static class PgKeys
     /// <param name="index">The position of the byte's first character; on success, the position of its last.</param>
     /// <param name="value">The byte.</param>
     /// <returns>False when the character at the position is neither unreserved nor a well-formed escape.</returns>
-    private static bool TryReadEscapedByte(string escaped, ref int index, out byte value)
+    private static bool TryReadEscapedByte(
+        ReadOnlySpan<char> escaped,
+        ref int index,
+        out byte value
+    )
     {
         value = 0;
         var character = escaped[index];
@@ -582,7 +663,36 @@ internal static class PgKeys
     /// <returns>The escaped text.</returns>
     private static string Escape(string text)
     {
-        var bytes = Encoding.UTF8.GetBytes(text);
+        var byteCount = Encoding.UTF8.GetByteCount(text);
+
+        if (byteCount <= MaxStackBytes)
+        {
+            Span<byte> buffer = stackalloc byte[MaxStackBytes];
+            var written = Encoding.UTF8.GetBytes(text, buffer);
+            return EscapeBytes(buffer[..written]);
+        }
+
+        var rented = ArrayPool<byte>.Shared.Rent(byteCount);
+
+        try
+        {
+            var writtenToRented = Encoding.UTF8.GetBytes(text, rented);
+            var bytes = rented.AsSpan(0, writtenToRented);
+            return EscapeBytes(bytes);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(rented);
+        }
+    }
+
+    /// <summary>
+    /// Writes UTF-8 bytes as escaped text.
+    /// </summary>
+    /// <param name="bytes">The UTF-8 bytes of a text.</param>
+    /// <returns>The escaped text.</returns>
+    private static string EscapeBytes(ReadOnlySpan<byte> bytes)
+    {
         var builder = new StringBuilder(bytes.Length);
 
         foreach (var value in bytes)

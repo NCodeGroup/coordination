@@ -59,12 +59,17 @@ internal sealed partial class PgSchemaName
     /// <param name="name">The validated name.</param>
     private PgSchemaName(string name)
     {
-        var nameBytes = Encoding.UTF8.GetBytes(name);
-        var digest = SHA256.HashData(nameBytes);
+        Span<byte> nameBytes = stackalloc byte[MaxLength];
+        var written = Encoding.UTF8.GetBytes(name, nameBytes);
+        var encoded = nameBytes[..written];
+
+        Span<byte> digest = stackalloc byte[SHA256.HashSizeInBytes];
+        SHA256.HashData(encoded, digest);
+        var prefix = digest[..4];
 
         Name = name;
         Quoted = "\"" + name + "\"";
-        Hash = Convert.ToHexStringLower(digest, 0, 4);
+        Hash = Convert.ToHexStringLower(prefix);
     }
 
     /// <summary>
