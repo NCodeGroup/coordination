@@ -91,14 +91,30 @@ internal sealed class PgListener(PgSource source, PgListenerEvents events, TimeP
         }
     }
 
+    /// <summary>
+    /// The clock reading, in timestamp ticks, of the listening connection's last traffic.
+    /// </summary>
     private long _lastTraffic;
+
+    /// <summary>
+    /// Whether the listener has connected to a server other than the one it first met.
+    /// </summary>
     private volatile bool _hasSeenAnotherServer;
 
+    /// <summary>
+    /// Gets the source of the listening connection.
+    /// </summary>
     private PgSource Source { get; } = source ?? throw new ArgumentNullException(nameof(source));
 
+    /// <summary>
+    /// Gets the callbacks that tell the provider about the listening connection.
+    /// </summary>
     private PgListenerEvents Events { get; } =
         events ?? throw new ArgumentNullException(nameof(events));
 
+    /// <summary>
+    /// Gets the clock that times the listener's pings.
+    /// </summary>
     private TimeProvider Time { get; } = time ?? throw new ArgumentNullException(nameof(time));
 
     /// <summary>

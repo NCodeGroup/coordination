@@ -34,6 +34,9 @@ internal sealed class PgLogSubscriber<TEntry>(long cursor, bool resyncFirst)
         return Channel.CreateBounded<PgLogEvent<TEntry>>(options);
     }
 
+    /// <summary>
+    /// Whether the subscriber's next event must be a resync; read by <see cref="NeedsResync"/>.
+    /// </summary>
     private volatile bool _needsResync = resyncFirst;
 
     /// <summary>

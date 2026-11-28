@@ -10,13 +10,16 @@ namespace NCode.Coordination.PostgreSql.Tests.Readability;
 
 /// <summary>
 /// Parses the PostgreSQL provider's source and reports what breaks its readability rules: a call inside another
-/// call's arguments, a lambda argument that isn't one plain expression, and a member over 40 lines.
+/// call's arguments, a lambda argument that isn't one plain expression, a member over 40 lines, a constant or
+/// static member declared after an instance member, and a member without a documentation comment.
 /// </summary>
 internal static class PgSourceRules
 {
     private const string NestedCallRule = "nested-call";
     private const string NestedLambdaRule = "nested-lambda";
     private const string LongMemberRule = "long-member";
+    private const string StaticOrderRule = "static-order";
+    private const string MissingDocRule = "missing-doc";
 
     private const int MaxMemberLines = 40;
     private const int MaxTextLength = 80;
@@ -42,8 +45,27 @@ internal static class PgSourceRules
         violations.AddRange(FindNestedLambdas(root));
         violations.AddRange(FindLongMembers(tree, root));
 
-        var ordered = violations.OrderBy(violation => violation.Node.SpanStart);
-        return [.. ordered.Select(violation => Describe(tree, violation.Node, violation.Rule))];
+        return DescribeAll(tree, violations);
+    }
+
+    /// <summary>
+    /// Checks one source text for a constant or static member declared after an instance member, and for a member
+    /// without a documentation comment.
+    /// </summary>
+    /// <param name="source">The C# source text.</param>
+    /// <returns>
+    /// One <c>"line: rule: text"</c> per violation, ordered by position.
+    /// </returns>
+    public static ImmutableArray<string> CheckLayout(string source)
+    {
+        var tree = CSharpSyntaxTree.ParseText(source);
+        var root = tree.GetRoot();
+
+        var violations = new List<(SyntaxNode Node, string Rule)>();
+        violations.AddRange(FindMisplacedStatics(root));
+        violations.AddRange(FindUndocumentedMembers(root));
+
+        return DescribeAll(tree, violations);
     }
 
     /// <summary>
@@ -65,7 +87,7 @@ internal static class PgSourceRules
         {
             var relativePath = Path.GetRelativePath(PackageRoot, file).Replace('\\', '/');
             var source = File.ReadAllText(file);
-            var fileViolations = Check(source);
+            var fileViolations = Check(source).AddRange(CheckLayout(source));
             foreach (var violation in fileViolations)
             {
                 violations.Add($"{relativePath}:{violation}");
@@ -178,7 +200,113 @@ internal static class PgSourceRules
 
     #endregion
 
+    #region Static order
+
+    private static IEnumerable<(SyntaxNode Node, string Rule)> FindMisplacedStatics(SyntaxNode root)
+    {
+        var declarations = root.DescendantNodes().OfType<TypeDeclarationSyntax>();
+        var checkedDeclarations = declarations.Where(IsLayoutChecked);
+        return checkedDeclarations.SelectMany(FindMisplacedStaticsIn);
+    }
+
+    private static bool IsLayoutChecked(TypeDeclarationSyntax declaration) =>
+        declaration.Kind()
+            is SyntaxKind.ClassDeclaration
+                or SyntaxKind.StructDeclaration
+                or SyntaxKind.RecordDeclaration
+                or SyntaxKind.RecordStructDeclaration
+                or SyntaxKind.InterfaceDeclaration;
+
+    private static IEnumerable<(SyntaxNode Node, string Rule)> FindMisplacedStaticsIn(
+        TypeDeclarationSyntax declaration
+    )
+    {
+        var seenInstanceMember = false;
+        foreach (var member in declaration.Members)
+        {
+            if (seenInstanceMember && IsConstantOrStatic(member))
+                yield return (member, StaticOrderRule);
+
+            if (IsInstanceMember(member))
+                seenInstanceMember = true;
+        }
+    }
+
+    private static bool IsConstantOrStatic(MemberDeclarationSyntax member) =>
+        member switch
+        {
+            FieldDeclarationSyntax field => field.Modifiers.Any(SyntaxKind.ConstKeyword)
+                || field.Modifiers.Any(SyntaxKind.StaticKeyword),
+            EventFieldDeclarationSyntax
+            or EventDeclarationSyntax
+            or PropertyDeclarationSyntax
+            or MethodDeclarationSyntax => member.Modifiers.Any(SyntaxKind.StaticKeyword),
+            _ => false,
+        };
+
+    private static bool IsInstanceMember(MemberDeclarationSyntax member) =>
+        member switch
+        {
+            FieldDeclarationSyntax field => !field.Modifiers.Any(SyntaxKind.ConstKeyword)
+                && !field.Modifiers.Any(SyntaxKind.StaticKeyword),
+            EventFieldDeclarationSyntax
+            or EventDeclarationSyntax
+            or PropertyDeclarationSyntax
+            or MethodDeclarationSyntax
+            or ConstructorDeclarationSyntax => !member.Modifiers.Any(SyntaxKind.StaticKeyword),
+            IndexerDeclarationSyntax => true,
+            _ => false,
+        };
+
+    #endregion
+
+    #region Missing documentation
+
+    private static IEnumerable<(SyntaxNode Node, string Rule)> FindUndocumentedMembers(
+        SyntaxNode root
+    )
+    {
+        var nodes = root.DescendantNodes().Where(IsDocumentedKind);
+        var undocumented = nodes.Where(node => !HasDocumentationComment(node));
+        return undocumented.Select(node => (node, MissingDocRule));
+    }
+
+    private static bool IsDocumentedKind(SyntaxNode node) =>
+        node switch
+        {
+            TypeDeclarationSyntax declaration => IsLayoutChecked(declaration),
+            EnumDeclarationSyntax
+            or DelegateDeclarationSyntax
+            or EnumMemberDeclarationSyntax
+            or BaseFieldDeclarationSyntax
+            or PropertyDeclarationSyntax
+            or EventDeclarationSyntax
+            or IndexerDeclarationSyntax
+            or MethodDeclarationSyntax
+            or ConstructorDeclarationSyntax
+            or OperatorDeclarationSyntax
+            or ConversionOperatorDeclarationSyntax => true,
+            _ => false,
+        };
+
+    private static bool HasDocumentationComment(SyntaxNode node)
+    {
+        var trivia = node.GetLeadingTrivia();
+        return trivia.Any(SyntaxKind.SingleLineDocumentationCommentTrivia);
+    }
+
+    #endregion
+
     #region Reporting
+
+    private static ImmutableArray<string> DescribeAll(
+        SyntaxTree tree,
+        List<(SyntaxNode Node, string Rule)> violations
+    )
+    {
+        var ordered = violations.OrderBy(violation => violation.Node.SpanStart);
+        return [.. ordered.Select(violation => Describe(tree, violation.Node, violation.Rule))];
+    }
 
     private static string Describe(SyntaxTree tree, SyntaxNode node, string rule)
     {

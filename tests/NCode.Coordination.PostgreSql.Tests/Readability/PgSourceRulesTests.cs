@@ -142,6 +142,112 @@ public sealed class PgSourceRulesTests
 
     #endregion
 
+    #region CheckLayout Tests
+
+    [Fact]
+    public void CheckLayout_StaticMethodAfterAnInstanceMethod_ReportsStaticOrder()
+    {
+        const string source = """
+            /// <summary>C.</summary>
+            class C
+            {
+                /// <summary>A.</summary>
+                void A() { }
+
+                /// <summary>B.</summary>
+                static void B() { }
+            }
+            """;
+
+        var violations = PgSourceRules.CheckLayout(source);
+
+        Assert.Equal<string>(["8: static-order: static void B() { }"], violations);
+    }
+
+    [Fact]
+    public void CheckLayout_ConstAfterAProperty_ReportsStaticOrder()
+    {
+        const string source = """
+            /// <summary>C.</summary>
+            class C
+            {
+                /// <summary>P.</summary>
+                int P { get; }
+
+                /// <summary>K.</summary>
+                const int K = 1;
+            }
+            """;
+
+        var violations = PgSourceRules.CheckLayout(source);
+
+        Assert.Equal<string>(["8: static-order: const int K = 1;"], violations);
+    }
+
+    [Fact]
+    public void CheckLayout_StaticsBeforeInstanceMembers_ReportsNothing()
+    {
+        const string source = """
+            /// <summary>C.</summary>
+            class C
+            {
+                /// <summary>K.</summary>
+                const int K = 1;
+
+                /// <summary>F.</summary>
+                static int F;
+
+                /// <summary>B.</summary>
+                static void B() { }
+
+                /// <summary>P.</summary>
+                int P { get; }
+
+                /// <summary>M.</summary>
+                void M() { }
+            }
+            """;
+
+        var violations = PgSourceRules.CheckLayout(source);
+
+        Assert.Empty(violations);
+    }
+
+    [Fact]
+    public void CheckLayout_MemberWithoutDocComment_ReportsMissingDoc()
+    {
+        const string source = """
+            /// <summary>C.</summary>
+            class C
+            {
+                void M() { }
+            }
+            """;
+
+        var violations = PgSourceRules.CheckLayout(source);
+
+        Assert.Equal<string>(["4: missing-doc: void M() { }"], violations);
+    }
+
+    [Fact]
+    public void CheckLayout_InheritdocMember_ReportsNothing()
+    {
+        const string source = """
+            /// <summary>C.</summary>
+            class C
+            {
+                /// <inheritdoc />
+                void M() { }
+            }
+            """;
+
+        var violations = PgSourceRules.CheckLayout(source);
+
+        Assert.Empty(violations);
+    }
+
+    #endregion
+
     #region CheckPath Tests
 
     [Theory(SkipTestWithoutData = true)]

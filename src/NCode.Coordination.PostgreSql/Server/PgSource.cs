@@ -61,6 +61,12 @@ internal sealed class PgSource : IAsyncDisposable, IDisposable
     /// </summary>
     private int _disposed;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="PgSource"/> class.
+    /// </summary>
+    /// <param name="root">The data source that holds the connection string and the pool.</param>
+    /// <param name="primary">The data source that opens connections to the primary.</param>
+    /// <param name="owned">Whether the source disposes its data source.</param>
     private PgSource(NpgsqlDataSource root, NpgsqlDataSource primary, bool owned)
     {
         Root = root;
