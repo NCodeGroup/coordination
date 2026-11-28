@@ -56,7 +56,7 @@ public sealed class PgLogFanoutTests
     {
         var log = new FakeLog(1, 3, 1, 2, 3);
         var fanout = new PgLogFanout<TestEntry>(log.ReadAsync);
-        var subscriber = fanout.Add(0, resyncFirst: true);
+        var subscriber = fanout.AddWithResync();
 
         await fanout.PumpAsync(CancellationToken.None);
 
@@ -74,7 +74,7 @@ public sealed class PgLogFanoutTests
     {
         var log = new FakeLog(1, 5, 1, 2, 3, 4, 5);
         var fanout = new PgLogFanout<TestEntry>(log.ReadAsync);
-        var subscriber = fanout.Add(2, resyncFirst: false);
+        var subscriber = fanout.AddAfter(2);
 
         await fanout.PumpAsync(CancellationToken.None);
 
@@ -91,7 +91,7 @@ public sealed class PgLogFanoutTests
     {
         var log = new FakeLog(0, 4, 1, 2, 4);
         var fanout = new PgLogFanout<TestEntry>(log.ReadAsync);
-        var subscriber = fanout.Add(0, resyncFirst: false);
+        var subscriber = fanout.AddAfter(0);
 
         await fanout.PumpAsync(CancellationToken.None);
 
@@ -112,7 +112,7 @@ public sealed class PgLogFanoutTests
     {
         var log = new FakeLog(5, 8, 6, 7, 8);
         var fanout = new PgLogFanout<TestEntry>(log.ReadAsync);
-        var subscriber = fanout.Add(2, resyncFirst: false);
+        var subscriber = fanout.AddAfter(2);
 
         await fanout.PumpAsync(CancellationToken.None);
 
@@ -128,7 +128,7 @@ public sealed class PgLogFanoutTests
     {
         var log = new FakeLog(0, 3, 1, 2, 3);
         var fanout = new PgLogFanout<TestEntry>(log.ReadAsync);
-        var subscriber = fanout.Add(7, resyncFirst: false);
+        var subscriber = fanout.AddAfter(7);
 
         await fanout.PumpAsync(CancellationToken.None);
 
@@ -144,8 +144,8 @@ public sealed class PgLogFanoutTests
     {
         var log = new FakeLog(1, 3, 1, 2, 3);
         var fanout = new PgLogFanout<TestEntry>(log.ReadAsync);
-        var behind = fanout.Add(1, resyncFirst: false);
-        var ahead = fanout.Add(2, resyncFirst: false);
+        var behind = fanout.AddAfter(1);
+        var ahead = fanout.AddAfter(2);
 
         await fanout.PumpAsync(CancellationToken.None);
 
@@ -166,7 +166,7 @@ public sealed class PgLogFanoutTests
         var numbers = Enumerable.Range(1, 1_100).Select(x => (long)x).ToArray();
         var log = new FakeLog(0, 1_100, numbers);
         var fanout = new PgLogFanout<TestEntry>(log.ReadAsync);
-        var subscriber = fanout.Add(0, resyncFirst: false);
+        var subscriber = fanout.AddAfter(0);
 
         await fanout.PumpAsync(CancellationToken.None);
 
@@ -194,8 +194,8 @@ public sealed class PgLogFanoutTests
     {
         var log = new FakeLog(1, 3, 1, 2, 3);
         var fanout = new PgLogFanout<TestEntry>(log.ReadAsync);
-        var first = fanout.Add(3, resyncFirst: false);
-        var second = fanout.Add(3, resyncFirst: false);
+        var first = fanout.AddAfter(3);
+        var second = fanout.AddAfter(3);
 
         await fanout.PumpAsync(CancellationToken.None);
 
@@ -236,7 +236,7 @@ public sealed class PgLogFanoutTests
     public async Task TryMarkWake_AfterAPumpBeganItsRead_ReturnsTrueAgain()
     {
         var fanout = new PgLogFanout<TestEntry>(new FakeLog(0, 0).ReadAsync);
-        fanout.Add(0, resyncFirst: false);
+        fanout.AddAfter(0);
 
         var first = fanout.TryMarkWake();
 
@@ -257,8 +257,8 @@ public sealed class PgLogFanoutTests
     public void Remove_LastSubscriber_ReturnsTrue()
     {
         var fanout = new PgLogFanout<TestEntry>(new FakeLog(0, 0).ReadAsync);
-        var first = fanout.Add(0, resyncFirst: false);
-        var second = fanout.Add(0, resyncFirst: false);
+        var first = fanout.AddAfter(0);
+        var second = fanout.AddAfter(0);
 
         var removedFirst = fanout.Remove(first);
         var countAfterFirst = fanout.Count;

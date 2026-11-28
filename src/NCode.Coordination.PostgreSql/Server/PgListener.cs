@@ -193,7 +193,7 @@ internal sealed class PgListener(PgSource source, PgListenerEvents events, TimeP
             References[channel] = References.GetValueOrDefault(channel) + 1;
             var listenRequest = new PgListenerRequest($"LISTEN \"{channel}\"", waiter);
             Requests.Enqueue(listenRequest);
-            Loop ??= Task.Run(() => RunAsync(Cancellation.Token), CancellationToken.None);
+            Loop ??= Task.Run(() => RunAsync(Cancellation.Token).AsTask(), CancellationToken.None);
         }
 
         try
@@ -281,7 +281,7 @@ internal sealed class PgListener(PgSource source, PgListenerEvents events, TimeP
     /// </summary>
     /// <param name="stop">The token that ends the loop.</param>
     /// <returns>A task that completes when the loop ends.</returns>
-    private async Task RunAsync(CancellationToken stop)
+    private async ValueTask RunAsync(CancellationToken stop)
     {
         while (!stop.IsCancellationRequested)
         {

@@ -139,15 +139,33 @@ internal sealed class PgLogFanout<TEntry>(
     }
 
     /// <summary>
-    /// Adds a subscriber.
+    /// Adds a subscriber that wants the log's entries after a number.
     /// </summary>
     /// <param name="cursor">The number after which the subscriber wants the log's entries.</param>
-    /// <param name="resyncFirst">True when the subscriber starts with a resync at the log's current number.</param>
     /// <returns>The subscriber, whose reader yields what the pumps hand it.</returns>
-    public PgLogSubscriber<TEntry> Add(long cursor, bool resyncFirst)
+    public PgLogSubscriber<TEntry> AddAfter(long cursor)
     {
-        var subscriber = new PgLogSubscriber<TEntry>(cursor, resyncFirst);
+        var subscriber = new PgLogSubscriber<TEntry>(cursor, false);
+        return Register(subscriber);
+    }
 
+    /// <summary>
+    /// Adds a subscriber that starts with a resync at the log's current number.
+    /// </summary>
+    /// <returns>The subscriber, whose reader yields what the pumps hand it.</returns>
+    public PgLogSubscriber<TEntry> AddWithResync()
+    {
+        var subscriber = new PgLogSubscriber<TEntry>(0, true);
+        return Register(subscriber);
+    }
+
+    /// <summary>
+    /// Registers a subscriber with the pumps.
+    /// </summary>
+    /// <param name="subscriber">The subscriber to register.</param>
+    /// <returns>The subscriber.</returns>
+    private PgLogSubscriber<TEntry> Register(PgLogSubscriber<TEntry> subscriber)
+    {
         lock (Gate)
         {
             Subscribers.Add(subscriber);

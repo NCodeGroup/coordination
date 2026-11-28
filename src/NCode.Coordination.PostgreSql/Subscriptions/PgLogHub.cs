@@ -55,7 +55,7 @@ internal sealed class PgLogHub : IAsyncDisposable, IDisposable
     /// <param name="pump">The fanout.</param>
     /// <param name="stop">The token that cancels the pump.</param>
     /// <returns>A task that completes when the pump has.</returns>
-    private static async Task PumpQuietlyAsync(IPgLogPump pump, CancellationToken stop)
+    private static async ValueTask PumpQuietlyAsync(IPgLogPump pump, CancellationToken stop)
     {
         try
         {
@@ -277,10 +277,10 @@ internal sealed class PgLogHub : IAsyncDisposable, IDisposable
     {
         if (after is { } cursor && !Listener.HasSeenAnotherServer)
         {
-            return fanout.Add(cursor, resyncFirst: false);
+            return fanout.AddAfter(cursor);
         }
 
-        return fanout.Add(0, resyncFirst: true);
+        return fanout.AddWithResync();
     }
 
     /// <summary>
@@ -407,7 +407,10 @@ internal sealed class PgLogHub : IAsyncDisposable, IDisposable
                 return;
             }
 
-            Checks ??= Task.Run(() => CheckAsync(Cancellation.Token), CancellationToken.None);
+            Checks ??= Task.Run(
+                () => CheckAsync(Cancellation.Token).AsTask(),
+                CancellationToken.None
+            );
         }
     }
 
@@ -416,7 +419,7 @@ internal sealed class PgLogHub : IAsyncDisposable, IDisposable
     /// </summary>
     /// <param name="stop">The token that ends the loop.</param>
     /// <returns>A task that completes when the loop ends.</returns>
-    private async Task CheckAsync(CancellationToken stop)
+    private async ValueTask CheckAsync(CancellationToken stop)
     {
         using var timer = new PeriodicTimer(Settings.CheckInterval, Time);
         try
@@ -437,17 +440,17 @@ internal sealed class PgLogHub : IAsyncDisposable, IDisposable
     /// </summary>
     /// <param name="stop">The token that cancels the pumps.</param>
     /// <returns>A task that completes when every pump has.</returns>
-    private Task PumpAllAsync(CancellationToken stop)
+    private async ValueTask PumpAllAsync(CancellationToken stop)
     {
         var fanouts = Fanouts.Values;
         var pumps = new List<Task>(fanouts.Count);
         foreach (var pump in fanouts)
         {
-            var pumping = PumpQuietlyAsync(pump, stop);
+            var pumping = PumpQuietlyAsync(pump, stop).AsTask();
             pumps.Add(pumping);
         }
 
-        return Task.WhenAll(pumps);
+        await Task.WhenAll(pumps).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -471,7 +474,7 @@ internal sealed class PgLogHub : IAsyncDisposable, IDisposable
         }
 
         var stop = Cancellation.Token;
-        _ = Task.Run(() => PumpQuietlyAsync(pump, stop), CancellationToken.None);
+        _ = Task.Run(() => PumpQuietlyAsync(pump, stop).AsTask(), CancellationToken.None);
     }
 
     /// <summary>
@@ -485,7 +488,7 @@ internal sealed class PgLogHub : IAsyncDisposable, IDisposable
         }
 
         var stop = Cancellation.Token;
-        _ = Task.Run(() => PumpAllAsync(stop), CancellationToken.None);
+        _ = Task.Run(() => PumpAllAsync(stop).AsTask(), CancellationToken.None);
     }
 
     /// <summary>

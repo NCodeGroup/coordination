@@ -73,7 +73,7 @@ internal sealed class PgSweeper(
             var timer = new PeriodicTimer(interval, Time);
             Timer = timer;
             var token = Cancellation.Token;
-            Loop = Task.Run(() => RunAsync(timer, token), CancellationToken.None);
+            Loop = Task.Run(() => RunAsync(timer, token).AsTask(), CancellationToken.None);
         }
     }
 
@@ -132,7 +132,7 @@ internal sealed class PgSweeper(
     /// <param name="timer">The timer that ticks the sweeps.</param>
     /// <param name="cancellationToken">The token that ends the loop, which is the sweeper's own.</param>
     /// <returns>A task that completes when the loop ends; its own cancellation ends it quietly.</returns>
-    private async Task RunAsync(PeriodicTimer timer, CancellationToken cancellationToken)
+    private async ValueTask RunAsync(PeriodicTimer timer, CancellationToken cancellationToken)
     {
         try
         {
