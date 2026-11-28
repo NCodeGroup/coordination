@@ -32,7 +32,8 @@ internal sealed class PgStatement(string sql, params IEnumerable<PgArgument> arg
         var command = new NpgsqlBatchCommand(Sql);
         foreach (var argument in Arguments)
         {
-            command.Parameters.Add(argument.ToParameter());
+            var parameter = argument.ToParameter();
+            command.Parameters.Add(parameter);
         }
 
         return command;

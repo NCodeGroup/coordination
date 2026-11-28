@@ -61,7 +61,8 @@ internal static partial class PgChannels
 
         if (payload.StartsWith("c:", StringComparison.Ordinal))
         {
-            if (!TryParseNumber(payload.AsSpan(2), out var revision))
+            var revisionText = payload.AsSpan(2);
+            if (!TryParseNumber(revisionText, out var revision))
             {
                 return false;
             }
@@ -79,12 +80,14 @@ internal static partial class PgChannels
                 return false;
             }
 
-            if (!TryParseNumber(rest[(colon + 1)..], out var sequence))
+            var sequenceText = rest[(colon + 1)..];
+            if (!TryParseNumber(sequenceText, out var sequence))
             {
                 return false;
             }
 
-            wake = new PgWake(rest[..colon].ToString(), sequence);
+            var topicToken = rest[..colon].ToString();
+            wake = new PgWake(topicToken, sequence);
             return true;
         }
 

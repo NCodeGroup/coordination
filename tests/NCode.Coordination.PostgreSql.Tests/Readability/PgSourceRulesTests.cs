@@ -5,7 +5,7 @@ namespace NCode.Coordination.PostgreSql.Tests.Readability;
 
 public sealed class PgSourceRulesTests
 {
-    public static TheoryData<string> CheckedPaths => [];
+    public static TheoryData<string> CheckedPaths => ["Server"];
 
     private static string BuildMethodSpanning(int lines)
     {

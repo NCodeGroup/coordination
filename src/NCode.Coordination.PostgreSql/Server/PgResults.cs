@@ -40,7 +40,8 @@ internal sealed class PgResults(NpgsqlDataReader reader)
         var rows = ImmutableArray.CreateBuilder<T>();
         while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
-            rows.Add(map(reader));
+            var row = map(reader);
+            rows.Add(row);
         }
 
         return rows.ToImmutable();
@@ -59,6 +60,11 @@ internal sealed class PgResults(NpgsqlDataReader reader)
         }
     }
 
+    /// <summary>
+    /// Moves to the next result: the current one on the first call, then each after it.
+    /// </summary>
+    /// <param name="cancellationToken">The token that cancels the read.</param>
+    /// <returns>True when a result is current; otherwise, false.</returns>
     private async ValueTask<bool> MoveNextAsync(CancellationToken cancellationToken)
     {
         if (!Started)

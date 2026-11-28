@@ -11,13 +11,19 @@ namespace NCode.Coordination.PostgreSql.Server;
 /// </summary>
 internal static class PgFailures
 {
-    /// <summary>The state of a foreign key violation, which says a statement's keyspace row is missing.</summary>
+    /// <summary>
+    /// The state of a foreign key violation, which says a statement's keyspace row is missing.
+    /// </summary>
     private const string ForeignKeyViolation = "23503";
 
-    /// <summary>The state of a session that ended while idle in a transaction.</summary>
+    /// <summary>
+    /// The state of a session that ended while idle in a transaction.
+    /// </summary>
     private const string IdleInTransactionTimeout = "25P03";
 
-    /// <summary>The state of a connection that failed while a transaction ended.</summary>
+    /// <summary>
+    /// The state of a connection that failed while a transaction ended.
+    /// </summary>
     private const string ConnectionFailureDuringTransaction = "08007";
 
     /// <summary>

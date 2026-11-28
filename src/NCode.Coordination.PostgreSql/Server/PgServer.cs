@@ -14,12 +14,93 @@ namespace NCode.Coordination.PostgreSql.Server;
 /// <param name="settings">The settings, whose timeouts every call sends.</param>
 internal sealed class PgServer(PgSource source, PgSettings settings)
 {
-    /// <summary>The statement that sets the timeouts of the current transaction.</summary>
+    /// <summary>
+    /// The statement that sets the timeouts of the current transaction.
+    /// </summary>
     private const string TimeoutsSql = """
         SELECT set_config('statement_timeout', $1, true),
                set_config('lock_timeout', $2, true),
                set_config('idle_in_transaction_session_timeout', $3, true)
         """;
+
+    /// <summary>
+    /// Sends statements as one batch on a connection and reads their results.
+    /// </summary>
+    /// <typeparam name="T">The type that <paramref name="read"/> returns.</typeparam>
+    /// <param name="connection">The open connection.</param>
+    /// <param name="statements">The statements of the batch.</param>
+    /// <param name="read">Reads the results of the batch.</param>
+    /// <param name="cancellationToken">The token that cancels the call.</param>
+    /// <returns>What <paramref name="read"/> returned, after the batch was read to its end.</returns>
+    internal static async ValueTask<T> RunBatchAsync<T>(
+        NpgsqlConnection connection,
+        IReadOnlyList<PgStatement> statements,
+        Func<PgResults, CancellationToken, ValueTask<T>> read,
+        CancellationToken cancellationToken
+    )
+    {
+        await using var batch = new NpgsqlBatch(connection);
+        foreach (var statement in statements)
+        {
+            var command = statement.ToBatchCommand();
+            batch.BatchCommands.Add(command);
+        }
+
+        await using var reader = await batch
+            .ExecuteReaderAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        var results = new PgResults(reader);
+        var value = await read(results, cancellationToken).ConfigureAwait(false);
+        await results.DrainAsync(cancellationToken).ConfigureAwait(false);
+        return value;
+    }
+
+    /// <summary>
+    /// Wraps a reader so that it first reads the result of the timeouts statement.
+    /// </summary>
+    /// <typeparam name="T">The type that <paramref name="read"/> returns.</typeparam>
+    /// <param name="read">Reads the results that follow the timeouts statement's.</param>
+    /// <returns>A reader that skips the timeouts row, then calls <paramref name="read"/>.</returns>
+    internal static Func<PgResults, CancellationToken, ValueTask<T>> SkipTimeouts<T>(
+        Func<PgResults, CancellationToken, ValueTask<T>> read
+    )
+    {
+        return async (results, cancellationToken) =>
+        {
+            await results.ReadAsync(_ => true, cancellationToken).ConfigureAwait(false);
+            return await read(results, cancellationToken).ConfigureAwait(false);
+        };
+    }
+
+    /// <summary>
+    /// Creates the statement that sets the timeouts of the current transaction from the settings.
+    /// </summary>
+    /// <param name="settings">The settings that hold the timeouts.</param>
+    /// <returns>The statement, whose arguments are the timeouts in milliseconds.</returns>
+    /// <exception cref="ArgumentNullException">The settings are null.</exception>
+    private static PgStatement CreateTimeouts(PgSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+
+        var statementTimeout = ToMilliseconds(settings.StatementTimeout);
+        var lockTimeout = ToMilliseconds(settings.LockTimeout);
+        var idleTimeout = ToMilliseconds(settings.IdleInTransactionTimeout);
+
+        return new PgStatement(TimeoutsSql, statementTimeout, lockTimeout, idleTimeout);
+    }
+
+    /// <summary>
+    /// Converts a duration to the text of a timeout setting, in whole milliseconds rounded up.
+    /// </summary>
+    /// <param name="duration">The duration.</param>
+    /// <returns>The milliseconds in invariant decimal followed by <c>ms</c>.</returns>
+    private static string ToMilliseconds(TimeSpan duration)
+    {
+        var milliseconds =
+            (duration.Ticks + TimeSpan.TicksPerMillisecond - 1) / TimeSpan.TicksPerMillisecond;
+        return milliseconds.ToString(CultureInfo.InvariantCulture) + "ms";
+    }
 
     /// <summary>
     /// Gets the statement that sets the statement, lock and idle-in-transaction timeouts of the current transaction.
@@ -58,10 +139,11 @@ internal sealed class PgServer(PgSource source, PgSettings settings)
                 .ConfigureAwait(false);
 
             sent = true;
+            var skipTimeouts = SkipTimeouts(read);
             return await RunBatchAsync(
                     connection,
                     [Timeouts, .. statements],
-                    SkipTimeouts(read),
+                    skipTimeouts,
                     cancellationToken
                 )
                 .ConfigureAwait(false);
@@ -113,54 +195,12 @@ internal sealed class PgServer(PgSource source, PgSettings settings)
     }
 
     /// <summary>
-    /// Sends statements as one batch on a connection and reads their results.
+    /// Translates a failure of the client and clears the pool when the connection was lost.
     /// </summary>
-    /// <typeparam name="T">The type that <paramref name="read"/> returns.</typeparam>
-    /// <param name="connection">The open connection.</param>
-    /// <param name="statements">The statements of the batch.</param>
-    /// <param name="read">Reads the results of the batch.</param>
-    /// <param name="cancellationToken">The token that cancels the call.</param>
-    /// <returns>What <paramref name="read"/> returned, after the batch was read to its end.</returns>
-    internal static async ValueTask<T> RunBatchAsync<T>(
-        NpgsqlConnection connection,
-        IReadOnlyList<PgStatement> statements,
-        Func<PgResults, CancellationToken, ValueTask<T>> read,
-        CancellationToken cancellationToken
-    )
-    {
-        await using var batch = new NpgsqlBatch(connection);
-        foreach (var statement in statements)
-        {
-            batch.BatchCommands.Add(statement.ToBatchCommand());
-        }
-
-        await using var reader = await batch
-            .ExecuteReaderAsync(cancellationToken)
-            .ConfigureAwait(false);
-
-        var results = new PgResults(reader);
-        var value = await read(results, cancellationToken).ConfigureAwait(false);
-        await results.DrainAsync(cancellationToken).ConfigureAwait(false);
-        return value;
-    }
-
-    /// <summary>
-    /// Wraps a reader so that it first reads the result of the timeouts statement.
-    /// </summary>
-    /// <typeparam name="T">The type that <paramref name="read"/> returns.</typeparam>
-    /// <param name="read">Reads the results that follow the timeouts statement's.</param>
-    /// <returns>A reader that skips the timeouts row, then calls <paramref name="read"/>.</returns>
-    internal static Func<PgResults, CancellationToken, ValueTask<T>> SkipTimeouts<T>(
-        Func<PgResults, CancellationToken, ValueTask<T>> read
-    )
-    {
-        return async (results, cancellationToken) =>
-        {
-            await results.ReadAsync(_ => true, cancellationToken).ConfigureAwait(false);
-            return await read(results, cancellationToken).ConfigureAwait(false);
-        };
-    }
-
+    /// <param name="exception">The failure of the client.</param>
+    /// <param name="committingStepSent">Whether the step that commits was sent before the failure.</param>
+    /// <returns>The exception to throw, which says whether the call may have taken effect.</returns>
+    /// <exception cref="PgKeyspaceMissingException">A statement found its keyspace's row missing.</exception>
     private CoordinationException Fail(Exception exception, bool committingStepSent)
     {
         if (PgFailures.IsConnectionLost(exception))
@@ -177,23 +217,5 @@ internal sealed class PgServer(PgSource source, PgSettings settings)
         }
 
         return PgFailures.Translate(exception, committingStepSent);
-    }
-
-    private static PgStatement CreateTimeouts(PgSettings settings)
-    {
-        ArgumentNullException.ThrowIfNull(settings);
-
-        var statementTimeout = ToMilliseconds(settings.StatementTimeout);
-        var lockTimeout = ToMilliseconds(settings.LockTimeout);
-        var idleTimeout = ToMilliseconds(settings.IdleInTransactionTimeout);
-
-        return new PgStatement(TimeoutsSql, statementTimeout, lockTimeout, idleTimeout);
-    }
-
-    private static string ToMilliseconds(TimeSpan duration)
-    {
-        var milliseconds =
-            (duration.Ticks + TimeSpan.TicksPerMillisecond - 1) / TimeSpan.TicksPerMillisecond;
-        return milliseconds.ToString(CultureInfo.InvariantCulture) + "ms";
     }
 }

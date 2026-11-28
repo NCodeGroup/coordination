@@ -23,20 +23,79 @@ internal sealed class PgListener(
     TimeProvider time
 ) : IAsyncDisposable, IDisposable
 {
-    /// <summary>The statement that reads when the server started.</summary>
+    /// <summary>
+    /// The statement that reads when the server started.
+    /// </summary>
     private const string StartTimeSql = "SELECT pg_postmaster_start_time()";
 
-    /// <summary>The statement that keeps an idle connection in use.</summary>
+    /// <summary>
+    /// The statement that keeps an idle connection in use.
+    /// </summary>
     private const string PingSql = "SELECT 1";
 
-    /// <summary>How long one wait for a notification lasts, between the requests the loop runs.</summary>
+    /// <summary>
+    /// How long one wait for a notification lasts, between the requests the loop runs.
+    /// </summary>
     private static readonly TimeSpan WaitSlice = TimeSpan.FromMilliseconds(100);
 
-    /// <summary>How long the connection may go without traffic before it is pinged.</summary>
+    /// <summary>
+    /// How long the connection may go without traffic before it is pinged.
+    /// </summary>
     private static readonly TimeSpan PingAfter = TimeSpan.FromSeconds(15);
 
-    /// <summary>How long the loop waits before it connects again.</summary>
+    /// <summary>
+    /// How long the loop waits before it connects again.
+    /// </summary>
     private static readonly TimeSpan ReconnectDelay = TimeSpan.FromSeconds(1);
+
+    /// <summary>
+    /// Runs one statement that returns no rows that matter.
+    /// </summary>
+    /// <param name="connection">The open connection.</param>
+    /// <param name="sql">The statement.</param>
+    /// <param name="stop">The token that ends the loop.</param>
+    private static async ValueTask ExecuteAsync(
+        NpgsqlConnection connection,
+        string sql,
+        CancellationToken stop
+    )
+    {
+        await using var command = new NpgsqlCommand(sql, connection);
+        await command.ExecuteNonQueryAsync(stop).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Builds the failure that a waiter receives when the listener could not reach the server.
+    /// </summary>
+    /// <param name="exception">The failure of the connection.</param>
+    /// <returns>An <c>unavailable</c> failure whose outcome is not unknown.</returns>
+    private static CoordinationException Unavailable(Exception exception)
+    {
+        return PgFailures.IsClientFailure(exception)
+            ? PgFailures.Translate(exception, committingStepSent: false)
+            : new CoordinationException(
+                CoordinationErrorCodes.Unavailable,
+                false,
+                "The PostgreSQL listener could not connect: " + exception.Message,
+                exception
+            );
+    }
+
+    /// <summary>
+    /// Disposes a connection that may be broken.
+    /// </summary>
+    /// <param name="connection">The connection.</param>
+    private static async ValueTask DisposeQuietlyAsync(NpgsqlConnection connection)
+    {
+        try
+        {
+            await connection.DisposeAsync().ConfigureAwait(false);
+        }
+        catch (Exception)
+        {
+            // A broken connection has nothing left to release.
+        }
+    }
 
     private long _lastTraffic;
     private volatile bool _hasSeenAnotherServer;
@@ -54,28 +113,44 @@ internal sealed class PgListener(
 
     private TimeProvider Time { get; } = time ?? throw new ArgumentNullException(nameof(time));
 
-    /// <summary>Gets the lock that guards the references, the requests, the loop and the disposed flag.</summary>
+    /// <summary>
+    /// Gets the lock that guards the references, the requests, the loop and the disposed flag.
+    /// </summary>
     private Lock Gate { get; } = new();
 
-    /// <summary>Gets the number of references to each listened channel.</summary>
+    /// <summary>
+    /// Gets the number of references to each listened channel.
+    /// </summary>
     private Dictionary<string, int> References { get; } = new(StringComparer.Ordinal);
 
-    /// <summary>Gets the requests that the loop has yet to send.</summary>
+    /// <summary>
+    /// Gets the requests that the loop has yet to send.
+    /// </summary>
     private Queue<PgListenerRequest> Requests { get; } = new();
 
-    /// <summary>Gets the source of the token that ends the loop.</summary>
+    /// <summary>
+    /// Gets the source of the token that ends the loop.
+    /// </summary>
     private CancellationTokenSource Cancellation { get; } = new();
 
-    /// <summary>Gets or sets the task of the loop, or null when it hasn't started.</summary>
+    /// <summary>
+    /// Gets or sets the task of the loop, or null when it hasn't started.
+    /// </summary>
     private Task? Loop { get; set; }
 
-    /// <summary>Gets or sets a value that says whether the listener is disposed.</summary>
+    /// <summary>
+    /// Gets or sets a value that says whether the listener is disposed.
+    /// </summary>
     private bool Disposed { get; set; }
 
-    /// <summary>Gets or sets a value that says whether a connection has listened before.</summary>
+    /// <summary>
+    /// Gets or sets a value that says whether a connection has listened before.
+    /// </summary>
     private bool ConnectedOnce { get; set; }
 
-    /// <summary>Gets or sets the start time that the last connection's server reported.</summary>
+    /// <summary>
+    /// Gets or sets the start time that the last connection's server reported.
+    /// </summary>
     private DateTime? LastStartTime { get; set; }
 
     /// <summary>
@@ -112,7 +187,8 @@ internal sealed class PgListener(
             ObjectDisposedException.ThrowIf(Disposed, this);
 
             References[channel] = References.GetValueOrDefault(channel) + 1;
-            Requests.Enqueue(new PgListenerRequest($"LISTEN \"{channel}\"", waiter));
+            var listenRequest = new PgListenerRequest($"LISTEN \"{channel}\"", waiter);
+            Requests.Enqueue(listenRequest);
             Loop ??= Task.Run(() => RunAsync(Cancellation.Token), CancellationToken.None);
         }
 
@@ -149,7 +225,8 @@ internal sealed class PgListener(
             }
 
             References.Remove(channel);
-            Requests.Enqueue(new PgListenerRequest($"UNLISTEN \"{channel}\"", null));
+            var unlistenRequest = new PgListenerRequest($"UNLISTEN \"{channel}\"", null);
+            Requests.Enqueue(unlistenRequest);
         }
     }
 
@@ -190,7 +267,8 @@ internal sealed class PgListener(
         }
 
         Cancellation.Cancel();
-        FailWaiters(new ObjectDisposedException(nameof(PgListener)));
+        var disposed = new ObjectDisposedException(nameof(PgListener));
+        FailWaiters(disposed);
         return Loop;
     }
 
@@ -203,54 +281,89 @@ internal sealed class PgListener(
     {
         while (!stop.IsCancellationRequested)
         {
-            NpgsqlConnection? connection = null;
-            try
-            {
-                connection = await Source.OpenAsync(stop).ConfigureAwait(false);
-                connection.Notification += OnNotification;
-                Touch();
-
-                await ConnectAsync(connection, stop).ConfigureAwait(false);
-                await ServeAsync(connection, stop).ConfigureAwait(false);
-            }
-            catch (Exception e) when (!stop.IsCancellationRequested)
-            {
-                if (PgFailures.IsConnectionLost(e))
-                {
-                    Source.ClearPool();
-                }
-
-                if (!ConnectedOnce)
-                {
-                    FailWaiters(Unavailable(e));
-                }
-            }
-            catch (Exception) when (stop.IsCancellationRequested)
-            {
-                // The listener is being disposed.
-            }
-            finally
-            {
-                if (connection is not null)
-                {
-                    connection.Notification -= OnNotification;
-                    await DisposeQuietlyAsync(connection).ConfigureAwait(false);
-                }
-            }
+            await ServeConnectionAsync(stop).ConfigureAwait(false);
 
             if (stop.IsCancellationRequested)
             {
                 return;
             }
 
-            try
-            {
-                await Task.Delay(ReconnectDelay, Time, stop).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException)
+            var delayed = await DelayBeforeReconnectAsync(stop).ConfigureAwait(false);
+            if (!delayed)
             {
                 return;
             }
+        }
+    }
+
+    /// <summary>
+    /// Opens one connection, serves it until a failure or disposal, and disposes it.
+    /// </summary>
+    /// <param name="stop">The token that ends the loop.</param>
+    /// <returns>A task that completes when the connection ended.</returns>
+    private async ValueTask ServeConnectionAsync(CancellationToken stop)
+    {
+        NpgsqlConnection? connection = null;
+        try
+        {
+            connection = await Source.OpenAsync(stop).ConfigureAwait(false);
+            connection.Notification += OnNotification;
+            Touch();
+
+            await ConnectAsync(connection, stop).ConfigureAwait(false);
+            await ServeAsync(connection, stop).ConfigureAwait(false);
+        }
+        catch (Exception e) when (!stop.IsCancellationRequested)
+        {
+            HandleConnectionFailure(e);
+        }
+        catch (Exception) when (stop.IsCancellationRequested)
+        {
+            // The listener is being disposed.
+        }
+        finally
+        {
+            if (connection is not null)
+            {
+                connection.Notification -= OnNotification;
+                await DisposeQuietlyAsync(connection).ConfigureAwait(false);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Clears the pool when the connection was lost, and fails the waiters when no connection has listened yet.
+    /// </summary>
+    /// <param name="exception">The failure of the connection.</param>
+    private void HandleConnectionFailure(Exception exception)
+    {
+        if (PgFailures.IsConnectionLost(exception))
+        {
+            Source.ClearPool();
+        }
+
+        if (!ConnectedOnce)
+        {
+            var failure = Unavailable(exception);
+            FailWaiters(failure);
+        }
+    }
+
+    /// <summary>
+    /// Waits before the loop connects again.
+    /// </summary>
+    /// <param name="stop">The token that ends the loop.</param>
+    /// <returns>True when the wait elapsed; false when the loop was stopped during it.</returns>
+    private async ValueTask<bool> DelayBeforeReconnectAsync(CancellationToken stop)
+    {
+        try
+        {
+            await Task.Delay(ReconnectDelay, Time, stop).ConfigureAwait(false);
+            return true;
+        }
+        catch (OperationCanceledException)
+        {
+            return false;
         }
     }
 
@@ -311,7 +424,7 @@ internal sealed class PgListener(
             {
                 Touch();
             }
-            else if (Time.GetElapsedTime(Volatile.Read(ref _lastTraffic)) >= PingAfter)
+            else if (IsDueForPing())
             {
                 await ExecuteAsync(connection, PingSql, stop).ConfigureAwait(false);
                 Touch();
@@ -349,22 +462,6 @@ internal sealed class PgListener(
     }
 
     /// <summary>
-    /// Runs one statement that returns no rows that matter.
-    /// </summary>
-    /// <param name="connection">The open connection.</param>
-    /// <param name="sql">The statement.</param>
-    /// <param name="stop">The token that ends the loop.</param>
-    private static async ValueTask ExecuteAsync(
-        NpgsqlConnection connection,
-        string sql,
-        CancellationToken stop
-    )
-    {
-        await using var command = new NpgsqlCommand(sql, connection);
-        await command.ExecuteNonQueryAsync(stop).ConfigureAwait(false);
-    }
-
-    /// <summary>
     /// Fails every waiter and drops every queued request, which the next connection's <c>LISTEN</c>s replace.
     /// </summary>
     /// <param name="exception">The failure that every waiter receives.</param>
@@ -384,23 +481,6 @@ internal sealed class PgListener(
     }
 
     /// <summary>
-    /// Builds the failure that a waiter receives when the listener could not reach the server.
-    /// </summary>
-    /// <param name="exception">The failure of the connection.</param>
-    /// <returns>An <c>unavailable</c> failure whose outcome is not unknown.</returns>
-    private static CoordinationException Unavailable(Exception exception)
-    {
-        return PgFailures.IsClientFailure(exception)
-            ? PgFailures.Translate(exception, committingStepSent: false)
-            : new CoordinationException(
-                CoordinationErrorCodes.Unavailable,
-                false,
-                "The PostgreSQL listener could not connect: " + exception.Message,
-                exception
-            );
-    }
-
-    /// <summary>
     /// Handles a notification of the connection.
     /// </summary>
     /// <param name="sender">The connection.</param>
@@ -416,22 +496,18 @@ internal sealed class PgListener(
     /// </summary>
     private void Touch()
     {
-        Volatile.Write(ref _lastTraffic, Time.GetTimestamp());
+        var timestamp = Time.GetTimestamp();
+        Volatile.Write(ref _lastTraffic, timestamp);
     }
 
     /// <summary>
-    /// Disposes a connection that may be broken.
+    /// Determines whether the connection has gone without traffic for longer than it may before it is pinged.
     /// </summary>
-    /// <param name="connection">The connection.</param>
-    private static async ValueTask DisposeQuietlyAsync(NpgsqlConnection connection)
+    /// <returns>True when the connection is due a ping; otherwise, false.</returns>
+    private bool IsDueForPing()
     {
-        try
-        {
-            await connection.DisposeAsync().ConfigureAwait(false);
-        }
-        catch (Exception)
-        {
-            // A broken connection has nothing left to release.
-        }
+        var lastTraffic = Volatile.Read(ref _lastTraffic);
+        var idle = Time.GetElapsedTime(lastTraffic);
+        return idle >= PingAfter;
     }
 }

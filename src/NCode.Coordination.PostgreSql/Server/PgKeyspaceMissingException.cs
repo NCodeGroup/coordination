@@ -10,6 +10,11 @@ namespace NCode.Coordination.PostgreSql.Server;
 internal sealed class PgKeyspaceMissingException : Exception
 {
     /// <summary>
+    /// The message of the exception that a statement throws when its keyspace's row does not exist.
+    /// </summary>
+    public const string RowMissingMessage = "The keyspace's row does not exist.";
+
+    /// <summary>
     /// Creates the exception without a message.
     /// </summary>
     public PgKeyspaceMissingException() { }

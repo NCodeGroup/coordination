@@ -9,47 +9,52 @@ namespace NCode.Coordination.PostgreSql.Server;
 /// A short transaction on one connection, whose first batch begins it and reads, and whose second batch writes and
 /// commits it.
 /// </summary>
-internal sealed class PgTransaction
+/// <param name="server">The server that created the transaction.</param>
+/// <param name="connection">The open connection, which the server disposes.</param>
+/// <param name="isolation">The isolation of the transaction.</param>
+internal sealed class PgTransaction(
+    PgServer server,
+    NpgsqlConnection connection,
+    PgIsolation isolation
+)
 {
-    private static readonly PgStatement Commit = new("COMMIT");
-    private static readonly PgStatement Rollback = new("ROLLBACK");
-    private static readonly PgStatement BeginReadCommitted = new(
-        "BEGIN ISOLATION LEVEL READ COMMITTED"
-    );
-    private static readonly PgStatement BeginRepeatableReadReadOnly = new(
-        "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY"
-    );
+    /// <summary>
+    /// Gets the statement that commits the transaction.
+    /// </summary>
+    private static PgStatement Commit { get; } = new("COMMIT");
+
+    /// <summary>
+    /// Gets the statement that rolls the transaction back.
+    /// </summary>
+    private static PgStatement Rollback { get; } = new("ROLLBACK");
+
+    /// <summary>
+    /// Gets the statement that begins a read-write transaction.
+    /// </summary>
+    private static PgStatement BeginReadCommitted { get; } =
+        new("BEGIN ISOLATION LEVEL READ COMMITTED");
+
+    /// <summary>
+    /// Gets the statement that begins a snapshot read.
+    /// </summary>
+    private static PgStatement BeginRepeatableReadReadOnly { get; } =
+        new("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY");
 
     /// <summary>
     /// Gets the server that created the transaction.
     /// </summary>
-    private PgServer Server { get; }
+    private PgServer Server { get; } = server ?? throw new ArgumentNullException(nameof(server));
 
     /// <summary>
     /// Gets the open connection that the transaction runs on.
     /// </summary>
-    private NpgsqlConnection Connection { get; }
+    private NpgsqlConnection Connection { get; } =
+        connection ?? throw new ArgumentNullException(nameof(connection));
 
     /// <summary>
     /// Gets the isolation of the transaction.
     /// </summary>
-    private PgIsolation Isolation { get; }
-
-    /// <summary>
-    /// Creates a transaction on an open connection, which the server disposes.
-    /// </summary>
-    /// <param name="server">The server that created the transaction.</param>
-    /// <param name="connection">The open connection.</param>
-    /// <param name="isolation">The isolation of the transaction.</param>
-    internal PgTransaction(PgServer server, NpgsqlConnection connection, PgIsolation isolation)
-    {
-        ArgumentNullException.ThrowIfNull(server);
-        ArgumentNullException.ThrowIfNull(connection);
-
-        Server = server;
-        Connection = connection;
-        Isolation = isolation;
-    }
+    private PgIsolation Isolation { get; } = isolation;
 
     /// <summary>
     /// Gets whether the step that commits the transaction was sent.
@@ -83,11 +88,12 @@ internal sealed class PgTransaction
                 ? BeginRepeatableReadReadOnly
                 : BeginReadCommitted;
 
+        var skipTimeouts = PgServer.SkipTimeouts(read);
         var result = await PgServer
             .RunBatchAsync(
                 Connection,
                 [begin, Server.Timeouts, .. statements],
-                PgServer.SkipTimeouts(read),
+                skipTimeouts,
                 cancellationToken
             )
             .ConfigureAwait(false);

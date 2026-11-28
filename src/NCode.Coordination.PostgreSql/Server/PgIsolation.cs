@@ -8,9 +8,13 @@ namespace NCode.Coordination.PostgreSql.Server;
 /// </summary>
 internal enum PgIsolation
 {
-    /// <summary>A read-write transaction at <c>READ COMMITTED</c>.</summary>
+    /// <summary>
+    /// A read-write transaction at <c>READ COMMITTED</c>.
+    /// </summary>
     ReadCommitted,
 
-    /// <summary>A read-only transaction at <c>REPEATABLE READ</c>, whose reads share one snapshot.</summary>
+    /// <summary>
+    /// A read-only transaction at <c>REPEATABLE READ</c>, whose reads share one snapshot.
+    /// </summary>
     RepeatableReadReadOnly,
 }

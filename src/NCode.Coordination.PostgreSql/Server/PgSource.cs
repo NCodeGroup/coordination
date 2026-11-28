@@ -11,30 +11,6 @@ namespace NCode.Coordination.PostgreSql.Server;
 /// </summary>
 internal sealed class PgSource : IAsyncDisposable, IDisposable
 {
-    private int _disposed;
-
-    private PgSource(NpgsqlDataSource root, NpgsqlDataSource primary, bool owned)
-    {
-        Root = root;
-        Primary = primary;
-        Owned = owned;
-    }
-
-    /// <summary>
-    /// Gets the data source that holds the connection string and the pool.
-    /// </summary>
-    private NpgsqlDataSource Root { get; }
-
-    /// <summary>
-    /// Gets the data source that opens connections to the primary.
-    /// </summary>
-    private NpgsqlDataSource Primary { get; }
-
-    /// <summary>
-    /// Gets whether the source disposes its data source.
-    /// </summary>
-    private bool Owned { get; }
-
     /// <summary>
     /// Builds a data source that the source owns, from a connection string.
     /// </summary>
@@ -79,6 +55,33 @@ internal sealed class PgSource : IAsyncDisposable, IDisposable
             : dataSource;
         return new PgSource(dataSource, primary, owned: false);
     }
+
+    /// <summary>
+    /// Whether the source disposed its data source, or a disposal began; 1 once it did.
+    /// </summary>
+    private int _disposed;
+
+    private PgSource(NpgsqlDataSource root, NpgsqlDataSource primary, bool owned)
+    {
+        Root = root;
+        Primary = primary;
+        Owned = owned;
+    }
+
+    /// <summary>
+    /// Gets the data source that holds the connection string and the pool.
+    /// </summary>
+    private NpgsqlDataSource Root { get; }
+
+    /// <summary>
+    /// Gets the data source that opens connections to the primary.
+    /// </summary>
+    private NpgsqlDataSource Primary { get; }
+
+    /// <summary>
+    /// Gets whether the source disposes its data source.
+    /// </summary>
+    private bool Owned { get; }
 
     /// <summary>
     /// Gets the connection string of the data source.

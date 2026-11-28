@@ -29,17 +29,32 @@ internal sealed record PgSettings(
     TimeSpan CheckInterval
 )
 {
-    /// <summary>Gets the settings that the options' defaults give.</summary>
-    public static PgSettings Default { get; } =
-        new(
+    /// <summary>
+    /// Gets the settings that the options' defaults give.
+    /// </summary>
+    public static PgSettings Default { get; } = CreateDefault();
+
+    /// <summary>
+    /// Creates the settings that the options' defaults give.
+    /// </summary>
+    /// <returns>The default settings.</returns>
+    private static PgSettings CreateDefault()
+    {
+        var timeout = TimeSpan.FromSeconds(5);
+        var sweepInterval = TimeSpan.FromSeconds(5);
+        var logRetention = TimeSpan.FromMinutes(5);
+        var checkInterval = TimeSpan.FromSeconds(5);
+
+        return new PgSettings(
             PgSchemaName.Default,
             ApplyMigrations: true,
-            StatementTimeout: TimeSpan.FromSeconds(5),
-            LockTimeout: TimeSpan.FromSeconds(5),
-            IdleInTransactionTimeout: TimeSpan.FromSeconds(5),
-            SweepInterval: TimeSpan.FromSeconds(5),
+            StatementTimeout: timeout,
+            LockTimeout: timeout,
+            IdleInTransactionTimeout: timeout,
+            SweepInterval: sweepInterval,
             SweepBatchSize: 1_000,
-            LogRetention: TimeSpan.FromMinutes(5),
-            CheckInterval: TimeSpan.FromSeconds(5)
+            LogRetention: logRetention,
+            CheckInterval: checkInterval
         );
+    }
 }
