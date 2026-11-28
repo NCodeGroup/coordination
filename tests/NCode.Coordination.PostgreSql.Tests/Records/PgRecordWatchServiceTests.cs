@@ -33,10 +33,12 @@ public sealed class PgRecordWatchServiceTests
         var service = CreateService(offline);
         var cancellationToken = TestContext.Current.CancellationToken;
 
-        await Assert.ThrowsAsync<ArgumentNullException>(async () =>
+        var exception = await Assert.ThrowsAsync<ArgumentNullException>(async () =>
         {
             await foreach (var _ in service.WatchKeyAsync(null!, null, null, cancellationToken)) { }
         });
+
+        Assert.Equal("key", exception.ParamName);
     }
 
     #endregion

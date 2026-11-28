@@ -28,9 +28,11 @@ public sealed class PgOccurrenceServiceTests
         var duration = TimeSpan.FromSeconds(5);
         var timeToLive = new TimeToLive(duration);
 
-        await Assert.ThrowsAsync<ArgumentNullException>(async () =>
+        var exception = await Assert.ThrowsAsync<ArgumentNullException>(async () =>
             await service.TryRecordAsync(null!, timeToLive, null, cancellationToken)
         );
+
+        Assert.Equal("key", exception.ParamName);
     }
 
     [Fact]

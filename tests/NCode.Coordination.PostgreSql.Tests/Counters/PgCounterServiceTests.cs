@@ -17,6 +17,20 @@ public sealed class PgCounterServiceTests
         return new PgCounterService(server, keyspaces, schema);
     }
 
+    private static CounterIncrement[] CreateIncrements(int count)
+    {
+        var key = new Keyspace("prod").CreateKey("k");
+        var duration = TimeSpan.FromMinutes(1);
+        var timeToLive = new TimeToLive(duration);
+        var increments = new CounterIncrement[count];
+        for (var index = 0; index < count; index++)
+        {
+            increments[index] = new CounterIncrement(key, 1, 100, timeToLive);
+        }
+
+        return increments;
+    }
+
     #region IncrementAsync Tests
 
     [Fact]
@@ -97,6 +111,57 @@ public sealed class PgCounterServiceTests
         );
 
         Assert.Equal("increments", exception.ParamName);
+    }
+
+    [Fact]
+    public async Task IncrementBatchAsync_MoreThanTheMostIncrements_Throws()
+    {
+        await using var offline = new PgOfflineServer();
+        var service = CreateService(offline);
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var increments = CreateIncrements(CoordinationLimits.MaxBatchIncrements + 1);
+
+        var exception = await Assert.ThrowsAsync<ArgumentException>(async () =>
+            await service.IncrementBatchAsync(increments, null, cancellationToken)
+        );
+
+        Assert.Equal("increments", exception.ParamName);
+        Assert.StartsWith("A batch has 1 to 16 increments.", exception.Message);
+    }
+
+    [Fact]
+    public async Task IncrementBatchAsync_TheMostIncrements_ReachesTheServer()
+    {
+        await using var offline = new PgOfflineServer();
+        var service = CreateService(offline);
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var increments = CreateIncrements(CoordinationLimits.MaxBatchIncrements);
+
+        var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
+            await service.IncrementBatchAsync(increments, null, cancellationToken)
+        );
+
+        Assert.Equal(CoordinationErrorCodes.Unavailable, exception.Code);
+    }
+
+    [Fact]
+    public async Task IncrementBatchAsync_NullIncrement_Throws()
+    {
+        await using var offline = new PgOfflineServer();
+        var service = CreateService(offline);
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var key = new Keyspace("prod").CreateKey("k");
+        var duration = TimeSpan.FromSeconds(5);
+        var timeToLive = new TimeToLive(duration);
+        var increment = new CounterIncrement(key, 1, 10, timeToLive);
+        CounterIncrement[] increments = [increment, null!];
+
+        var exception = await Assert.ThrowsAsync<ArgumentException>(async () =>
+            await service.IncrementBatchAsync(increments, null, cancellationToken)
+        );
+
+        Assert.Equal("increments", exception.ParamName);
+        Assert.StartsWith("A batch holds no null increment.", exception.Message);
     }
 
     #endregion

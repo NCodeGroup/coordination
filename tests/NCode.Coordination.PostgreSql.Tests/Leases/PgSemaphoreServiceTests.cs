@@ -61,5 +61,25 @@ public sealed class PgSemaphoreServiceTests
         Assert.Equal("capacity", exception.ParamName);
     }
 
+    [Theory]
+    [InlineData(1)]
+    [InlineData(CoordinationLimits.MaxSemaphoreCapacity)]
+    public async Task TryAcquireAsync_CapacityAtTheBounds_ReachesTheServer(int capacity)
+    {
+        await using var offline = new PgOfflineServer();
+        var service = CreateService(offline);
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var resource = new Keyspace("prod").CreateKey("r");
+        var duration = TimeSpan.FromSeconds(5);
+        var timeToLive = new TimeToLive(duration);
+        var terms = LeaseTerms.ForTimeToLive(timeToLive);
+
+        var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
+            await service.TryAcquireAsync(resource, capacity, terms, null, cancellationToken)
+        );
+
+        Assert.Equal(CoordinationErrorCodes.Unavailable, exception.Code);
+    }
+
     #endregion
 }
