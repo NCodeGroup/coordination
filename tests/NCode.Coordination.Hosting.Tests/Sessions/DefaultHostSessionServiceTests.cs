@@ -1023,6 +1023,7 @@ public sealed class DefaultHostSessionServiceTests : IDisposable
         var cancellationToken = TestContext.Current.CancellationToken;
         var time = HostingTesting.CreateTime();
         var failure = new InvalidOperationException("The jitter is broken.");
+        var unavailable = CreateUnavailable();
         var sessions = Mocks.Create<ISessionService>();
         var membership = Mocks.Create<IMembershipService>();
         var jitter = Mocks.Create<IJitter>();
@@ -1035,7 +1036,7 @@ public sealed class DefaultHostSessionServiceTests : IDisposable
                     It.IsAny<CancellationToken>()
                 )
             )
-            .ThrowsAsync(CreateUnavailable())
+            .ThrowsAsync(unavailable)
             .Verifiable();
         jitter.Setup(x => x.Next()).Throws(failure).Verifiable();
         var logger = new FakeLogger<DefaultHostSessionService>();
