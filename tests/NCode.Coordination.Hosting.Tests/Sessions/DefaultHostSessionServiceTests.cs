@@ -432,6 +432,7 @@ public sealed class DefaultHostSessionServiceTests : IDisposable
         var grant = CreateGrant("s1");
         var sessions = Mocks.Create<ISessionService>();
         var membership = Mocks.Create<IMembershipService>();
+        var unavailable = CreateUnavailable();
         sessions
             .SetupSequence(x =>
                 x.OpenAsync(
@@ -441,7 +442,7 @@ public sealed class DefaultHostSessionServiceTests : IDisposable
                     It.IsAny<CancellationToken>()
                 )
             )
-            .ThrowsAsync(CreateUnavailable())
+            .ThrowsAsync(unavailable)
             .ReturnsAsync(grant);
         membership
             .Setup(x =>
@@ -496,6 +497,7 @@ public sealed class DefaultHostSessionServiceTests : IDisposable
         var grant = CreateGrant("s1");
         var sessions = Mocks.Create<ISessionService>();
         var membership = Mocks.Create<IMembershipService>();
+        var unavailable = CreateUnavailable();
         sessions
             .SetupSequence(x =>
                 x.OpenAsync(
@@ -505,9 +507,9 @@ public sealed class DefaultHostSessionServiceTests : IDisposable
                     It.IsAny<CancellationToken>()
                 )
             )
-            .ThrowsAsync(CreateUnavailable())
-            .ThrowsAsync(CreateUnavailable())
-            .ThrowsAsync(CreateUnavailable())
+            .ThrowsAsync(unavailable)
+            .ThrowsAsync(unavailable)
+            .ThrowsAsync(unavailable)
             .ReturnsAsync(grant);
         membership
             .Setup(x =>
@@ -555,6 +557,7 @@ public sealed class DefaultHostSessionServiceTests : IDisposable
         var grant = CreateGrant("s1");
         var sessions = Mocks.Create<ISessionService>();
         var membership = Mocks.Create<IMembershipService>();
+        var unavailable = CreateUnavailable();
         sessions
             .SetupSequence(x =>
                 x.OpenAsync(
@@ -564,7 +567,7 @@ public sealed class DefaultHostSessionServiceTests : IDisposable
                     It.IsAny<CancellationToken>()
                 )
             )
-            .ThrowsAsync(CreateUnavailable())
+            .ThrowsAsync(unavailable)
             .ReturnsAsync(grant);
         membership
             .Setup(x =>
@@ -604,6 +607,7 @@ public sealed class DefaultHostSessionServiceTests : IDisposable
         var grant = CreateGrant("s1");
         var sessions = Mocks.Create<ISessionService>();
         var membership = Mocks.Create<IMembershipService>();
+        var unavailable = CreateUnavailable();
         sessions
             .Setup(x =>
                 x.OpenAsync(
@@ -630,7 +634,7 @@ public sealed class DefaultHostSessionServiceTests : IDisposable
                     It.IsAny<CancellationToken>()
                 )
             )
-            .ThrowsAsync(CreateUnavailable())
+            .ThrowsAsync(unavailable)
             .Verifiable();
         await using var service = HostingTesting.CreateService(
             time,
@@ -914,6 +918,7 @@ public sealed class DefaultHostSessionServiceTests : IDisposable
         var grant = CreateGrant("s1");
         var sessions = Mocks.Create<ISessionService>();
         var membership = Mocks.Create<IMembershipService>();
+        var unavailable = CreateUnavailable();
         sessions
             .Setup(x =>
                 x.OpenAsync(
@@ -929,7 +934,7 @@ public sealed class DefaultHostSessionServiceTests : IDisposable
             .Setup(x =>
                 x.CloseAsync(grant.Id, It.IsAny<OperationOptions?>(), It.IsAny<CancellationToken>())
             )
-            .ThrowsAsync(CreateUnavailable())
+            .ThrowsAsync(unavailable)
             .Verifiable();
         membership
             .Setup(x =>
