@@ -59,7 +59,7 @@ public sealed class PostgreSqlProviderRestartTests
         var failures = new ConcurrentQueue<(CoordinationKey Key, CoordinationException Failure)>();
         var reached = 0;
 
-        async ValueTask RestartAsync()
+        async ValueTask RestartAsync(CancellationToken cancellationToken)
         {
             await halfway.Task.WaitAsync(PgTestSupport.WaitLimit, cancellationToken);
             await server.StopAsync(cancellationToken);
@@ -68,7 +68,7 @@ public sealed class PostgreSqlProviderRestartTests
             await server.StartAgainAsync(cancellationToken);
         }
 
-        async ValueTask ClientAsync(int client)
+        async ValueTask ClientAsync(int client, CancellationToken cancellationToken)
         {
             for (var step = 0; step < Steps; step++)
             {
@@ -99,11 +99,11 @@ public sealed class PostgreSqlProviderRestartTests
             }
         }
 
-        var restarting = RestartAsync().AsTask();
+        var restarting = RestartAsync(cancellationToken).AsTask();
         List<Task> running = [restarting];
         for (var client = 0; client < Clients; client++)
         {
-            var writer = ClientAsync(client).AsTask();
+            var writer = ClientAsync(client, cancellationToken).AsTask();
             running.Add(writer);
         }
 

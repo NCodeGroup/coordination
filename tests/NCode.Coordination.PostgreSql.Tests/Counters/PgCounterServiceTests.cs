@@ -147,6 +147,21 @@ public sealed class PgCounterServiceTests
     }
 
     [Fact]
+    public async Task IncrementBatchAsync_OneIncrement_ReachesTheServer()
+    {
+        await using var offline = new PgOfflineServer();
+        var service = CreateService(offline);
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var increments = CreateIncrements(1);
+
+        var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
+            await service.IncrementBatchAsync(increments, null, cancellationToken)
+        );
+
+        Assert.Equal(CoordinationErrorCodes.Unavailable, exception.Code);
+    }
+
+    [Fact]
     public async Task IncrementBatchAsync_NullIncrement_Throws()
     {
         await using var offline = new PgOfflineServer();

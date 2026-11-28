@@ -121,6 +121,20 @@ public sealed class PgKeysTests
         Assert.Equal(key, result);
     }
 
+    [Theory]
+    [InlineData("", 1)]
+    [InlineData("xabc", 1)]
+    [InlineData("tabc", 5)]
+    public void TryDecodeKey_Malformed_ReturnsFalse(string text, int depth)
+    {
+        var keyspace = new Keyspace("prod");
+
+        var decoded = PgKeys.TryDecodeKey(keyspace, text, depth, out var result);
+
+        Assert.False(decoded);
+        Assert.Null(result);
+    }
+
     #endregion
 
     #region Index Tests

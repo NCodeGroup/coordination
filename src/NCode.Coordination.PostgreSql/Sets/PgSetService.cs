@@ -212,7 +212,7 @@ internal sealed class PgSetService(PgServer server, PgKeyspaces keyspaces, PgSch
     /// <param name="rows">The encoded members.</param>
     /// <returns>The members' segments.</returns>
     /// <exception cref="CoordinationException">A member doesn't decode.</exception>
-    private static ImmutableArray<KeySegment> DecodeMembers(ImmutableArray<string> rows)
+    internal static ImmutableArray<KeySegment> DecodeMembers(ImmutableArray<string> rows)
     {
         var members = ImmutableArray.CreateBuilder<KeySegment>(rows.Length);
         foreach (var row in rows)

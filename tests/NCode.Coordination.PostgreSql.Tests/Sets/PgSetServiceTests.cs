@@ -1,6 +1,7 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using System.Collections.Immutable;
 using NCode.Coordination.PostgreSql.Tests;
 
 namespace NCode.Coordination.PostgreSql.Sets.Tests;
@@ -30,6 +31,27 @@ public sealed class PgSetServiceTests
 
         await Assert.ThrowsAsync<ArgumentNullException>(async () =>
             await service.AddAsync(key, null!, timeToLive, null, cancellationToken)
+        );
+    }
+
+    #endregion
+
+    #region DecodeMembers Tests
+
+    [Fact]
+    public void DecodeMembers_Malformed_ThrowsUnavailable()
+    {
+        ImmutableArray<string> rows = ["x%zz"];
+
+        var exception = Assert.Throws<CoordinationException>(() =>
+            PgSetService.DecodeMembers(rows)
+        );
+
+        Assert.Equal(CoordinationErrorCodes.Unavailable, exception.Code);
+        Assert.False(exception.OutcomeUnknown);
+        Assert.Equal(
+            "The server returned a set member the provider didn't write.",
+            exception.Message
         );
     }
 

@@ -62,7 +62,10 @@ public sealed class PgProbeTests
 
         Assert.Equal(CoordinationErrorCodes.Unsupported, exception.Code);
         Assert.False(exception.OutcomeUnknown);
-        Assert.Contains("PostgreSQL 15 or later", exception.Message, StringComparison.Ordinal);
+        Assert.Equal(
+            "The provider needs PostgreSQL 15 or later, and the server reports 140000.",
+            exception.Message
+        );
     }
 
     [Fact]
