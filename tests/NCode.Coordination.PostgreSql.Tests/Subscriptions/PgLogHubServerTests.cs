@@ -3,6 +3,7 @@
 
 using System.Globalization;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging.Testing;
 using NCode.Coordination.PostgreSql.Keys;
 using NCode.Coordination.PostgreSql.Logging;
@@ -19,8 +20,9 @@ public sealed class PgLogHubServerTests(PgServers servers)
 
     private sealed record TestEntry(long Number) : IPgLogEntry;
 
-    private async ValueTask<IReadOnlyList<FakeLogRecord>> DeliverAfterFailedReadAsync(
-        Exception failure,
+    private async ValueTask WithHubAsync(
+        ILoggerFactory loggerFactory,
+        Func<PgLogHub, ValueTask> test,
         CancellationToken cancellationToken
     )
     {
@@ -28,6 +30,41 @@ public sealed class PgLogHubServerTests(PgServers servers)
         var schema = PgSchemaName.Create(schemaName);
         var checkInterval = TimeSpan.FromSeconds(1);
         var settings = PgSettings.Default with { Schema = schema, CheckInterval = checkInterval };
+
+        try
+        {
+            await using var source = PgSource.FromConnectionString(servers.PostgreSql19);
+            var server = new PgServer(source, settings);
+            var probe = new PgProbe(server, source, PostgreSqlProfiles.Standalone, settings);
+            await probe.RunAsync(cancellationToken);
+
+            var tokens = new PgRandomTokens();
+            var keyspaces = new PgKeyspaces(server, schema, tokens);
+            await using var hub = new PgLogHub(
+                source,
+                keyspaces,
+                settings,
+                TimeProvider.System,
+                loggerFactory
+            );
+
+            await test(hub);
+        }
+        finally
+        {
+            await PgServers.ExecuteAsAdminAsync(
+                servers.Admin19,
+                $"DROP SCHEMA IF EXISTS \"{schemaName}\" CASCADE",
+                CancellationToken.None
+            );
+        }
+    }
+
+    private async ValueTask<IReadOnlyList<FakeLogRecord>> DeliverAfterFailedReadAsync(
+        Exception failure,
+        CancellationToken cancellationToken
+    )
+    {
         var options = new FakeLogCollectorOptions();
         var collector = FakeLogCollector.Create(options);
         var loggerFactory = new PgCollectingLoggerFactory(collector);
@@ -53,50 +90,96 @@ public sealed class PgLogHubServerTests(PgServers servers)
             return ValueTask.FromResult(read);
         }
 
-        try
-        {
-            await using var source = PgSource.FromConnectionString(servers.PostgreSql19);
-            var server = new PgServer(source, settings);
-            var probe = new PgProbe(server, source, PostgreSqlProfiles.Standalone, settings);
-            await probe.RunAsync(cancellationToken);
+        await WithHubAsync(
+            loggerFactory,
+            async hub =>
+            {
+                var subscriber = await hub.SubscribeAsync(
+                    id,
+                    () => new PgLogFanout<TestEntry>(Read),
+                    0,
+                    cancellationToken
+                );
 
-            var tokens = new PgRandomTokens();
-            var keyspaces = new PgKeyspaces(server, schema, tokens);
-            await using var hub = new PgLogHub(
-                source,
-                keyspaces,
-                settings,
-                TimeProvider.System,
-                loggerFactory
-            );
+                using var timeout = CancellationTokenSource.CreateLinkedTokenSource(
+                    cancellationToken
+                );
+                timeout.CancelAfter(Patience);
+                var delivered = await subscriber.Reader.ReadAsync(timeout.Token);
 
-            var subscriber = await hub.SubscribeAsync(
-                id,
-                () => new PgLogFanout<TestEntry>(Read),
-                0,
-                cancellationToken
-            );
-
-            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            timeout.CancelAfter(Patience);
-            var delivered = await subscriber.Reader.ReadAsync(timeout.Token);
-
-            Assert.False(delivered.IsResync);
-            Assert.Equal(1, delivered.Current);
-            var expectedEntry = new TestEntry(1);
-            Assert.Equal(expectedEntry, delivered.Entry);
-        }
-        finally
-        {
-            await PgServers.ExecuteAsAdminAsync(
-                servers.Admin19,
-                $"DROP SCHEMA IF EXISTS \"{schemaName}\" CASCADE",
-                CancellationToken.None
-            );
-        }
+                Assert.False(delivered.IsResync);
+                Assert.Equal(1, delivered.Current);
+                var expectedEntry = new TestEntry(1);
+                Assert.Equal(expectedEntry, delivered.Entry);
+            },
+            cancellationToken
+        );
 
         return collector.GetSnapshot();
     }
+
+    #region SubscribeAsync Tests
+
+    [PgServerFact]
+    public async Task SubscribeAsync_FirstReadFails_RemovesTheSubscriberAndRethrows()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var failure = new CoordinationException(CoordinationErrorCodes.Unavailable, false, "down");
+        var id = new PgLogId(1, null);
+        var creates = 0;
+        PgLogFanout<TestEntry>? first = null;
+
+        ValueTask<PgLogRead<TestEntry>> Fail(long after, int count, CancellationToken token)
+        {
+            return ValueTask.FromException<PgLogRead<TestEntry>>(failure);
+        }
+
+        ValueTask<PgLogRead<TestEntry>> Empty(long after, int count, CancellationToken token)
+        {
+            var empty = new PgLogRead<TestEntry>(0, 0, []);
+            return ValueTask.FromResult(empty);
+        }
+
+        PgLogFanout<TestEntry> CreateFailing()
+        {
+            creates++;
+            first = new PgLogFanout<TestEntry>(Fail);
+            return first;
+        }
+
+        PgLogFanout<TestEntry> CreateEmpty()
+        {
+            creates++;
+            return new PgLogFanout<TestEntry>(Empty);
+        }
+
+        await WithHubAsync(
+            NullLoggerFactory.Instance,
+            async hub =>
+            {
+                var thrown = await Assert.ThrowsAsync<CoordinationException>(async () =>
+                    await hub.SubscribeAsync<TestEntry>(id, CreateFailing, 0, cancellationToken)
+                );
+
+                Assert.Same(failure, thrown);
+                Assert.NotNull(first);
+                Assert.Equal(0, first.Count);
+
+                var subscriber = await hub.SubscribeAsync<TestEntry>(
+                    id,
+                    CreateEmpty,
+                    0,
+                    cancellationToken
+                );
+
+                Assert.Equal(2, creates);
+                await hub.UnsubscribeAsync(id, subscriber, cancellationToken);
+            },
+            cancellationToken
+        );
+    }
+
+    #endregion
 
     #region CheckAsync Tests
 
