@@ -90,7 +90,9 @@ measured on the server's clock.
   keyspace's log. The records, members and grants bound to it are absent from then on, and the sweep deletes them once
   the session's entry has left the log.
 - **Membership**: a join, a leave and a session's end are changes of the keyspace, and a group's watch reads them from
-  its keyspace's change log.
+  its keyspace's change log. A join and a leave read their group's members inside the keyspace's lock, and a read or
+  a watch reads the whole group, so each costs time in proportion to the group's members:
+  a group is meant for the nodes of a cluster.
 - **Leases, semaphores and elections**: each grant carries a fencing token from a row per resource that outlives every
   grant, so a grant after an expiry or a sweep still gets a greater one. A grant locks its keyspace's row but takes no
   revision. Waiting for a release or a session's end, and watching a role, read the server every 100 milliseconds until
