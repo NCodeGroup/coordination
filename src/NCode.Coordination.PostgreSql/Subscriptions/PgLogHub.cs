@@ -396,7 +396,7 @@ internal sealed class PgLogHub : IAsyncDisposable, IDisposable
     }
 
     /// <summary>
-    /// Gets a value that says whether the hub is disposed.
+    /// Gets a value indicating whether the hub is disposed.
     /// </summary>
     private bool IsDisposed
     {

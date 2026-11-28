@@ -193,7 +193,7 @@ internal sealed class PgKeyspaceChange(PgSettings settings, PgChangeOrigin origi
     public long Revision { get; private set; } = origin.Revision;
 
     /// <summary>
-    /// Gets a value that tells whether the transaction has taken no revision and made no write, so it has nothing to
+    /// Gets a value indicating whether the transaction has taken no revision and made no write, so it has nothing to
     /// commit.
     /// </summary>
     public bool IsEmpty => Entries.Count == 0 && Extras.Count == 0;

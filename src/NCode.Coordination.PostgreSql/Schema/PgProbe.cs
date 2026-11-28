@@ -27,6 +27,11 @@ internal sealed class PgProbe(
     private const int MinimumVersion = 150000;
 
     /// <summary>
+    /// The value of a boolean or commit setting that the server reports when it is on.
+    /// </summary>
+    private const string On = "on";
+
+    /// <summary>
     /// The statement that reads the server's version, role and durability settings.
     /// </summary>
     private const string ServerSql = """
@@ -174,7 +179,7 @@ internal sealed class PgProbe(
     /// <exception cref="CoordinationException">The server is refused.</exception>
     private static void CheckCommitsAreDurable(string fsync, string commit)
     {
-        if (!string.Equals(fsync, "on", StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(fsync, On, StringComparison.OrdinalIgnoreCase))
         {
             throw Unsupported(
                 "The server runs with fsync off, so a crash loses commits it acknowledged."
@@ -280,7 +285,7 @@ internal sealed class PgProbe(
         }
 
         var commitWaitsForStandby =
-            string.Equals(commit, "on", StringComparison.OrdinalIgnoreCase)
+            string.Equals(commit, On, StringComparison.OrdinalIgnoreCase)
             || string.Equals(commit, "remote_apply", StringComparison.OrdinalIgnoreCase);
 
         if (string.IsNullOrWhiteSpace(names) || !commitWaitsForStandby)

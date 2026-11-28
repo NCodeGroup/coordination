@@ -70,6 +70,9 @@ A keyspace is a row whose lock orders the changes that watches can see, so the c
 one after another and those of different keyspaces don't wait for each other. A keyspace per tenant is the unit of
 scale.
 
+The provider keeps each keyspace's row id in memory for its life, so the keyspaces it reaches are a bounded set, such
+as one per tenant or cluster, not one per request.
+
 ## Primitives
 
 The provider keeps records, record watches, transactions, occurrences, sets, counters, sequences, sessions,

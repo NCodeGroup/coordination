@@ -1,6 +1,7 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using NCode.Coordination.PostgreSql.Server;
 using Npgsql;
 
 namespace NCode.Coordination;
@@ -48,47 +49,48 @@ public sealed class PostgreSqlProviderOptions
     /// advisory lock. It is true by default; a host that applies them itself with
     /// <see cref="PostgreSqlSchema.GetMigrations(string)"/> sets it to false.
     /// </summary>
-    public bool ApplyMigrations { get; set; } = true;
+    public bool ApplyMigrations { get; set; } = PgSettings.Default.ApplyMigrations;
 
     /// <summary>
     /// Gets or sets the longest that a statement may run on the server, set per operation. It is at least one
     /// millisecond and less than one hour, and 5 seconds by default.
     /// </summary>
-    public TimeSpan StatementTimeout { get; set; } = TimeSpan.FromSeconds(5);
+    public TimeSpan StatementTimeout { get; set; } = PgSettings.Default.StatementTimeout;
 
     /// <summary>
     /// Gets or sets the longest that a statement may wait for a lock, set per operation. It is at least one
     /// millisecond and less than one hour, and 5 seconds by default.
     /// </summary>
-    public TimeSpan LockTimeout { get; set; } = TimeSpan.FromSeconds(5);
+    public TimeSpan LockTimeout { get; set; } = PgSettings.Default.LockTimeout;
 
     /// <summary>
     /// Gets or sets the longest that a session may sit idle inside a transaction, set per operation. It is at least
     /// one millisecond and less than one hour, and 5 seconds by default.
     /// </summary>
-    public TimeSpan IdleInTransactionTimeout { get; set; } = TimeSpan.FromSeconds(5);
+    public TimeSpan IdleInTransactionTimeout { get; set; } =
+        PgSettings.Default.IdleInTransactionTimeout;
 
     /// <summary>
     /// Gets or sets the time between the passes that delete expired rows. It is at least one millisecond and less
     /// than one hour, and 5 seconds by default.
     /// </summary>
-    public TimeSpan SweepInterval { get; set; } = TimeSpan.FromSeconds(5);
+    public TimeSpan SweepInterval { get; set; } = PgSettings.Default.SweepInterval;
 
     /// <summary>
     /// Gets or sets the most rows that a sweep deletes in one statement. It is from 1 to 100,000, and 1,000 by
     /// default.
     /// </summary>
-    public int SweepBatchSize { get; set; } = 1_000;
+    public int SweepBatchSize { get; set; } = PgSettings.Default.SweepBatchSize;
 
     /// <summary>
     /// Gets or sets how long a change log keeps its entries, which bounds how long a watch may fall behind before it
     /// resynchronizes. It is from one second to one day, and 5 minutes by default.
     /// </summary>
-    public TimeSpan LogRetention { get; set; } = TimeSpan.FromMinutes(5);
+    public TimeSpan LogRetention { get; set; } = PgSettings.Default.LogRetention;
 
     /// <summary>
     /// Gets or sets the time between the periodic reads of each change log without a wake-up. It is at least one
     /// millisecond and less than one hour, and 5 seconds by default.
     /// </summary>
-    public TimeSpan CheckInterval { get; set; } = TimeSpan.FromSeconds(5);
+    public TimeSpan CheckInterval { get; set; } = PgSettings.Default.CheckInterval;
 }

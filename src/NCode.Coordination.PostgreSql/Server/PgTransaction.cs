@@ -57,12 +57,12 @@ internal sealed class PgTransaction(
     private PgIsolation Isolation { get; } = isolation;
 
     /// <summary>
-    /// Gets whether the step that commits the transaction was sent.
+    /// Gets a value indicating whether the step that commits the transaction was sent.
     /// </summary>
     public bool CommitSent { get; private set; }
 
     /// <summary>
-    /// Gets whether the transaction was committed or rolled back.
+    /// Gets a value indicating whether the transaction was committed or rolled back.
     /// </summary>
     public bool Completed { get; private set; }
 

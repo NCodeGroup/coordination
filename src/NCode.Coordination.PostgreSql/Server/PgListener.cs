@@ -132,7 +132,7 @@ internal sealed class PgListener(
     /// <summary>
     /// Whether the listener has connected to a server other than the one it first met.
     /// </summary>
-    private volatile bool _hasSeenAnotherServer;
+    private bool _hasSeenAnotherServer;
 
     /// <summary>
     /// Gets the source of the listening connection.
@@ -197,10 +197,10 @@ internal sealed class PgListener(
     private DateTime? LastStartTime { get; set; }
 
     /// <summary>
-    /// Gets a value that says whether a connection has reached a server that started at another time than the
+    /// Gets a value indicating whether a connection has reached a server that started at another time than the
     /// previous connection's.
     /// </summary>
-    public bool HasSeenAnotherServer => _hasSeenAnotherServer;
+    public bool HasSeenAnotherServer => Volatile.Read(ref _hasSeenAnotherServer);
 
     /// <summary>
     /// Starts listening to a channel, or counts another reference to it.
@@ -429,7 +429,7 @@ internal sealed class PgListener(
                 LastStartTime = startTime;
                 if (changed)
                 {
-                    _hasSeenAnotherServer = true;
+                    Volatile.Write(ref _hasSeenAnotherServer, true);
                     Events.IdentityChanged();
                 }
             }

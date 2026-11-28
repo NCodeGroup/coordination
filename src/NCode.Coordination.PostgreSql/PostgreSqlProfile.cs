@@ -94,7 +94,7 @@ public sealed partial record PostgreSqlProfile
     public Guarantee Durability { get; }
 
     /// <summary>
-    /// Gets a value that says whether the probe requires a synchronous standby.
+    /// Gets a value indicating whether the probe requires a synchronous standby.
     /// </summary>
     public bool RequiresSynchronousStandby { get; }
 

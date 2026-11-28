@@ -37,7 +37,7 @@ internal sealed class PgLogSubscriber<TEntry>(long cursor, bool resyncFirst)
     /// <summary>
     /// Whether the subscriber's next event must be a resync; read by <see cref="NeedsResync"/>.
     /// </summary>
-    private volatile bool _needsResync = resyncFirst;
+    private bool _needsResync = resyncFirst;
 
     /// <summary>
     /// Gets the bounded queue of what the subscriber was handed.
@@ -55,8 +55,8 @@ internal sealed class PgLogSubscriber<TEntry>(long cursor, bool resyncFirst)
     /// </summary>
     public bool NeedsResync
     {
-        get => _needsResync;
-        set => _needsResync = value;
+        get => Volatile.Read(ref _needsResync);
+        set => Volatile.Write(ref _needsResync, value);
     }
 
     /// <summary>

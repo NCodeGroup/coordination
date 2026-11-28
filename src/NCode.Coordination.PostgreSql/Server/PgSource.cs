@@ -91,7 +91,7 @@ internal sealed class PgSource : IAsyncDisposable, IDisposable
     private NpgsqlDataSource Primary { get; }
 
     /// <summary>
-    /// Gets whether the source disposes its data source.
+    /// Gets a value indicating whether the source disposes its data source.
     /// </summary>
     private bool Owned { get; }
 
