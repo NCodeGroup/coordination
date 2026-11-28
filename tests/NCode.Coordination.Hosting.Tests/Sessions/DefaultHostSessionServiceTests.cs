@@ -1021,15 +1021,30 @@ public sealed class DefaultHostSessionServiceTests : IDisposable
     public async Task StoppedAsync_WhenTheSessionLoopFaulted_StillStops()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        var time = new ThrowingTimerTimeProvider(HostingTesting.Start);
+        var time = HostingTesting.CreateTime();
+        var failure = new InvalidOperationException("The jitter is broken.");
         var sessions = Mocks.Create<ISessionService>();
         var membership = Mocks.Create<IMembershipService>();
+        var jitter = Mocks.Create<IJitter>();
+        sessions
+            .Setup(x =>
+                x.OpenAsync(
+                    It.IsAny<Keyspace>(),
+                    It.IsAny<TimeToLive>(),
+                    It.IsAny<OperationOptions?>(),
+                    It.IsAny<CancellationToken>()
+                )
+            )
+            .ThrowsAsync(CreateUnavailable())
+            .Verifiable();
+        jitter.Setup(x => x.Next()).Throws(failure).Verifiable();
         var logger = new FakeLogger<DefaultHostSessionService>();
         await using var service = HostingTesting.CreateService(
             time,
             sessions.Object,
             membership.Object,
-            logger: logger
+            jitter.Object,
+            logger
         );
         await service.StartAsync(cancellationToken);
         Assert.Equal(HostSessionState.Unreachable, service.State);
@@ -1040,7 +1055,9 @@ public sealed class DefaultHostSessionServiceTests : IDisposable
         Assert.Equal(HostSessionState.Stopped, service.State);
         var records = logger.Collector.GetSnapshot();
         Assert.Contains(records, x =>
-            x.Id.Id == EventIds.SessionLoopFailed && x.Level == LogLevel.Error
+            x.Id.Id == EventIds.SessionLoopFailed
+            && x.Level == LogLevel.Error
+            && x.Exception == failure
         );
     }
 
@@ -1118,14 +1135,4 @@ public sealed class DefaultHostSessionServiceTests : IDisposable
     }
 
     #endregion
-
-    private sealed class ThrowingTimerTimeProvider(DateTimeOffset start) : FakeTimeProvider(start)
-    {
-        public override ITimer CreateTimer(
-            TimerCallback callback,
-            object? state,
-            TimeSpan dueTime,
-            TimeSpan period
-        ) => throw new InvalidOperationException("The clock is broken.");
-    }
 }
