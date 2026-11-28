@@ -149,7 +149,7 @@ internal sealed class PgProbe(
     /// <param name="version">The server's version number.</param>
     /// <param name="inRecovery">Whether the server is in recovery.</param>
     /// <exception cref="CoordinationException">The server is refused.</exception>
-    private static void CheckVersionAndRole(int version, bool inRecovery)
+    internal static void CheckVersionAndRole(int version, bool inRecovery)
     {
         if (version < MinimumVersion)
         {

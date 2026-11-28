@@ -1,10 +1,15 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using System.Text.RegularExpressions;
+
 namespace NCode.Coordination.PostgreSql.Schema.Tests;
 
-public sealed class PgMigrationsTests
+public sealed partial class PgMigrationsTests
 {
+    [GeneratedRegex(@"^CREATE TABLE \{schema\}\.(?<name>[a-z_]+)", RegexOptions.CultureInvariant)]
+    private static partial Regex CreatedTable();
+
     #region All Tests
 
     [Fact]
@@ -73,7 +78,31 @@ public sealed class PgMigrationsTests
     [Fact]
     public void GetMigrations_InvalidSchema_Throws()
     {
-        Assert.Throws<ArgumentException>(() => PostgreSqlSchema.GetMigrations("Not-A-Schema"));
+        var exception = Assert.Throws<ArgumentException>(() =>
+            PostgreSqlSchema.GetMigrations("Not-A-Schema")
+        );
+
+        Assert.Equal("schema", exception.ParamName);
+    }
+
+    #endregion
+
+    #region Tables Property Tests
+
+    [Fact]
+    public void Tables_EveryMigration_ListsEachTableItCreates()
+    {
+        var created = PgMigrations
+            .All.SelectMany(migration => migration.Statements)
+            .Select(statement => CreatedTable().Match(statement))
+            .Where(match => match.Success)
+            .Select(match => match.Groups["name"].Value)
+            .Where(name => name != "schema_version")
+            .Order(StringComparer.Ordinal);
+
+        var listed = PgMigrations.Tables.Order(StringComparer.Ordinal);
+
+        Assert.Equal(listed, created);
     }
 
     #endregion

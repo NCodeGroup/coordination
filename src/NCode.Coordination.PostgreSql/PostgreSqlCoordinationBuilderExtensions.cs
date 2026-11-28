@@ -68,7 +68,7 @@ public static class PostgreSqlCoordinationBuilderExtensions
             var profile = options.Profile;
             ArgumentNullException.ThrowIfNull(profile);
 
-            var schema = PgSchemaName.Create(options.Schema);
+            var schema = PgSchemaName.Create(options.Schema, nameof(configure));
 
             var settings = CreateSettings(options, schema, nameof(configure));
             var factory = new PgProviderFactory(

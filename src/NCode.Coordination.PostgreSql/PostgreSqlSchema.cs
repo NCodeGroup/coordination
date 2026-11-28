@@ -29,7 +29,7 @@ public static class PostgreSqlSchema
     {
         ArgumentNullException.ThrowIfNull(schema);
 
-        var name = PgSchemaName.Create(schema);
+        var name = PgSchemaName.Create(schema, nameof(schema));
 
         var migrations = new List<PostgreSqlMigration>(PgMigrations.All.Length);
         foreach (var migration in PgMigrations.All)

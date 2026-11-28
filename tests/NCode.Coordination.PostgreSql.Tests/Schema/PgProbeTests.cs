@@ -46,4 +46,26 @@ public sealed class PgProbeTests
     }
 
     #endregion
+
+    #region CheckVersionAndRole Tests
+
+    [Fact]
+    public void CheckVersionAndRole_Version14_ThrowsUnsupported()
+    {
+        var exception = Assert.Throws<CoordinationException>(() =>
+            PgProbe.CheckVersionAndRole(140000, inRecovery: false)
+        );
+
+        Assert.Equal(CoordinationErrorCodes.Unsupported, exception.Code);
+        Assert.False(exception.OutcomeUnknown);
+        Assert.Contains("PostgreSQL 15 or later", exception.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void CheckVersionAndRole_Version15_Passes()
+    {
+        PgProbe.CheckVersionAndRole(150000, inRecovery: false);
+    }
+
+    #endregion
 }

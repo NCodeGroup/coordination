@@ -40,13 +40,23 @@ internal sealed partial class PgSchemaName
     /// <returns>The schema name.</returns>
     /// <exception cref="ArgumentException">The name is not 1 to 63 lowercase letters, digits and underscores that
     /// start with a letter or an underscore.</exception>
-    public static PgSchemaName Create(string name)
+    public static PgSchemaName Create(string name) => Create(name, nameof(name));
+
+    /// <summary>
+    /// Creates a schema name after validating it, naming the caller's parameter when it refuses.
+    /// </summary>
+    /// <param name="name">The name.</param>
+    /// <param name="paramName">The name of the caller's parameter that the refusal reports.</param>
+    /// <returns>The schema name.</returns>
+    /// <exception cref="ArgumentException">The name is not 1 to 63 lowercase letters, digits and underscores that
+    /// start with a letter or an underscore.</exception>
+    public static PgSchemaName Create(string name, string paramName)
     {
         if (name is null || name.Length > MaxLength || !NamePattern().IsMatch(name))
         {
             throw new ArgumentException(
                 $"'{name}' is not a schema name the provider takes: use 1 to 63 lowercase letters, digits and underscores, starting with a letter or an underscore.",
-                nameof(name)
+                paramName
             );
         }
 

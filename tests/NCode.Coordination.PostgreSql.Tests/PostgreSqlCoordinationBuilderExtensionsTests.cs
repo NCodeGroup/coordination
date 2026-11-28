@@ -66,6 +66,10 @@ public sealed class PostgreSqlCoordinationBuilderExtensionsTests : IDisposable
         );
 
         Assert.Equal("configure", exception.ParamName);
+        Assert.StartsWith(
+            "Set exactly one of PostgreSqlProviderOptions.ConnectionString and PostgreSqlProviderOptions.DataSource.",
+            exception.Message
+        );
     }
 
     [Theory]
@@ -78,13 +82,35 @@ public sealed class PostgreSqlCoordinationBuilderExtensionsTests : IDisposable
     {
         var builder = CreateBuilder();
 
-        Assert.Throws<ArgumentException>(() =>
+        var exception = Assert.Throws<ArgumentException>(() =>
             builder.Object.AddPostgreSqlProvider(options =>
             {
                 options.ConnectionString = ConnectionString;
                 options.Schema = schema;
             })
         );
+
+        Assert.Equal("configure", exception.ParamName);
+        Assert.StartsWith(
+            $"'{schema}' is not a schema name the provider takes: use 1 to 63 lowercase letters, digits and underscores, starting with a letter or an underscore.",
+            exception.Message
+        );
+    }
+
+    [Fact]
+    public void AddPostgreSqlProvider_ValidSchema_AddsTheProvider()
+    {
+        Func<IServiceProvider, ICoordinationProvider>? factory = null;
+        var builder = CreateBuilder(f => factory = f);
+
+        var result = builder.Object.AddPostgreSqlProvider(options =>
+        {
+            options.ConnectionString = ConnectionString;
+            options.Schema = "a_1";
+        });
+
+        Assert.Same(builder.Object, result);
+        Assert.NotNull(factory);
     }
 
     [Theory]
