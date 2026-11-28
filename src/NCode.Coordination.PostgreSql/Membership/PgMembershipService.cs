@@ -7,6 +7,7 @@ using NCode.Coordination.PostgreSql.Keys;
 using NCode.Coordination.PostgreSql.Records;
 using NCode.Coordination.PostgreSql.Server;
 using NCode.Coordination.PostgreSql.Subscriptions;
+using Npgsql;
 using NpgsqlTypes;
 
 namespace NCode.Coordination.PostgreSql.Membership;
@@ -14,9 +15,10 @@ namespace NCode.Coordination.PostgreSql.Membership;
 /// <summary>
 /// The membership groups of the PostgreSQL provider: each member is a row of the <c>members</c> table bound to its
 /// session, so it is absent once its session ends. A join and a leave are transactions that lock the keyspace's row,
-/// end the expired sessions they meet and log one entry that names the group. A read is one statement, and a watch
-/// subscribes to the keyspace's change log and reads the group again after a resync and after each entry that names
-/// the group or ends a session, yielding the view when its revision is above the last one yielded.
+/// end the expired sessions they meet and log one entry that names the group. A read is one statement, unless it
+/// meets an expired session: then it reads again in a transaction that first waits for the keyspace's writers. A
+/// watch subscribes to the keyspace's change log and reads the group again after a resync and after each entry that
+/// names the group or ends a session, yielding the view when its revision is above the last one yielded.
 /// </summary>
 /// <param name="table">The record table, whose keyspaces' ids and transactions the service shares.</param>
 /// <param name="changeLog">The reader of a keyspace's change log.</param>
@@ -25,7 +27,9 @@ namespace NCode.Coordination.PostgreSql.Membership;
 internal sealed class PgMembershipService(PgRecordTable table, PgChangeLog changeLog, PgLogHub hub)
     : IMembershipService
 {
-    /// <summary>The template of the statement that reads a group's rows beside the deadlines of their sessions.</summary>
+    /// <summary>
+    /// The template of the statement that reads a group's rows beside the deadlines of their sessions.
+    /// </summary>
     private const string SelectGroup = """
         SELECT m.session_id, m.node_id, s.deadline
         FROM {schema}.members m
@@ -33,12 +37,16 @@ internal sealed class PgMembershipService(PgRecordTable table, PgChangeLog chang
         WHERE m.keyspace_id = $1 AND m.group_idx = $2 AND m.group_depth = $3
         """;
 
-    /// <summary>The template of the statement that reads the deadline of a session's row.</summary>
+    /// <summary>
+    /// The template of the statement that reads the deadline of a session's row.
+    /// </summary>
     private const string SelectSession = """
         SELECT deadline FROM {schema}.sessions WHERE keyspace_id = $1 AND id = $2
         """;
 
-    /// <summary>The template of the statement that adds a member to a group, replacing its session's row.</summary>
+    /// <summary>
+    /// The template of the statement that adds a member to a group, replacing its session's row.
+    /// </summary>
     private const string UpsertMember = """
         INSERT INTO {schema}.members
             (keyspace_id, group_idx, group_depth, group_key, session_id, node_id, address, metadata_names, metadata_values)
@@ -48,13 +56,17 @@ internal sealed class PgMembershipService(PgRecordTable table, PgChangeLog chang
             metadata_names = EXCLUDED.metadata_names, metadata_values = EXCLUDED.metadata_values
         """;
 
-    /// <summary>The template of the statement that removes a session's member from a group.</summary>
+    /// <summary>
+    /// The template of the statement that removes a session's member from a group.
+    /// </summary>
     private const string DeleteMember = """
         DELETE FROM {schema}.members
         WHERE keyspace_id = $1 AND group_idx = $2 AND group_depth = $3 AND session_id = $4
         """;
 
-    /// <summary>The template of the statement that reads a group's live members at the keyspace's revision.</summary>
+    /// <summary>
+    /// The template of the statement that reads a group's live members at the keyspace's revision.
+    /// </summary>
     private const string SelectMembers = """
         WITH now AS (SELECT clock_timestamp() AS t)
         SELECT k.revision, now.t, m.session_id, m.node_id, m.address, m.metadata_names, m.metadata_values, s.deadline
@@ -66,10 +78,320 @@ internal sealed class PgMembershipService(PgRecordTable table, PgChangeLog chang
         ORDER BY m.node_id
         """;
 
-    /// <summary>The template of the statement that waits for the writers of a keyspace's row.</summary>
-    private const string LockShare = """
-        SELECT 1 FROM {schema}.keyspaces WHERE id = $1 FOR SHARE
-        """;
+    /// <summary>
+    /// Finds a group's rows by its key.
+    /// </summary>
+    /// <param name="group">The group's key.</param>
+    /// <returns>The group's key with the values that its rows are found by.</returns>
+    private static PgGroupAddress AddressOf(CoordinationKey group)
+    {
+        var index = PgKeys.Index(group);
+        var depth = (short)group.PartitionDepth;
+        var indexArgument = PgArgument.Typed(index, NpgsqlDbType.Bytea);
+
+        return new PgGroupAddress(group, index, depth, indexArgument);
+    }
+
+    /// <summary>
+    /// Builds what a join needs: the member's metadata is sorted ordinally by name into two arrays.
+    /// </summary>
+    /// <param name="address">The group's key and the values that its rows are found by.</param>
+    /// <param name="member">The member that joins.</param>
+    /// <returns>The request.</returns>
+    private static PgJoinRequest JoinRequestOf(PgGroupAddress address, Member member)
+    {
+        var ordered = member.Metadata.OrderBy(pair => pair.Key, StringComparer.Ordinal).ToArray();
+        var names = ordered.Select(pair => pair.Key).ToArray();
+        var values = ordered.Select(pair => pair.Value).ToArray();
+        var groupText = PgKeys.KeyText(address.Group);
+        var namesArgument = PgArgument.Typed(names, NpgsqlDbType.Array | NpgsqlDbType.Text);
+        var valuesArgument = PgArgument.Typed(values, NpgsqlDbType.Array | NpgsqlDbType.Text);
+
+        return new PgJoinRequest(address, member, groupText, namesArgument, valuesArgument);
+    }
+
+    /// <summary>
+    /// Tells whether a live member of the group, bound to another session, already holds the joining member's node id.
+    /// </summary>
+    /// <param name="start">What the transaction's first batch read.</param>
+    /// <param name="request">What the join needs.</param>
+    /// <returns><see langword="true"/> when the node id is taken.</returns>
+    private static bool IsNodeIdTaken(PgMembershipStart start, PgJoinRequest request)
+    {
+        var now = start.Change.Now;
+
+        return start.Rows.Any(row => HoldsNodeIdForOtherSession(row, now, request));
+    }
+
+    /// <summary>
+    /// Tells whether a member row is live, has the joining member's node id and is bound to another session.
+    /// </summary>
+    /// <param name="row">The member row.</param>
+    /// <param name="now">The server's instant.</param>
+    /// <param name="request">What the join needs.</param>
+    /// <returns><see langword="true"/> when the row keeps the node id from the joining member.</returns>
+    private static bool HoldsNodeIdForOtherSession(
+        PgGroupRow row,
+        DateTime now,
+        PgJoinRequest request
+    )
+    {
+        var member = request.Member;
+        var sameNode = string.Equals(row.NodeId, member.NodeId, StringComparison.Ordinal);
+        var sameSession = string.Equals(
+            row.Session,
+            member.Session.Value,
+            StringComparison.Ordinal
+        );
+
+        return row.IsLiveAt(now) && sameNode && !sameSession;
+    }
+
+    /// <summary>
+    /// Tells whether the group has a live member bound to a session.
+    /// </summary>
+    /// <param name="start">What the transaction's first batch read.</param>
+    /// <param name="session">The id of the session.</param>
+    /// <returns><see langword="true"/> when the session's member is live.</returns>
+    private static bool HasLiveMember(PgMembershipStart start, string session)
+    {
+        var now = start.Change.Now;
+
+        return start.Rows.Any(row => IsLiveMemberOf(row, now, session));
+    }
+
+    /// <summary>
+    /// Tells whether a member row is live and is bound to a session.
+    /// </summary>
+    /// <param name="row">The member row.</param>
+    /// <param name="now">The server's instant.</param>
+    /// <param name="session">The id of the session.</param>
+    /// <returns><see langword="true"/> when the row is the session's live member.</returns>
+    private static bool IsLiveMemberOf(PgGroupRow row, DateTime now, string session)
+    {
+        var sameSession = string.Equals(row.Session, session, StringComparison.Ordinal);
+
+        return row.IsLiveAt(now) && sameSession;
+    }
+
+    /// <summary>
+    /// Tells whether an entry of the change log may change a group's members: it names the group or ends a session.
+    /// </summary>
+    /// <param name="entry">The entry, or null.</param>
+    /// <param name="address">The group's key and the values that its rows are found by.</param>
+    /// <returns><see langword="true"/> when the group's view may have changed.</returns>
+    private static bool Concerns(PgChange? entry, PgGroupAddress address)
+    {
+        if (entry is null)
+        {
+            return false;
+        }
+
+        if (entry.EndedSession is not null)
+        {
+            return true;
+        }
+
+        return entry.GroupDepth == address.Depth
+            && entry.GroupIndex is { } groupIndex
+            && groupIndex.AsSpan().SequenceEqual(address.Index);
+    }
+
+    /// <summary>
+    /// Reads a timestamp column as an instant of kind UTC.
+    /// </summary>
+    /// <param name="reader">The reader, on a row.</param>
+    /// <param name="ordinal">The column's position.</param>
+    /// <returns>The instant.</returns>
+    private static DateTime ReadUtc(NpgsqlDataReader reader, int ordinal)
+    {
+        var instant = reader.GetDateTime(ordinal);
+
+        return DateTime.SpecifyKind(instant, DateTimeKind.Utc);
+    }
+
+    /// <summary>
+    /// Reads a timestamp column that may be null as an instant of kind UTC.
+    /// </summary>
+    /// <param name="reader">The reader, on a row.</param>
+    /// <param name="ordinal">The column's position.</param>
+    /// <returns>The instant, or null.</returns>
+    private static DateTime? ReadNullableUtc(NpgsqlDataReader reader, int ordinal)
+    {
+        if (reader.IsDBNull(ordinal))
+        {
+            return null;
+        }
+
+        return ReadUtc(reader, ordinal);
+    }
+
+    /// <summary>
+    /// Reads a text column that may be null.
+    /// </summary>
+    /// <param name="reader">The reader, on a row.</param>
+    /// <param name="ordinal">The column's position.</param>
+    /// <returns>The text, or null.</returns>
+    private static string? ReadNullableText(NpgsqlDataReader reader, int ordinal)
+    {
+        if (reader.IsDBNull(ordinal))
+        {
+            return null;
+        }
+
+        return reader.GetString(ordinal);
+    }
+
+    /// <summary>
+    /// Reads a text array column that may be null.
+    /// </summary>
+    /// <param name="reader">The reader, on a row.</param>
+    /// <param name="ordinal">The column's position.</param>
+    /// <returns>The texts, or null.</returns>
+    private static string[]? ReadNullableTexts(NpgsqlDataReader reader, int ordinal)
+    {
+        if (reader.IsDBNull(ordinal))
+        {
+            return null;
+        }
+
+        return reader.GetFieldValue<string[]>(ordinal);
+    }
+
+    /// <summary>
+    /// Reads a row of the result of the statement that reads a group's rows beside the deadlines of their sessions.
+    /// </summary>
+    /// <param name="reader">The reader, on a row.</param>
+    /// <returns>The row.</returns>
+    private static PgGroupRow ReadGroupRow(NpgsqlDataReader reader)
+    {
+        var session = reader.GetString(0);
+        var nodeId = reader.GetString(1);
+        var deadline = ReadNullableUtc(reader, 2);
+
+        return new PgGroupRow(session, nodeId, deadline);
+    }
+
+    /// <summary>
+    /// Reads a row of the result of the statement that reads the deadline of a session's row.
+    /// </summary>
+    /// <param name="reader">The reader, on a row.</param>
+    /// <returns>The deadline, of kind UTC.</returns>
+    private static DateTime ReadSessionDeadline(NpgsqlDataReader reader) => ReadUtc(reader, 0);
+
+    /// <summary>
+    /// Reads a row of the result of the statement that lists a group's members.
+    /// </summary>
+    /// <param name="reader">The reader, on a row.</param>
+    /// <returns>The row.</returns>
+    private static PgMemberRow ReadMemberRow(NpgsqlDataReader reader)
+    {
+        var revision = reader.GetInt64(0);
+        var now = ReadUtc(reader, 1);
+        var session = ReadNullableText(reader, 2);
+        var nodeId = ReadNullableText(reader, 3);
+        var address = ReadNullableText(reader, 4);
+        var names = ReadNullableTexts(reader, 5);
+        var values = ReadNullableTexts(reader, 6);
+        var deadline = ReadNullableUtc(reader, 7);
+
+        return new PgMemberRow(revision, now, session, nodeId, address, names, values, deadline);
+    }
+
+    /// <summary>
+    /// Reads the results of the first batch of a join or a leave.
+    /// </summary>
+    /// <param name="results">The results of the batch.</param>
+    /// <param name="cancellationToken">The token that cancels the call.</param>
+    /// <returns>What the batch's four statements returned.</returns>
+    private static async ValueTask<(
+        ImmutableArray<long> Revisions,
+        ImmutableArray<DateTime> Clocks,
+        ImmutableArray<PgGroupRow> Rows,
+        ImmutableArray<DateTime> Deadlines
+    )> ReadStartAsync(PgResults results, CancellationToken cancellationToken)
+    {
+        var revisions = await results
+            .ReadAsync(reader => reader.GetInt64(0), cancellationToken)
+            .ConfigureAwait(false);
+        var clocks = await results
+            .ReadAsync(reader => reader.GetDateTime(0), cancellationToken)
+            .ConfigureAwait(false);
+        var rows = await results.ReadAsync(ReadGroupRow, cancellationToken).ConfigureAwait(false);
+        var deadlines = await results
+            .ReadAsync(ReadSessionDeadline, cancellationToken)
+            .ConfigureAwait(false);
+
+        return (revisions, clocks, rows, deadlines);
+    }
+
+    /// <summary>
+    /// Reads the result of the statement that lists a group's members.
+    /// </summary>
+    /// <param name="results">The results of the batch.</param>
+    /// <param name="cancellationToken">The token that cancels the call.</param>
+    /// <returns>The rows; none when the keyspace's row does not exist.</returns>
+    private static async ValueTask<ImmutableArray<PgMemberRow>> ReadMembersAsync(
+        PgResults results,
+        CancellationToken cancellationToken
+    )
+    {
+        return await results.ReadAsync(ReadMemberRow, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Builds the view of a group from the rows that were read, keeping the live members only.
+    /// </summary>
+    /// <param name="group">The group.</param>
+    /// <param name="rows">The rows, which are not empty.</param>
+    /// <returns>The view at the keyspace's revision.</returns>
+    private static MembershipView ToView(CoordinationKey group, ImmutableArray<PgMemberRow> rows)
+    {
+        var members = new List<Member>();
+        foreach (var row in rows)
+        {
+            var member = ToLiveMember(group.Keyspace, row);
+            if (member is not null)
+            {
+                members.Add(member);
+            }
+        }
+
+        var revision = new Revision(rows[0].Revision);
+
+        return new MembershipView(group, revision, members);
+    }
+
+    /// <summary>
+    /// Builds the member that a row holds when its session's deadline is after the instant of the read.
+    /// </summary>
+    /// <param name="keyspace">The group's keyspace.</param>
+    /// <param name="row">The row.</param>
+    /// <returns>The member, or null when the row holds no member or its session has expired.</returns>
+    private static Member? ToLiveMember(Keyspace keyspace, PgMemberRow row)
+    {
+        if (
+            row
+                is not {
+                    Session: { } session,
+                    NodeId: { } nodeId,
+                    Address: { } address,
+                    Names: { } names,
+                    Values: { } values,
+                    Deadline: { } deadline,
+                }
+            || deadline <= row.Now
+        )
+        {
+            return null;
+        }
+
+        var pairs = names.Zip(values, (name, value) => KeyValuePair.Create(name, value));
+        var metadata = ImmutableDictionary.CreateRange(pairs);
+        var sessionId = new SessionId(keyspace, session);
+
+        return new Member(sessionId, nodeId, address) { Metadata = metadata };
+    }
 
     /// <summary>
     /// Gets the record table, whose keyspaces' ids and transactions the service shares.
@@ -87,23 +409,30 @@ internal sealed class PgMembershipService(PgRecordTable table, PgChangeLog chang
     /// </summary>
     private PgLogHub Hub { get; } = hub ?? throw new ArgumentNullException(nameof(hub));
 
-    /// <summary>Gets the statement that reads a group's rows beside the deadlines of their sessions.</summary>
+    /// <summary>
+    /// Gets the statement that reads a group's rows beside the deadlines of their sessions.
+    /// </summary>
     private string SelectGroupSql { get; } = table.Settings.Schema.Apply(SelectGroup);
 
-    /// <summary>Gets the statement that reads the deadline of a session's row.</summary>
+    /// <summary>
+    /// Gets the statement that reads the deadline of a session's row.
+    /// </summary>
     private string SelectSessionSql { get; } = table.Settings.Schema.Apply(SelectSession);
 
-    /// <summary>Gets the statement that adds a member to a group.</summary>
+    /// <summary>
+    /// Gets the statement that adds a member to a group.
+    /// </summary>
     private string UpsertMemberSql { get; } = table.Settings.Schema.Apply(UpsertMember);
 
-    /// <summary>Gets the statement that removes a session's member from a group.</summary>
+    /// <summary>
+    /// Gets the statement that removes a session's member from a group.
+    /// </summary>
     private string DeleteMemberSql { get; } = table.Settings.Schema.Apply(DeleteMember);
 
-    /// <summary>Gets the statement that reads a group's live members.</summary>
+    /// <summary>
+    /// Gets the statement that reads a group's live members.
+    /// </summary>
     private string SelectMembersSql { get; } = table.Settings.Schema.Apply(SelectMembers);
-
-    /// <summary>Gets the statement that waits for the writers of a keyspace's row.</summary>
-    private string LockShareSql { get; } = table.Settings.Schema.Apply(LockShare);
 
     /// <inheritdoc />
     public async ValueTask<MembershipJoinStatus> JoinAsync(
@@ -117,91 +446,13 @@ internal sealed class PgMembershipService(PgRecordTable table, PgChangeLog chang
         ArgumentNullException.ThrowIfNull(member);
         PgCall.Check(options, cancellationToken);
 
-        var index = PgKeys.Index(group);
-        var depth = (short)group.PartitionDepth;
-        var sessionId = member.Session.Value;
-        var ordered = member.Metadata.OrderBy(pair => pair.Key, StringComparer.Ordinal).ToArray();
-        var names = ordered.Select(pair => pair.Key).ToArray();
-        var values = ordered.Select(pair => pair.Value).ToArray();
-        var indexArgument = PgArgument.Typed(index, NpgsqlDbType.Bytea);
-        var groupText = PgKeys.KeyText(group);
-        var namesArgument = PgArgument.Typed(names, NpgsqlDbType.Array | NpgsqlDbType.Text);
-        var valuesArgument = PgArgument.Typed(values, NpgsqlDbType.Array | NpgsqlDbType.Text);
+        var address = AddressOf(group);
+        var request = JoinRequestOf(address, member);
 
         return await Table
             .Keyspaces.RunAsync<MembershipJoinStatus>(
                 group.Keyspace,
-                async (id, token) =>
-                    await Table
-                        .Server.TransactAsync(
-                            PgIsolation.ReadCommitted,
-                            async (transaction, transactionToken) =>
-                            {
-                                var start = await BeginAsync(
-                                        transaction,
-                                        id,
-                                        index,
-                                        depth,
-                                        sessionId,
-                                        transactionToken
-                                    )
-                                    .ConfigureAwait(false);
-
-                                start.EndExpiredSessions();
-
-                                var now = start.Change.Now;
-                                MembershipJoinStatus status;
-                                if (start.SessionDeadline is not { } deadline || deadline <= now)
-                                {
-                                    status = MembershipJoinStatus.SessionEnded;
-                                }
-                                else if (
-                                    start.Rows.Any(row =>
-                                        row.IsLiveAt(now)
-                                        && string.Equals(
-                                            row.NodeId,
-                                            member.NodeId,
-                                            StringComparison.Ordinal
-                                        )
-                                        && !string.Equals(
-                                            row.Session,
-                                            sessionId,
-                                            StringComparison.Ordinal
-                                        )
-                                    )
-                                )
-                                {
-                                    status = MembershipJoinStatus.NodeIdTaken;
-                                }
-                                else
-                                {
-                                    start.Change.Begin();
-                                    start.Change.NameGroup(index, depth);
-                                    start.Change.Write(
-                                        new PgStatement(
-                                            UpsertMemberSql,
-                                            id,
-                                            indexArgument,
-                                            depth,
-                                            groupText,
-                                            sessionId,
-                                            member.NodeId,
-                                            member.Address,
-                                            namesArgument,
-                                            valuesArgument
-                                        )
-                                    );
-                                    status = MembershipJoinStatus.Joined;
-                                }
-
-                                await Table
-                                    .CommitAsync(transaction, start.Change, id, transactionToken)
-                                    .ConfigureAwait(false);
-                                return status;
-                            },
-                            token
-                        )
-                        .ConfigureAwait(false),
+                (id, token) => JoinInKeyspaceAsync(id, request, token),
                 cancellationToken
             )
             .ConfigureAwait(false);
@@ -219,64 +470,13 @@ internal sealed class PgMembershipService(PgRecordTable table, PgChangeLog chang
         ArgumentNullException.ThrowIfNull(session);
         PgCall.Check(options, cancellationToken);
 
-        var index = PgKeys.Index(group);
-        var depth = (short)group.PartitionDepth;
-        var indexArgument = PgArgument.Typed(index, NpgsqlDbType.Bytea);
+        var address = AddressOf(group);
+        var request = new PgLeaveRequest(address, session);
 
         await Table
-            .Keyspaces.RunAsync(
+            .Keyspaces.RunAsync<bool>(
                 group.Keyspace,
-                async (id, token) =>
-                    await Table
-                        .Server.TransactAsync(
-                            PgIsolation.ReadCommitted,
-                            async (transaction, transactionToken) =>
-                            {
-                                var start = await BeginAsync(
-                                        transaction,
-                                        id,
-                                        index,
-                                        depth,
-                                        session.Value,
-                                        transactionToken
-                                    )
-                                    .ConfigureAwait(false);
-
-                                start.EndExpiredSessions();
-
-                                var now = start.Change.Now;
-                                if (
-                                    start.Rows.Any(row =>
-                                        row.IsLiveAt(now)
-                                        && string.Equals(
-                                            row.Session,
-                                            session.Value,
-                                            StringComparison.Ordinal
-                                        )
-                                    )
-                                )
-                                {
-                                    start.Change.Begin();
-                                    start.Change.NameGroup(index, depth);
-                                    start.Change.Write(
-                                        new PgStatement(
-                                            DeleteMemberSql,
-                                            id,
-                                            indexArgument,
-                                            depth,
-                                            session.Value
-                                        )
-                                    );
-                                }
-
-                                await Table
-                                    .CommitAsync(transaction, start.Change, id, transactionToken)
-                                    .ConfigureAwait(false);
-                                return true;
-                            },
-                            token
-                        )
-                        .ConfigureAwait(false),
+                (id, token) => LeaveInKeyspaceAsync(id, request, token),
                 cancellationToken
             )
             .ConfigureAwait(false);
@@ -321,24 +521,9 @@ internal sealed class PgMembershipService(PgRecordTable table, PgChangeLog chang
         [EnumeratorCancellation] CancellationToken cancellationToken
     )
     {
-        var keyspaceId = await Table
-            .Keyspaces.ResolveAsync(group.Keyspace, cancellationToken)
+        var (logId, subscriber) = await SubscribeToChangesAsync(group.Keyspace, cancellationToken)
             .ConfigureAwait(false);
-        var index = PgKeys.Index(group);
-        var depth = (short)group.PartitionDepth;
-
-        var logId = new PgLogId(keyspaceId, null);
-        var subscriber = await Hub.SubscribeAsync(
-                logId,
-                () =>
-                    new PgLogFanout<PgChange>(
-                        (cursor, limit, readToken) =>
-                            ChangeLog.ReadAsync(keyspaceId, cursor, limit, readToken)
-                    ),
-                null,
-                cancellationToken
-            )
-            .ConfigureAwait(false);
+        var address = AddressOf(group);
 
         try
         {
@@ -349,7 +534,7 @@ internal sealed class PgMembershipService(PgRecordTable table, PgChangeLog chang
                 var item in subscriber.Reader.ReadAllAsync(cancellationToken).ConfigureAwait(false)
             )
             {
-                if (!item.IsResync && !Concerns(item.Entry, index, depth))
+                if (!item.IsResync && !Concerns(item.Entry, address))
                 {
                     continue;
                 }
@@ -369,22 +554,44 @@ internal sealed class PgMembershipService(PgRecordTable table, PgChangeLog chang
     }
 
     /// <summary>
-    /// Tells whether an entry of the change log may change a group's members: it names the group or ends a session.
+    /// Resolves a keyspace and subscribes to its change log.
     /// </summary>
-    /// <param name="entry">The entry, or null.</param>
-    /// <param name="index">The group's index value.</param>
-    /// <param name="depth">The group's partition depth.</param>
-    /// <returns><see langword="true"/> when the group's view may have changed.</returns>
-    private static bool Concerns(PgChange? entry, byte[] index, short depth) =>
-        entry is not null
-        && (
-            entry.EndedSession is not null
-            || (
-                entry.GroupDepth == depth
-                && entry.GroupIndex is { } groupIndex
-                && groupIndex.AsSpan().SequenceEqual(index)
+    /// <param name="keyspace">The keyspace.</param>
+    /// <param name="cancellationToken">The token that cancels the call.</param>
+    /// <returns>The log's id and the subscriber that reads it.</returns>
+    /// <exception cref="CoordinationException">The server could not be reached or failed.</exception>
+    private async ValueTask<(
+        PgLogId LogId,
+        PgLogSubscriber<PgChange> Subscriber
+    )> SubscribeToChangesAsync(Keyspace keyspace, CancellationToken cancellationToken)
+    {
+        var keyspaceId = await Table
+            .Keyspaces.ResolveAsync(keyspace, cancellationToken)
+            .ConfigureAwait(false);
+
+        var logId = new PgLogId(keyspaceId, null);
+        var subscriber = await Hub.SubscribeAsync(
+                logId,
+                () => CreateFanout(keyspaceId),
+                null,
+                cancellationToken
             )
+            .ConfigureAwait(false);
+
+        return (logId, subscriber);
+    }
+
+    /// <summary>
+    /// Creates the fanout that reads a keyspace's change log.
+    /// </summary>
+    /// <param name="keyspaceId">The keyspace's id.</param>
+    /// <returns>A fanout that reads the keyspace's change log.</returns>
+    private PgLogFanout<PgChange> CreateFanout(long keyspaceId)
+    {
+        return new PgLogFanout<PgChange>(
+            (cursor, limit, readToken) => ChangeLog.ReadAsync(keyspaceId, cursor, limit, readToken)
         );
+    }
 
     /// <summary>
     /// Reads a group's live members at the keyspace's revision. A member whose session's deadline has passed makes the
@@ -399,152 +606,248 @@ internal sealed class PgMembershipService(PgRecordTable table, PgChangeLog chang
         CancellationToken cancellationToken
     )
     {
-        var index = PgKeys.Index(group);
-        var depth = (short)group.PartitionDepth;
+        var address = AddressOf(group);
 
         return await Table
             .Keyspaces.RunAsync<MembershipView>(
                 group.Keyspace,
-                async (id, token) =>
-                {
-                    var first = await Table
-                        .Server.ExecuteAsync(
-                            [SelectMembersStatement(id, index, depth)],
-                            ReadMembersAsync,
-                            token
-                        )
-                        .ConfigureAwait(false);
-
-                    if (first.Length == 0)
-                    {
-                        throw new PgKeyspaceMissingException("The keyspace's row does not exist.");
-                    }
-
-                    if (!first.Any(row => row.IsExpired()))
-                    {
-                        return ToView(group, first);
-                    }
-
-                    var second = await Table
-                        .Server.TransactAsync(
-                            PgIsolation.ReadCommitted,
-                            async (transaction, transactionToken) =>
-                                await transaction
-                                    .FirstAsync(
-                                        [
-                                            new PgStatement(LockShareSql, id),
-                                            SelectMembersStatement(id, index, depth),
-                                        ],
-                                        async (results, readToken) =>
-                                        {
-                                            await results
-                                                .ReadAsync(reader => reader.GetInt32(0), readToken)
-                                                .ConfigureAwait(false);
-                                            return await ReadMembersAsync(results, readToken)
-                                                .ConfigureAwait(false);
-                                        },
-                                        transactionToken
-                                    )
-                                    .ConfigureAwait(false),
-                            token
-                        )
-                        .ConfigureAwait(false);
-
-                    if (second.Length == 0)
-                    {
-                        throw new PgKeyspaceMissingException("The keyspace's row does not exist.");
-                    }
-
-                    return ToView(group, second);
-                },
+                (id, token) => ReadViewInKeyspaceAsync(id, address, token),
                 cancellationToken
             )
             .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Reads a group's view in a keyspace: one statement, then, when it met a member whose session has expired, a
+    /// second read that follows the keyspace's writers.
+    /// </summary>
+    /// <param name="id">The keyspace's id.</param>
+    /// <param name="address">The group's key and the values that its rows are found by.</param>
+    /// <param name="cancellationToken">The token that cancels the call.</param>
+    /// <returns>The view.</returns>
+    /// <exception cref="PgKeyspaceMissingException">The keyspace's row does not exist.</exception>
+    private async ValueTask<MembershipView> ReadViewInKeyspaceAsync(
+        long id,
+        PgGroupAddress address,
+        CancellationToken cancellationToken
+    )
+    {
+        var statement = SelectMembersStatement(id, address);
+
+        var first = await Table
+            .Server.ExecuteAsync([statement], ReadMembersAsync, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (first.Length == 0)
+        {
+            throw new PgKeyspaceMissingException(PgKeyspaceMissingException.RowMissingMessage);
+        }
+
+        if (!first.Any(row => row.IsExpired()))
+        {
+            return ToView(address.Group, first);
+        }
+
+        var second = await Table
+            .ReadAfterWritersAsync(id, statement, ReadMembersAsync, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (second.Length == 0)
+        {
+            throw new PgKeyspaceMissingException(PgKeyspaceMissingException.RowMissingMessage);
+        }
+
+        return ToView(address.Group, second);
     }
 
     /// <summary>
     /// Builds the statement that reads a group's members.
     /// </summary>
     /// <param name="keyspaceId">The keyspace's id.</param>
-    /// <param name="index">The group's index value.</param>
-    /// <param name="depth">The group's partition depth.</param>
+    /// <param name="address">The group's key and the values that its rows are found by.</param>
     /// <returns>The statement.</returns>
-    private PgStatement SelectMembersStatement(long keyspaceId, byte[] index, short depth)
+    private PgStatement SelectMembersStatement(long keyspaceId, PgGroupAddress address)
     {
-        var indexArgument = PgArgument.Typed(index, NpgsqlDbType.Bytea);
-
-        return new PgStatement(SelectMembersSql, keyspaceId, indexArgument, depth);
+        return new PgStatement(SelectMembersSql, keyspaceId, address.IndexArgument, address.Depth);
     }
 
     /// <summary>
-    /// Reads the result of the statement that lists a group's members.
+    /// Joins a group in a keyspace, in a transaction.
     /// </summary>
-    /// <param name="results">The results of the batch.</param>
+    /// <param name="id">The keyspace's id.</param>
+    /// <param name="request">What the join needs.</param>
     /// <param name="cancellationToken">The token that cancels the call.</param>
-    /// <returns>The rows; none when the keyspace's row does not exist.</returns>
-    private static async ValueTask<ImmutableArray<PgMemberRow>> ReadMembersAsync(
-        PgResults results,
+    /// <returns>The status of the join.</returns>
+    private async ValueTask<MembershipJoinStatus> JoinInKeyspaceAsync(
+        long id,
+        PgJoinRequest request,
         CancellationToken cancellationToken
     )
     {
-        return await results
-            .ReadAsync(
-                reader => new PgMemberRow(
-                    reader.GetInt64(0),
-                    DateTime.SpecifyKind(reader.GetDateTime(1), DateTimeKind.Utc),
-                    reader.IsDBNull(2) ? null : reader.GetString(2),
-                    reader.IsDBNull(3) ? null : reader.GetString(3),
-                    reader.IsDBNull(4) ? null : reader.GetString(4),
-                    reader.IsDBNull(5) ? null : reader.GetFieldValue<string[]>(5),
-                    reader.IsDBNull(6) ? null : reader.GetFieldValue<string[]>(6),
-                    reader.IsDBNull(7)
-                        ? null
-                        : DateTime.SpecifyKind(reader.GetDateTime(7), DateTimeKind.Utc)
-                ),
+        return await Table
+            .Server.TransactAsync(
+                PgIsolation.ReadCommitted,
+                (transaction, token) => JoinInTransactionAsync(transaction, id, request, token),
                 cancellationToken
             )
             .ConfigureAwait(false);
     }
 
     /// <summary>
-    /// Builds the view of a group from the rows that were read, keeping the live members only.
+    /// Begins a change, decides the join from the group's rows and commits the change.
     /// </summary>
-    /// <param name="group">The group.</param>
-    /// <param name="rows">The rows, which are not empty.</param>
-    /// <returns>The view at the keyspace's revision.</returns>
-    private static MembershipView ToView(CoordinationKey group, ImmutableArray<PgMemberRow> rows)
+    /// <param name="transaction">The transaction, which has not run a batch.</param>
+    /// <param name="id">The keyspace's id.</param>
+    /// <param name="request">What the join needs.</param>
+    /// <param name="cancellationToken">The token that cancels the call.</param>
+    /// <returns>The status of the join.</returns>
+    private async ValueTask<MembershipJoinStatus> JoinInTransactionAsync(
+        PgTransaction transaction,
+        long id,
+        PgJoinRequest request,
+        CancellationToken cancellationToken
+    )
     {
-        var members = new List<Member>();
-        foreach (var row in rows)
-        {
-            if (
-                row
-                    is not {
-                        Session: { } session,
-                        NodeId: { } nodeId,
-                        Address: { } address,
-                        Names: { } names,
-                        Values: { } values,
-                        Deadline: { } deadline,
-                    }
-                || deadline <= row.Now
-            )
-            {
-                continue;
-            }
+        var session = request.Member.Session.Value;
+        var start = await BeginAsync(transaction, id, request.Address, session, cancellationToken)
+            .ConfigureAwait(false);
 
-            var metadata = ImmutableDictionary.CreateRange(
-                names.Zip(values, (name, value) => KeyValuePair.Create(name, value))
-            );
-            members.Add(
-                new Member(new SessionId(group.Keyspace, session), nodeId, address)
-                {
-                    Metadata = metadata,
-                }
-            );
+        start.EndExpiredSessions();
+
+        var status = DecideJoin(id, start, request);
+
+        await Table
+            .CommitAsync(transaction, start.Change, id, cancellationToken)
+            .ConfigureAwait(false);
+        return status;
+    }
+
+    /// <summary>
+    /// Decides a join from the rows that were read, having made its write in the change.
+    /// </summary>
+    /// <param name="id">The keyspace's id.</param>
+    /// <param name="start">What the transaction's first batch read.</param>
+    /// <param name="request">What the join needs.</param>
+    /// <returns>The status of the join.</returns>
+    private MembershipJoinStatus DecideJoin(long id, PgMembershipStart start, PgJoinRequest request)
+    {
+        var now = start.Change.Now;
+        if (start.SessionDeadline is not { } deadline || deadline <= now)
+        {
+            return MembershipJoinStatus.SessionEnded;
         }
 
-        return new MembershipView(group, new Revision(rows[0].Revision), members);
+        if (IsNodeIdTaken(start, request))
+        {
+            return MembershipJoinStatus.NodeIdTaken;
+        }
+
+        WriteMember(id, start, request);
+        return MembershipJoinStatus.Joined;
+    }
+
+    /// <summary>
+    /// Writes the member's row in the change that names the group.
+    /// </summary>
+    /// <param name="id">The keyspace's id.</param>
+    /// <param name="start">What the transaction's first batch read.</param>
+    /// <param name="request">What the join needs.</param>
+    private void WriteMember(long id, PgMembershipStart start, PgJoinRequest request)
+    {
+        var address = request.Address;
+        var member = request.Member;
+        var upsert = new PgStatement(
+            UpsertMemberSql,
+            id,
+            address.IndexArgument,
+            address.Depth,
+            request.GroupText,
+            member.Session.Value,
+            member.NodeId,
+            member.Address,
+            request.Names,
+            request.Values
+        );
+
+        start.Change.Begin();
+        start.Change.NameGroup(address.Index, address.Depth);
+        start.Change.Write(upsert);
+    }
+
+    /// <summary>
+    /// Leaves a group in a keyspace, in a transaction.
+    /// </summary>
+    /// <param name="id">The keyspace's id.</param>
+    /// <param name="request">What the leave needs.</param>
+    /// <param name="cancellationToken">The token that cancels the call.</param>
+    /// <returns>Always <see langword="true"/>: a session that holds no member leaves nothing.</returns>
+    private async ValueTask<bool> LeaveInKeyspaceAsync(
+        long id,
+        PgLeaveRequest request,
+        CancellationToken cancellationToken
+    )
+    {
+        return await Table
+            .Server.TransactAsync(
+                PgIsolation.ReadCommitted,
+                (transaction, token) => LeaveInTransactionAsync(transaction, id, request, token),
+                cancellationToken
+            )
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Begins a change, removes the session's member when the group has it live and commits the change.
+    /// </summary>
+    /// <param name="transaction">The transaction, which has not run a batch.</param>
+    /// <param name="id">The keyspace's id.</param>
+    /// <param name="request">What the leave needs.</param>
+    /// <param name="cancellationToken">The token that cancels the call.</param>
+    /// <returns>Always <see langword="true"/>.</returns>
+    private async ValueTask<bool> LeaveInTransactionAsync(
+        PgTransaction transaction,
+        long id,
+        PgLeaveRequest request,
+        CancellationToken cancellationToken
+    )
+    {
+        var session = request.Session.Value;
+        var start = await BeginAsync(transaction, id, request.Address, session, cancellationToken)
+            .ConfigureAwait(false);
+
+        start.EndExpiredSessions();
+
+        if (HasLiveMember(start, session))
+        {
+            WriteLeave(id, start, request);
+        }
+
+        await Table
+            .CommitAsync(transaction, start.Change, id, cancellationToken)
+            .ConfigureAwait(false);
+        return true;
+    }
+
+    /// <summary>
+    /// Writes the removal of the session's member in the change that names the group.
+    /// </summary>
+    /// <param name="id">The keyspace's id.</param>
+    /// <param name="start">What the transaction's first batch read.</param>
+    /// <param name="request">What the leave needs.</param>
+    private void WriteLeave(long id, PgMembershipStart start, PgLeaveRequest request)
+    {
+        var address = request.Address;
+        var delete = new PgStatement(
+            DeleteMemberSql,
+            id,
+            address.IndexArgument,
+            address.Depth,
+            request.Session.Value
+        );
+
+        start.Change.Begin();
+        start.Change.NameGroup(address.Index, address.Depth);
+        start.Change.Write(delete);
     }
 
     /// <summary>
@@ -553,8 +856,7 @@ internal sealed class PgMembershipService(PgRecordTable table, PgChangeLog chang
     /// </summary>
     /// <param name="transaction">The transaction, which has not run a batch.</param>
     /// <param name="keyspaceId">The keyspace's id.</param>
-    /// <param name="index">The group's index value.</param>
-    /// <param name="depth">The group's partition depth.</param>
+    /// <param name="address">The group's key and the values that its rows are found by.</param>
     /// <param name="session">The id of the session that joins or leaves.</param>
     /// <param name="cancellationToken">The token that cancels the call.</param>
     /// <returns>What the batch read.</returns>
@@ -562,67 +864,35 @@ internal sealed class PgMembershipService(PgRecordTable table, PgChangeLog chang
     private async ValueTask<PgMembershipStart> BeginAsync(
         PgTransaction transaction,
         long keyspaceId,
-        byte[] index,
-        short depth,
+        PgGroupAddress address,
         string session,
         CancellationToken cancellationToken
     )
     {
-        var indexArgument = PgArgument.Typed(index, NpgsqlDbType.Bytea);
-        var (revisions, clocks, rows, deadlines) = await transaction
-            .FirstAsync(
-                [
-                    Table.LockKeyspace(keyspaceId),
-                    Table.Clock(),
-                    new PgStatement(SelectGroupSql, keyspaceId, indexArgument, depth),
-                    new PgStatement(SelectSessionSql, keyspaceId, session),
-                ],
-                async (results, token) =>
-                {
-                    var revisionRows = await results
-                        .ReadAsync(reader => reader.GetInt64(0), token)
-                        .ConfigureAwait(false);
-                    var clockRows = await results
-                        .ReadAsync(reader => reader.GetDateTime(0), token)
-                        .ConfigureAwait(false);
-                    var groupRows = await results
-                        .ReadAsync(
-                            reader => new PgGroupRow(
-                                reader.GetString(0),
-                                reader.GetString(1),
-                                reader.IsDBNull(2)
-                                    ? null
-                                    : DateTime.SpecifyKind(reader.GetDateTime(2), DateTimeKind.Utc)
-                            ),
-                            token
-                        )
-                        .ConfigureAwait(false);
-                    var sessionRows = await results
-                        .ReadAsync(
-                            reader => DateTime.SpecifyKind(reader.GetDateTime(0), DateTimeKind.Utc),
-                            token
-                        )
-                        .ConfigureAwait(false);
+        var lockKeyspace = Table.LockKeyspace(keyspaceId);
+        var clock = Table.Clock();
+        var selectGroup = new PgStatement(
+            SelectGroupSql,
+            keyspaceId,
+            address.IndexArgument,
+            address.Depth
+        );
+        var selectSession = new PgStatement(SelectSessionSql, keyspaceId, session);
+        PgStatement[] statements = [lockKeyspace, clock, selectGroup, selectSession];
 
-                    return (revisionRows, clockRows, groupRows, sessionRows);
-                },
-                cancellationToken
-            )
+        var read = await transaction
+            .FirstAsync(statements, ReadStartAsync, cancellationToken)
             .ConfigureAwait(false);
 
-        if (revisions.Length == 0)
+        if (read.Revisions.Length == 0)
         {
-            throw new PgKeyspaceMissingException("The keyspace's row does not exist.");
+            throw new PgKeyspaceMissingException(PgKeyspaceMissingException.RowMissingMessage);
         }
 
-        var now = DateTime.SpecifyKind(clocks[0], DateTimeKind.Utc);
-        var change = Table.NewChange(keyspaceId, revisions[0], now);
+        var now = DateTime.SpecifyKind(read.Clocks[0], DateTimeKind.Utc);
+        var change = Table.NewChange(keyspaceId, read.Revisions[0], now);
+        DateTime? sessionDeadline = read.Deadlines.Length == 0 ? null : read.Deadlines[0];
 
-        return new PgMembershipStart(
-            change,
-            session,
-            rows,
-            deadlines.Length == 0 ? null : deadlines[0]
-        );
+        return new PgMembershipStart(change, session, read.Rows, sessionDeadline);
     }
 }

@@ -26,7 +26,9 @@ internal sealed record PgMemberRow(
     DateTime? Deadline
 )
 {
-    /// <summary>Tells whether the member's session has passed its deadline at the instant of the read.</summary>
+    /// <summary>
+    /// Tells whether the member's session has passed its deadline at the instant of the read.
+    /// </summary>
     /// <returns><see langword="true"/> when the row holds a member whose session's deadline has passed.</returns>
     public bool IsExpired() => Deadline is { } deadline && deadline <= Now;
 }

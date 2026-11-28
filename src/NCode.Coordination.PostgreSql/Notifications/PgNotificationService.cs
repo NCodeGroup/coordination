@@ -6,6 +6,7 @@ using System.Runtime.CompilerServices;
 using NCode.Coordination.PostgreSql.Keys;
 using NCode.Coordination.PostgreSql.Server;
 using NCode.Coordination.PostgreSql.Subscriptions;
+using Npgsql;
 
 namespace NCode.Coordination.PostgreSql.Notifications;
 
@@ -54,6 +55,94 @@ internal sealed class PgNotificationService(
           WHERE keyspace_id = $1 AND idx = $2 AND depth = $3 AND sequence > $4
           ORDER BY sequence LIMIT $5) m ON true
         """;
+
+    /// <summary>
+    /// Reads the result of the statement that publishes a message.
+    /// </summary>
+    /// <param name="results">The results of the batch.</param>
+    /// <param name="cancellationToken">The token that cancels the call.</param>
+    /// <returns>The sequence of the message that was written.</returns>
+    private static async ValueTask<ImmutableArray<long>> ReadPublishedAsync(
+        PgResults results,
+        CancellationToken cancellationToken
+    )
+    {
+        return await results
+            .ReadAsync(reader => reader.GetInt64(0), cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Reads a row of the result of the statement that reads a topic's log.
+    /// </summary>
+    /// <param name="reader">The reader, on a row.</param>
+    /// <returns>The row.</returns>
+    private static PgLogRow ReadLogRow(NpgsqlDataReader reader)
+    {
+        var removed = reader.IsDBNull(0) ? 0L : reader.GetInt64(0);
+        var current = reader.IsDBNull(1) ? 0L : reader.GetInt64(1);
+        var message = ReadMessage(reader);
+
+        return new PgLogRow(removed, current, message);
+    }
+
+    /// <summary>
+    /// Reads the message that a row of a topic's log holds.
+    /// </summary>
+    /// <param name="reader">The reader, on a row.</param>
+    /// <returns>The message, or null when the row holds none.</returns>
+    private static PgMessage? ReadMessage(NpgsqlDataReader reader)
+    {
+        if (reader.IsDBNull(2))
+        {
+            return null;
+        }
+
+        var number = reader.GetInt64(2);
+        var payload = reader.GetFieldValue<byte[]>(3);
+
+        return new PgMessage(number, payload);
+    }
+
+    /// <summary>
+    /// Reads the result of the statement that reads a topic's log.
+    /// </summary>
+    /// <param name="results">The results of the batch.</param>
+    /// <param name="cancellationToken">The token that cancels the call.</param>
+    /// <returns>The rows of the log.</returns>
+    private static async ValueTask<ImmutableArray<PgLogRow>> ReadLogRowsAsync(
+        PgResults results,
+        CancellationToken cancellationToken
+    )
+    {
+        return await results.ReadAsync(ReadLogRow, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Builds what a read of a topic's log returns from the rows that were read.
+    /// </summary>
+    /// <param name="rows">The rows, which hold the same removed and current sequences.</param>
+    /// <returns>The highest removed sequence, the current sequence and the messages that the rows hold.</returns>
+    private static PgLogRead<PgMessage> ToLogRead(ImmutableArray<PgLogRow> rows)
+    {
+        if (rows.Length == 0)
+        {
+            return new PgLogRead<PgMessage>(0, 0, []);
+        }
+
+        var messages = ImmutableArray.CreateBuilder<PgMessage>();
+        foreach (var row in rows)
+        {
+            if (row.Message is { } message)
+            {
+                messages.Add(message);
+            }
+        }
+
+        var entries = messages.ToImmutable();
+
+        return new PgLogRead<PgMessage>(rows[0].Removed, rows[0].Current, entries);
+    }
 
     /// <summary>
     /// Gets the seam to the server.
@@ -118,45 +207,12 @@ internal sealed class PgNotificationService(
         var retention = PgCall.ToMicroseconds(Settings.LogRetention);
         var announcement = "t:" + PgKeys.PageToken(index, depth) + ":";
 
+        var request = new PgPublishRequest(index, depth, text, body, retention, announcement);
+
         await Keyspaces
             .RunAsync(
                 topic.Keyspace,
-                async (id, runToken) =>
-                {
-                    var channel = PgChannels.ForKeyspace(Settings.Schema, id);
-
-                    var rows = await Server
-                        .ExecuteAsync(
-                            [
-                                new PgStatement(
-                                    Publish,
-                                    id,
-                                    index,
-                                    depth,
-                                    text,
-                                    body,
-                                    retention,
-                                    channel,
-                                    announcement
-                                ),
-                            ],
-                            async (results, readToken) =>
-                                await results
-                                    .ReadAsync(reader => reader.GetInt64(0), readToken)
-                                    .ConfigureAwait(false),
-                            runToken
-                        )
-                        .ConfigureAwait(false);
-
-                    if (rows.Length != 1)
-                    {
-                        throw new CoordinationException(
-                            CoordinationErrorCodes.Unavailable,
-                            true,
-                            $"A publish returned {rows.Length} rows instead of one."
-                        );
-                    }
-                },
+                (id, token) => PublishInKeyspaceAsync(id, request, token),
                 cancellationToken
             )
             .ConfigureAwait(false);
@@ -177,25 +233,7 @@ internal sealed class PgNotificationService(
         ArgumentNullException.ThrowIfNull(topic);
         PgCall.Check(options, cancellationToken);
 
-        var index = PgKeys.Index(topic);
-        var depth = (short)topic.PartitionDepth;
-
-        var keyspaceId = await Keyspaces
-            .ResolveAsync(topic.Keyspace, cancellationToken)
-            .ConfigureAwait(false);
-
-        var topicToken = PgKeys.PageToken(index, depth);
-        var logId = new PgLogId(keyspaceId, topicToken);
-        var subscriber = await Hub.SubscribeAsync(
-                logId,
-                () =>
-                    new PgLogFanout<PgMessage>(
-                        (after, limit, readToken) =>
-                            ReadLogAsync(keyspaceId, index, depth, after, limit, readToken)
-                    ),
-                null,
-                cancellationToken
-            )
+        var (logId, subscriber) = await SubscribeToLogAsync(topic, cancellationToken)
             .ConfigureAwait(false);
 
         try
@@ -227,6 +265,93 @@ internal sealed class PgNotificationService(
     }
 
     /// <summary>
+    /// Resolves a topic's keyspace and subscribes to the topic's message log.
+    /// </summary>
+    /// <param name="topic">The topic.</param>
+    /// <param name="cancellationToken">The token that cancels the call.</param>
+    /// <returns>The log's id and the subscriber that reads it.</returns>
+    /// <exception cref="CoordinationException">The server could not be reached or failed.</exception>
+    private async ValueTask<(
+        PgLogId LogId,
+        PgLogSubscriber<PgMessage> Subscriber
+    )> SubscribeToLogAsync(CoordinationKey topic, CancellationToken cancellationToken)
+    {
+        var index = PgKeys.Index(topic);
+        var depth = (short)topic.PartitionDepth;
+
+        var keyspaceId = await Keyspaces
+            .ResolveAsync(topic.Keyspace, cancellationToken)
+            .ConfigureAwait(false);
+
+        var topicToken = PgKeys.PageToken(index, depth);
+        var logId = new PgLogId(keyspaceId, topicToken);
+        var subscriber = await Hub.SubscribeAsync(
+                logId,
+                () => CreateFanout(keyspaceId, index, depth),
+                null,
+                cancellationToken
+            )
+            .ConfigureAwait(false);
+
+        return (logId, subscriber);
+    }
+
+    /// <summary>
+    /// Creates the fanout that reads a topic's message log.
+    /// </summary>
+    /// <param name="keyspaceId">The id of the topic's keyspace.</param>
+    /// <param name="index">The topic's index value.</param>
+    /// <param name="depth">The topic's partition depth.</param>
+    /// <returns>A fanout that reads the topic's message log.</returns>
+    private PgLogFanout<PgMessage> CreateFanout(long keyspaceId, byte[] index, short depth)
+    {
+        return new PgLogFanout<PgMessage>(
+            (after, limit, readToken) =>
+                ReadLogAsync(keyspaceId, index, depth, after, limit, readToken)
+        );
+    }
+
+    /// <summary>
+    /// Publishes a message to a topic in a keyspace, in one statement.
+    /// </summary>
+    /// <param name="id">The keyspace's id.</param>
+    /// <param name="request">What the publish needs.</param>
+    /// <param name="cancellationToken">The token that cancels the call.</param>
+    /// <exception cref="CoordinationException">The statement did not write exactly one message.</exception>
+    private async ValueTask PublishInKeyspaceAsync(
+        long id,
+        PgPublishRequest request,
+        CancellationToken cancellationToken
+    )
+    {
+        var channel = PgChannels.ForKeyspace(Settings.Schema, id);
+        var statement = new PgStatement(
+            Publish,
+            id,
+            request.Index,
+            request.Depth,
+            request.Text,
+            request.Body,
+            request.Retention,
+            channel,
+            request.Announcement
+        );
+
+        var rows = await Server
+            .ExecuteAsync([statement], ReadPublishedAsync, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (rows.Length != 1)
+        {
+            throw new CoordinationException(
+                CoordinationErrorCodes.Unavailable,
+                true,
+                $"A publish returned {rows.Length} rows instead of one."
+            );
+        }
+    }
+
+    /// <summary>
     /// Reads a topic's message log after a sequence, in one statement.
     /// </summary>
     /// <param name="keyspaceId">The id of the topic's keyspace.</param>
@@ -246,44 +371,12 @@ internal sealed class PgNotificationService(
         CancellationToken cancellationToken
     )
     {
+        var statement = new PgStatement(ReadLog, keyspaceId, index, depth, after, (long)limit);
+
         var rows = await Server
-            .ExecuteAsync(
-                [new PgStatement(ReadLog, keyspaceId, index, depth, after, (long)limit)],
-                async (results, readToken) =>
-                    await results
-                        .ReadAsync(
-                            reader =>
-                                (
-                                    Removed: reader.IsDBNull(0) ? 0L : reader.GetInt64(0),
-                                    Current: reader.IsDBNull(1) ? 0L : reader.GetInt64(1),
-                                    Message: reader.IsDBNull(2)
-                                        ? null
-                                        : new PgMessage(
-                                            reader.GetInt64(2),
-                                            reader.GetFieldValue<byte[]>(3)
-                                        )
-                                ),
-                            readToken
-                        )
-                        .ConfigureAwait(false),
-                cancellationToken
-            )
+            .ExecuteAsync([statement], ReadLogRowsAsync, cancellationToken)
             .ConfigureAwait(false);
 
-        if (rows.Length == 0)
-        {
-            return new PgLogRead<PgMessage>(0, 0, []);
-        }
-
-        var messages = ImmutableArray.CreateBuilder<PgMessage>();
-        foreach (var row in rows)
-        {
-            if (row.Message is { } message)
-            {
-                messages.Add(message);
-            }
-        }
-
-        return new PgLogRead<PgMessage>(rows[0].Removed, rows[0].Current, messages.ToImmutable());
+        return ToLogRead(rows);
     }
 }
