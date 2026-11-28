@@ -23,6 +23,8 @@ and never disposes. Exactly one of the two is set.
 - The provider holds one connection for listening. It must reach PostgreSQL directly or through session pooling, never
   transaction pooling, which doesn't keep a session's `LISTEN`.
 - `Multiplexing` must be off.
+- A host's data source must set `Keep Alive`, which the probe checks, as it checks `Multiplexing`; the listening
+  connection needs it to notice a server that went away.
 - No connection enlists in an ambient `TransactionScope`: the provider opens each one outside any ambient
   transaction, and a connection string it builds turns `Enlist` off.
 - A connection string it builds keeps its `Keep Alive` setting, or sets 15 seconds when the string leaves it at 0.

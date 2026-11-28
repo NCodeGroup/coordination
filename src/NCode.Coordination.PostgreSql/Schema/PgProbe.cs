@@ -179,10 +179,19 @@ internal sealed class PgProbe(
     /// </exception>
     public async ValueTask RunAsync(CancellationToken cancellationToken)
     {
-        if (new NpgsqlConnectionStringBuilder(source.ConnectionString).Multiplexing)
+        var connectionString = new NpgsqlConnectionStringBuilder(source.ConnectionString);
+
+        if (connectionString.Multiplexing)
         {
             throw Unsupported(
                 "The provider's data source multiplexes commands, which its listening connection and SET LOCAL can't share; turn Multiplexing off."
+            );
+        }
+
+        if (connectionString.KeepAlive == 0)
+        {
+            throw Unsupported(
+                "The provider's data source has no Keep Alive, which its listening connection needs to notice a server that went away; set Keep Alive, such as 15 seconds."
             );
         }
 

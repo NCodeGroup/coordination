@@ -25,8 +25,9 @@ public sealed class PostgreSqlProviderOptions
     /// </summary>
     /// <remarks>
     /// The provider holds one connection for listening, which needs direct access to PostgreSQL or session pooling:
-    /// transaction pooling does not keep a session's <c>LISTEN</c>. The data source must not use multiplexing, and
-    /// the provider opens every connection outside any ambient transaction.
+    /// transaction pooling does not keep a session's <c>LISTEN</c>. The data source must not use multiplexing and
+    /// must set <c>Keep Alive</c>, which the probe checks, so the listening connection notices a server that went
+    /// away; the provider opens every connection outside any ambient transaction.
     /// </remarks>
     public Func<IServiceProvider, NpgsqlDataSource>? DataSource { get; set; }
 
