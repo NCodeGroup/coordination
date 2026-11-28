@@ -100,14 +100,56 @@ internal sealed class PgMembershipService(PgRecordTable table, PgChangeLog chang
     /// <returns>The request.</returns>
     private static PgJoinRequest JoinRequestOf(PgGroupAddress address, Member member)
     {
-        var ordered = member.Metadata.OrderBy(pair => pair.Key, StringComparer.Ordinal).ToArray();
-        var names = ordered.Select(pair => pair.Key).ToArray();
-        var values = ordered.Select(pair => pair.Value).ToArray();
+        var (names, values) = SortedMetadata(member.Metadata);
         var groupText = PgKeys.KeyText(address.Group);
         var namesArgument = PgArgument.Typed(names, NpgsqlDbType.Array | NpgsqlDbType.Text);
         var valuesArgument = PgArgument.Typed(values, NpgsqlDbType.Array | NpgsqlDbType.Text);
 
         return new PgJoinRequest(address, member, groupText, namesArgument, valuesArgument);
+    }
+
+    /// <summary>
+    /// Copies a member's metadata into two arrays, sorted ordinally by name.
+    /// </summary>
+    /// <param name="metadata">The member's metadata.</param>
+    /// <returns>The names and, at the same positions, the values.</returns>
+    private static (string[] Names, string[] Values) SortedMetadata(
+        ImmutableDictionary<string, string> metadata
+    )
+    {
+        var pairs = new KeyValuePair<string, string>[metadata.Count];
+        var next = 0;
+        foreach (var pair in metadata)
+        {
+            pairs[next] = pair;
+            next++;
+        }
+
+        Array.Sort(pairs, CompareNames);
+
+        var names = new string[pairs.Length];
+        var values = new string[pairs.Length];
+        for (var index = 0; index < pairs.Length; index++)
+        {
+            names[index] = pairs[index].Key;
+            values[index] = pairs[index].Value;
+        }
+
+        return (names, values);
+    }
+
+    /// <summary>
+    /// Compares two metadata entries ordinally by name.
+    /// </summary>
+    /// <param name="left">The first entry.</param>
+    /// <param name="right">The second entry.</param>
+    /// <returns>A value that is negative, zero or positive as the first name sorts before, with or after the second.</returns>
+    private static int CompareNames(
+        KeyValuePair<string, string> left,
+        KeyValuePair<string, string> right
+    )
+    {
+        return string.CompareOrdinal(left.Key, right.Key);
     }
 
     /// <summary>
@@ -119,8 +161,37 @@ internal sealed class PgMembershipService(PgRecordTable table, PgChangeLog chang
     private static bool IsNodeIdTaken(PgMembershipStart start, PgJoinRequest request)
     {
         var now = start.Change.Now;
+        foreach (var row in start.Rows)
+        {
+            if (HoldsNodeIdForOtherSession(row, now, request))
+            {
+                return true;
+            }
+        }
 
-        return start.Rows.Any(row => HoldsNodeIdForOtherSession(row, now, request));
+        return false;
+    }
+
+    /// <summary>
+    /// Decides a join from the rows that were read.
+    /// </summary>
+    /// <param name="start">What the transaction's first batch read.</param>
+    /// <param name="request">What the join needs.</param>
+    /// <returns>The status of the join.</returns>
+    private static MembershipJoinStatus DecideJoin(PgMembershipStart start, PgJoinRequest request)
+    {
+        var now = start.Change.Now;
+        if (start.SessionDeadline is not { } deadline || deadline <= now)
+        {
+            return MembershipJoinStatus.SessionEnded;
+        }
+
+        if (IsNodeIdTaken(start, request))
+        {
+            return MembershipJoinStatus.NodeIdTaken;
+        }
+
+        return MembershipJoinStatus.Joined;
     }
 
     /// <summary>
@@ -156,8 +227,33 @@ internal sealed class PgMembershipService(PgRecordTable table, PgChangeLog chang
     private static bool HasLiveMember(PgMembershipStart start, string session)
     {
         var now = start.Change.Now;
+        foreach (var row in start.Rows)
+        {
+            if (IsLiveMemberOf(row, now, session))
+            {
+                return true;
+            }
+        }
 
-        return start.Rows.Any(row => IsLiveMemberOf(row, now, session));
+        return false;
+    }
+
+    /// <summary>
+    /// Tells whether a read met a member whose session's deadline has passed.
+    /// </summary>
+    /// <param name="rows">The rows that were read.</param>
+    /// <returns><see langword="true"/> when a row has expired.</returns>
+    private static bool HoldsExpiredRow(ImmutableArray<PgMemberRow> rows)
+    {
+        foreach (var row in rows)
+        {
+            if (row.IsExpired())
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>
@@ -386,8 +482,13 @@ internal sealed class PgMembershipService(PgRecordTable table, PgChangeLog chang
             return null;
         }
 
-        var pairs = names.Zip(values, (name, value) => KeyValuePair.Create(name, value));
-        var metadata = ImmutableDictionary.CreateRange(pairs);
+        var builder = ImmutableDictionary.CreateBuilder<string, string>();
+        for (var index = 0; index < names.Length; index++)
+        {
+            builder.Add(names[index], values[index]);
+        }
+
+        var metadata = builder.ToImmutable();
         var sessionId = new SessionId(keyspace, session);
 
         return new Member(sessionId, nodeId, address) { Metadata = metadata };
@@ -492,7 +593,9 @@ internal sealed class PgMembershipService(PgRecordTable table, PgChangeLog chang
         ArgumentNullException.ThrowIfNull(group);
         PgCall.Check(options, cancellationToken);
 
-        return await ReadViewAsync(group, cancellationToken).ConfigureAwait(false);
+        var address = AddressOf(group);
+
+        return await ReadViewAsync(address, cancellationToken).ConfigureAwait(false);
     }
 
     /// <inheritdoc />
@@ -527,7 +630,7 @@ internal sealed class PgMembershipService(PgRecordTable table, PgChangeLog chang
 
         try
         {
-            var last = await ReadViewAsync(group, cancellationToken).ConfigureAwait(false);
+            var last = await ReadViewAsync(address, cancellationToken).ConfigureAwait(false);
             yield return last;
 
             await foreach (
@@ -539,7 +642,7 @@ internal sealed class PgMembershipService(PgRecordTable table, PgChangeLog chang
                     continue;
                 }
 
-                var view = await ReadViewAsync(group, cancellationToken).ConfigureAwait(false);
+                var view = await ReadViewAsync(address, cancellationToken).ConfigureAwait(false);
                 if (view.Revision.Value > last.Revision.Value)
                 {
                     last = view;
@@ -597,20 +700,18 @@ internal sealed class PgMembershipService(PgRecordTable table, PgChangeLog chang
     /// Reads a group's live members at the keyspace's revision. A member whose session's deadline has passed makes the
     /// read run again after it waits for the keyspace's writers, so the view follows the write that ends the session.
     /// </summary>
-    /// <param name="group">The group.</param>
+    /// <param name="address">The group's key and the values that its rows are found by.</param>
     /// <param name="cancellationToken">The token that cancels the call.</param>
     /// <returns>The view.</returns>
     /// <exception cref="CoordinationException">The server could not be reached or failed.</exception>
     private async ValueTask<MembershipView> ReadViewAsync(
-        CoordinationKey group,
+        PgGroupAddress address,
         CancellationToken cancellationToken
     )
     {
-        var address = AddressOf(group);
-
         return await Table
             .RunInKeyspaceAsync<MembershipView>(
-                group.Keyspace,
+                address.Group.Keyspace,
                 (id, token) => ReadViewInKeyspaceAsync(id, address, token),
                 cancellationToken
             )
@@ -643,7 +744,7 @@ internal sealed class PgMembershipService(PgRecordTable table, PgChangeLog chang
             throw new PgKeyspaceMissingException(PgKeyspaceMissingException.RowMissingMessage);
         }
 
-        if (!first.Any(row => row.IsExpired()))
+        if (!HoldsExpiredRow(first))
         {
             return ToView(address.Group, first);
         }
@@ -714,36 +815,16 @@ internal sealed class PgMembershipService(PgRecordTable table, PgChangeLog chang
 
         start.EndExpiredSessions();
 
-        var status = DecideJoin(id, start, request);
+        var status = DecideJoin(start, request);
+        if (status == MembershipJoinStatus.Joined)
+        {
+            WriteMember(id, start, request);
+        }
 
         await Table
             .CommitAsync(transaction, start.Change, id, cancellationToken)
             .ConfigureAwait(false);
         return status;
-    }
-
-    /// <summary>
-    /// Decides a join from the rows that were read, having made its write in the change.
-    /// </summary>
-    /// <param name="id">The keyspace's id.</param>
-    /// <param name="start">What the transaction's first batch read.</param>
-    /// <param name="request">What the join needs.</param>
-    /// <returns>The status of the join.</returns>
-    private MembershipJoinStatus DecideJoin(long id, PgMembershipStart start, PgJoinRequest request)
-    {
-        var now = start.Change.Now;
-        if (start.SessionDeadline is not { } deadline || deadline <= now)
-        {
-            return MembershipJoinStatus.SessionEnded;
-        }
-
-        if (IsNodeIdTaken(start, request))
-        {
-            return MembershipJoinStatus.NodeIdTaken;
-        }
-
-        WriteMember(id, start, request);
-        return MembershipJoinStatus.Joined;
     }
 
     /// <summary>
