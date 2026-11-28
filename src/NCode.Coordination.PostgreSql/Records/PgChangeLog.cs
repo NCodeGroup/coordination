@@ -51,17 +51,20 @@ internal sealed class PgChangeLog(PgServer server, PgSchemaName schema)
     /// <summary>
     /// The statement that reads a page of the keys still bound to an ended session, which are those of the records
     /// that name it and those that later entries replaced. Its parameters are the keyspace id, the session's id, the
-    /// revision of the entry that ended it, and the index value and depth to read after.
+    /// revision of the entry that ended it, the index value and depth to read after, and the page size. Each branch
+    /// reads from an index in key order and stops at one page, so a page costs a page, not every remaining key.
     /// </summary>
     private const string EndedKeysSql = """
         SELECT idx, depth, key FROM (
-          SELECT r.idx, r.depth, r.key FROM {schema}.records r WHERE r.keyspace_id = $1 AND r.session_id = $2
+          (SELECT r.idx, r.depth, r.key FROM {schema}.records r
+           WHERE r.keyspace_id = $1 AND r.session_id = $2 AND (r.idx, r.depth) > ($4, $5)
+           ORDER BY r.idx, r.depth LIMIT $6)
           UNION
-          SELECT i.idx, i.depth, i.key FROM {schema}.change_items i
-          WHERE i.keyspace_id = $1 AND i.replaced_session = $2 AND i.revision > $3) b
-        WHERE (idx, depth) > ($4, $5)
+          (SELECT DISTINCT i.idx, i.depth, i.key FROM {schema}.change_items i
+           WHERE i.keyspace_id = $1 AND i.replaced_session = $2 AND i.revision > $3 AND (i.idx, i.depth) > ($4, $5)
+           ORDER BY i.idx, i.depth LIMIT $6)) b
         ORDER BY idx, depth
-        LIMIT 1000
+        LIMIT $6
         """;
 
     /// <summary>
@@ -426,6 +429,7 @@ internal sealed class PgChangeLog(PgServer server, PgSchemaName schema)
         var keys = ImmutableArray.CreateBuilder<PgChangeItem>();
         var lastIndex = Array.Empty<byte>();
         short lastDepth = -1;
+        var pageSize = PgArgument.Typed(EndedPageSize, NpgsqlDbType.Integer);
 
         while (true)
         {
@@ -437,7 +441,8 @@ internal sealed class PgChangeLog(PgServer server, PgSchemaName schema)
                 session,
                 revision,
                 lastIndexArgument,
-                lastDepthArgument
+                lastDepthArgument,
+                pageSize
             );
             IReadOnlyList<PgStatement> statements = [statement];
             var page = await transaction

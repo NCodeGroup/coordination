@@ -30,7 +30,7 @@ public sealed class PgChangeLogTests(PgServers servers)
         public async Task<PgLogRead<PgChange>> ReadAsync(CancellationToken cancellationToken)
         {
             var id = await Keyspaces.ResolveAsync(Keyspace, cancellationToken);
-            return await Log.ReadAsync(id, 0, 100, cancellationToken);
+            return await Log.ReadAsync(id, 0, 2_000, cancellationToken);
         }
     }
 
@@ -213,6 +213,68 @@ public sealed class PgChangeLogTests(PgServers servers)
                 var listed = Assert.Single(ended.EndedKeys);
                 Assert.Equal(PgKeys.KeyText(key), listed.Key);
                 Assert.Equal((short)2, listed.Kind);
+            },
+            cancellationToken
+        );
+    }
+
+    [PgServerFact]
+    public async Task ReadAsync_SessionEndWithMoreKeysThanAPage_ListsEachKeyOnceInOrder()
+    {
+        await AssertSessionEndListsEachKeyOnceInOrderAsync(1_001);
+    }
+
+    [PgServerFact]
+    public async Task ReadAsync_SessionEndWithExactlyAPageOfKeys_ListsEachKeyOnce()
+    {
+        await AssertSessionEndListsEachKeyOnceInOrderAsync(1_000);
+    }
+
+    private async Task AssertSessionEndListsEachKeyOnceInOrderAsync(int count)
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await WithServicesAsync(
+            async context =>
+            {
+                var grant = await context.Sessions.OpenAsync(
+                    context.Keyspace,
+                    OneMinute,
+                    null,
+                    cancellationToken
+                );
+                var lifetime = RecordLifetime.ForSession(grant.Id);
+
+                var keys = new List<CoordinationKey>();
+                for (var number = 0; number < count; number++)
+                {
+                    var name = "k" + number.ToString("D4", CultureInfo.InvariantCulture);
+                    var key = context.KeyOf(name);
+                    var created = await context.Records.CreateAsync(
+                        key,
+                        new byte[] { 1 },
+                        lifetime,
+                        null,
+                        cancellationToken
+                    );
+                    Assert.True(created.IsWritten);
+                    keys.Add(key);
+                }
+
+                await context.Sessions.CloseAsync(grant.Id, null, cancellationToken);
+
+                var read = await context.ReadAsync(cancellationToken);
+
+                var ended = Assert.Single(read.Entries, entry => entry.EndedSession is not null);
+                Assert.Equal(count, ended.EndedKeys.Length);
+
+                var listed = ended.EndedKeys.Select(item => item.Key).ToList();
+                Assert.Equal(
+                    keys.Select(PgKeys.KeyText).Order(StringComparer.Ordinal),
+                    listed.Order(StringComparer.Ordinal)
+                );
+
+                var indexes = ended.EndedKeys.Select(item => Convert.ToHexString(item.Index));
+                Assert.Equal(indexes.Order(StringComparer.Ordinal), indexes);
             },
             cancellationToken
         );

@@ -10,7 +10,7 @@ CREATE TABLE {schema}.records (
     PRIMARY KEY (keyspace_id, idx, depth)
 );
 CREATE INDEX records_deadline ON {schema}.records (deadline) WHERE deadline IS NOT NULL;
-CREATE INDEX records_session ON {schema}.records (keyspace_id, session_id) WHERE session_id IS NOT NULL;
+CREATE INDEX records_session ON {schema}.records (keyspace_id, session_id, idx, depth) WHERE session_id IS NOT NULL;
 CREATE TABLE {schema}.changes (
     keyspace_id bigint NOT NULL REFERENCES {schema}.keyspaces (id),
     revision bigint NOT NULL,
@@ -37,5 +37,5 @@ CREATE TABLE {schema}.change_items (
     PRIMARY KEY (keyspace_id, revision, ordinal),
     FOREIGN KEY (keyspace_id, revision) REFERENCES {schema}.changes (keyspace_id, revision) ON DELETE CASCADE
 );
-CREATE INDEX change_items_replaced ON {schema}.change_items (keyspace_id, replaced_session) WHERE replaced_session IS NOT NULL;
+CREATE INDEX change_items_replaced ON {schema}.change_items (keyspace_id, replaced_session, idx, depth) WHERE replaced_session IS NOT NULL;
 INSERT INTO {schema}.schema_version (version, compatible_from) VALUES (3, 1);
