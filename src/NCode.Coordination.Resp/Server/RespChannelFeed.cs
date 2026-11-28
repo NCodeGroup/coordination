@@ -93,6 +93,32 @@ internal sealed class RespChannelFeed(
         return new RespChannelFeed(signals, queue, events, timer, logger);
     }
 
+    // No token: DisposeAsync takes none, and the unsubscribe can't be canceled.
+    /// <summary>
+    /// Unsubscribes from the server channel. A failed or disposed connection is not an error here: the subscription
+    /// ends with the connection, and the failure is logged.
+    /// </summary>
+    /// <param name="unsubscribe">Unsubscribes from the server channel.</param>
+    /// <param name="logger">The logger that reports the failure.</param>
+    /// <returns>True when the unsubscribe completed; false when the connection failed or was disposed.</returns>
+    internal static async ValueTask<bool> TryUnsubscribeAsync(
+        Func<Task> unsubscribe,
+        ILogger logger
+    )
+    {
+        try
+        {
+            await unsubscribe().ConfigureAwait(false);
+            return true;
+        }
+        catch (Exception exception)
+            when (RespFailures.IsClientFailure(exception) || exception is ObjectDisposedException)
+        {
+            logger.UnsubscribeFailed(exception);
+            return false;
+        }
+    }
+
     /// <summary>
     /// Gets the queue of the signals.
     /// </summary>
@@ -136,31 +162,5 @@ internal sealed class RespChannelFeed(
             .ConfigureAwait(false);
 
         _ = Queue.Writer.TryComplete();
-    }
-
-    // No token: DisposeAsync takes none, and the unsubscribe can't be canceled.
-    /// <summary>
-    /// Unsubscribes from the server channel. A failed or disposed connection is not an error here: the subscription
-    /// ends with the connection, and the failure is logged.
-    /// </summary>
-    /// <param name="unsubscribe">Unsubscribes from the server channel.</param>
-    /// <param name="logger">The logger that reports the failure.</param>
-    /// <returns>True when the unsubscribe completed; false when the connection failed or was disposed.</returns>
-    internal static async ValueTask<bool> TryUnsubscribeAsync(
-        Func<Task> unsubscribe,
-        ILogger logger
-    )
-    {
-        try
-        {
-            await unsubscribe().ConfigureAwait(false);
-            return true;
-        }
-        catch (Exception exception)
-            when (RespFailures.IsClientFailure(exception) || exception is ObjectDisposedException)
-        {
-            logger.UnsubscribeFailed(exception);
-            return false;
-        }
     }
 }

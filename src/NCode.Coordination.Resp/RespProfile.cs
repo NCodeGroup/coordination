@@ -96,7 +96,7 @@ public sealed partial record RespProfile
     public Version MinimumVersion { get; }
 
     /// <summary>
-    /// Gets a value that says whether the server carries channel messages on sharded channels.
+    /// Gets a value indicating whether the server carries channel messages on sharded channels.
     /// </summary>
     public bool ShardedChannels { get; }
 

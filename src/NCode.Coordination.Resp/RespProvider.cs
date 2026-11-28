@@ -184,17 +184,12 @@ internal sealed class RespProvider : ICoordinationProvider, IAsyncDisposable, ID
     /// <param name="profile">The vendor profile that the server must match.</param>
     /// <exception cref="ArgumentNullException">The connection or the profile is null.</exception>
     public RespProvider(RespConnection connection, RespProfile profile)
-        : this(connection, profile, RespSubscriptions.DefaultCheckInterval) { }
-
-    /// <summary>
-    /// Creates the provider and the services that share its connection.
-    /// </summary>
-    /// <param name="connection">The holder of the provider's connection to its server. The provider disposes the holder, which disposes the multiplexer only when it owns it.</param>
-    /// <param name="profile">The vendor profile that the server must match.</param>
-    /// <param name="checkInterval">The time between two periodic checks of each notification subscription and watch.</param>
-    /// <exception cref="ArgumentNullException">The connection or the profile is null.</exception>
-    public RespProvider(RespConnection connection, RespProfile profile, TimeSpan checkInterval)
-        : this(connection, profile, checkInterval, NullLoggerFactory.Instance) { }
+        : this(
+            connection,
+            profile,
+            RespSubscriptions.DefaultCheckInterval,
+            NullLoggerFactory.Instance
+        ) { }
 
     /// <summary>
     /// Creates the provider and the services that share its connection.
