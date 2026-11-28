@@ -14,6 +14,35 @@ public sealed class PostgreSqlCoordinationBuilderExtensionsTests : IDisposable
     private static Func<IServiceProvider, ICoordinationProvider> AnyFactory =>
         It.IsAny<Func<IServiceProvider, ICoordinationProvider>>();
 
+    private static void SetDuration(
+        PostgreSqlProviderOptions options,
+        string option,
+        TimeSpan value
+    )
+    {
+        switch (option)
+        {
+            case "StatementTimeout":
+                options.StatementTimeout = value;
+                break;
+            case "LockTimeout":
+                options.LockTimeout = value;
+                break;
+            case "IdleInTransactionTimeout":
+                options.IdleInTransactionTimeout = value;
+                break;
+            case "SweepInterval":
+                options.SweepInterval = value;
+                break;
+            case "CheckInterval":
+                options.CheckInterval = value;
+                break;
+            default:
+                options.LogRetention = value;
+                break;
+        }
+    }
+
     private MockRepository Mocks { get; } = new(MockBehavior.Strict);
 
     public void Dispose() => Mocks.Verify();
@@ -127,6 +156,12 @@ public sealed class PostgreSqlCoordinationBuilderExtensionsTests : IDisposable
     [InlineData("SweepInterval", 36_000_000_000L)]
     [InlineData("CheckInterval", 36_000_000_000L)]
     [InlineData("LogRetention", 864_000_000_001L)]
+    [InlineData("StatementTimeout", 9_999L)]
+    [InlineData("LockTimeout", 9_999L)]
+    [InlineData("IdleInTransactionTimeout", 9_999L)]
+    [InlineData("SweepInterval", 9_999L)]
+    [InlineData("CheckInterval", 9_999L)]
+    [InlineData("LogRetention", 9_999_999L)]
     public void AddPostgreSqlProvider_DurationOutOfRange_Throws(string option, long ticks)
     {
         var builder = CreateBuilder();
@@ -136,32 +171,59 @@ public sealed class PostgreSqlCoordinationBuilderExtensionsTests : IDisposable
             builder.Object.AddPostgreSqlProvider(options =>
             {
                 options.ConnectionString = ConnectionString;
-                switch (option)
-                {
-                    case "StatementTimeout":
-                        options.StatementTimeout = value;
-                        break;
-                    case "LockTimeout":
-                        options.LockTimeout = value;
-                        break;
-                    case "IdleInTransactionTimeout":
-                        options.IdleInTransactionTimeout = value;
-                        break;
-                    case "SweepInterval":
-                        options.SweepInterval = value;
-                        break;
-                    case "CheckInterval":
-                        options.CheckInterval = value;
-                        break;
-                    default:
-                        options.LogRetention = value;
-                        break;
-                }
+                SetDuration(options, option, value);
             })
         );
 
         Assert.Equal("configure", exception.ParamName);
         Assert.Contains(option, exception.Message);
+    }
+
+    [Theory]
+    [InlineData("StatementTimeout", 10_000L)]
+    [InlineData("LockTimeout", 10_000L)]
+    [InlineData("IdleInTransactionTimeout", 10_000L)]
+    [InlineData("SweepInterval", 10_000L)]
+    [InlineData("CheckInterval", 10_000L)]
+    [InlineData("LogRetention", 10_000_000L)]
+    [InlineData("StatementTimeout", 35_999_999_999L)]
+    [InlineData("LockTimeout", 35_999_999_999L)]
+    [InlineData("IdleInTransactionTimeout", 35_999_999_999L)]
+    [InlineData("SweepInterval", 35_999_999_999L)]
+    [InlineData("CheckInterval", 35_999_999_999L)]
+    [InlineData("LogRetention", 864_000_000_000L)]
+    public void AddPostgreSqlProvider_DurationAtTheEdge_AddsTheProvider(string option, long ticks)
+    {
+        Func<IServiceProvider, ICoordinationProvider>? factory = null;
+        var builder = CreateBuilder(f => factory = f);
+        var value = TimeSpan.FromTicks(ticks);
+
+        var result = builder.Object.AddPostgreSqlProvider(options =>
+        {
+            options.ConnectionString = ConnectionString;
+            SetDuration(options, option, value);
+        });
+
+        Assert.Same(builder.Object, result);
+        Assert.NotNull(factory);
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(100_000)]
+    public void AddPostgreSqlProvider_BatchSizeAtTheEdge_AddsTheProvider(int batchSize)
+    {
+        Func<IServiceProvider, ICoordinationProvider>? factory = null;
+        var builder = CreateBuilder(f => factory = f);
+
+        var result = builder.Object.AddPostgreSqlProvider(options =>
+        {
+            options.ConnectionString = ConnectionString;
+            options.SweepBatchSize = batchSize;
+        });
+
+        Assert.Same(builder.Object, result);
+        Assert.NotNull(factory);
     }
 
     [Theory]
