@@ -299,6 +299,35 @@ public sealed class PostgreSqlProviderProbeTests(PgServers servers)
     }
 
     [PgServerFact]
+    public async Task ProbeAsync_SchemaNewerCompatibleFromThisCode_Succeeds()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await WithSchemaAsync(servers.Admin19, async schema =>
+        {
+            await ProbeAsync(
+                servers.PostgreSql19,
+                PostgreSqlProfiles.Standalone,
+                schema,
+                cancellationToken
+            );
+            var version = PgMigrations.Latest + 1;
+            var compatibleFrom = PgMigrations.Latest;
+            await PgServers.ExecuteAsAdminAsync(
+                servers.Admin19,
+                $"INSERT INTO \"{schema}\".schema_version (version, compatible_from) VALUES ({version}, {compatibleFrom})",
+                cancellationToken
+            );
+
+            await ProbeAsync(
+                servers.PostgreSql19,
+                PostgreSqlProfiles.Standalone,
+                schema,
+                cancellationToken
+            );
+        });
+    }
+
+    [PgServerFact]
     public async Task ProbeAsync_SchemaNewerAndIncompatible_ThrowsUnsupported()
     {
         var cancellationToken = TestContext.Current.CancellationToken;

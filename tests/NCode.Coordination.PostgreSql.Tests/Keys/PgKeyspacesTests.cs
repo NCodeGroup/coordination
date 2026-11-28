@@ -226,7 +226,7 @@ public sealed class PgKeyspacesTests(PgServers servers) : IDisposable
                 var keyspace = new Keyspace("cell", orders);
                 var calls = 0;
 
-                ValueTask<string> Operation(long id, CancellationToken token)
+                ValueTask<string> OperationAsync(long id, CancellationToken token)
                 {
                     calls++;
                     var missing = new PgKeyspaceMissingException();
@@ -234,7 +234,7 @@ public sealed class PgKeyspacesTests(PgServers servers) : IDisposable
                 }
 
                 var failure = await Assert.ThrowsAsync<CoordinationException>(async () =>
-                    await keyspaces.RunAsync(keyspace, Operation, cancellationToken)
+                    await keyspaces.RunAsync(keyspace, OperationAsync, cancellationToken)
                 );
 
                 Assert.Equal(2, calls);

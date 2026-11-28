@@ -88,18 +88,12 @@ internal static class PgConformance
             ApplicationName = applicationName,
         };
 
-        var source = PgSource.FromConnectionString(builder.ConnectionString);
-        var provider = new PostgreSqlProvider(source, profile, Settings);
-
-        try
-        {
-            await provider.ProbeAsync(cancellationToken);
-        }
-        catch
-        {
-            await provider.DisposeAsync();
-            throw;
-        }
+        var provider = await PgTestSupport.CreateProviderAsync(
+            builder.ConnectionString,
+            profile,
+            Settings.Schema,
+            cancellationToken
+        );
 
         return new ConformanceTarget(provider)
         {

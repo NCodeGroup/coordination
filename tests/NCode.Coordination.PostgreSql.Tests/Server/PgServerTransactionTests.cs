@@ -83,10 +83,12 @@ public sealed class PgServerTransactionTests(PgServers servers)
         return new($"INSERT INTO {schema}.t (id) VALUES ($1)", argument);
     }
 
-    private static ValueTask<bool> Ignore(PgResults results, CancellationToken cancellationToken) =>
-        ValueTask.FromResult(true);
+    private static ValueTask<bool> IgnoreAsync(
+        PgResults results,
+        CancellationToken cancellationToken
+    ) => ValueTask.FromResult(true);
 
-    private static async ValueTask<long> ReadCount(
+    private static async ValueTask<long> ReadCountAsync(
         PgResults results,
         CancellationToken cancellationToken
     )
@@ -114,7 +116,7 @@ public sealed class PgServerTransactionTests(PgServers servers)
                     PgIsolation.ReadCommitted,
                     async (transaction, token) =>
                     {
-                        await transaction.FirstAsync(reads, Ignore, token);
+                        await transaction.FirstAsync(reads, IgnoreAsync, token);
                         await transaction.CommitAsync(writes, token);
                         return true;
                     },
@@ -146,8 +148,8 @@ public sealed class PgServerTransactionTests(PgServers servers)
                     PgIsolation.ReadCommitted,
                     async (transaction, token) =>
                     {
-                        await transaction.FirstAsync(reads, Ignore, token);
-                        await transaction.NextAsync(writes, Ignore, token);
+                        await transaction.FirstAsync(reads, IgnoreAsync, token);
+                        await transaction.NextAsync(writes, IgnoreAsync, token);
                         await transaction.RollbackAsync(token);
                         return true;
                     },
@@ -180,7 +182,7 @@ public sealed class PgServerTransactionTests(PgServers servers)
                         PgIsolation.ReadCommitted,
                         async (transaction, token) =>
                         {
-                            await transaction.FirstAsync(reads, Ignore, token);
+                            await transaction.FirstAsync(reads, IgnoreAsync, token);
                             await transaction.CommitAsync(writes, token);
                             return true;
                         },
@@ -222,7 +224,7 @@ public sealed class PgServerTransactionTests(PgServers servers)
                         PgIsolation.ReadCommitted,
                         async (transaction, token) =>
                         {
-                            await transaction.FirstAsync(reads, Ignore, token);
+                            await transaction.FirstAsync(reads, IgnoreAsync, token);
                             await transaction.CommitAsync(writes, token);
                             return true;
                         },
@@ -271,7 +273,7 @@ public sealed class PgServerTransactionTests(PgServers servers)
                         PgIsolation.ReadCommitted,
                         async (transaction, token) =>
                         {
-                            await transaction.FirstAsync(reads, Ignore, token);
+                            await transaction.FirstAsync(reads, IgnoreAsync, token);
                             await transaction.CommitAsync(writes, token);
                             return true;
                         },
@@ -324,7 +326,7 @@ public sealed class PgServerTransactionTests(PgServers servers)
                         PgIsolation.ReadCommitted,
                         async (transaction, token) =>
                         {
-                            await transaction.FirstAsync(reads, Ignore, token);
+                            await transaction.FirstAsync(reads, IgnoreAsync, token);
                             await transaction.CommitAsync(writes, token);
                             return true;
                         },
@@ -379,7 +381,7 @@ public sealed class PgServerTransactionTests(PgServers servers)
                         PgIsolation.ReadCommitted,
                         async (transaction, token) =>
                         {
-                            await transaction.FirstAsync(reads, Ignore, token);
+                            await transaction.FirstAsync(reads, IgnoreAsync, token);
                             await transaction.CommitAsync(writes, token);
                             return true;
                         },
@@ -410,7 +412,7 @@ public sealed class PgServerTransactionTests(PgServers servers)
                     PgIsolation.RepeatableReadReadOnly,
                     async (transaction, token) =>
                     {
-                        var before = await transaction.FirstAsync([count], ReadCount, token);
+                        var before = await transaction.FirstAsync([count], ReadCountAsync, token);
 
                         await PgServers.ExecuteAsAdminAsync(
                             servers.Admin19,
@@ -418,7 +420,7 @@ public sealed class PgServerTransactionTests(PgServers servers)
                             token
                         );
 
-                        var after = await transaction.NextAsync([count], ReadCount, token);
+                        var after = await transaction.NextAsync([count], ReadCountAsync, token);
                         return (before, after);
                     },
                     cancellationToken

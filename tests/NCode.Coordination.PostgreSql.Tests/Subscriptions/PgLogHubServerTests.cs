@@ -71,7 +71,7 @@ public sealed class PgLogHubServerTests(PgServers servers)
         var calls = 0;
         var id = new PgLogId(1, null);
 
-        ValueTask<PgLogRead<TestEntry>> Read(long after, int count, CancellationToken token)
+        ValueTask<PgLogRead<TestEntry>> ReadLogAsync(long after, int count, CancellationToken token)
         {
             var call = Interlocked.Increment(ref calls);
             if (call == 1)
@@ -96,7 +96,7 @@ public sealed class PgLogHubServerTests(PgServers servers)
             {
                 var subscriber = await hub.SubscribeAsync(
                     id,
-                    () => new PgLogFanout<TestEntry>(Read),
+                    () => new PgLogFanout<TestEntry>(ReadLogAsync),
                     0,
                     cancellationToken
                 );
@@ -129,12 +129,12 @@ public sealed class PgLogHubServerTests(PgServers servers)
         var creates = 0;
         PgLogFanout<TestEntry>? first = null;
 
-        ValueTask<PgLogRead<TestEntry>> Fail(long after, int count, CancellationToken token)
+        ValueTask<PgLogRead<TestEntry>> FailAsync(long after, int count, CancellationToken token)
         {
             return ValueTask.FromException<PgLogRead<TestEntry>>(failure);
         }
 
-        ValueTask<PgLogRead<TestEntry>> Empty(long after, int count, CancellationToken token)
+        ValueTask<PgLogRead<TestEntry>> EmptyAsync(long after, int count, CancellationToken token)
         {
             var empty = new PgLogRead<TestEntry>(0, 0, []);
             return ValueTask.FromResult(empty);
@@ -143,14 +143,14 @@ public sealed class PgLogHubServerTests(PgServers servers)
         PgLogFanout<TestEntry> CreateFailing()
         {
             creates++;
-            first = new PgLogFanout<TestEntry>(Fail);
+            first = new PgLogFanout<TestEntry>(FailAsync);
             return first;
         }
 
         PgLogFanout<TestEntry> CreateEmpty()
         {
             creates++;
-            return new PgLogFanout<TestEntry>(Empty);
+            return new PgLogFanout<TestEntry>(EmptyAsync);
         }
 
         await WithHubAsync(

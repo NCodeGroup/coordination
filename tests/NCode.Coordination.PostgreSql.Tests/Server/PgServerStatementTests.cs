@@ -43,8 +43,10 @@ public sealed class PgServerStatementTests(PgServers servers)
     private static PgServer NewServer(PgSource source, PgSettings? settings = null) =>
         new(source, settings ?? PgSettings.Default);
 
-    private static ValueTask<bool> Ignore(PgResults results, CancellationToken cancellationToken) =>
-        ValueTask.FromResult(true);
+    private static ValueTask<bool> IgnoreAsync(
+        PgResults results,
+        CancellationToken cancellationToken
+    ) => ValueTask.FromResult(true);
 
     private static async ValueTask<int> ReadFirstInt32Async(
         PgResults results,
@@ -127,7 +129,7 @@ public sealed class PgServerStatementTests(PgServers servers)
         PgStatement[] statements = [new PgStatement("SELECT 1 / 0")];
 
         var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
-            await server.ExecuteAsync(statements, Ignore, cancellationToken)
+            await server.ExecuteAsync(statements, IgnoreAsync, cancellationToken)
         );
 
         Assert.Equal(CoordinationErrorCodes.Unavailable, exception.Code);
@@ -145,7 +147,7 @@ public sealed class PgServerStatementTests(PgServers servers)
         PgStatement[] statements = [new PgStatement("SELECT pg_sleep(1)")];
 
         var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
-            await server.ExecuteAsync(statements, Ignore, cancellationToken)
+            await server.ExecuteAsync(statements, IgnoreAsync, cancellationToken)
         );
 
         Assert.Equal(CoordinationErrorCodes.Unavailable, exception.Code);
@@ -161,7 +163,7 @@ public sealed class PgServerStatementTests(PgServers servers)
         PgStatement[] statements = [new PgStatement("SELECT 9223372036854775807::bigint + 1")];
 
         var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
-            await server.ExecuteAsync(statements, Ignore, cancellationToken)
+            await server.ExecuteAsync(statements, IgnoreAsync, cancellationToken)
         );
 
         Assert.Equal(CoordinationErrorCodes.LimitExceeded, exception.Code);
@@ -207,7 +209,7 @@ public sealed class PgServerStatementTests(PgServers servers)
         );
 
         var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
-            await server.ExecuteAsync(statements, Ignore, cancellationToken)
+            await server.ExecuteAsync(statements, IgnoreAsync, cancellationToken)
         );
         await terminate;
 
@@ -262,7 +264,7 @@ public sealed class PgServerStatementTests(PgServers servers)
                 PgStatement[] statements = [new PgStatement($"SELECT id FROM {schema}.t")];
 
                 var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
-                    await server.ExecuteAsync(statements, Ignore, cancellationToken)
+                    await server.ExecuteAsync(statements, IgnoreAsync, cancellationToken)
                 );
 
                 Assert.Equal(CoordinationErrorCodes.AccessDenied, exception.Code);
@@ -293,7 +295,7 @@ public sealed class PgServerStatementTests(PgServers servers)
                 PgStatement[] statements = [insert];
 
                 await Assert.ThrowsAsync<PgKeyspaceMissingException>(async () =>
-                    await server.ExecuteAsync(statements, Ignore, cancellationToken)
+                    await server.ExecuteAsync(statements, IgnoreAsync, cancellationToken)
                 );
             },
             cancellationToken
@@ -327,7 +329,7 @@ public sealed class PgServerStatementTests(PgServers servers)
                     )
                 )
                 {
-                    await server.ExecuteAsync(statements, Ignore, cancellationToken);
+                    await server.ExecuteAsync(statements, IgnoreAsync, cancellationToken);
                 }
 
                 var count = await PgServers.ScalarAsync(
@@ -350,7 +352,7 @@ public sealed class PgServerStatementTests(PgServers servers)
         var canceledToken = new CancellationToken(canceled: true);
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
-            await server.ExecuteAsync(statements, Ignore, canceledToken)
+            await server.ExecuteAsync(statements, IgnoreAsync, canceledToken)
         );
     }
 
