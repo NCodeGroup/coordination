@@ -3,7 +3,6 @@
 
 using System.Diagnostics;
 using System.Text;
-using NCode.Coordination.PostgreSql.Schema;
 using NCode.Coordination.PostgreSql.Tests.Servers;
 using Npgsql;
 
@@ -315,8 +314,7 @@ public sealed class PostgreSqlProviderFailoverTests
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var server = await PgFailoverServer.StartAsync(true, cancellationToken);
-        var schemaName = $"t_{Guid.NewGuid():N}";
-        var schema = PgSchemaName.Create(schemaName);
+        var schema = PgTestSupport.CreateSchemaName();
         await using var oldPrimary = await PgTestSupport.CreateProviderAsync(
             server.PrimaryAdmin,
             PostgreSqlProfiles.Synchronous,

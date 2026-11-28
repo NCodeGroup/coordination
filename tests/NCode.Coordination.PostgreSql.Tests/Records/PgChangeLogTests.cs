@@ -386,5 +386,29 @@ public sealed class PgChangeLogTests(PgServers servers)
         );
     }
 
+    [PgServerFact]
+    public async Task ReadAsync_KeyspaceWithoutARow_ReturnsNothingRemovedAtRevisionZero()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await WithServicesAsync(
+            async context =>
+            {
+                const long missingKeyspaceId = 1;
+
+                var read = await context.Log.ReadAsync(
+                    missingKeyspaceId,
+                    0,
+                    2_000,
+                    cancellationToken
+                );
+
+                Assert.Equal(0, read.Removed);
+                Assert.Equal(0, read.Current);
+                Assert.Empty(read.Entries);
+            },
+            cancellationToken
+        );
+    }
+
     #endregion
 }

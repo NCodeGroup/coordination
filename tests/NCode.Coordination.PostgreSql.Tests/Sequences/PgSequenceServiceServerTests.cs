@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using System.Globalization;
-using NCode.Coordination.PostgreSql.Schema;
 using NCode.Coordination.PostgreSql.Tests;
 using NCode.Coordination.PostgreSql.Tests.Servers;
 
@@ -15,9 +14,8 @@ public sealed class PgSequenceServiceServerTests(PgServers servers)
         CancellationToken cancellationToken
     )
     {
-        var guid = Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
-        var name = "t_" + guid;
-        var schema = PgSchemaName.Create(name);
+        var schema = PgTestSupport.CreateSchemaName();
+        var name = schema.Name;
 
         try
         {

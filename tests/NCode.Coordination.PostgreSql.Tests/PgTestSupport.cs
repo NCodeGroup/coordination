@@ -65,6 +65,16 @@ internal static class PgTestSupport
     }
 
     /// <summary>
+    /// Creates the name of a schema that no other test uses, so that a provider in it sees no other test's tables.
+    /// </summary>
+    /// <returns>The schema's name.</returns>
+    public static PgSchemaName CreateSchemaName()
+    {
+        var name = $"t_{Guid.NewGuid():N}";
+        return PgSchemaName.Create(name);
+    }
+
+    /// <summary>
     /// Creates a provider in a schema of its own, so that no other test sees its tables, and probes it.
     /// </summary>
     /// <param name="connectionString">The connection string of the server.</param>
@@ -77,8 +87,7 @@ internal static class PgTestSupport
         CancellationToken cancellationToken
     )
     {
-        var name = $"t_{Guid.NewGuid():N}";
-        var schema = PgSchemaName.Create(name);
+        var schema = CreateSchemaName();
 
         return CreateProviderAsync(connectionString, profile, schema, cancellationToken);
     }

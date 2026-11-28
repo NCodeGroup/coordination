@@ -724,9 +724,7 @@ public sealed class PgSweepsTests(PgServers servers)
     public async Task RunPassAsync_PassFindsTheKeyspaceMissing_LogsSweepPassFailedOnce()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
-        var guid = Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
-        var schemaName = "t_" + guid;
-        var schema = PgSchemaName.Create(schemaName);
+        var schema = PgTestSupport.CreateSchemaName();
 
         try
         {
@@ -757,7 +755,7 @@ public sealed class PgSweepsTests(PgServers servers)
         {
             await PgServers.ExecuteAsAdminAsync(
                 servers.Admin19,
-                $"DROP SCHEMA IF EXISTS \"{schemaName}\" CASCADE",
+                $"DROP SCHEMA IF EXISTS \"{schema.Name}\" CASCADE",
                 CancellationToken.None
             );
         }

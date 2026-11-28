@@ -35,6 +35,7 @@ public sealed class PgSemaphoreServiceTests
         );
 
         Assert.Equal("capacity", exception.ParamName);
+        Assert.Equal(0, exception.ActualValue);
     }
 
     [Fact]
@@ -59,6 +60,7 @@ public sealed class PgSemaphoreServiceTests
         );
 
         Assert.Equal("capacity", exception.ParamName);
+        Assert.Equal(CoordinationLimits.MaxSemaphoreCapacity + 1, exception.ActualValue);
     }
 
     [Theory]
