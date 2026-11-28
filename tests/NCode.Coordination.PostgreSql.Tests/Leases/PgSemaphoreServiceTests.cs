@@ -1,25 +1,19 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
-using NCode.Coordination.PostgreSql.Keys;
-using NCode.Coordination.PostgreSql.Records;
 using NCode.Coordination.PostgreSql.Server;
+using NCode.Coordination.PostgreSql.Tests;
 
 namespace NCode.Coordination.PostgreSql.Leases.Tests;
 
 public sealed class PgSemaphoreServiceTests
 {
-    private static async Task WithServiceAsync(Func<PgSemaphoreService, Task> test)
+    private static PgSemaphoreService CreateService(PgOfflineServer offline)
     {
-        await using var source = PgSource.FromConnectionString(
-            "Host=127.0.0.1;Port=1;Database=coordination;Username=u;Password=p;Timeout=1"
-        );
-        var settings = PgSettings.Default;
-        var server = new PgServer(source, settings);
-        var keyspaces = new PgKeyspaces(server, settings.Schema);
-        var table = new PgRecordTable(server, keyspaces, settings);
+        var grants = new PgGrants(offline.Table);
+        var tokens = new PgRandomTokens();
 
-        await test(new PgSemaphoreService(new PgGrants(table), new PgRandomTokens()));
+        return new PgSemaphoreService(grants, tokens);
     }
 
     #region TryAcquireAsync Tests
@@ -27,35 +21,35 @@ public sealed class PgSemaphoreServiceTests
     [Fact]
     public async Task TryAcquireAsync_CapacityZero_Throws()
     {
+        await using var offline = new PgOfflineServer();
+        var service = CreateService(offline);
         var cancellationToken = TestContext.Current.CancellationToken;
         var resource = new Keyspace("prod").CreateKey("r");
         var terms = LeaseTerms.ForTimeToLive(new TimeToLive(TimeSpan.FromSeconds(5)));
-        await WithServiceAsync(async service =>
-        {
-            await Assert.ThrowsAsync<ArgumentOutOfRangeException>(async () =>
-                await service.TryAcquireAsync(resource, 0, terms, null, cancellationToken)
-            );
-        });
+
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(async () =>
+            await service.TryAcquireAsync(resource, 0, terms, null, cancellationToken)
+        );
     }
 
     [Fact]
     public async Task TryAcquireAsync_CapacityAboveTheLimit_Throws()
     {
+        await using var offline = new PgOfflineServer();
+        var service = CreateService(offline);
         var cancellationToken = TestContext.Current.CancellationToken;
         var resource = new Keyspace("prod").CreateKey("r");
         var terms = LeaseTerms.ForTimeToLive(new TimeToLive(TimeSpan.FromSeconds(5)));
-        await WithServiceAsync(async service =>
-        {
-            await Assert.ThrowsAsync<ArgumentOutOfRangeException>(async () =>
-                await service.TryAcquireAsync(
-                    resource,
-                    CoordinationLimits.MaxSemaphoreCapacity + 1,
-                    terms,
-                    null,
-                    cancellationToken
-                )
-            );
-        });
+
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(async () =>
+            await service.TryAcquireAsync(
+                resource,
+                CoordinationLimits.MaxSemaphoreCapacity + 1,
+                terms,
+                null,
+                cancellationToken
+            )
+        );
     }
 
     #endregion

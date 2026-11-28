@@ -1,24 +1,17 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
-using NCode.Coordination.PostgreSql.Keys;
-using NCode.Coordination.PostgreSql.Records;
-using NCode.Coordination.PostgreSql.Server;
+using NCode.Coordination.PostgreSql.Tests;
 
 namespace NCode.Coordination.PostgreSql.Transactions.Tests;
 
 public sealed class PgTransactionServiceTests
 {
-    private static async Task WithServiceAsync(Func<PgTransactionService, Task> test)
+    private static PgTransactionService CreateService(PgOfflineServer offline)
     {
-        await using var source = PgSource.FromConnectionString(
-            "Host=127.0.0.1;Port=1;Database=coordination;Username=u;Password=p;Timeout=1"
-        );
-        var settings = PgSettings.Default;
-        var server = new PgServer(source, settings);
-        var keyspaces = new PgKeyspaces(server, settings.Schema);
+        var table = offline.Table;
 
-        await test(new PgTransactionService(new PgRecordTable(server, keyspaces, settings)));
+        return new PgTransactionService(table);
     }
 
     #region ExecuteAsync Tests
@@ -26,18 +19,20 @@ public sealed class PgTransactionServiceTests
     [Fact]
     public async Task ExecuteAsync_NullTransaction_Throws()
     {
+        await using var offline = new PgOfflineServer();
+        var service = CreateService(offline);
         var cancellationToken = TestContext.Current.CancellationToken;
-        await WithServiceAsync(async service =>
-        {
-            await Assert.ThrowsAsync<ArgumentNullException>(async () =>
-                await service.ExecuteAsync(null!, null, cancellationToken)
-            );
-        });
+
+        await Assert.ThrowsAsync<ArgumentNullException>(async () =>
+            await service.ExecuteAsync(null!, null, cancellationToken)
+        );
     }
 
     [Fact]
     public async Task ExecuteAsync_SessionInTheFailureBranch_ReachesTheServer()
     {
+        await using var offline = new PgOfflineServer();
+        var service = CreateService(offline);
         var cancellationToken = TestContext.Current.CancellationToken;
         var keyspace = new Keyspace("prod");
         var key = keyspace.CreateKey("k");
@@ -56,14 +51,12 @@ public sealed class PgTransactionServiceTests
                 ),
             ],
         };
-        await WithServiceAsync(async service =>
-        {
-            var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
-                await service.ExecuteAsync(transaction, null, cancellationToken)
-            );
 
-            Assert.Equal(CoordinationErrorCodes.Unavailable, exception.Code);
-        });
+        var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
+            await service.ExecuteAsync(transaction, null, cancellationToken)
+        );
+
+        Assert.Equal(CoordinationErrorCodes.Unavailable, exception.Code);
     }
 
     #endregion

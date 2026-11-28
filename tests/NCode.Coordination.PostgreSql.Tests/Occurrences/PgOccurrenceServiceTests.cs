@@ -2,24 +2,19 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using System.Collections.Immutable;
-using NCode.Coordination.PostgreSql.Keys;
-using NCode.Coordination.PostgreSql.Schema;
-using NCode.Coordination.PostgreSql.Server;
+using NCode.Coordination.PostgreSql.Tests;
 
 namespace NCode.Coordination.PostgreSql.Occurrences.Tests;
 
 public sealed class PgOccurrenceServiceTests
 {
-    private static async Task WithServiceAsync(Func<PgOccurrenceService, Task> test)
+    private static PgOccurrenceService CreateService(PgOfflineServer offline)
     {
-        await using var source = PgSource.FromConnectionString(
-            "Host=127.0.0.1;Port=1;Database=coordination;Username=u;Password=p;Timeout=1"
-        );
-        var server = new PgServer(source, PgSettings.Default);
-        var schema = PgSchemaName.Default;
-        var keyspaces = new PgKeyspaces(server, schema);
+        var server = offline.Server;
+        var keyspaces = offline.Keyspaces;
+        var schema = offline.Settings.Schema;
 
-        await test(new PgOccurrenceService(server, keyspaces, schema));
+        return new PgOccurrenceService(server, keyspaces, schema);
     }
 
     #region TryRecordAsync Tests
@@ -27,62 +22,62 @@ public sealed class PgOccurrenceServiceTests
     [Fact]
     public async Task TryRecordAsync_NullKey_Throws()
     {
+        await using var offline = new PgOfflineServer();
+        var service = CreateService(offline);
         var cancellationToken = TestContext.Current.CancellationToken;
-        await WithServiceAsync(async service =>
-        {
-            await Assert.ThrowsAsync<ArgumentNullException>(async () =>
-                await service.TryRecordAsync(
-                    null!,
-                    new TimeToLive(TimeSpan.FromSeconds(5)),
-                    null,
-                    cancellationToken
-                )
-            );
-        });
+
+        await Assert.ThrowsAsync<ArgumentNullException>(async () =>
+            await service.TryRecordAsync(
+                null!,
+                new TimeToLive(TimeSpan.FromSeconds(5)),
+                null,
+                cancellationToken
+            )
+        );
     }
 
     [Fact]
     public async Task TryRecordAsync_Extension_ThrowsUnsupportedBeforeTheServer()
     {
+        await using var offline = new PgOfflineServer();
+        var service = CreateService(offline);
         var cancellationToken = TestContext.Current.CancellationToken;
         var key = new Keyspace("prod").CreateKey("k");
         var options = new OperationOptions
         {
             Extensions = ImmutableDictionary<string, string>.Empty.Add("consul.lock-delay", "15s"),
         };
-        await WithServiceAsync(async service =>
-        {
-            var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
-                await service.TryRecordAsync(
-                    key,
-                    new TimeToLive(TimeSpan.FromSeconds(5)),
-                    options,
-                    cancellationToken
-                )
-            );
 
-            Assert.Equal(CoordinationErrorCodes.Unsupported, exception.Code);
-            Assert.False(exception.OutcomeUnknown);
-        });
+        var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
+            await service.TryRecordAsync(
+                key,
+                new TimeToLive(TimeSpan.FromSeconds(5)),
+                options,
+                cancellationToken
+            )
+        );
+
+        Assert.Equal(CoordinationErrorCodes.Unsupported, exception.Code);
+        Assert.False(exception.OutcomeUnknown);
     }
 
     [Fact]
     public async Task TryRecordAsync_CanceledToken_ThrowsOperationCanceledException()
     {
+        await using var offline = new PgOfflineServer();
+        var service = CreateService(offline);
         var key = new Keyspace("prod").CreateKey("k");
         using var cts = new CancellationTokenSource();
         await cts.CancelAsync();
-        await WithServiceAsync(async service =>
-        {
-            await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
-                await service.TryRecordAsync(
-                    key,
-                    new TimeToLive(TimeSpan.FromSeconds(5)),
-                    null,
-                    cts.Token
-                )
-            );
-        });
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
+            await service.TryRecordAsync(
+                key,
+                new TimeToLive(TimeSpan.FromSeconds(5)),
+                null,
+                cts.Token
+            )
+        );
     }
 
     #endregion

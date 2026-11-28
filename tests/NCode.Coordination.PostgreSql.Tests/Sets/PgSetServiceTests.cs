@@ -2,24 +2,19 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using System.Collections.Immutable;
-using NCode.Coordination.PostgreSql.Keys;
-using NCode.Coordination.PostgreSql.Schema;
-using NCode.Coordination.PostgreSql.Server;
+using NCode.Coordination.PostgreSql.Tests;
 
 namespace NCode.Coordination.PostgreSql.Sets.Tests;
 
 public sealed class PgSetServiceTests
 {
-    private static async Task WithServiceAsync(Func<PgSetService, Task> test)
+    private static PgSetService CreateService(PgOfflineServer offline)
     {
-        await using var source = PgSource.FromConnectionString(
-            "Host=127.0.0.1;Port=1;Database=coordination;Username=u;Password=p;Timeout=1"
-        );
-        var server = new PgServer(source, PgSettings.Default);
-        var schema = PgSchemaName.Default;
-        var keyspaces = new PgKeyspaces(server, schema);
+        var server = offline.Server;
+        var keyspaces = offline.Keyspaces;
+        var schema = offline.Settings.Schema;
 
-        await test(new PgSetService(server, keyspaces, schema));
+        return new PgSetService(server, keyspaces, schema);
     }
 
     #region AddAsync Tests
@@ -27,20 +22,20 @@ public sealed class PgSetServiceTests
     [Fact]
     public async Task AddAsync_NullMember_Throws()
     {
+        await using var offline = new PgOfflineServer();
+        var service = CreateService(offline);
         var cancellationToken = TestContext.Current.CancellationToken;
         var key = new Keyspace("prod").CreateKey("k");
-        await WithServiceAsync(async service =>
-        {
-            await Assert.ThrowsAsync<ArgumentNullException>(async () =>
-                await service.AddAsync(
-                    key,
-                    null!,
-                    new TimeToLive(TimeSpan.FromSeconds(5)),
-                    null,
-                    cancellationToken
-                )
-            );
-        });
+
+        await Assert.ThrowsAsync<ArgumentNullException>(async () =>
+            await service.AddAsync(
+                key,
+                null!,
+                new TimeToLive(TimeSpan.FromSeconds(5)),
+                null,
+                cancellationToken
+            )
+        );
     }
 
     #endregion
@@ -50,21 +45,21 @@ public sealed class PgSetServiceTests
     [Fact]
     public async Task ListAsync_Extension_ThrowsUnsupported()
     {
+        await using var offline = new PgOfflineServer();
+        var service = CreateService(offline);
         var cancellationToken = TestContext.Current.CancellationToken;
         var key = new Keyspace("prod").CreateKey("k");
         var options = new OperationOptions
         {
             Extensions = ImmutableDictionary<string, string>.Empty.Add("consul.lock-delay", "15s"),
         };
-        await WithServiceAsync(async service =>
-        {
-            var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
-                await service.ListAsync(key, options, cancellationToken)
-            );
 
-            Assert.Equal(CoordinationErrorCodes.Unsupported, exception.Code);
-            Assert.False(exception.OutcomeUnknown);
-        });
+        var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
+            await service.ListAsync(key, options, cancellationToken)
+        );
+
+        Assert.Equal(CoordinationErrorCodes.Unsupported, exception.Code);
+        Assert.False(exception.OutcomeUnknown);
     }
 
     #endregion

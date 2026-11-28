@@ -9,7 +9,7 @@ namespace NCode.Coordination.PostgreSql.Tests;
 
 public sealed class PostgreSqlCoordinationBuilderExtensionsTests : IDisposable
 {
-    private const string ConnectionString = "Host=127.0.0.1;Port=1;Database=coordination";
+    private const string ConnectionString = PgOfflineServer.ConnectionString;
 
     private MockRepository Mocks { get; } = new(MockBehavior.Strict);
 
