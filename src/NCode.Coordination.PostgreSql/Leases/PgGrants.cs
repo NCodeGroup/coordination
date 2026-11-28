@@ -430,7 +430,7 @@ internal sealed class PgGrants(PgRecordTable table)
     /// <param name="session">The id of the session that the terms bind to, or null when they bind to none.</param>
     /// <param name="cancellationToken">The token that cancels the call.</param>
     /// <returns>The change and what the batch read.</returns>
-    /// <exception cref="ArgumentNullException">The transaction or the scope is null.</exception>
+    /// <exception cref="ArgumentNullException">The transaction is null.</exception>
     /// <exception cref="PgKeyspaceMissingException">The keyspace's row does not exist.</exception>
     public async ValueTask<PgGrantStart> BeginAsync(
         PgTransaction transaction,
@@ -440,7 +440,6 @@ internal sealed class PgGrants(PgRecordTable table)
     )
     {
         ArgumentNullException.ThrowIfNull(transaction);
-        ArgumentNullException.ThrowIfNull(scope);
 
         var keyspaceId = scope.KeyspaceId;
         var kind = scope.Kind;
@@ -762,15 +761,12 @@ internal sealed class PgGrants(PgRecordTable table)
     /// <param name="scope">The keyspace, kind and resource whose grants are read.</param>
     /// <param name="cancellationToken">The token that cancels the call.</param>
     /// <returns>The live grants, by slot; none when the resource is free.</returns>
-    /// <exception cref="ArgumentNullException">The scope is null.</exception>
     /// <exception cref="CoordinationException">The server could not be reached or failed.</exception>
     public async ValueTask<ImmutableArray<PgGrantRow>> ReadAsync(
         PgGrantScope scope,
         CancellationToken cancellationToken
     )
     {
-        ArgumentNullException.ThrowIfNull(scope);
-
         var statement = SelectNowStatement(scope);
 
         var first = await Table

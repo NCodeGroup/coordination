@@ -480,7 +480,7 @@ internal sealed class PgSweeps(
     /// <summary>
     /// Gets the passes that delete rows without a change, in the order they run.
     /// </summary>
-    private PgSweepPass[] Passes { get; } =
+    private ImmutableArray<PgSweepPass> Passes { get; } =
     [
         CreatePass("occurrences", OccurrencesSql, settings.Schema),
         CreatePass("counters", CountersSql, settings.Schema),
@@ -491,7 +491,7 @@ internal sealed class PgSweeps(
     /// <summary>
     /// Gets the passes that run after the sessions ended, in the order they run.
     /// </summary>
-    private PgSweepPass[] PassesAfterSessions { get; } =
+    private ImmutableArray<PgSweepPass> PassesAfterSessions { get; } =
     [
         CreatePass("bound records", BoundRecordsSql, settings.Schema),
         CreatePass("bound members", BoundMembersSql, settings.Schema),

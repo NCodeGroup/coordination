@@ -8,4 +8,4 @@ namespace NCode.Coordination.PostgreSql.Server;
 /// </summary>
 /// <param name="Sql">The statement.</param>
 /// <param name="Waiter">The waiter that completes when the statement ran, or null when nobody waits.</param>
-internal sealed record PgListenerRequest(string Sql, TaskCompletionSource? Waiter);
+internal readonly record struct PgListenerRequest(string Sql, TaskCompletionSource? Waiter);

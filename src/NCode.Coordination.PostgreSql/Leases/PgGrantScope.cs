@@ -9,4 +9,4 @@ namespace NCode.Coordination.PostgreSql.Leases;
 /// <param name="KeyspaceId">The keyspace's id.</param>
 /// <param name="Kind">The kind of the grants: 1 for leases, 2 for semaphores, 3 for elections.</param>
 /// <param name="Resource">The resource that the grants guard.</param>
-internal sealed record PgGrantScope(long KeyspaceId, short Kind, CoordinationKey Resource);
+internal readonly record struct PgGrantScope(long KeyspaceId, short Kind, CoordinationKey Resource);

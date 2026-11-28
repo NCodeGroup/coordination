@@ -9,4 +9,4 @@ namespace NCode.Coordination.PostgreSql.Counters;
 /// <param name="Entry">The row to write.</param>
 /// <param name="Count">The count to write.</param>
 /// <param name="Deadline">The instant on the server's clock at which the counter expires.</param>
-internal sealed record PgCounterWrite(PgCounterEntry Entry, long Count, DateTime Deadline);
+internal readonly record struct PgCounterWrite(PgCounterEntry Entry, long Count, DateTime Deadline);

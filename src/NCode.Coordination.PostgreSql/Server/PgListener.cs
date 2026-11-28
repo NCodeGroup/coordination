@@ -487,7 +487,7 @@ internal sealed class PgListener(
     {
         while (true)
         {
-            PgListenerRequest? request;
+            PgListenerRequest request;
             lock (Gate)
             {
                 if (!Requests.TryPeek(out request))

@@ -8,4 +8,4 @@ namespace NCode.Coordination.PostgreSql.Sweep;
 /// </summary>
 /// <param name="Name">The name that a log entry gives the pass.</param>
 /// <param name="Sql">The statement, whose only argument is the batch size and which returns the count of rows it deleted.</param>
-internal sealed record PgSweepPass(string Name, string Sql);
+internal readonly record struct PgSweepPass(string Name, string Sql);
