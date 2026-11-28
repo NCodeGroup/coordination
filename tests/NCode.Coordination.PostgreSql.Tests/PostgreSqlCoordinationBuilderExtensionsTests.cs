@@ -84,7 +84,7 @@ public sealed class PostgreSqlCoordinationBuilderExtensionsTests : IDisposable
 
         Assert.Equal("configure", exception.ParamName);
         Assert.StartsWith(
-            "Set exactly one of PostgreSqlProviderOptions.ConnectionString and PostgreSqlProviderOptions.DataSource.",
+            PostgreSqlCoordinationBuilderExtensions.OneSourceMessage,
             exception.Message
         );
     }
@@ -104,7 +104,7 @@ public sealed class PostgreSqlCoordinationBuilderExtensionsTests : IDisposable
 
         Assert.Equal("configure", exception.ParamName);
         Assert.StartsWith(
-            "Set exactly one of PostgreSqlProviderOptions.ConnectionString and PostgreSqlProviderOptions.DataSource.",
+            PostgreSqlCoordinationBuilderExtensions.OneSourceMessage,
             exception.Message
         );
     }

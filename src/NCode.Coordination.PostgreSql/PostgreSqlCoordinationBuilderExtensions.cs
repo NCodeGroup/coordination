@@ -28,6 +28,12 @@ public static class PostgreSqlCoordinationBuilderExtensions
     private const int MaxSweepBatchSize = 100_000;
 
     /// <summary>
+    /// The message that refuses options that set neither or both of the connection string and the data source.
+    /// </summary>
+    internal const string OneSourceMessage =
+        "Set exactly one of PostgreSqlProviderOptions.ConnectionString and PostgreSqlProviderOptions.DataSource.";
+
+    /// <summary>
     /// The least value of a timeout or an interval, which is included.
     /// </summary>
     private static TimeSpan MinShortDuration { get; } = TimeSpan.FromMilliseconds(1);
@@ -79,10 +85,7 @@ public static class PostgreSqlCoordinationBuilderExtensions
             var hasConnectionString = !string.IsNullOrWhiteSpace(connectionString);
             if (hasConnectionString == (dataSourceFactory is not null))
             {
-                throw new ArgumentException(
-                    "Set exactly one of PostgreSqlProviderOptions.ConnectionString and PostgreSqlProviderOptions.DataSource.",
-                    nameof(configure)
-                );
+                throw new ArgumentException(OneSourceMessage, nameof(configure));
             }
 
             var profile = options.Profile;

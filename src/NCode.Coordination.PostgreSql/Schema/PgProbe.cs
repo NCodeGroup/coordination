@@ -32,6 +32,18 @@ internal sealed class PgProbe(
     private const string On = "on";
 
     /// <summary>
+    /// The message that refuses a data source that multiplexes commands.
+    /// </summary>
+    internal const string MultiplexingMessage =
+        "The provider's data source multiplexes commands, which its listening connection and SET LOCAL can't share; turn Multiplexing off.";
+
+    /// <summary>
+    /// The message that refuses a data source without Keep Alive.
+    /// </summary>
+    internal const string NoKeepAliveMessage =
+        "The provider's data source has no Keep Alive, which its listening connection needs to notice a server that went away; set Keep Alive, such as 15 seconds.";
+
+    /// <summary>
     /// The statement that reads the server's version, role and durability settings.
     /// </summary>
     private const string ServerSql = """
@@ -149,6 +161,14 @@ internal sealed class PgProbe(
     }
 
     /// <summary>
+    /// Builds the message that refuses a server older than <see cref="MinimumVersion"/>.
+    /// </summary>
+    /// <param name="version">The server's version number.</param>
+    /// <returns>The message, which names the version.</returns>
+    internal static string TooOldMessage(int version) =>
+        $"The provider needs PostgreSQL 15 or later, and the server reports {version}.";
+
+    /// <summary>
     /// Refuses a server older than <see cref="MinimumVersion"/> and a server that is a standby.
     /// </summary>
     /// <param name="version">The server's version number.</param>
@@ -158,9 +178,8 @@ internal sealed class PgProbe(
     {
         if (version < MinimumVersion)
         {
-            throw Unsupported(
-                $"The provider needs PostgreSQL 15 or later, and the server reports {version}."
-            );
+            var message = TooOldMessage(version);
+            throw Unsupported(message);
         }
 
         if (inRecovery)
@@ -228,16 +247,12 @@ internal sealed class PgProbe(
 
         if (connectionString.Multiplexing)
         {
-            throw Unsupported(
-                "The provider's data source multiplexes commands, which its listening connection and SET LOCAL can't share; turn Multiplexing off."
-            );
+            throw Unsupported(MultiplexingMessage);
         }
 
         if (connectionString.KeepAlive == 0)
         {
-            throw Unsupported(
-                "The provider's data source has no Keep Alive, which its listening connection needs to notice a server that went away; set Keep Alive, such as 15 seconds."
-            );
+            throw Unsupported(NoKeepAliveMessage);
         }
 
         await CheckServerAsync(cancellationToken).ConfigureAwait(false);
