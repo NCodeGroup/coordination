@@ -135,6 +135,8 @@ public sealed class PgGrantsServerTests(PgServers servers)
         }
     }
 
+    #region TryAcquireAsync Tests
+
     [PgServerFact]
     public async Task TryAcquireAsync_AfterTheGrantExpiredAndWasSwept_GivesAGreaterFencingToken()
     {
@@ -157,8 +159,11 @@ public sealed class PgGrantsServerTests(PgServers servers)
 
                 await context.Sweeps.SweepAsync(cancellationToken);
 
-                Assert.Equal(0, await context.GrantCountAsync(cancellationToken));
-                Assert.Equal(firstToken, await context.LastFencingAsync(cancellationToken));
+                var grantCount = await context.GrantCountAsync(cancellationToken);
+                var lastAfterSweep = await context.LastFencingAsync(cancellationToken);
+
+                Assert.Equal(0, grantCount);
+                Assert.Equal(firstToken, lastAfterSweep);
 
                 var second = await context.Leases.TryAcquireAsync(
                     resource,
@@ -167,9 +172,10 @@ public sealed class PgGrantsServerTests(PgServers servers)
                     cancellationToken
                 );
                 var secondToken = GrantOf(second).FencingToken.Value;
+                var lastAfterSecond = await context.LastFencingAsync(cancellationToken);
 
                 Assert.True(secondToken > firstToken);
-                Assert.Equal(secondToken, await context.LastFencingAsync(cancellationToken));
+                Assert.Equal(secondToken, lastAfterSecond);
             },
             cancellationToken
         );
@@ -193,13 +199,22 @@ public sealed class PgGrantsServerTests(PgServers servers)
                 var grant = GrantOf(first);
                 var before = await context.RevisionAsync(cancellationToken);
 
-                Assert.True(
-                    await context.Leases.RenewAsync(grant, OneMinute, null, cancellationToken)
+                var renewed = await context.Leases.RenewAsync(
+                    grant,
+                    OneMinute,
+                    null,
+                    cancellationToken
                 );
-                Assert.Equal(before, await context.RevisionAsync(cancellationToken));
+                var afterRenew = await context.RevisionAsync(cancellationToken);
 
-                Assert.True(await context.Leases.ReleaseAsync(grant, null, cancellationToken));
-                Assert.Equal(before, await context.RevisionAsync(cancellationToken));
+                Assert.True(renewed);
+                Assert.Equal(before, afterRenew);
+
+                var released = await context.Leases.ReleaseAsync(grant, null, cancellationToken);
+                var afterRelease = await context.RevisionAsync(cancellationToken);
+
+                Assert.True(released);
+                Assert.Equal(before, afterRelease);
 
                 var second = await context.Leases.TryAcquireAsync(
                     resource,
@@ -207,8 +222,10 @@ public sealed class PgGrantsServerTests(PgServers servers)
                     null,
                     cancellationToken
                 );
+                var afterSecond = await context.RevisionAsync(cancellationToken);
+
                 Assert.True(second.IsAcquired);
-                Assert.Equal(before, await context.RevisionAsync(cancellationToken));
+                Assert.Equal(before, afterSecond);
             },
             cancellationToken
         );
@@ -247,7 +264,9 @@ public sealed class PgGrantsServerTests(PgServers servers)
                 Assert.Equal(LeaseAcquireStatus.Held, blocked.Status);
 
                 await context.Sessions.CloseAsync(session.Id, null, cancellationToken);
-                Assert.Equal(1, await context.GrantCountAsync(cancellationToken));
+                var grantCount = await context.GrantCountAsync(cancellationToken);
+
+                Assert.Equal(1, grantCount);
 
                 var second = await context.Leases.TryAcquireAsync(
                     resource,
@@ -260,4 +279,6 @@ public sealed class PgGrantsServerTests(PgServers servers)
             cancellationToken
         );
     }
+
+    #endregion
 }

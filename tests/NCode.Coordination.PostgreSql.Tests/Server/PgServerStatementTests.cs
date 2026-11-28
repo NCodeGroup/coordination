@@ -72,10 +72,8 @@ public sealed class PgServerStatementTests(PgServers servers)
                 connection
             );
             command.Parameters.Add(new NpgsqlParameter { Value = applicationName });
-            var count = Convert.ToInt64(
-                await command.ExecuteScalarAsync(cancellationToken),
-                CultureInfo.InvariantCulture
-            );
+            var scalar = await command.ExecuteScalarAsync(cancellationToken);
+            var count = Convert.ToInt64(scalar, CultureInfo.InvariantCulture);
             if (count > 0)
             {
                 return;
@@ -92,6 +90,8 @@ public sealed class PgServerStatementTests(PgServers servers)
 
     private static ValueTask<bool> Ignore(PgResults results, CancellationToken cancellationToken) =>
         ValueTask.FromResult(true);
+
+    #region ExecuteAsync Tests
 
     [PgServerFact]
     public async Task ExecuteAsync_Statement_ReturnsItsRows()
@@ -347,4 +347,6 @@ public sealed class PgServerStatementTests(PgServers servers)
             )
         );
     }
+
+    #endregion
 }

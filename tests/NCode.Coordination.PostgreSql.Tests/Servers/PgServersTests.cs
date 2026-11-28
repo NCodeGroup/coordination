@@ -43,6 +43,8 @@ public sealed class PgServersTests(PgServers servers)
         return number / 10000;
     }
 
+    #region PostgreSql19 Tests
+
     [PgServerFact]
     public async Task PostgreSql19_Started_ReportsVersion19()
     {
@@ -52,17 +54,6 @@ public sealed class PgServersTests(PgServers servers)
         );
 
         Assert.Equal(19, major);
-    }
-
-    [PgServerFact]
-    public async Task PostgreSql15_Started_ReportsVersion15()
-    {
-        var major = await MajorVersionAsync(
-            servers.PostgreSql15,
-            TestContext.Current.CancellationToken
-        );
-
-        Assert.Equal(15, major);
     }
 
     [PgServerFact]
@@ -77,6 +68,25 @@ public sealed class PgServersTests(PgServers servers)
         Assert.Equal("on", value);
     }
 
+    #endregion
+
+    #region PostgreSql15 Tests
+
+    [PgServerFact]
+    public async Task PostgreSql15_Started_ReportsVersion15()
+    {
+        var major = await MajorVersionAsync(
+            servers.PostgreSql15,
+            TestContext.Current.CancellationToken
+        );
+
+        Assert.Equal(15, major);
+    }
+
+    #endregion
+
+    #region Unsafe19 Tests
+
     [PgServerFact]
     public async Task Unsafe19_Started_RunsWithoutFsync()
     {
@@ -89,6 +99,10 @@ public sealed class PgServersTests(PgServers servers)
         Assert.Equal("off", value);
     }
 
+    #endregion
+
+    #region Coordinator Tests
+
     [PgServerFact]
     public async Task Coordinator_Always_IsNotASuperuser()
     {
@@ -100,4 +114,6 @@ public sealed class PgServersTests(PgServers servers)
 
         Assert.False(Assert.IsType<bool>(value));
     }
+
+    #endregion
 }

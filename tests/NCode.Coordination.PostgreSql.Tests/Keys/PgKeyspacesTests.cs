@@ -64,6 +64,8 @@ public sealed class PgKeyspacesTests(PgServers servers)
         return ids;
     }
 
+    #region ResolveAsync Tests
+
     [PgServerFact]
     public async Task ResolveAsync_SameKeyspace_GivesOneId()
     {
@@ -78,19 +80,13 @@ public sealed class PgKeyspacesTests(PgServers servers)
                 var second = await keyspaces.ResolveAsync(keyspace, cancellationToken);
                 keyspaces.Clear();
                 var third = await keyspaces.ResolveAsync(keyspace, cancellationToken);
+                var name = PgKeys.KeyspaceName(keyspace);
+                var ids = await ReadIdsAsync(servers.Admin19, schema, name, cancellationToken);
 
                 Assert.NotEqual(0, first);
                 Assert.Equal(first, second);
                 Assert.Equal(first, third);
-                Assert.Equal(
-                    [first],
-                    await ReadIdsAsync(
-                        servers.Admin19,
-                        schema,
-                        PgKeys.KeyspaceName(keyspace),
-                        cancellationToken
-                    )
-                );
+                Assert.Equal([first], ids);
             },
             cancellationToken
         );
@@ -118,6 +114,10 @@ public sealed class PgKeyspacesTests(PgServers servers)
             cancellationToken
         );
     }
+
+    #endregion
+
+    #region RunAsync Tests
 
     [PgServerFact]
     public async Task RunAsync_RowMissing_ResolvesAgainAndRetriesOnce()
@@ -151,14 +151,14 @@ public sealed class PgKeyspacesTests(PgServers servers)
                     cancellationToken
                 );
 
+                var ids = await ReadIdsAsync(servers.Admin19, schema, name, cancellationToken);
+                var resolved = await keyspaces.ResolveAsync(keyspace, cancellationToken);
+
                 Assert.Equal("done", result);
                 Assert.Equal(2, seen.Count);
                 Assert.NotEqual(seen[0], seen[1]);
-                Assert.Equal(
-                    [seen[1]],
-                    await ReadIdsAsync(servers.Admin19, schema, name, cancellationToken)
-                );
-                Assert.Equal(seen[1], await keyspaces.ResolveAsync(keyspace, cancellationToken));
+                Assert.Equal([seen[1]], ids);
+                Assert.Equal(seen[1], resolved);
             },
             cancellationToken
         );
@@ -195,4 +195,6 @@ public sealed class PgKeyspacesTests(PgServers servers)
             cancellationToken
         );
     }
+
+    #endregion
 }

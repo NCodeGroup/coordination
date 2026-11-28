@@ -55,7 +55,8 @@ public sealed class PgRecordWatchServerTests(PgServers servers)
                 connection
             );
 
-            return (long)(await command.ExecuteScalarAsync(cancellationToken))!;
+            var scalar = await command.ExecuteScalarAsync(cancellationToken);
+            return Assert.IsType<long>(scalar);
         }
 
         public async Task InsertMessageWithoutWakeUpAsync(
@@ -74,7 +75,8 @@ public sealed class PgRecordWatchServerTests(PgServers servers)
             {
                 Parameters = { new NpgsqlParameter { Value = PgKeys.KeyspaceName(Keyspace) } },
             };
-            var keyspaceId = (long)(await find.ExecuteScalarAsync(cancellationToken))!;
+            var foundId = await find.ExecuteScalarAsync(cancellationToken);
+            var keyspaceId = Assert.IsType<long>(foundId);
 
             var index = PgKeys.Index(topic);
             var depth = (short)topic.PartitionDepth;
@@ -95,7 +97,8 @@ public sealed class PgRecordWatchServerTests(PgServers servers)
                     new NpgsqlParameter { Value = depth },
                 },
             };
-            var sequence = (long)(await raise.ExecuteScalarAsync(cancellationToken))!;
+            var raised = await raise.ExecuteScalarAsync(cancellationToken);
+            var sequence = Assert.IsType<long>(raised);
 
             await using var insert = new NpgsqlCommand(
                 $"INSERT INTO \"{SchemaName}\".messages (keyspace_id, idx, depth, sequence, payload, deadline) "
@@ -208,6 +211,8 @@ public sealed class PgRecordWatchServerTests(PgServers servers)
         return result.Revision;
     }
 
+    #region WatchKeyAsync Tests
+
     [PgServerFact]
     public async Task WatchKeyAsync_AfterARevisionTheLogHolds_ReplaysWithoutAResync()
     {
@@ -285,6 +290,10 @@ public sealed class PgRecordWatchServerTests(PgServers servers)
         );
     }
 
+    #endregion
+
+    #region WatchPrefixAsync Tests
+
     [PgServerFact]
     public async Task WatchPrefixAsync_SessionEnds_DeliversTheDeletionOfEachBoundRecord()
     {
@@ -334,7 +343,7 @@ public sealed class PgRecordWatchServerTests(PgServers servers)
                 Assert.All(deleted, item => Assert.True(item.Revision > revisionB));
                 Assert.Equal(
                     new HashSet<CoordinationKey> { keyA, keyB },
-                    deleted.Select(item => item.Key!).ToHashSet()
+                    deleted.Select(item => item.Key).OfType<CoordinationKey>().ToHashSet()
                 );
             },
             cancellationToken
@@ -358,8 +367,11 @@ public sealed class PgRecordWatchServerTests(PgServers servers)
                     .Watches.WatchPrefixAsync(prefix, null, null, cancellationToken)
                     .GetAsyncEnumerator(cancellationToken);
 
-                Assert.True((await NextAsync(keyWatch, cancellationToken)).IsResync);
-                Assert.True((await NextAsync(prefixWatch, cancellationToken)).IsResync);
+                var keyResync = await NextAsync(keyWatch, cancellationToken);
+                var prefixResync = await NextAsync(prefixWatch, cancellationToken);
+
+                Assert.True(keyResync.IsResync);
+                Assert.True(prefixResync.IsResync);
 
                 var revision = await CreateAsync(
                     context,
@@ -380,6 +392,10 @@ public sealed class PgRecordWatchServerTests(PgServers servers)
             cancellationToken
         );
     }
+
+    #endregion
+
+    #region SubscribeAsync Tests
 
     [PgServerFact]
     public async Task SubscribeAsync_WakeUpLost_DeliversWithinTheCheckInterval()
@@ -423,4 +439,6 @@ public sealed class PgRecordWatchServerTests(PgServers servers)
             cancellationToken
         );
     }
+
+    #endregion
 }

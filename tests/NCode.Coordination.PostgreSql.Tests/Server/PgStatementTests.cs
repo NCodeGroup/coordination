@@ -7,6 +7,8 @@ namespace NCode.Coordination.PostgreSql.Server.Tests;
 
 public sealed class PgStatementTests
 {
+    #region ToBatchCommand Tests
+
     [Fact]
     public void ToBatchCommand_Arguments_AddsParametersInOrder()
     {
@@ -29,6 +31,10 @@ public sealed class PgStatementTests
         Assert.Equal(3, statement.Arguments.Length);
     }
 
+    #endregion
+
+    #region Typed Tests
+
     [Fact]
     public void Typed_Null_GivesDbNullWithItsType()
     {
@@ -43,11 +49,19 @@ public sealed class PgStatementTests
         Assert.Equal(NpgsqlDbType.Bigint, parameter.NpgsqlDbType);
     }
 
+    #endregion
+
+    #region Of Tests
+
     [Fact]
     public void Of_Null_Throws()
     {
         Assert.Throws<ArgumentNullException>(() => PgArgument.Of(null!));
     }
+
+    #endregion
+
+    #region ImplicitConversion Tests
 
     [Fact]
     public void ImplicitConversion_Long_GivesTheArgumentOfBuilds()
@@ -81,4 +95,6 @@ public sealed class PgStatementTests
 
         Assert.Throws<ArgumentNullException>(() => (PgArgument)text);
     }
+
+    #endregion
 }

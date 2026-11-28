@@ -74,6 +74,8 @@ public sealed class PgChangeLogTests(PgServers servers)
         }
     }
 
+    #region ReadAsync Tests
+
     [PgServerFact]
     public async Task ReadAsync_AfterTwoWrites_ReturnsBothEntriesWithTheirItems()
     {
@@ -215,4 +217,6 @@ public sealed class PgChangeLogTests(PgServers servers)
             cancellationToken
         );
     }
+
+    #endregion
 }

@@ -104,6 +104,8 @@ public sealed class PgSessionServerTests(PgServers servers)
         }
     }
 
+    #region CloseAsync Tests
+
     [PgServerFact]
     public async Task CloseAsync_SessionWithThreeRecords_TakesOneRevisionAndLogsOneEntry()
     {
@@ -165,6 +167,10 @@ public sealed class PgSessionServerTests(PgServers servers)
             cancellationToken
         );
     }
+
+    #endregion
+
+    #region CreateAsync Tests
 
     [PgServerFact]
     public async Task CreateAsync_BoundToAnExpiredSession_EndsItAndReturnsSessionEnded()
@@ -263,4 +269,6 @@ public sealed class PgSessionServerTests(PgServers servers)
             cancellationToken
         );
     }
+
+    #endregion
 }

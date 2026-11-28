@@ -137,6 +137,8 @@ public sealed class PostgreSqlProviderProbeTests(PgServers servers)
         }
     }
 
+    #region ProbeAsync Tests
+
     [PgServerFact]
     public async Task ProbeAsync_PostgreSql19AsCoordinator_Succeeds()
     {
@@ -406,6 +408,8 @@ public sealed class PostgreSqlProviderProbeTests(PgServers servers)
             cancellationToken
         );
     }
+
+    #endregion
 
     private async Task<CoordinationException?> ProbeAsRoleWithGrantsAsync(
         string[] grants,

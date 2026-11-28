@@ -50,10 +50,8 @@ public sealed class PgServerTransactionTests(PgServers servers)
         await connection.OpenAsync(cancellationToken);
 
         await using var command = new NpgsqlCommand($"SELECT count(*) FROM {schema}.t", connection);
-        return Convert.ToInt64(
-            await command.ExecuteScalarAsync(cancellationToken),
-            CultureInfo.InvariantCulture
-        );
+        var scalar = await command.ExecuteScalarAsync(cancellationToken);
+        return Convert.ToInt64(scalar, CultureInfo.InvariantCulture);
     }
 
     private static async Task TerminateAsync(
@@ -93,10 +91,8 @@ public sealed class PgServerTransactionTests(PgServers servers)
                 connection
             );
             command.Parameters.Add(new NpgsqlParameter { Value = applicationName });
-            var count = Convert.ToInt64(
-                await command.ExecuteScalarAsync(cancellationToken),
-                CultureInfo.InvariantCulture
-            );
+            var scalar = await command.ExecuteScalarAsync(cancellationToken);
+            var count = Convert.ToInt64(scalar, CultureInfo.InvariantCulture);
             if (isDone(count))
             {
                 return;
@@ -157,6 +153,8 @@ public sealed class PgServerTransactionTests(PgServers servers)
         return rows[0];
     }
 
+    #region TransactAsync Tests
+
     [PgServerFact]
     public async Task TransactAsync_Commit_AppliesTheWrites()
     {
@@ -179,7 +177,9 @@ public sealed class PgServerTransactionTests(PgServers servers)
                     cancellationToken
                 );
 
-                Assert.Equal(1L, await CountAsync(servers.Admin19, schema, cancellationToken));
+                var count = await CountAsync(servers.Admin19, schema, cancellationToken);
+
+                Assert.Equal(1L, count);
             },
             cancellationToken
         );
@@ -208,7 +208,9 @@ public sealed class PgServerTransactionTests(PgServers servers)
                     cancellationToken
                 );
 
-                Assert.Equal(0L, await CountAsync(servers.Admin19, schema, cancellationToken));
+                var count = await CountAsync(servers.Admin19, schema, cancellationToken);
+
+                Assert.Equal(0L, count);
             },
             cancellationToken
         );
@@ -245,9 +247,11 @@ public sealed class PgServerTransactionTests(PgServers servers)
                     )
                 );
 
+                var count = await CountAsync(servers.Admin19, schema, cancellationToken);
+
                 Assert.Equal(CoordinationErrorCodes.Unavailable, exception.Code);
                 Assert.False(exception.OutcomeUnknown);
-                Assert.Equal(0L, await CountAsync(servers.Admin19, schema, cancellationToken));
+                Assert.Equal(0L, count);
             },
             cancellationToken
         );
@@ -291,9 +295,11 @@ public sealed class PgServerTransactionTests(PgServers servers)
                     )
                 );
 
+                var count = await CountAsync(servers.Admin19, schema, cancellationToken);
+
                 Assert.Equal(CoordinationErrorCodes.Unavailable, exception.Code);
                 Assert.False(exception.OutcomeUnknown);
-                Assert.Equal(0L, await CountAsync(servers.Admin19, schema, cancellationToken));
+                Assert.Equal(0L, count);
             },
             cancellationToken
         );
@@ -337,9 +343,11 @@ public sealed class PgServerTransactionTests(PgServers servers)
                     )
                 );
 
+                var count = await CountAsync(servers.Admin19, schema, cancellationToken);
+
                 Assert.Equal(CoordinationErrorCodes.Unavailable, exception.Code);
                 Assert.True(exception.OutcomeUnknown);
-                Assert.Equal(0L, await CountAsync(servers.Admin19, schema, cancellationToken));
+                Assert.Equal(0L, count);
             },
             cancellationToken
         );
@@ -503,11 +511,15 @@ public sealed class PgServerTransactionTests(PgServers servers)
                     cancellationToken
                 );
 
+                var rowCount = await CountAsync(servers.Admin19, schema, cancellationToken);
+
                 Assert.Equal(0L, first);
                 Assert.Equal(first, second);
-                Assert.Equal(1L, await CountAsync(servers.Admin19, schema, cancellationToken));
+                Assert.Equal(1L, rowCount);
             },
             cancellationToken
         );
     }
+
+    #endregion
 }

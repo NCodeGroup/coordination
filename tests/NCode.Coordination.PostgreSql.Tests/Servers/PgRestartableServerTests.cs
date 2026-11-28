@@ -23,6 +23,8 @@ public sealed class PgRestartableServerTests
         return Assert.IsType<string>(value);
     }
 
+    #region StartAgainAsync Tests
+
     [PgServerFact]
     public async Task StartAgainAsync_AfterStop_KeepsTheEndpointAndTheData()
     {
@@ -42,4 +44,6 @@ public sealed class PgRestartableServerTests
         var value = await ReadAsync(server.ConnectionString, cancellationToken);
         Assert.Equal("kept", value);
     }
+
+    #endregion
 }

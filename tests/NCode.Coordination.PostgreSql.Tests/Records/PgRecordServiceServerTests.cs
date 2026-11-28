@@ -131,6 +131,8 @@ public sealed class PgRecordServiceServerTests(PgServers servers)
 
     private static KeySegment LongPrefixSegment() => KeySegment.FromString(new string('p', 256));
 
+    #region CreateAsync Tests
+
     [PgServerFact]
     public async Task CreateAsync_Written_LogsOneEntryAndNotifiesOnce()
     {
@@ -163,10 +165,17 @@ public sealed class PgRecordServiceServerTests(PgServers servers)
                 );
                 Assert.True(result.IsWritten);
 
-                Assert.True(await listener.WaitAsync(TimeSpan.FromSeconds(10), cancellationToken));
-                Assert.False(
-                    await listener.WaitAsync(TimeSpan.FromMilliseconds(500), cancellationToken)
+                var notified = await listener.WaitAsync(
+                    TimeSpan.FromSeconds(10),
+                    cancellationToken
                 );
+                Assert.True(notified);
+
+                var notifiedAgain = await listener.WaitAsync(
+                    TimeSpan.FromMilliseconds(500),
+                    cancellationToken
+                );
+                Assert.False(notifiedAgain);
 
                 Assert.Equal([PgChannels.ChangePayload(result.Revision.Value)], payloads.ToArray());
 
@@ -242,6 +251,10 @@ public sealed class PgRecordServiceServerTests(PgServers servers)
             cancellationToken
         );
     }
+
+    #endregion
+
+    #region ReadAsync Tests
 
     [PgServerFact]
     public async Task ReadAsync_RecordExpiresWhileASwapIsPaused_WaitsForTheSwap()
@@ -321,6 +334,10 @@ public sealed class PgRecordServiceServerTests(PgServers servers)
         );
     }
 
+    #endregion
+
+    #region ListAsync Tests
+
     [PgServerFact]
     public async Task ListAsync_LongestKeys_PagesThroughEveryRecord()
     {
@@ -371,4 +388,6 @@ public sealed class PgRecordServiceServerTests(PgServers servers)
             cancellationToken
         );
     }
+
+    #endregion
 }

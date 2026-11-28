@@ -56,7 +56,8 @@ public sealed class PgSweepsTests(PgServers servers)
                 connection
             );
 
-            return (long)(await command.ExecuteScalarAsync(cancellationToken))!;
+            var scalar = await command.ExecuteScalarAsync(cancellationToken);
+            return Assert.IsType<long>(scalar);
         }
 
         public async Task RecordAsync(
@@ -148,6 +149,8 @@ public sealed class PgSweepsTests(PgServers servers)
             logRetention
         );
 
+    #region SweepAsync Tests
+
     [PgServerFact]
     public async Task SweepAsync_FiveExpiredOccurrences_RemovesTwoPerPass()
     {
@@ -159,11 +162,13 @@ public sealed class PgSweepsTests(PgServers servers)
                 await Task.Delay(TimeSpan.FromMilliseconds(50), cancellationToken);
 
                 await context.Sweeps.SweepAsync(cancellationToken);
-                Assert.Equal(3, await context.CountAsync("occurrences", cancellationToken));
+                var afterFirst = await context.CountAsync("occurrences", cancellationToken);
+                Assert.Equal(3, afterFirst);
 
                 await context.Sweeps.SweepAsync(cancellationToken);
                 await context.Sweeps.SweepAsync(cancellationToken);
-                Assert.Equal(0, await context.CountAsync("occurrences", cancellationToken));
+                var afterAll = await context.CountAsync("occurrences", cancellationToken);
+                Assert.Equal(0, afterAll);
             },
             cancellationToken
         );
@@ -202,8 +207,10 @@ public sealed class PgSweepsTests(PgServers servers)
                     .WaitAsync(TimeSpan.FromSeconds(3), cancellationToken);
                 stopwatch.Stop();
 
+                var remaining = await context.CountAsync("occurrences", cancellationToken);
+
                 Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(3));
-                Assert.Equal(1, await context.CountAsync("occurrences", cancellationToken));
+                Assert.Equal(1, remaining);
 
                 await transaction.RollbackAsync(cancellationToken);
             },
@@ -230,9 +237,13 @@ public sealed class PgSweepsTests(PgServers servers)
                 await context.Sweeps.SweepAsync(cancellationToken);
                 await context.Sweeps.SweepAsync(cancellationToken);
 
-                Assert.Equal(3, await context.CountAsync("occurrences", cancellationToken));
-                Assert.Equal(1, await context.CountAsync("set_members", cancellationToken));
-                Assert.Equal(1, await context.CountAsync("sets", cancellationToken));
+                var occurrences = await context.CountAsync("occurrences", cancellationToken);
+                var members = await context.CountAsync("set_members", cancellationToken);
+                var sets = await context.CountAsync("sets", cancellationToken);
+
+                Assert.Equal(3, occurrences);
+                Assert.Equal(1, members);
+                Assert.Equal(1, sets);
             },
             cancellationToken
         );
@@ -253,21 +264,28 @@ public sealed class PgSweepsTests(PgServers servers)
                     cancellationToken
                 );
                 Assert.True(result.IsWritten);
-                Assert.Equal(1, await context.CountAsync("records", cancellationToken));
+                var before = await context.CountAsync("records", cancellationToken);
                 await Task.Delay(TimeSpan.FromMilliseconds(50), cancellationToken);
 
                 await context.Sweeps.SweepAsync(cancellationToken);
 
-                Assert.Equal(0, await context.CountAsync("records", cancellationToken));
-                Assert.Equal(2, await context.CountAsync("changes", cancellationToken));
-                Assert.Equal(
-                    1,
-                    await context.CountAsync("change_items WHERE kind = 2", cancellationToken)
+                var records = await context.CountAsync("records", cancellationToken);
+                var changes = await context.CountAsync("changes", cancellationToken);
+                var deletions = await context.CountAsync(
+                    "change_items WHERE kind = 2",
+                    cancellationToken
                 );
-                Assert.Equal(
-                    3,
-                    await context.ScalarAsync("revision", "keyspaces", cancellationToken)
+                var revision = await context.ScalarAsync(
+                    "revision",
+                    "keyspaces",
+                    cancellationToken
                 );
+
+                Assert.Equal(1, before);
+                Assert.Equal(0, records);
+                Assert.Equal(2, changes);
+                Assert.Equal(1, deletions);
+                Assert.Equal(3, revision);
             },
             cancellationToken
         );
@@ -291,17 +309,23 @@ public sealed class PgSweepsTests(PgServers servers)
                     );
                 }
 
-                Assert.Equal(2, await context.CountAsync("changes", cancellationToken));
+                var before = await context.CountAsync("changes", cancellationToken);
+                Assert.Equal(2, before);
                 await Task.Delay(TimeSpan.FromMilliseconds(1200), cancellationToken);
 
                 await context.Sweeps.SweepAsync(cancellationToken);
 
-                Assert.Equal(0, await context.CountAsync("changes", cancellationToken));
-                Assert.Equal(0, await context.CountAsync("change_items", cancellationToken));
-                Assert.Equal(
-                    3,
-                    await context.ScalarAsync("log_removed", "keyspaces", cancellationToken)
+                var changes = await context.CountAsync("changes", cancellationToken);
+                var items = await context.CountAsync("change_items", cancellationToken);
+                var logRemoved = await context.ScalarAsync(
+                    "log_removed",
+                    "keyspaces",
+                    cancellationToken
                 );
+
+                Assert.Equal(0, changes);
+                Assert.Equal(0, items);
+                Assert.Equal(3, logRemoved);
             },
             cancellationToken,
             TimeSpan.FromSeconds(1)
@@ -325,18 +349,31 @@ public sealed class PgSweepsTests(PgServers servers)
                     );
                 }
 
-                Assert.Equal(3, await context.CountAsync("messages", cancellationToken));
+                var before = await context.CountAsync("messages", cancellationToken);
+                Assert.Equal(3, before);
                 await Task.Delay(TimeSpan.FromMilliseconds(1200), cancellationToken);
 
                 await context.Sweeps.SweepAsync(cancellationToken);
 
-                Assert.Equal(1, await context.CountAsync("messages", cancellationToken));
-                Assert.Equal(2, await context.ScalarAsync("removed", "topics", cancellationToken));
+                var afterFirst = await context.CountAsync("messages", cancellationToken);
+                var removedFirst = await context.ScalarAsync(
+                    "removed",
+                    "topics",
+                    cancellationToken
+                );
+                Assert.Equal(1, afterFirst);
+                Assert.Equal(2, removedFirst);
 
                 await context.Sweeps.SweepAsync(cancellationToken);
 
-                Assert.Equal(0, await context.CountAsync("messages", cancellationToken));
-                Assert.Equal(3, await context.ScalarAsync("removed", "topics", cancellationToken));
+                var afterSecond = await context.CountAsync("messages", cancellationToken);
+                var removedSecond = await context.ScalarAsync(
+                    "removed",
+                    "topics",
+                    cancellationToken
+                );
+                Assert.Equal(0, afterSecond);
+                Assert.Equal(3, removedSecond);
             },
             cancellationToken,
             TimeSpan.FromSeconds(1)
@@ -357,23 +394,27 @@ public sealed class PgSweepsTests(PgServers servers)
                     cancellationToken
                 );
                 await Task.Delay(TimeSpan.FromMilliseconds(50), cancellationToken);
-                Assert.Equal(1, await context.CountAsync("sessions", cancellationToken));
+                var before = await context.CountAsync("sessions", cancellationToken);
+                Assert.Equal(1, before);
 
                 await context.Sweeps.SweepAsync(cancellationToken);
 
-                Assert.Equal(0, await context.CountAsync("sessions", cancellationToken));
-                Assert.Equal(1, await context.CountAsync("changes", cancellationToken));
-                Assert.Equal(
-                    1,
-                    await context.CountAsync(
-                        "changes WHERE ended_session IS NOT NULL",
-                        cancellationToken
-                    )
+                var sessions = await context.CountAsync("sessions", cancellationToken);
+                var changes = await context.CountAsync("changes", cancellationToken);
+                var ended = await context.CountAsync(
+                    "changes WHERE ended_session IS NOT NULL",
+                    cancellationToken
                 );
-                Assert.Equal(
-                    2,
-                    await context.ScalarAsync("revision", "keyspaces", cancellationToken)
+                var revision = await context.ScalarAsync(
+                    "revision",
+                    "keyspaces",
+                    cancellationToken
                 );
+
+                Assert.Equal(0, sessions);
+                Assert.Equal(1, changes);
+                Assert.Equal(1, ended);
+                Assert.Equal(2, revision);
             },
             cancellationToken
         );
@@ -405,8 +446,11 @@ public sealed class PgSweepsTests(PgServers servers)
                 await context.Sweeps.SweepAsync(cancellationToken);
                 await context.Sweeps.SweepAsync(cancellationToken);
 
-                Assert.Equal(0, await context.CountAsync("sessions", cancellationToken));
-                Assert.Equal(1, await context.CountAsync("records", cancellationToken));
+                var sessions = await context.CountAsync("sessions", cancellationToken);
+                var records = await context.CountAsync("records", cancellationToken);
+
+                Assert.Equal(0, sessions);
+                Assert.Equal(1, records);
             },
             cancellationToken
         );
@@ -436,14 +480,18 @@ public sealed class PgSweepsTests(PgServers servers)
                 await Task.Delay(TimeSpan.FromMilliseconds(500), cancellationToken);
 
                 await context.Sweeps.SweepAsync(cancellationToken);
-                Assert.Equal(1, await context.CountAsync("records", cancellationToken));
+                var kept = await context.CountAsync("records", cancellationToken);
+                Assert.Equal(1, kept);
 
                 await Task.Delay(TimeSpan.FromMilliseconds(1200), cancellationToken);
                 await context.Sweeps.SweepAsync(cancellationToken);
                 await context.Sweeps.SweepAsync(cancellationToken);
 
-                Assert.Equal(0, await context.CountAsync("changes", cancellationToken));
-                Assert.Equal(0, await context.CountAsync("records", cancellationToken));
+                var changes = await context.CountAsync("changes", cancellationToken);
+                var records = await context.CountAsync("records", cancellationToken);
+
+                Assert.Equal(0, changes);
+                Assert.Equal(0, records);
             },
             cancellationToken,
             TimeSpan.FromSeconds(1)
@@ -469,10 +517,15 @@ public sealed class PgSweepsTests(PgServers servers)
                 await context.Sweeps.SweepAsync(cancellationToken);
                 await context.Sweeps.SweepAsync(cancellationToken);
 
-                Assert.Equal(0, await context.CountAsync("set_members", cancellationToken));
-                Assert.Equal(0, await context.CountAsync("sets", cancellationToken));
+                var members = await context.CountAsync("set_members", cancellationToken);
+                var sets = await context.CountAsync("sets", cancellationToken);
+
+                Assert.Equal(0, members);
+                Assert.Equal(0, sets);
             },
             cancellationToken
         );
     }
+
+    #endregion
 }

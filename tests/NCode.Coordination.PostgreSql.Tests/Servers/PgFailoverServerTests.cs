@@ -38,6 +38,8 @@ public sealed class PgFailoverServerTests
         return state;
     }
 
+    #region StartAsync Tests
+
     [PgServerFact]
     public async Task StartAsync_Asynchronous_StreamsToTheStandby()
     {
@@ -59,4 +61,6 @@ public sealed class PgFailoverServerTests
 
         Assert.Equal("sync", state);
     }
+
+    #endregion
 }

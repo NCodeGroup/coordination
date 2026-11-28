@@ -96,6 +96,8 @@ public sealed class PgMigrationsServerTests(PgServers servers)
         );
     }
 
+    #region ApplyAsync Tests
+
     [PgServerFact]
     public async Task ApplyAsync_NewSchema_ReachesTheLatestVersion()
     {
@@ -191,6 +193,10 @@ public sealed class PgMigrationsServerTests(PgServers servers)
         }
     }
 
+    #endregion
+
+    #region GetMigrations Tests
+
     [PgServerFact]
     public async Task GetMigrations_RunByTheHost_ReachTheLatestVersion()
     {
@@ -215,6 +221,10 @@ public sealed class PgMigrationsServerTests(PgServers servers)
         });
     }
 
+    #endregion
+
+    #region ReadVersionAsync Tests
+
     [PgServerFact]
     public async Task ReadVersionAsync_NoTables_ReturnsZero()
     {
@@ -228,4 +238,6 @@ public sealed class PgMigrationsServerTests(PgServers servers)
 
         Assert.Equal((0, 0), version);
     }
+
+    #endregion
 }
