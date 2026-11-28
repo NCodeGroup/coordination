@@ -204,7 +204,8 @@ internal sealed class PgNotificationService(
         var depth = (short)topic.PartitionDepth;
         var body = payload.ToArray();
         var retention = PgCall.ToMicroseconds(Settings.LogRetention);
-        var announcement = "t:" + PgKeys.PageToken(index, depth) + ":";
+        var pageToken = PgKeys.PageToken(index, depth);
+        var announcement = PgChannels.TopicAnnouncement(pageToken);
 
         var request = new PgPublishRequest(index, depth, text, body, retention, announcement);
 

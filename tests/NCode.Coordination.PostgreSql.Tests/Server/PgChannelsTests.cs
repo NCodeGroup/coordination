@@ -68,6 +68,31 @@ public sealed class PgChannelsTests
 
     #endregion
 
+    #region TopicAnnouncement Tests
+
+    [Fact]
+    public void TopicAnnouncement_Token_StartsTheTopicPayload()
+    {
+        var payload = PgChannels.TopicPayload("tok", 5);
+        var announcement = PgChannels.TopicAnnouncement("tok");
+
+        Assert.Equal(announcement + "5", payload);
+    }
+
+    [Fact]
+    public void TopicAnnouncement_WithASequence_ParsesAsTheTopicsWake()
+    {
+        var announcement = PgChannels.TopicAnnouncement("tok");
+
+        var parsed = PgChannels.TryParseWake(announcement + "7", out var wake);
+
+        Assert.True(parsed);
+        Assert.Equal("tok", wake.TopicToken);
+        Assert.Equal(7L, wake.Number);
+    }
+
+    #endregion
+
     #region TryParseWake Tests
 
     [Fact]

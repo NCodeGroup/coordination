@@ -23,6 +23,11 @@ internal static partial class PgChannels
     private const string TopicPrefix = "t:";
 
     /// <summary>
+    /// The character that follows the topic token in the payload of a topic's announcement.
+    /// </summary>
+    private const char TopicSeparator = ':';
+
+    /// <summary>
     /// Gets the name of a keyspace's channel: <c>ncode.</c>, the schema's hash, <c>.</c> and the keyspace's id as 16
     /// lowercase hex digits, which is 31 characters.
     /// </summary>
@@ -45,6 +50,18 @@ internal static partial class PgChannels
         ChangePrefix + revision.ToString(CultureInfo.InvariantCulture);
 
     /// <summary>
+    /// Gets the payload of a topic's announcement before the sequence, which the publish statement appends.
+    /// </summary>
+    /// <param name="topicToken">The continuation-token encoding of the topic's key.</param>
+    /// <returns>The announcement: <c>t:</c>, the token and <c>:</c>.</returns>
+    public static string TopicAnnouncement(string topicToken)
+    {
+        ArgumentNullException.ThrowIfNull(topicToken);
+
+        return TopicPrefix + topicToken + TopicSeparator;
+    }
+
+    /// <summary>
     /// Gets the payload that announces a message was published to a topic.
     /// </summary>
     /// <param name="topicToken">The continuation-token encoding of the topic's key.</param>
@@ -52,9 +69,10 @@ internal static partial class PgChannels
     /// <returns>The payload: <c>t:</c>, the token, <c>:</c> and the sequence in invariant decimal.</returns>
     public static string TopicPayload(string topicToken, long sequence)
     {
-        ArgumentNullException.ThrowIfNull(topicToken);
+        var announcement = TopicAnnouncement(topicToken);
+        var sequenceText = sequence.ToString(CultureInfo.InvariantCulture);
 
-        return TopicPrefix + topicToken + ":" + sequence.ToString(CultureInfo.InvariantCulture);
+        return announcement + sequenceText;
     }
 
     /// <summary>
@@ -84,8 +102,8 @@ internal static partial class PgChannels
         if (payload.StartsWith(TopicPrefix, StringComparison.Ordinal))
         {
             var rest = payload.AsSpan(TopicPrefix.Length);
-            var colon = rest.IndexOf(':');
-            if (colon <= 0 || rest[(colon + 1)..].Contains(':'))
+            var colon = rest.IndexOf(TopicSeparator);
+            if (colon <= 0 || rest[(colon + 1)..].Contains(TopicSeparator))
             {
                 return false;
             }
