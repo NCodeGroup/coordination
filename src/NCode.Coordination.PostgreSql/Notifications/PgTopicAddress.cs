@@ -9,4 +9,4 @@ namespace NCode.Coordination.PostgreSql.Notifications;
 /// <param name="KeyspaceId">The keyspace's id.</param>
 /// <param name="Index">The topic's index value.</param>
 /// <param name="Depth">The topic's partition depth.</param>
-internal sealed record PgTopicAddress(long KeyspaceId, byte[] Index, short Depth);
+internal readonly record struct PgTopicAddress(long KeyspaceId, byte[] Index, short Depth);

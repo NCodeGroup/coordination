@@ -674,7 +674,7 @@ internal sealed class PgRecordTable(PgServer server, PgKeyspaces keyspaces, PgSe
     /// <param name="scope">The keyspace, the keys whose rows to read and the sessions whose rows to read.</param>
     /// <param name="cancellationToken">The token that cancels the call.</param>
     /// <returns>The change, the rows of the keys that exist, and the deadlines of the sessions that exist.</returns>
-    /// <exception cref="ArgumentNullException">The transaction or the scope is null.</exception>
+    /// <exception cref="ArgumentNullException">The transaction is null.</exception>
     /// <exception cref="PgKeyspaceMissingException">The keyspace's row does not exist.</exception>
     public async ValueTask<PgChangeStart> BeginAsync(
         PgTransaction transaction,
@@ -683,7 +683,6 @@ internal sealed class PgRecordTable(PgServer server, PgKeyspaces keyspaces, PgSe
     )
     {
         ArgumentNullException.ThrowIfNull(transaction);
-        ArgumentNullException.ThrowIfNull(scope);
 
         var keyspaceId = scope.KeyspaceId;
         var distinct = DistinctKeys(scope.Keys);

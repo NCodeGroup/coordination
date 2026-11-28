@@ -9,4 +9,4 @@ namespace NCode.Coordination.PostgreSql.Notifications;
 /// <param name="Removed">The highest sequence that the sweep removed, or 0 without a topic row.</param>
 /// <param name="Current">The topic's current sequence, or 0 without a topic row.</param>
 /// <param name="Message">The message that the row holds, or null when the topic has no message after the cursor.</param>
-internal sealed record PgLogRow(long Removed, long Current, PgMessage? Message);
+internal readonly record struct PgLogRow(long Removed, long Current, PgMessage? Message);

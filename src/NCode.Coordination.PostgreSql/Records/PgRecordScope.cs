@@ -11,7 +11,7 @@ namespace NCode.Coordination.PostgreSql.Records;
 /// <param name="KeyspaceId">The keyspace's id.</param>
 /// <param name="Keys">The keys whose rows to read; a key that is listed twice is read once.</param>
 /// <param name="Sessions">The ids of the sessions that the writes bind to, whose rows to read.</param>
-internal sealed record PgRecordScope(
+internal readonly record struct PgRecordScope(
     long KeyspaceId,
     ImmutableArray<CoordinationKey> Keys,
     ImmutableArray<string> Sessions

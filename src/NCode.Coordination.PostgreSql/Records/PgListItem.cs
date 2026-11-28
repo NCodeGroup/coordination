@@ -9,7 +9,7 @@ namespace NCode.Coordination.PostgreSql.Records;
 /// <param name="KeyspaceRevision">The keyspace's revision.</param>
 /// <param name="Now">The server's instant.</param>
 /// <param name="Row">The record's row, or null when the row holds no record.</param>
-internal sealed record PgListItem(long KeyspaceRevision, DateTime Now, PgRecordRow? Row)
+internal readonly record struct PgListItem(long KeyspaceRevision, DateTime Now, PgRecordRow? Row)
 {
     /// <summary>
     /// Tells whether the record holds at the instant that it was read.

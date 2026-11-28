@@ -8,4 +8,4 @@ namespace NCode.Coordination.PostgreSql.Membership;
 /// </summary>
 /// <param name="Address">The group's key and the values that its rows are found by.</param>
 /// <param name="Session">The session that leaves.</param>
-internal sealed record PgLeaveRequest(PgGroupAddress Address, SessionId Session);
+internal readonly record struct PgLeaveRequest(PgGroupAddress Address, SessionId Session);
