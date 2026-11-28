@@ -44,6 +44,18 @@ public sealed class PgRecordServiceServerTests(PgServers servers)
         return KeySegment.FromString(text);
     }
 
+    private static (CoordinationKey Earlier, CoordinationKey Later) OrderByIndex(
+        CoordinationKey first,
+        CoordinationKey second
+    )
+    {
+        var firstIndex = PgKeys.Index(first);
+        var secondIndex = PgKeys.Index(second);
+        ReadOnlySpan<byte> secondSpan = secondIndex;
+        var comparison = firstIndex.AsSpan().SequenceCompareTo(secondSpan);
+        return comparison < 0 ? (first, second) : (second, first);
+    }
+
     private sealed record Context(
         string AdminConnectionString,
         string SchemaName,
@@ -445,6 +457,100 @@ public sealed class PgRecordServiceServerTests(PgServers servers)
                     var recordValue = record.Value.ToArray();
                     Assert.Equal(new byte[] { 2 }, recordValue);
                     Assert.Equal(swapped.Revision.Value, record.Revision.Value);
+                }
+                finally
+                {
+                    gate.TrySetResult();
+                }
+            },
+            cancellationToken
+        );
+    }
+
+    [PgServerFact]
+    public async Task ListAsync_OnlyTheLookAheadRowExpired_DoesNotWaitForTheWriters()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await WithRecordsAsync(
+            async context =>
+            {
+                var prefixSegment = KeySegment.FromString("listed");
+                var firstSegment = KeySegment.FromString("first");
+                var secondSegment = KeySegment.FromString("second");
+                var prefix = context.Keyspace.CreateKey(prefixSegment);
+                var firstKey = context.Keyspace.CreateKey(prefixSegment, firstSegment);
+                var secondKey = context.Keyspace.CreateKey(prefixSegment, secondSegment);
+                var (earlierKey, laterKey) = OrderByIndex(firstKey, secondKey);
+                var oneMinuteLifetime = RecordLifetime.ForTimeToLive(OneMinute);
+                byte[] earlierValue = [1];
+                byte[] laterValue = [2];
+                byte[] swappedValue = [3];
+                var earlier = await context.Records.CreateAsync(
+                    earlierKey,
+                    earlierValue,
+                    RecordLifetime.Persistent,
+                    null,
+                    cancellationToken
+                );
+                Assert.True(earlier.IsWritten);
+                var later = await context.Records.CreateAsync(
+                    laterKey,
+                    laterValue,
+                    oneMinuteLifetime,
+                    null,
+                    cancellationToken
+                );
+                Assert.True(later.IsWritten);
+
+                await PgServers.ExpireRowsAsync(
+                    context.AdminConnectionString,
+                    context.SchemaName,
+                    "records",
+                    cancellationToken
+                );
+
+                var reached = new TaskCompletionSource(
+                    TaskCreationOptions.RunContinuationsAsynchronously
+                );
+                var gate = new TaskCompletionSource(
+                    TaskCreationOptions.RunContinuationsAsynchronously
+                );
+                context.PausedServer.AfterFirstBatch = async token =>
+                {
+                    reached.TrySetResult();
+                    await gate.Task.WaitAsync(token);
+                };
+
+                try
+                {
+                    var swap = context
+                        .PausedRecords.CompareAndSwapAsync(
+                            earlierKey,
+                            earlier.Revision,
+                            swappedValue,
+                            RecordLifetime.Persistent,
+                            null,
+                            cancellationToken
+                        )
+                        .AsTask();
+
+                    await reached.Task.WaitAsync(TenSeconds, cancellationToken);
+
+                    var request = new RecordPageRequest(1);
+                    var list = context
+                        .Records.ListAsync(prefix, request, null, cancellationToken)
+                        .AsTask();
+
+                    var page = await list.WaitAsync(TenSeconds, cancellationToken);
+                    Assert.False(swap.IsCompleted);
+                    var record = Assert.Single(page.Records);
+                    Assert.Equal(earlier.Revision.Value, record.Revision.Value);
+                    Assert.NotNull(page.ContinuationToken);
+
+                    gate.TrySetResult();
+
+                    var swapped = await swap.WaitAsync(TenSeconds, cancellationToken);
+                    Assert.True(swapped.IsWritten);
                 }
                 finally
                 {
