@@ -68,6 +68,48 @@ A keyspace is a row whose lock orders the changes that watches can see, so the c
 one after another and those of different keyspaces don't wait for each other. A keyspace per tenant is the unit of
 scale.
 
+## Primitives
+
+The provider keeps records, record watches, transactions, occurrences, sets, counters, sequences, sessions,
+membership, leases, semaphores, elections, claims and notifications in tables of its schema, and every time to live is
+measured on the server's clock.
+
+- **Occurrences, counters, sequences, sets and claims**: one statement or one transaction each, and none takes a
+  keyspace's row, so none waits for the writers of a keyspace. A batch of counter increments locks its counters in key
+  order, so two batches never wait for each other in a cycle. A count that passes `bigint` fails as `limit-exceeded`
+  and is not applied. A set holds at most 10,000 live members.
+- **Records and transactions**: a change locks its keyspace's row, takes the keyspace's next revision and logs the keys
+  it wrote or deleted, in the same database transaction. A listing returns pages of digests, and its continuation token
+  is under 700 characters.
+- **Sessions**: a session's end, by a close, by a write that meets it expired or by the sweep, is one change in its
+  keyspace's log. The records, members and grants bound to it are absent from then on, and the sweep deletes them once
+  the session's entry has left the log.
+- **Membership**: a join, a leave and a session's end are changes of the keyspace, and a group's watch reads them from
+  its keyspace's change log.
+- **Leases, semaphores and elections**: each grant carries a fencing token from a row per resource that outlives every
+  grant, so a grant after an expiry or a sweep still gets a greater one. A grant locks its keyspace's row but takes no
+  revision. Waiting for a release or a session's end, and watching a role, read the server every 100 milliseconds until
+  the condition holds or the caller cancels.
+- **Notifications**: a publish takes the topic's next sequence and stores the message, up to 4,096 bytes, in the topic's
+  log, and wakes the subscribers with `pg_notify`.
+- **Record and membership watches**: a watch reads its keyspace's change log after the revision it has delivered. It
+  replays after a revision the log still holds, and starts with a resync when the log no longer holds it.
+- **Resyncs**: every watch and subscription reads its log in order and resyncs after a gap in the numbers, a lost and
+  restored listening connection, a log that dropped an entry the subscriber still needs, a server whose start time
+  differs from the one before the reconnect, or a log whose number is behind a subscriber's. Every `CheckInterval`, 5
+  seconds by default, each log is also read without a wake-up, so a lost `pg_notify` costs at most that long.
+- **The sweep**: every `SweepInterval`, once the probe has passed, the provider deletes the expired rows, in
+  statements of at most `SweepBatchSize` rows that skip rows another transaction holds, and ends the expired sessions.
+  It also deletes the entries of change logs and topic logs older than `LogRetention`, 5 minutes by default, at least a
+  second and at most a day, and a watch or subscription that needs a deleted entry resyncs.
+
+The provider declares every primitive but notifications linearizable until the server fails over, since an old primary
+goes on answering reads after a standby is promoted. It declares the profile's durability for every primitive but
+record watches and notifications, which keep only a bounded log. Transactions and counter batches are atomic across
+partitions, because one database transaction commits every row. Record watches and notifications are at most once with
+gap detection: a message can be lost, but never without a resync after it. Every primitive but sequences, record
+watches and notifications declares the server's clock.
+
 ## Timeouts
 
 `StatementTimeout`, `LockTimeout` and `IdleInTransactionTimeout`, 5 seconds each by default, are set with `SET LOCAL`
