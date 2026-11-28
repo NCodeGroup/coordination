@@ -13,8 +13,6 @@ namespace NCode.Coordination.PostgreSql.Sessions.Tests;
 
 public sealed class PgSessionServerTests(PgServers servers)
 {
-    private static readonly TimeToLive OneSecond = new(TimeSpan.FromSeconds(1));
-
     private static readonly TimeToLive OneMinute = new(TimeSpan.FromMinutes(1));
 
     private sealed record Context(
@@ -181,12 +179,17 @@ public sealed class PgSessionServerTests(PgServers servers)
             {
                 var grant = await context.Sessions.OpenAsync(
                     context.Keyspace,
-                    OneSecond,
+                    OneMinute,
                     null,
                     cancellationToken
                 );
 
-                await Task.Delay(TimeSpan.FromMilliseconds(1200), cancellationToken);
+                await PgServers.ExpireRowsAsync(
+                    context.AdminConnectionString,
+                    context.SchemaName,
+                    "sessions",
+                    cancellationToken
+                );
 
                 var result = await context.Records.CreateAsync(
                     context.KeyOf("late"),

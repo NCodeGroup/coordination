@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using System.Collections.Concurrent;
-using System.Diagnostics;
 using System.Globalization;
 using NCode.Coordination.PostgreSql.Keys;
 using NCode.Coordination.PostgreSql.Schema;
@@ -14,7 +13,7 @@ namespace NCode.Coordination.PostgreSql.Records.Tests;
 
 public sealed class PgRecordServiceServerTests(PgServers servers)
 {
-    private static readonly TimeToLive OneSecond = new(TimeSpan.FromSeconds(1));
+    private static readonly TimeToLive OneMinute = new(TimeSpan.FromMinutes(1));
 
     private sealed record Context(
         string AdminConnectionString,
@@ -216,13 +215,18 @@ public sealed class PgRecordServiceServerTests(PgServers servers)
                 var first = await context.Records.CreateAsync(
                     key,
                     new byte[] { 1 },
-                    RecordLifetime.ForTimeToLive(OneSecond),
+                    RecordLifetime.ForTimeToLive(OneMinute),
                     null,
                     cancellationToken
                 );
                 Assert.True(first.IsWritten);
 
-                await Task.Delay(TimeSpan.FromMilliseconds(1200), cancellationToken);
+                await PgServers.ExpireRowsAsync(
+                    context.AdminConnectionString,
+                    context.SchemaName,
+                    "records",
+                    cancellationToken
+                );
 
                 var second = await context.Records.CreateAsync(
                     key,
@@ -267,12 +271,11 @@ public sealed class PgRecordServiceServerTests(PgServers servers)
                 var created = await context.Records.CreateAsync(
                     key,
                     new byte[] { 1 },
-                    RecordLifetime.ForTimeToLive(OneSecond),
+                    RecordLifetime.ForTimeToLive(OneMinute),
                     null,
                     cancellationToken
                 );
                 Assert.True(created.IsWritten);
-                var sinceCreate = Stopwatch.StartNew();
 
                 var reached = new TaskCompletionSource(
                     TaskCreationOptions.RunContinuationsAsynchronously
@@ -301,17 +304,19 @@ public sealed class PgRecordServiceServerTests(PgServers servers)
 
                     await reached.Task.WaitAsync(TimeSpan.FromSeconds(10), cancellationToken);
 
-                    var remaining = TimeSpan.FromMilliseconds(1500) - sinceCreate.Elapsed;
-                    if (remaining > TimeSpan.Zero)
-                    {
-                        await Task.Delay(remaining, cancellationToken);
-                    }
+                    await PgServers.ExpireRowsAsync(
+                        context.AdminConnectionString,
+                        context.SchemaName,
+                        "records",
+                        cancellationToken
+                    );
 
                     var read = context.Records.ReadAsync(key, null, cancellationToken).AsTask();
 
-                    await Task.WhenAny(
-                        read,
-                        Task.Delay(TimeSpan.FromMilliseconds(300), cancellationToken)
+                    await PgActivity.WaitForLockWaitAsync(
+                        context.AdminConnectionString,
+                        context.SchemaName,
+                        cancellationToken
                     );
                     Assert.False(read.IsCompleted);
 

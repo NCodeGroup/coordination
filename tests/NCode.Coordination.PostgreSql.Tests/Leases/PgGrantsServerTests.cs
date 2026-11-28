@@ -15,8 +15,6 @@ namespace NCode.Coordination.PostgreSql.Leases.Tests;
 
 public sealed class PgGrantsServerTests(PgServers servers)
 {
-    private static readonly TimeToLive OneSecond = new(TimeSpan.FromSeconds(1));
-
     private static readonly TimeToLive OneMinute = new(TimeSpan.FromMinutes(1));
 
     private static LeaseGrant GrantOf(LeaseAcquireResult result)
@@ -145,7 +143,7 @@ public sealed class PgGrantsServerTests(PgServers servers)
             async context =>
             {
                 var resource = context.KeyOf("swept");
-                var terms = LeaseTerms.ForTimeToLive(OneSecond);
+                var terms = LeaseTerms.ForTimeToLive(OneMinute);
 
                 var first = await context.Leases.TryAcquireAsync(
                     resource,
@@ -155,7 +153,12 @@ public sealed class PgGrantsServerTests(PgServers servers)
                 );
                 var firstToken = GrantOf(first).FencingToken.Value;
 
-                await Task.Delay(TimeSpan.FromMilliseconds(1200), cancellationToken);
+                await PgServers.ExpireRowsAsync(
+                    context.AdminConnectionString,
+                    context.SchemaName,
+                    "grants",
+                    cancellationToken
+                );
 
                 await context.Sweeps.SweepAsync(cancellationToken);
 
