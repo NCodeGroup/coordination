@@ -22,6 +22,15 @@ internal sealed record PgGrantStart(
 )
 {
     /// <summary>
+    /// Tells whether the session of a grant's terms has ended: the terms bind to a session whose row is gone or past
+    /// its deadline.
+    /// </summary>
+    /// <param name="session">The id of the terms' session, or null when they bind to none.</param>
+    /// <returns><see langword="true"/> when the terms bind to a session that is not live.</returns>
+    public bool SessionEnded(string? session) =>
+        session is not null && (SessionDeadline is not { } deadline || deadline <= Change.Now);
+
+    /// <summary>
     /// Ends every session that the read met past its deadline, whether a grant is bound to it or it is the terms'.
     /// </summary>
     /// <param name="session">The id of the terms' session, or null when there is none.</param>

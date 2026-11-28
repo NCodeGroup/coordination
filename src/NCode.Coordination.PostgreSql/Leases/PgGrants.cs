@@ -273,6 +273,25 @@ internal sealed class PgGrants(PgRecordTable table)
         [.. read.Rows.Where(row => row.StateAt(read.Now) == PgRecordState.Live)];
 
     /// <summary>
+    /// Finds the grant row of a held grant when the grant is still the live one: the slot, the fencing token and the
+    /// owner token all match.
+    /// </summary>
+    /// <param name="start">What the transaction's first batch read.</param>
+    /// <param name="held">The grant the caller holds.</param>
+    /// <returns>The row, or null when the grant has ended.</returns>
+    private static PgGrantRow? FindHeld(PgGrantStart start, PgHeldGrant held)
+    {
+        var now = start.Change.Now;
+
+        return start.Rows.FirstOrDefault(row =>
+            row.Slot == held.Slot
+            && row.Fencing == held.Fencing
+            && string.Equals(row.Owner, held.Owner, StringComparison.Ordinal)
+            && row.StateAt(now) == PgRecordState.Live
+        );
+    }
+
+    /// <summary>
     /// Gets the record table, whose keyspaces' ids, transactions and changes the grants share.
     /// </summary>
     public PgRecordTable Table { get; } = table ?? throw new ArgumentNullException(nameof(table));
@@ -373,55 +392,213 @@ internal sealed class PgGrants(PgRecordTable table)
     }
 
     /// <summary>
+    /// Gives a resource's slot a new holder: writes the grant's row and the resource's fencing row in the change.
+    /// </summary>
+    /// <param name="start">What the transaction's first batch read.</param>
+    /// <param name="keyspaceId">The keyspace's id.</param>
+    /// <param name="grant">The grant to write.</param>
+    /// <returns>The fencing token of the grant, which is the one after the last the resource was given.</returns>
+    /// <exception cref="ArgumentNullException">The start or the grant is null.</exception>
+    public long Grant(PgGrantStart start, long keyspaceId, PgNewGrant grant)
+    {
+        ArgumentNullException.ThrowIfNull(start);
+        ArgumentNullException.ThrowIfNull(grant);
+
+        var fencing = start.Last + 1;
+        var upsert = Upsert(keyspaceId, grant, fencing);
+        var fence = Fence(keyspaceId, grant, fencing);
+        start.Change.Write(upsert);
+        start.Change.Write(fence);
+
+        return fencing;
+    }
+
+    /// <summary>
+    /// Moves the deadline of a grant when it is still the live one: the slot, the fencing token and the owner token all
+    /// match.
+    /// </summary>
+    /// <param name="held">The grant the caller holds.</param>
+    /// <param name="timeToLive">The time to live that the grant is renewed for.</param>
+    /// <param name="cancellationToken">The token that cancels the call.</param>
+    /// <returns><see langword="true"/> when the grant was renewed; <see langword="false"/> when it has ended.</returns>
+    /// <exception cref="ArgumentNullException">The grant or the time to live is null.</exception>
+    /// <exception cref="CoordinationException">The server could not be reached or failed.</exception>
+    public async ValueTask<bool> RenewHeldAsync(
+        PgHeldGrant held,
+        TimeToLive timeToLive,
+        CancellationToken cancellationToken
+    )
+    {
+        ArgumentNullException.ThrowIfNull(held);
+        ArgumentNullException.ThrowIfNull(timeToLive);
+
+        return await ChangeHeldAsync(
+                held,
+                (id, now) => RenewStatement(id, held, now, timeToLive),
+                cancellationToken
+            )
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Deletes a grant when it is still the live one: the slot, the fencing token and the owner token all match.
+    /// </summary>
+    /// <param name="held">The grant the caller holds.</param>
+    /// <param name="cancellationToken">The token that cancels the call.</param>
+    /// <returns><see langword="true"/> when the grant was deleted; <see langword="false"/> when it has ended.</returns>
+    /// <exception cref="ArgumentNullException">The grant is null.</exception>
+    /// <exception cref="CoordinationException">The server could not be reached or failed.</exception>
+    public async ValueTask<bool> ReleaseHeldAsync(
+        PgHeldGrant held,
+        CancellationToken cancellationToken
+    )
+    {
+        ArgumentNullException.ThrowIfNull(held);
+
+        return await ChangeHeldAsync(held, (id, _) => Delete(id, held), cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Builds the statement that renews a held grant from the server's instant.
+    /// </summary>
+    /// <param name="keyspaceId">The keyspace's id.</param>
+    /// <param name="held">The grant the caller holds.</param>
+    /// <param name="now">The instant the transaction read on the server's clock.</param>
+    /// <param name="timeToLive">The time to live that the grant is renewed for.</param>
+    /// <returns>The statement.</returns>
+    private PgStatement RenewStatement(
+        long keyspaceId,
+        PgHeldGrant held,
+        DateTime now,
+        TimeToLive timeToLive
+    )
+    {
+        var deadline = PgCall.DeadlineAfter(now, timeToLive);
+
+        return Renew(keyspaceId, held, deadline);
+    }
+
+    /// <summary>
+    /// Applies a write to a held grant when it is still the live one, in a transaction on the grant's keyspace.
+    /// </summary>
+    /// <param name="held">The grant the caller holds.</param>
+    /// <param name="write">Builds the write from the keyspace's id and the server's instant.</param>
+    /// <param name="cancellationToken">The token that cancels the call.</param>
+    /// <returns><see langword="true"/> when the write was made; <see langword="false"/> when the grant has ended.</returns>
+    /// <exception cref="CoordinationException">The server could not be reached or failed.</exception>
+    private async ValueTask<bool> ChangeHeldAsync(
+        PgHeldGrant held,
+        Func<long, DateTime, PgStatement> write,
+        CancellationToken cancellationToken
+    )
+    {
+        return await Table
+            .Keyspaces.RunAsync<bool>(
+                held.Resource.Keyspace,
+                (id, token) => ChangeHeldInKeyspaceAsync(id, held, write, token),
+                cancellationToken
+            )
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Changes a held grant in a keyspace, in a transaction.
+    /// </summary>
+    /// <param name="keyspaceId">The keyspace's id.</param>
+    /// <param name="held">The grant the caller holds.</param>
+    /// <param name="write">Builds the write from the keyspace's id and the server's instant.</param>
+    /// <param name="cancellationToken">The token that cancels the call.</param>
+    /// <returns><see langword="true"/> when the write was made; <see langword="false"/> when the grant has ended.</returns>
+    private async ValueTask<bool> ChangeHeldInKeyspaceAsync(
+        long keyspaceId,
+        PgHeldGrant held,
+        Func<long, DateTime, PgStatement> write,
+        CancellationToken cancellationToken
+    )
+    {
+        return await Table
+            .Server.TransactAsync(
+                PgIsolation.ReadCommitted,
+                (transaction, token) =>
+                    ChangeHeldInTransactionAsync(transaction, keyspaceId, held, write, token),
+                cancellationToken
+            )
+            .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Begins a change, ends the expired sessions it met, makes the write when the grant is still the live one and
+    /// commits the change.
+    /// </summary>
+    /// <param name="transaction">The transaction, which has not run a batch.</param>
+    /// <param name="keyspaceId">The keyspace's id.</param>
+    /// <param name="held">The grant the caller holds.</param>
+    /// <param name="write">Builds the write from the keyspace's id and the server's instant.</param>
+    /// <param name="cancellationToken">The token that cancels the call.</param>
+    /// <returns><see langword="true"/> when the write was made; <see langword="false"/> when the grant has ended.</returns>
+    private async ValueTask<bool> ChangeHeldInTransactionAsync(
+        PgTransaction transaction,
+        long keyspaceId,
+        PgHeldGrant held,
+        Func<long, DateTime, PgStatement> write,
+        CancellationToken cancellationToken
+    )
+    {
+        var start = await BeginAsync(
+                transaction,
+                keyspaceId,
+                held.Kind,
+                held.Resource,
+                null,
+                cancellationToken
+            )
+            .ConfigureAwait(false);
+
+        start.EndExpiredSessions(null);
+
+        var live = FindHeld(start, held);
+        if (live is not null)
+        {
+            var statement = write(keyspaceId, start.Change.Now);
+            start.Change.Write(statement);
+        }
+
+        await Table
+            .CommitAsync(transaction, start.Change, keyspaceId, cancellationToken)
+            .ConfigureAwait(false);
+        return live is not null;
+    }
+
+    /// <summary>
     /// Builds the statement that writes a grant, replacing the row that holds its slot.
     /// </summary>
     /// <param name="keyspaceId">The keyspace's id.</param>
-    /// <param name="kind">The kind of the grant.</param>
-    /// <param name="resource">The resource that the grant guards.</param>
-    /// <param name="slot">The slot the grant holds.</param>
-    /// <param name="capacity">The capacity of the semaphore the grant belongs to; 1 for a lease or an election.</param>
+    /// <param name="grant">The grant to write.</param>
     /// <param name="fencing">The fencing token of the grant.</param>
-    /// <param name="owner">The owner token of the grant.</param>
-    /// <param name="session">The id of the session the grant is bound to, or null.</param>
-    /// <param name="deadline">The instant the grant expires, or null when it is bound to a session.</param>
-    /// <param name="value">The leader's value of an election, or null.</param>
     /// <returns>The statement.</returns>
-    /// <exception cref="ArgumentNullException">The resource or the owner is null.</exception>
-    public PgStatement Upsert(
-        long keyspaceId,
-        short kind,
-        CoordinationKey resource,
-        int slot,
-        int capacity,
-        long fencing,
-        string owner,
-        string? session,
-        DateTime? deadline,
-        byte[]? value
-    )
+    private PgStatement Upsert(long keyspaceId, PgNewGrant grant, long fencing)
     {
-        ArgumentNullException.ThrowIfNull(resource);
-        ArgumentNullException.ThrowIfNull(owner);
-
+        var resource = grant.Resource;
         var index = PgKeys.Index(resource);
         var indexArgument = PgArgument.Typed(index, NpgsqlDbType.Bytea);
         var depth = (short)resource.PartitionDepth;
         var keyText = PgKeys.KeyText(resource);
-        var sessionArgument = PgArgument.Typed(session, NpgsqlDbType.Text);
-        var deadlineArgument = PgArgument.Typed(deadline, NpgsqlDbType.TimestampTz);
-        var valueArgument = PgArgument.Typed(value, NpgsqlDbType.Bytea);
+        var sessionArgument = PgArgument.Typed(grant.Session, NpgsqlDbType.Text);
+        var deadlineArgument = PgArgument.Typed(grant.Deadline, NpgsqlDbType.TimestampTz);
+        var valueArgument = PgArgument.Typed(grant.Value, NpgsqlDbType.Bytea);
 
         return new PgStatement(
             UpsertGrantSql,
             keyspaceId,
-            kind,
+            grant.Kind,
             indexArgument,
             depth,
             keyText,
-            slot,
-            capacity,
+            grant.Slot,
+            grant.Capacity,
             fencing,
-            owner,
+            grant.Owner,
             sessionArgument,
             deadlineArgument,
             valueArgument
@@ -432,15 +609,12 @@ internal sealed class PgGrants(PgRecordTable table)
     /// Builds the statement that stores the last fencing token given to a resource.
     /// </summary>
     /// <param name="keyspaceId">The keyspace's id.</param>
-    /// <param name="kind">The kind of the grants.</param>
-    /// <param name="resource">The resource that the grants guard.</param>
-    /// <param name="last">The fencing token that was given.</param>
+    /// <param name="grant">The grant that was given.</param>
+    /// <param name="fencing">The fencing token that was given.</param>
     /// <returns>The statement.</returns>
-    /// <exception cref="ArgumentNullException">The resource is null.</exception>
-    public PgStatement Fence(long keyspaceId, short kind, CoordinationKey resource, long last)
+    private PgStatement Fence(long keyspaceId, PgNewGrant grant, long fencing)
     {
-        ArgumentNullException.ThrowIfNull(resource);
-
+        var resource = grant.Resource;
         var index = PgKeys.Index(resource);
         var indexArgument = PgArgument.Typed(index, NpgsqlDbType.Bytea);
         var depth = (short)resource.PartitionDepth;
@@ -449,11 +623,11 @@ internal sealed class PgGrants(PgRecordTable table)
         return new PgStatement(
             UpsertFencingSql,
             keyspaceId,
-            kind,
+            grant.Kind,
             indexArgument,
             depth,
             keyText,
-            last
+            fencing
         );
     }
 
@@ -461,38 +635,25 @@ internal sealed class PgGrants(PgRecordTable table)
     /// Builds the statement that moves the deadline of a grant.
     /// </summary>
     /// <param name="keyspaceId">The keyspace's id.</param>
-    /// <param name="kind">The kind of the grant.</param>
-    /// <param name="resource">The resource that the grant guards.</param>
-    /// <param name="slot">The slot the grant holds.</param>
-    /// <param name="fencing">The fencing token of the grant.</param>
+    /// <param name="held">The grant the caller holds.</param>
     /// <param name="deadline">The new deadline.</param>
     /// <returns>The statement.</returns>
-    /// <exception cref="ArgumentNullException">The resource is null.</exception>
-    public PgStatement Renew(
-        long keyspaceId,
-        short kind,
-        CoordinationKey resource,
-        int slot,
-        long fencing,
-        DateTime deadline
-    )
+    private PgStatement Renew(long keyspaceId, PgHeldGrant held, DateTime deadline)
     {
-        ArgumentNullException.ThrowIfNull(resource);
-
-        var index = PgKeys.Index(resource);
+        var index = PgKeys.Index(held.Resource);
         var indexArgument = PgArgument.Typed(index, NpgsqlDbType.Bytea);
-        var depth = (short)resource.PartitionDepth;
+        var depth = (short)held.Resource.PartitionDepth;
         var deadlineArgument = PgArgument.Typed(deadline, NpgsqlDbType.TimestampTz);
 
         return new PgStatement(
             RenewGrantSql,
             keyspaceId,
-            kind,
+            held.Kind,
             indexArgument,
             depth,
-            slot,
+            held.Slot,
             deadlineArgument,
-            fencing
+            held.Fencing
         );
     }
 
@@ -500,34 +661,22 @@ internal sealed class PgGrants(PgRecordTable table)
     /// Builds the statement that deletes a grant.
     /// </summary>
     /// <param name="keyspaceId">The keyspace's id.</param>
-    /// <param name="kind">The kind of the grant.</param>
-    /// <param name="resource">The resource that the grant guards.</param>
-    /// <param name="slot">The slot the grant holds.</param>
-    /// <param name="fencing">The fencing token of the grant.</param>
+    /// <param name="held">The grant the caller holds.</param>
     /// <returns>The statement.</returns>
-    /// <exception cref="ArgumentNullException">The resource is null.</exception>
-    public PgStatement Delete(
-        long keyspaceId,
-        short kind,
-        CoordinationKey resource,
-        int slot,
-        long fencing
-    )
+    private PgStatement Delete(long keyspaceId, PgHeldGrant held)
     {
-        ArgumentNullException.ThrowIfNull(resource);
-
-        var index = PgKeys.Index(resource);
+        var index = PgKeys.Index(held.Resource);
         var indexArgument = PgArgument.Typed(index, NpgsqlDbType.Bytea);
-        var depth = (short)resource.PartitionDepth;
+        var depth = (short)held.Resource.PartitionDepth;
 
         return new PgStatement(
             DeleteGrantSql,
             keyspaceId,
-            kind,
+            held.Kind,
             indexArgument,
             depth,
-            slot,
-            fencing
+            held.Slot,
+            held.Fencing
         );
     }
 
