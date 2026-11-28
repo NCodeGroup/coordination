@@ -563,13 +563,13 @@ internal sealed class PgRecordService(PgRecordTable table) : IRecordService
     /// <param name="results">The results of the batch.</param>
     /// <param name="cancellationToken">The token that cancels the call.</param>
     /// <returns>One item for each row: the keyspace's revision, the server's instant and the record's row, if any.</returns>
-    private static async ValueTask<ImmutableArray<ListItem>> ReadListAsync(
+    private static async ValueTask<ImmutableArray<PgListItem>> ReadListAsync(
         PgResults results,
         CancellationToken cancellationToken
     ) =>
         await results
             .ReadAsync(
-                reader => new ListItem(
+                reader => new PgListItem(
                     reader.GetInt64(0),
                     DateTime.SpecifyKind(reader.GetDateTime(1), DateTimeKind.Utc),
                     reader.IsDBNull(2)
@@ -592,18 +592,4 @@ internal sealed class PgRecordService(PgRecordTable table) : IRecordService
                 cancellationToken
             )
             .ConfigureAwait(false);
-
-    /// <summary>
-    /// Holds one row that the list statement returned.
-    /// </summary>
-    /// <param name="KeyspaceRevision">The keyspace's revision.</param>
-    /// <param name="Now">The server's instant.</param>
-    /// <param name="Row">The record's row, or null when the row holds no record.</param>
-    private sealed record ListItem(long KeyspaceRevision, DateTime Now, PgRecordRow? Row)
-    {
-        /// <summary>Tells whether the record holds at the instant that it was read.</summary>
-        /// <returns>The state that <see cref="PgLiveness.StateOf"/> decides for the row; <see cref="PgRecordState.Live"/>
-        /// when there is none.</returns>
-        public PgRecordState StateAt() => Row?.StateAt(Now) ?? PgRecordState.Live;
-    }
 }

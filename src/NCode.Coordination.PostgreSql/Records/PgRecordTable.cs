@@ -201,7 +201,7 @@ internal sealed class PgRecordTable(PgServer server, PgKeyspaces keyspaces, PgSe
     /// <param name="results">The results of the batch.</param>
     /// <param name="cancellationToken">The token that cancels the call.</param>
     /// <returns>The row and the instant, or null when the key has no row.</returns>
-    private static async ValueTask<OneRead?> ReadOneResultAsync(
+    private static async ValueTask<PgOneRead?> ReadOneResultAsync(
         PgResults results,
         CancellationToken cancellationToken
     )
@@ -211,7 +211,7 @@ internal sealed class PgRecordTable(PgServer server, PgKeyspaces keyspaces, PgSe
                 reader =>
                     reader.IsDBNull(1)
                         ? null
-                        : new OneRead(
+                        : new PgOneRead(
                             DateTime.SpecifyKind(reader.GetDateTime(0), DateTimeKind.Utc),
                             reader.GetFieldValue<byte[]>(1),
                             reader.GetInt64(2),
@@ -236,32 +236,8 @@ internal sealed class PgRecordTable(PgServer server, PgKeyspaces keyspaces, PgSe
     /// <param name="key">The record's key.</param>
     /// <param name="read">The row.</param>
     /// <returns>The record.</returns>
-    private static StoredRecord ToRecord(CoordinationKey key, OneRead read) =>
+    private static StoredRecord ToRecord(CoordinationKey key, PgOneRead read) =>
         new(key, read.Value, new Revision(read.Revision));
-
-    /// <summary>
-    /// Holds the row that <see cref="ReadOneAsync"/> read, with the instant the server read it at.
-    /// </summary>
-    /// <param name="Now">The server's instant.</param>
-    /// <param name="Value">The record's value.</param>
-    /// <param name="Revision">The keyspace's revision at which the record was written.</param>
-    /// <param name="Deadline">The instant the record expires, or null when it doesn't.</param>
-    /// <param name="Session">The id of the session the record is bound to, or null.</param>
-    /// <param name="SessionDeadline">The deadline of the session's row, or null when it is bound to none or the row is gone.</param>
-    private sealed record OneRead(
-        DateTime Now,
-        byte[] Value,
-        long Revision,
-        DateTime? Deadline,
-        string? Session,
-        DateTime? SessionDeadline
-    )
-    {
-        /// <summary>Tells whether the record holds at the instant that it was read.</summary>
-        /// <returns>The state that <see cref="PgLiveness.StateOf"/> decides.</returns>
-        public PgRecordState StateAt() =>
-            PgLiveness.StateOf(Deadline, Session, SessionDeadline, Now);
-    }
 
     /// <summary>
     /// Decodes the key of a row that the server returned.

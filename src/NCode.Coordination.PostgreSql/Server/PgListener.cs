@@ -40,7 +40,7 @@ internal sealed class PgListener(
 
     private readonly Lock _gate = new();
     private readonly Dictionary<string, int> _references = new(StringComparer.Ordinal);
-    private readonly Queue<Request> _requests = new();
+    private readonly Queue<PgListenerRequest> _requests = new();
     private readonly CancellationTokenSource _stop = new();
     private Task? _loop;
     private bool _disposed;
@@ -96,7 +96,7 @@ internal sealed class PgListener(
             ObjectDisposedException.ThrowIf(_disposed, this);
 
             _references[channel] = _references.GetValueOrDefault(channel) + 1;
-            _requests.Enqueue(new Request($"LISTEN \"{channel}\"", waiter));
+            _requests.Enqueue(new PgListenerRequest($"LISTEN \"{channel}\"", waiter));
             _loop ??= Task.Run(() => RunAsync(_stop.Token), CancellationToken.None);
         }
 
@@ -133,7 +133,7 @@ internal sealed class PgListener(
             }
 
             _references.Remove(channel);
-            _requests.Enqueue(new Request($"UNLISTEN \"{channel}\"", null));
+            _requests.Enqueue(new PgListenerRequest($"UNLISTEN \"{channel}\"", null));
         }
     }
 
@@ -312,7 +312,7 @@ internal sealed class PgListener(
     {
         while (true)
         {
-            Request? request;
+            PgListenerRequest? request;
             lock (_gate)
             {
                 if (!_requests.TryPeek(out request))
@@ -354,7 +354,7 @@ internal sealed class PgListener(
     /// <param name="exception">The failure that every waiter receives.</param>
     private void FailWaiters(Exception exception)
     {
-        Request[] requests;
+        PgListenerRequest[] requests;
         lock (_gate)
         {
             requests = [.. _requests];
@@ -418,11 +418,4 @@ internal sealed class PgListener(
             // A broken connection has nothing left to release.
         }
     }
-
-    /// <summary>
-    /// A <c>LISTEN</c> or <c>UNLISTEN</c> that the loop runs, and the task that awaits it.
-    /// </summary>
-    /// <param name="Sql">The statement.</param>
-    /// <param name="Waiter">The waiter that completes when the statement ran, or null when nobody waits.</param>
-    private sealed record Request(string Sql, TaskCompletionSource? Waiter);
 }

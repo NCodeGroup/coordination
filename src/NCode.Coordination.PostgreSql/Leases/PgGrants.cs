@@ -441,7 +441,7 @@ internal sealed class PgGrants(PgRecordTable table)
     /// <param name="results">The results of the batch.</param>
     /// <param name="cancellationToken">The token that cancels the call.</param>
     /// <returns>The server's instant and the rows that exist.</returns>
-    private static async ValueTask<GrantRead> ReadRowsAsync(
+    private static async ValueTask<PgGrantRead> ReadRowsAsync(
         PgResults results,
         CancellationToken cancellationToken
     )
@@ -457,7 +457,7 @@ internal sealed class PgGrants(PgRecordTable table)
             )
             .ConfigureAwait(false);
 
-        return new GrantRead(rows[0].Now, [.. rows.Select(row => row.Row).OfType<PgGrantRow>()]);
+        return new PgGrantRead(rows[0].Now, [.. rows.Select(row => row.Row).OfType<PgGrantRow>()]);
     }
 
     /// <summary>
@@ -497,13 +497,6 @@ internal sealed class PgGrants(PgRecordTable table)
     /// </summary>
     /// <param name="read">What the read returned.</param>
     /// <returns>The live grants.</returns>
-    private static ImmutableArray<PgGrantRow> Live(GrantRead read) =>
+    private static ImmutableArray<PgGrantRow> Live(PgGrantRead read) =>
         [.. read.Rows.Where(row => row.StateAt(read.Now) == PgRecordState.Live)];
-
-    /// <summary>
-    /// Holds what a read of a resource's grants returned.
-    /// </summary>
-    /// <param name="Now">The server's instant.</param>
-    /// <param name="Rows">The grant rows that exist, expired or not.</param>
-    private sealed record GrantRead(DateTime Now, ImmutableArray<PgGrantRow> Rows);
 }

@@ -99,7 +99,7 @@ internal sealed class PgKeyspaceChange(
     private string NotifySql { get; } = schema.Apply(Notify);
 
     /// <summary>Gets the entries the transaction has taken, in order.</summary>
-    private List<Entry> Entries { get; } = [];
+    private List<PgChangeEntry> Entries { get; } = [];
 
     /// <summary>Gets the sessions that this change has ended.</summary>
     private HashSet<string> EndedSessions { get; } = new(StringComparer.Ordinal);
@@ -152,7 +152,7 @@ internal sealed class PgKeyspaceChange(
     public long Begin()
     {
         Revision++;
-        Entries.Add(new Entry(Revision));
+        Entries.Add(new PgChangeEntry(Revision));
         return Revision;
     }
 
@@ -227,7 +227,7 @@ internal sealed class PgKeyspaceChange(
 
         var entry = Current();
         entry.Writes.Add(
-            new RecordWrite(
+            new PgRecordWrite(
                 WrittenKind,
                 PgKeys.Index(key),
                 (short)key.PartitionDepth,
@@ -252,7 +252,7 @@ internal sealed class PgKeyspaceChange(
 
         var entry = Current();
         entry.Writes.Add(
-            new RecordWrite(DeletedKind, row.Index, row.Depth, row.Key, null, null, null, null)
+            new PgRecordWrite(DeletedKind, row.Index, row.Depth, row.Key, null, null, null, null)
         );
     }
 
@@ -345,7 +345,7 @@ internal sealed class PgKeyspaceChange(
     /// </summary>
     /// <param name="entry">The entry.</param>
     /// <returns>The statement, whose arrays hold one element for each write of the entry.</returns>
-    private PgStatement ItemsStatement(Entry entry)
+    private PgStatement ItemsStatement(PgChangeEntry entry)
     {
         var writes = entry.Writes;
 
@@ -397,7 +397,7 @@ internal sealed class PgKeyspaceChange(
     /// </summary>
     /// <returns>The entry.</returns>
     /// <exception cref="InvalidOperationException"><see cref="Begin"/> was not called.</exception>
-    private Entry Current()
+    private PgChangeEntry Current()
     {
         if (Entries.Count == 0)
         {
@@ -406,45 +406,4 @@ internal sealed class PgKeyspaceChange(
 
         return Entries[^1];
     }
-
-    /// <summary>
-    /// Holds one entry of the change log: its revision and its writes.
-    /// </summary>
-    /// <param name="Revision">The entry's revision.</param>
-    private sealed record Entry(long Revision)
-    {
-        /// <summary>Gets the entry's record writes, in order.</summary>
-        public List<RecordWrite> Writes { get; } = [];
-
-        /// <summary>Gets or sets the id of the session the entry ended, or null.</summary>
-        public string? EndedSession { get; set; }
-
-        /// <summary>Gets or sets the index value of the group the entry names, or null.</summary>
-        public byte[]? GroupIndex { get; set; }
-
-        /// <summary>Gets or sets the partition depth of the group the entry names, or null.</summary>
-        public short? GroupDepth { get; set; }
-    }
-
-    /// <summary>
-    /// Holds one record write of an entry.
-    /// </summary>
-    /// <param name="Kind">1 for a record written, 2 for a record deleted.</param>
-    /// <param name="Index">The record's index value.</param>
-    /// <param name="Depth">The record's partition depth.</param>
-    /// <param name="Key">The record's key text.</param>
-    /// <param name="Value">The value written, or null for a deletion.</param>
-    /// <param name="Deadline">The instant the record written expires, or null.</param>
-    /// <param name="Session">The session the record written is bound to, or null.</param>
-    /// <param name="ReplacedSession">The ended session whose row the write replaced, or null.</param>
-    private sealed record RecordWrite(
-        short Kind,
-        byte[] Index,
-        short Depth,
-        string Key,
-        byte[]? Value,
-        DateTime? Deadline,
-        string? Session,
-        string? ReplacedSession
-    );
 }

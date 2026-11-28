@@ -484,14 +484,14 @@ internal sealed class PgMembershipService(PgRecordTable table, PgChangeLog chang
     /// <param name="results">The results of the batch.</param>
     /// <param name="cancellationToken">The token that cancels the call.</param>
     /// <returns>The rows; none when the keyspace's row does not exist.</returns>
-    private static async ValueTask<ImmutableArray<MemberRow>> ReadMembersAsync(
+    private static async ValueTask<ImmutableArray<PgMemberRow>> ReadMembersAsync(
         PgResults results,
         CancellationToken cancellationToken
     )
     {
         return await results
             .ReadAsync(
-                reader => new MemberRow(
+                reader => new PgMemberRow(
                     reader.GetInt64(0),
                     DateTime.SpecifyKind(reader.GetDateTime(1), DateTimeKind.Utc),
                     reader.IsDBNull(2) ? null : reader.GetString(2),
@@ -514,7 +514,7 @@ internal sealed class PgMembershipService(PgRecordTable table, PgChangeLog chang
     /// <param name="group">The group.</param>
     /// <param name="rows">The rows, which are not empty.</param>
     /// <returns>The view at the keyspace's revision.</returns>
-    private static MembershipView ToView(CoordinationKey group, ImmutableArray<MemberRow> rows)
+    private static MembershipView ToView(CoordinationKey group, ImmutableArray<PgMemberRow> rows)
     {
         var members = new List<Member>();
         foreach (var row in rows)
@@ -561,7 +561,7 @@ internal sealed class PgMembershipService(PgRecordTable table, PgChangeLog chang
     /// <param name="cancellationToken">The token that cancels the call.</param>
     /// <returns>What the batch read.</returns>
     /// <exception cref="PgKeyspaceMissingException">The keyspace's row does not exist.</exception>
-    private async ValueTask<Start> BeginAsync(
+    private async ValueTask<PgMembershipStart> BeginAsync(
         PgTransaction transaction,
         long keyspaceId,
         byte[] index,
@@ -597,7 +597,7 @@ internal sealed class PgMembershipService(PgRecordTable table, PgChangeLog chang
                         .ConfigureAwait(false);
                     var groupRows = await results
                         .ReadAsync(
-                            reader => new GroupRow(
+                            reader => new PgGroupRow(
                                 reader.GetString(0),
                                 reader.GetString(1),
                                 reader.IsDBNull(2)
@@ -628,91 +628,11 @@ internal sealed class PgMembershipService(PgRecordTable table, PgChangeLog chang
         var now = DateTime.SpecifyKind(clocks[0], DateTimeKind.Utc);
         var change = Table.NewChange(keyspaceId, revisions[0], now);
 
-        return new Start(change, session, rows, deadlines.Length == 0 ? null : deadlines[0]);
-    }
-
-    /// <summary>
-    /// Holds what the first batch of a join or a leave read.
-    /// </summary>
-    /// <param name="Change">The change that the transaction builds.</param>
-    /// <param name="Session">The id of the session that joins or leaves.</param>
-    /// <param name="Rows">The group's rows.</param>
-    /// <param name="SessionDeadline">The deadline of the session's row, or null when it does not exist.</param>
-    private sealed record Start(
-        PgKeyspaceChange Change,
-        string Session,
-        ImmutableArray<GroupRow> Rows,
-        DateTime? SessionDeadline
-    )
-    {
-        /// <summary>
-        /// Ends every session that the read met past its deadline: those of the group's members and the session that
-        /// joins or leaves.
-        /// </summary>
-        public void EndExpiredSessions()
-        {
-            var now = Change.Now;
-            var expired = new SortedSet<string>(StringComparer.Ordinal);
-
-            foreach (var row in Rows)
-            {
-                if (row.Deadline is { } deadline && deadline <= now)
-                {
-                    expired.Add(row.Session);
-                }
-            }
-
-            if (SessionDeadline is { } own && own <= now)
-            {
-                expired.Add(Session);
-            }
-
-            foreach (var session in expired)
-            {
-                Change.EndSession(session);
-            }
-        }
-    }
-
-    /// <summary>
-    /// Holds one member row of a group with the deadline of its session.
-    /// </summary>
-    /// <param name="Session">The id of the session the member is bound to.</param>
-    /// <param name="NodeId">The member's node id.</param>
-    /// <param name="Deadline">The deadline of the session's row, or null when the row is gone.</param>
-    private sealed record GroupRow(string Session, string NodeId, DateTime? Deadline)
-    {
-        /// <summary>Tells whether the member's session is live at an instant.</summary>
-        /// <param name="now">The instant, on the server's clock.</param>
-        /// <returns><see langword="true"/> when the session's row exists and its deadline is after the instant.</returns>
-        public bool IsLiveAt(DateTime now) => Deadline is { } deadline && deadline > now;
-    }
-
-    /// <summary>
-    /// Holds one row of a group's read: the keyspace's revision, the server's instant and, when the group has a
-    /// member, the member with the deadline of its session.
-    /// </summary>
-    /// <param name="Revision">The keyspace's revision.</param>
-    /// <param name="Now">The server's instant.</param>
-    /// <param name="Session">The id of the member's session, or null when the group has no member.</param>
-    /// <param name="NodeId">The member's node id.</param>
-    /// <param name="Address">The member's address.</param>
-    /// <param name="Names">The names of the member's metadata, ordinally sorted.</param>
-    /// <param name="Values">The values of the member's metadata, in the order of the names.</param>
-    /// <param name="Deadline">The deadline of the member's session.</param>
-    private sealed record MemberRow(
-        long Revision,
-        DateTime Now,
-        string? Session,
-        string? NodeId,
-        string? Address,
-        string[]? Names,
-        string[]? Values,
-        DateTime? Deadline
-    )
-    {
-        /// <summary>Tells whether the member's session has passed its deadline at the instant of the read.</summary>
-        /// <returns><see langword="true"/> when the row holds a member whose session's deadline has passed.</returns>
-        public bool IsExpired() => Deadline is { } deadline && deadline <= Now;
+        return new PgMembershipStart(
+            change,
+            session,
+            rows,
+            deadlines.Length == 0 ? null : deadlines[0]
+        );
     }
 }
