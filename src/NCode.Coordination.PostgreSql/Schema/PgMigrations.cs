@@ -65,7 +65,7 @@ internal static partial class PgMigrations
     /// <summary>
     /// The versions, names and compatibility of the migrations, in order.
     /// </summary>
-    private static (int Version, string Name, int CompatibleFrom)[] Table { get; } =
+    private static ImmutableArray<(int Version, string Name, int CompatibleFrom)> Table { get; } =
     [
         (1, "keyspaces", 1),
         (2, "counting", 1),

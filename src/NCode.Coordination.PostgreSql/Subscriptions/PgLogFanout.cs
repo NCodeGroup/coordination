@@ -28,7 +28,7 @@ internal sealed class PgLogFanout<TEntry>(
     /// </summary>
     /// <param name="subscribers">The subscribers.</param>
     /// <returns>The lowest cursor, or <see cref="long.MaxValue"/> when every subscriber needs a resync.</returns>
-    private static long Lowest(PgLogSubscriber<TEntry>[] subscribers)
+    private static long Lowest(IReadOnlyList<PgLogSubscriber<TEntry>> subscribers)
     {
         var lowest = long.MaxValue;
         foreach (var subscriber in subscribers)

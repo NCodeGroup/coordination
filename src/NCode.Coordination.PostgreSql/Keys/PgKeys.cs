@@ -411,7 +411,7 @@ internal static class PgKeys
     /// <returns>False when the key cannot be built; true otherwise.</returns>
     private static bool TryBuildKey(
         Keyspace keyspace,
-        List<KeySegment> segments,
+        IReadOnlyList<KeySegment> segments,
         int depth,
         [NotNullWhen(true)] out CoordinationKey? key
     )

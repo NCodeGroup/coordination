@@ -1,6 +1,8 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using System.Collections.Immutable;
+
 namespace NCode.Coordination.PostgreSql.Records;
 
 /// <summary>
@@ -24,5 +26,5 @@ internal sealed record PgPutRequest(
     /// <summary>
     /// Gets the ids of the sessions that the write binds the record to, which the first batch reads.
     /// </summary>
-    public string[] Sessions => Session is null ? [] : [Session];
+    public ImmutableArray<string> Sessions => Session is null ? [] : [Session];
 }
