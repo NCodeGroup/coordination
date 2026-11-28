@@ -107,14 +107,14 @@ internal sealed class PgLogFanout<TEntry>(
     /// </summary>
     private List<PgLogSubscriber<TEntry>> Subscribers { get; } = [];
 
-    // Never disposed: a SemaphoreSlim whose AvailableWaitHandle is never read holds nothing to free, and a pump may
-    // still be releasing it when the log's last subscriber leaves.
     /// <summary>
     /// Gets or sets a value that says whether a wake-up is waiting for a pump to begin its read, guarded by
     /// <see cref="Gate" />.
     /// </summary>
     private bool WakePending { get; set; }
 
+    // Never disposed: a SemaphoreSlim whose AvailableWaitHandle is never read holds nothing to free, and a pump may
+    // still be releasing it when the log's last subscriber leaves.
     /// <summary>
     /// Gets the gate that serializes the pumps.
     /// </summary>
