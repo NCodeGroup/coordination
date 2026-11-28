@@ -10,4 +10,4 @@ namespace NCode.Coordination.PostgreSql.Leases;
 /// </summary>
 /// <param name="Now">The server's instant.</param>
 /// <param name="Rows">The grant rows that exist, expired or not.</param>
-internal sealed record PgGrantRead(DateTime Now, ImmutableArray<PgGrantRow> Rows);
+internal readonly record struct PgGrantRead(DateTime Now, ImmutableArray<PgGrantRow> Rows);

@@ -9,7 +9,7 @@ namespace NCode.Coordination.PostgreSql.Membership;
 /// <param name="Session">The id of the session the member is bound to.</param>
 /// <param name="NodeId">The member's node id.</param>
 /// <param name="Deadline">The deadline of the session's row, or null when the row is gone.</param>
-internal sealed record PgGroupRow(string Session, string NodeId, DateTime? Deadline)
+internal readonly record struct PgGroupRow(string Session, string NodeId, DateTime? Deadline)
 {
     /// <summary>
     /// Tells whether the member's session is live at an instant.

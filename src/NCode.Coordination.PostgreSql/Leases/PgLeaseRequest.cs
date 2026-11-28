@@ -10,7 +10,7 @@ namespace NCode.Coordination.PostgreSql.Leases;
 /// <param name="Resource">The resource that the lease guards.</param>
 /// <param name="Terms">The terms of the lease.</param>
 /// <param name="SessionId">The id of the terms' session, or null when the lease is bound to none.</param>
-internal sealed record PgLeaseRequest(
+internal readonly record struct PgLeaseRequest(
     CoordinationKey Resource,
     LeaseTerms Terms,
     string? SessionId

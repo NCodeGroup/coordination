@@ -142,8 +142,7 @@ internal sealed class PgListener(
     /// <summary>
     /// Gets the callbacks that tell the provider about the listening connection.
     /// </summary>
-    private PgListenerEvents Events { get; } =
-        events ?? throw new ArgumentNullException(nameof(events));
+    private PgListenerEvents Events { get; } = events;
 
     /// <summary>
     /// Gets the clock that times the listener's pings.

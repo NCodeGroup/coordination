@@ -10,7 +10,7 @@ namespace NCode.Coordination.PostgreSql.Transactions;
 /// <param name="Transaction">The transaction to execute.</param>
 /// <param name="Keys">The distinct keys that the conditions and the writes of both branches name.</param>
 /// <param name="Sessions">The ids of the distinct sessions of the transaction's keyspace that its writes bind records to.</param>
-internal sealed record PgTransactionRequest(
+internal readonly record struct PgTransactionRequest(
     RecordTransaction Transaction,
     IReadOnlyList<CoordinationKey> Keys,
     IReadOnlyCollection<string> Sessions

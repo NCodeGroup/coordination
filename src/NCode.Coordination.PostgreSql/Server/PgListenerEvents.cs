@@ -9,7 +9,7 @@ namespace NCode.Coordination.PostgreSql.Server;
 /// <param name="Notified">Called with the channel and the payload of every notification.</param>
 /// <param name="Reconnected">Called after every connection but the first has listened to every referenced channel.</param>
 /// <param name="IdentityChanged">Called when a connection reaches a server that started at another time.</param>
-internal sealed record PgListenerEvents(
+internal readonly record struct PgListenerEvents(
     Action<string, string> Notified,
     Action Reconnected,
     Action IdentityChanged

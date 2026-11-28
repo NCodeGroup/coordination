@@ -12,7 +12,7 @@ namespace NCode.Coordination.PostgreSql.Subscriptions;
 /// <param name="Removed">The highest number the sweep removed from the log.</param>
 /// <param name="Current">The number of the log's latest entry.</param>
 /// <param name="Entries">The entries after the cursor that was read from, in number order, up to a page.</param>
-internal sealed record PgLogRead<TEntry>(
+internal readonly record struct PgLogRead<TEntry>(
     long Removed,
     long Current,
     ImmutableArray<TEntry> Entries
