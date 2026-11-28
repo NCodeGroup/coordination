@@ -71,7 +71,7 @@ internal sealed class PgTransactionService(PgRecordTable table) : ITransactionSe
     /// </summary>
     /// <param name="transaction">The transaction.</param>
     /// <returns>The keys.</returns>
-    private static CoordinationKey[] KeysOf(RecordTransaction transaction)
+    private static ImmutableArray<CoordinationKey> KeysOf(RecordTransaction transaction)
     {
         var capacity =
             transaction.Conditions.Length
@@ -121,7 +121,7 @@ internal sealed class PgTransactionService(PgRecordTable table) : ITransactionSe
     /// </summary>
     /// <param name="transaction">The transaction.</param>
     /// <returns>The sessions' ids.</returns>
-    private static string[] SessionsOf(RecordTransaction transaction)
+    private static ImmutableArray<string> SessionsOf(RecordTransaction transaction)
     {
         var writeCount = transaction.OnSuccess.Length + transaction.OnFailure.Length;
         var seen = new HashSet<string>(writeCount, StringComparer.Ordinal);
@@ -315,8 +315,8 @@ internal sealed class PgTransactionService(PgRecordTable table) : ITransactionSe
         ArgumentNullException.ThrowIfNull(transaction);
         PgCall.Check(options, cancellationToken);
 
-        ImmutableArray<CoordinationKey> keys = [.. KeysOf(transaction)];
-        ImmutableArray<string> sessions = [.. SessionsOf(transaction)];
+        var keys = KeysOf(transaction);
+        var sessions = SessionsOf(transaction);
         var request = new PgTransactionRequest(transaction, keys, sessions);
 
         return await Table
