@@ -179,6 +179,22 @@ public sealed class PostgreSqlProviderTests
                     ],
                     support.Guarantees
                 );
+            },
+            support =>
+            {
+                Assert.Equal(Primitives.RecordWatch, support.Primitive);
+                Assert.Equal<Guarantee>(
+                    [Guarantees.LinearizableUntilFailover, Guarantees.AtMostOnceWithGapDetection],
+                    support.Guarantees
+                );
+            },
+            support =>
+            {
+                Assert.Equal(Primitives.Notification, support.Primitive);
+                Assert.Equal<Guarantee>(
+                    [Guarantees.AtMostOnceWithGapDetection],
+                    support.Guarantees
+                );
             }
         );
     }
@@ -200,6 +216,8 @@ public sealed class PostgreSqlProviderTests
     [InlineData(typeof(ISemaphoreService))]
     [InlineData(typeof(IElectionService))]
     [InlineData(typeof(IClaimService))]
+    [InlineData(typeof(IRecordWatchService))]
+    [InlineData(typeof(INotificationService))]
     public async Task GetPrimitiveService_ServedPrimitive_ReturnsItsService(Type serviceType)
     {
         await using var provider = CreateProvider("Host=127.0.0.1;Port=1");
@@ -215,7 +233,7 @@ public sealed class PostgreSqlProviderTests
     {
         await using var provider = CreateProvider("Host=127.0.0.1;Port=1");
 
-        var service = provider.GetPrimitiveService(typeof(IRecordWatchService));
+        var service = provider.GetPrimitiveService(typeof(IDisposable));
 
         Assert.Null(service);
     }
