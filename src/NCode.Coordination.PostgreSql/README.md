@@ -120,6 +120,27 @@ in every operation's transaction, so they bind that operation and not the connec
 least a millisecond and less than an hour. A call that exceeds one fails as `unavailable`, and says whether it may have
 taken effect.
 
+## Logging
+
+The provider logs through the `ILogger` its host's `ILoggerFactory` makes, with a category per class, and uses no
+logger when the host registers no `ILoggerFactory`. It registers no logging provider: the host decides where its logs go.
+It logs each failure its background work catches and goes on from, once per failed round, with an event id of its band,
+4000 to 4999:
+
+| Id | Name | Level | Meaning |
+| --- | --- | --- | --- |
+| 4001 | `SweepFailed` | Error | A whole sweep failed unexpectedly; the next sweep runs every pass again |
+| 4002 | `SweepPassFailed` | Warning | One pass of the sweep failed, named in the entry; the next sweep runs it again |
+| 4003 | `SweepStepFailed` | Warning | One step of the sweep failed, named in the entry; the next sweep runs it again |
+| 4004 | `PumpFailed` | Warning | Reading a log for its subscribers failed with a coordination failure or a missing keyspace; the next wake-up or check reads it again |
+| 4005 | `PumpFaulted` | Error | Reading a log for its subscribers failed unexpectedly; the next wake-up or check reads it again |
+| 4006 | `ListenerConnectionFailed` | Warning | The listening connection failed; the listener connects again after the delay the entry names |
+| 4007 | `ListenerDisposeFailed` | Debug | Disposing a broken listening connection failed; it holds nothing left to release |
+
+Each entry carries the failure as its exception. No entry carries a keyspace, key, channel, topic or connection string,
+since they can name a tenant or hold a secret, so an entry shows that something failed, not for whom. See
+[ADR-1035](https://github.com/NCodeGroup/coordination/blob/main/docs/decisions/1035-the-providers-log-every-failure-their-background-work-catches-with-event-ids-of-their-own.md).
+
 ## Verification
 
 The provider passes every suite of the conformance kit against PostgreSQL 19 and PostgreSQL 15: concurrent runs of
