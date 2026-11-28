@@ -60,5 +60,30 @@ public sealed class RespChannelFeedTests : IDisposable
         Assert.Same(failure, record.Exception);
     }
 
+    [Fact]
+    public async Task TryUnsubscribeAsync_WhenTheConnectionFails_LogsAtDebugOnce()
+    {
+        var logger = new FakeLogger<RespChannelFeed>();
+        var failure = new RedisConnectionException(
+            ConnectionFailureType.SocketClosed,
+            CommandFlags.None,
+            "closed",
+            null,
+            CommandStatus.Unknown
+        );
+
+        var unsubscribed = await RespChannelFeed.TryUnsubscribeAsync(
+            () => Task.FromException(failure),
+            logger
+        );
+
+        Assert.False(unsubscribed);
+        var records = logger.Collector.GetSnapshot();
+        var record = Assert.Single(records);
+        Assert.Equal(EventIds.UnsubscribeFailed, record.Id.Id);
+        Assert.Equal(LogLevel.Debug, record.Level);
+        Assert.Same(failure, record.Exception);
+    }
+
     #endregion
 }
