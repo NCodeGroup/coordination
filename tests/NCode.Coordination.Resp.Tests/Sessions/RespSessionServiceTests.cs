@@ -1,6 +1,7 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using Microsoft.Extensions.Logging.Abstractions;
 using NCode.Coordination.Resp.Keys;
 using NCode.Coordination.Resp.Leases;
 using NCode.Coordination.Resp.Membership;
@@ -49,7 +50,12 @@ public sealed class RespSessionServiceTests(RespServers servers)
         var records = new RespRecordService(table);
         var checkInterval = RespSubscriptions.DefaultCheckInterval;
         var schedule = new RespCheckSchedule(checkInterval, TimeProvider.System);
-        var subscriptions = new RespSubscriptions(connection, profile, schedule);
+        var subscriptions = new RespSubscriptions(
+            connection,
+            profile,
+            schedule,
+            NullLoggerFactory.Instance
+        );
         var membership = new RespMembershipService(table, subscriptions);
         var keyspace = CreateKeyspace();
         var minute = TimeSpan.FromMinutes(1);

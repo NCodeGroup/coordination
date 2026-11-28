@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using System.Globalization;
+using Microsoft.Extensions.Logging.Abstractions;
 using NCode.Coordination.Resp.Keys;
 using NCode.Coordination.Resp.Records;
 using NCode.Coordination.Resp.Server;
@@ -42,7 +43,12 @@ public sealed class RespMembershipServiceTests(RespServers servers)
         var table = new RespRecordTable(server, profile);
         var checkInterval = TimeSpan.FromMilliseconds(200);
         var schedule = new RespCheckSchedule(checkInterval, TimeProvider.System);
-        var subscriptions = new RespSubscriptions(connection, profile, schedule);
+        var subscriptions = new RespSubscriptions(
+            connection,
+            profile,
+            schedule,
+            NullLoggerFactory.Instance
+        );
         var tokens = new RespRandomTokens();
         var sessions = new RespSessionService(table, tokens);
         var membership = new RespMembershipService(table, subscriptions);

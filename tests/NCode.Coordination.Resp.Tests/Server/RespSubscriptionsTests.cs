@@ -1,6 +1,7 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using StackExchange.Redis;
 
@@ -61,7 +62,12 @@ public sealed class RespSubscriptionsTests : IDisposable
         );
         var checkInterval = RespSubscriptions.DefaultCheckInterval;
         var schedule = new RespCheckSchedule(checkInterval, TimeProvider.System);
-        var subscriptions = new RespSubscriptions(connection, RespProfiles.Valkey, schedule);
+        var subscriptions = new RespSubscriptions(
+            connection,
+            RespProfiles.Valkey,
+            schedule,
+            NullLoggerFactory.Instance
+        );
         Func<CancellationToken, ValueTask<long>> readNumber = _ => ValueTask.FromResult(0L);
 
         var exception = await Assert.ThrowsAsync<CoordinationException>(() =>

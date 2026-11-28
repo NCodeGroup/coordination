@@ -1,6 +1,7 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using Microsoft.Extensions.Logging.Abstractions;
 using NCode.Coordination.Resp.Server;
 using NCode.Coordination.Resp.Tests.Servers;
 using StackExchange.Redis;
@@ -38,7 +39,12 @@ public sealed class RespRecordWatchServiceTests(RespServers servers)
         var table = new RespRecordTable(server, profile);
         var checkInterval = TimeSpan.FromMilliseconds(200);
         var schedule = new RespCheckSchedule(checkInterval, TimeProvider.System);
-        var subscriptions = new RespSubscriptions(connection, profile, schedule);
+        var subscriptions = new RespSubscriptions(
+            connection,
+            profile,
+            schedule,
+            NullLoggerFactory.Instance
+        );
         var records = new RespRecordService(table);
 
         return (records, new RespRecordWatchService(table, records, subscriptions));

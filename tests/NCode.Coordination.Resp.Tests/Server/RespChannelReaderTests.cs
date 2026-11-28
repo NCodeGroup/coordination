@@ -2,7 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using System.Threading.Channels;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging.Testing;
 using Microsoft.Extensions.Time.Testing;
+using NCode.Coordination.Resp.Logging;
 using StackExchange.Redis;
 
 namespace NCode.Coordination.Resp.Server.Tests;
@@ -26,12 +30,25 @@ public sealed class RespChannelReaderTests
         RespChannelReader Reader,
         Channel<RespSignal> Signals,
         FakeTimeProvider Time
-    ) Create(params IEnumerable<Func<ValueTask<long>>> reads)
+    ) Create(params IEnumerable<Func<ValueTask<long>>> reads) =>
+        CreateLogged(NullLogger<RespChannelReader>.Instance, reads);
+
+    private static (
+        RespChannelReader Reader,
+        Channel<RespSignal> Signals,
+        FakeTimeProvider Time
+    ) CreateLogged(ILogger<RespChannelReader> logger, IEnumerable<Func<ValueTask<long>>> reads)
     {
         var signals = Channel.CreateUnbounded<RespSignal>();
         var time = new FakeTimeProvider();
         var pending = new Queue<Func<ValueTask<long>>>(reads);
-        var reader = new RespChannelReader(signals.Reader, _ => pending.Dequeue()(), time, null);
+        var reader = new RespChannelReader(
+            signals.Reader,
+            _ => pending.Dequeue()(),
+            time,
+            null,
+            logger
+        );
         return (reader, signals, time);
     }
 
@@ -348,6 +365,27 @@ public sealed class RespChannelReaderTests
         var item = await NextAsync(items);
 
         AssertResync(item, 7);
+    }
+
+    [Fact]
+    public async Task ReadAsync_WhenACheckFails_LogsTheReadFailureOnce()
+    {
+        var seven = Number(7);
+        var failure = Fails();
+        var logger = new FakeLogger<RespChannelReader>();
+        var (reader, signals, _) = CreateLogged(logger, [seven, failure, seven, seven]);
+        await using var items = Open(reader);
+        await NextAsync(items);
+
+        await signals.Writer.WriteAsync(RespSignal.Check, TestContext.Current.CancellationToken);
+        await signals.Writer.WriteAsync(RespSignal.Check, TestContext.Current.CancellationToken);
+        await NextAsync(items);
+
+        var records = logger.Collector.GetSnapshot();
+        var record = Assert.Single(records);
+        Assert.Equal(EventIds.ChannelNumberReadFailed, record.Id.Id);
+        Assert.Equal(LogLevel.Warning, record.Level);
+        Assert.IsType<CoordinationException>(record.Exception);
     }
 
     [Fact]
