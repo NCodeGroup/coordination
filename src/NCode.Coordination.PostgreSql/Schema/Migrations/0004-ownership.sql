@@ -12,6 +12,7 @@ CREATE TABLE {schema}.ended_sessions (
     revision bigint NOT NULL,
     PRIMARY KEY (keyspace_id, session_id)
 );
+CREATE INDEX ended_sessions_revision ON {schema}.ended_sessions (keyspace_id, revision);
 CREATE TABLE {schema}.members (
     keyspace_id bigint NOT NULL REFERENCES {schema}.keyspaces (id),
     group_idx bytea NOT NULL,
