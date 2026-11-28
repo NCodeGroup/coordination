@@ -602,7 +602,7 @@ internal sealed class PgSweeps(
         }
         catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
         {
-            // An unexpected failure of one pass (or step) must not stop the others; the next sweep runs it again.
+            // An unexpected failure of this pass must not stop the others; the next sweep runs it again.
             Logger.SweepPassFaulted(exception, pass.Name);
         }
     }
@@ -637,7 +637,7 @@ internal sealed class PgSweeps(
         }
         catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
         {
-            // An unexpected failure of one pass (or step) must not stop the others; the next sweep runs it again.
+            // An unexpected failure of this step must not stop the others; the next sweep runs it again.
             Logger.SweepStepFaulted(exception, step);
         }
     }

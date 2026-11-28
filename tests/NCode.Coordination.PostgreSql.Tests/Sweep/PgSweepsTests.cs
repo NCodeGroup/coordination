@@ -110,6 +110,29 @@ public sealed class PgSweepsTests(PgServers servers)
         return ValueTask.FromException(failure);
     }
 
+    private static async Task RunMissingKeyspacePassAsync(
+        string connectionString,
+        PgSchemaName schema,
+        FakeLogger<PgSweeps> logger,
+        CancellationToken cancellationToken
+    )
+    {
+        var settings = PgSettings.Default with { Schema = schema };
+        await using var source = PgSource.FromConnectionString(connectionString);
+        var server = new PgServer(source, settings);
+        var tokens = new PgRandomTokens();
+        var keyspaces = new PgKeyspaces(server, schema, tokens);
+        var table = new PgRecordTable(server, keyspaces, settings);
+        var sweeps = new PgSweeps(server, settings, table, logger);
+        var sql =
+            "INSERT INTO "
+            + schema.Quoted
+            + ".sessions (keyspace_id, id, ttl_us, deadline) VALUES (-1, 'missing', $1, now()) RETURNING 0::bigint";
+        var pass = new PgSweepPass("missing keyspace", sql);
+
+        await sweeps.RunPassAsync(pass, cancellationToken);
+    }
+
     private static async Task WithSweepsAsync(
         string adminConnectionString,
         string connectionString,
@@ -695,6 +718,49 @@ public sealed class PgSweepsTests(PgServers servers)
         Assert.Equal(EventIds.SweepPassFaulted, record.Id.Id);
         Assert.Equal(LogLevel.Error, record.Level);
         Assert.Equal(name, logged);
+    }
+
+    [PgServerFact]
+    public async Task RunPassAsync_PassFindsTheKeyspaceMissing_LogsSweepPassFailedOnce()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var guid = Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
+        var schemaName = "t_" + guid;
+        var schema = PgSchemaName.Create(schemaName);
+
+        try
+        {
+            await using var provider = await PgTestSupport.CreateProviderAsync(
+                servers.PostgreSql19,
+                PostgreSqlProfiles.Standalone,
+                schema,
+                cancellationToken
+            );
+            var logger = new FakeLogger<PgSweeps>();
+
+            await RunMissingKeyspacePassAsync(
+                servers.PostgreSql19,
+                schema,
+                logger,
+                cancellationToken
+            );
+
+            var records = logger.Collector.GetSnapshot();
+            var record = Assert.Single(records);
+            var logged = record.GetStructuredStateValue("Pass");
+            Assert.Equal(EventIds.SweepPassFailed, record.Id.Id);
+            Assert.Equal(LogLevel.Warning, record.Level);
+            Assert.Equal("missing keyspace", logged);
+            Assert.IsType<PgKeyspaceMissingException>(record.Exception);
+        }
+        finally
+        {
+            await PgServers.ExecuteAsAdminAsync(
+                servers.Admin19,
+                $"DROP SCHEMA IF EXISTS \"{schemaName}\" CASCADE",
+                CancellationToken.None
+            );
+        }
     }
 
     #endregion
