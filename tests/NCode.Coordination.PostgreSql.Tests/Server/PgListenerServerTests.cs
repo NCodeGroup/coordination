@@ -3,6 +3,7 @@
 
 using System.Globalization;
 using System.Threading.Channels;
+using Microsoft.Extensions.Logging.Abstractions;
 using NCode.Coordination.PostgreSql.Tests.Servers;
 using Npgsql;
 
@@ -93,7 +94,12 @@ public sealed class PgListenerServerTests(PgServers servers)
         var applicationName = "listener-" + Guid.NewGuid().ToString("N");
         var connectionString = NewListenerConnectionString(applicationName);
         await using var source = PgSource.FromConnectionString(connectionString);
-        await using var listener = new PgListener(source, events, TimeProvider.System);
+        await using var listener = new PgListener(
+            source,
+            events,
+            TimeProvider.System,
+            NullLogger<PgListener>.Instance
+        );
 
         await listener.ListenAsync(channel, cancellationToken);
         await NotifyAsync(channel, "c:7", cancellationToken);
@@ -113,7 +119,12 @@ public sealed class PgListenerServerTests(PgServers servers)
 
         await using var server = await PgRestartableServer.StartAsync(cancellationToken);
         await using var source = PgSource.FromConnectionString(server.ConnectionString);
-        await using var listener = new PgListener(source, events, TimeProvider.System);
+        await using var listener = new PgListener(
+            source,
+            events,
+            TimeProvider.System,
+            NullLogger<PgListener>.Instance
+        );
 
         await listener.ListenAsync(first, cancellationToken);
         await server.StopAsync(cancellationToken);
@@ -147,7 +158,12 @@ public sealed class PgListenerServerTests(PgServers servers)
         var applicationName = "listener-" + Guid.NewGuid().ToString("N");
         var connectionString = NewListenerConnectionString(applicationName);
         await using var source = PgSource.FromConnectionString(connectionString);
-        await using var listener = new PgListener(source, events, TimeProvider.System);
+        await using var listener = new PgListener(
+            source,
+            events,
+            TimeProvider.System,
+            NullLogger<PgListener>.Instance
+        );
 
         await listener.ListenAsync(channel, cancellationToken);
         await NotifyAsync(channel, "c:1", cancellationToken);
@@ -192,7 +208,12 @@ public sealed class PgListenerServerTests(PgServers servers)
 
         var connectionString = NewListenerConnectionString(applicationName);
         await using var source = PgSource.FromConnectionString(connectionString);
-        await using var listener = new PgListener(source, events, TimeProvider.System);
+        await using var listener = new PgListener(
+            source,
+            events,
+            TimeProvider.System,
+            NullLogger<PgListener>.Instance
+        );
 
         await listener.ListenAsync(channel, cancellationToken);
         await TerminateAsync(applicationName, cancellationToken);

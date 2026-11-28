@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using System.Collections.Immutable;
+using Microsoft.Extensions.Logging.Abstractions;
 using NCode.Coordination.PostgreSql.Subscriptions;
 using NCode.Coordination.PostgreSql.Tests;
 
@@ -16,7 +17,8 @@ public sealed class PgRecordWatchServiceTests
             offline.Source,
             offline.Keyspaces,
             offline.Settings,
-            TimeProvider.System
+            TimeProvider.System,
+            NullLoggerFactory.Instance
         );
 
         return new PgRecordWatchService(offline.Keyspaces, changeLog, hub);

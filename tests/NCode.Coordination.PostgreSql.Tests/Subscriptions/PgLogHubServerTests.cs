@@ -2,9 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using System.Globalization;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Testing;
 using NCode.Coordination.PostgreSql.Keys;
+using NCode.Coordination.PostgreSql.Logging;
 using NCode.Coordination.PostgreSql.Schema;
 using NCode.Coordination.PostgreSql.Server;
+using NCode.Coordination.PostgreSql.Tests;
 using NCode.Coordination.PostgreSql.Tests.Servers;
 
 namespace NCode.Coordination.PostgreSql.Subscriptions.Tests;
@@ -15,16 +19,18 @@ public sealed class PgLogHubServerTests(PgServers servers)
 
     private sealed record TestEntry(long Number) : IPgLogEntry;
 
-    #region CheckAsync Tests
-
-    [PgServerFact]
-    public async Task CheckAsync_PumpThrowsUnexpectedly_NextCheckStillDelivers()
+    private async Task<IReadOnlyList<FakeLogRecord>> DeliverAfterFailedReadAsync(
+        Exception failure,
+        CancellationToken cancellationToken
+    )
     {
-        var cancellationToken = TestContext.Current.CancellationToken;
         var schemaName = "hub_" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
         var schema = PgSchemaName.Create(schemaName);
         var checkInterval = TimeSpan.FromSeconds(1);
         var settings = PgSettings.Default with { Schema = schema, CheckInterval = checkInterval };
+        var options = new FakeLogCollectorOptions();
+        var collector = FakeLogCollector.Create(options);
+        var loggerFactory = new PgCollectingLoggerFactory(collector);
         var calls = 0;
         var id = new PgLogId(1, null);
 
@@ -39,7 +45,6 @@ public sealed class PgLogHubServerTests(PgServers servers)
 
             if (call == 2)
             {
-                var failure = new InvalidOperationException("The read failed unexpectedly.");
                 return ValueTask.FromException<PgLogRead<TestEntry>>(failure);
             }
 
@@ -57,7 +62,13 @@ public sealed class PgLogHubServerTests(PgServers servers)
 
             var tokens = new PgRandomTokens();
             var keyspaces = new PgKeyspaces(server, schema, tokens);
-            await using var hub = new PgLogHub(source, keyspaces, settings, TimeProvider.System);
+            await using var hub = new PgLogHub(
+                source,
+                keyspaces,
+                settings,
+                TimeProvider.System,
+                loggerFactory
+            );
 
             var subscriber = await hub.SubscribeAsync(
                 id,
@@ -83,6 +94,36 @@ public sealed class PgLogHubServerTests(PgServers servers)
                 CancellationToken.None
             );
         }
+
+        return collector.GetSnapshot();
+    }
+
+    #region CheckAsync Tests
+
+    [PgServerFact]
+    public async Task CheckAsync_PumpThrowsUnexpectedly_NextCheckStillDelivers()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var failure = new InvalidOperationException("The read failed unexpectedly.");
+
+        var records = await DeliverAfterFailedReadAsync(failure, cancellationToken);
+
+        var record = Assert.Single(records, x => x.Id.Id == EventIds.PumpFaulted);
+        Assert.Equal(LogLevel.Error, record.Level);
+        Assert.Same(failure, record.Exception);
+    }
+
+    [PgServerFact]
+    public async Task CheckAsync_PumpFailsWithACoordinationFailure_LogsPumpFailedOnce()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var failure = new CoordinationException(CoordinationErrorCodes.Unavailable, false, "down");
+
+        var records = await DeliverAfterFailedReadAsync(failure, cancellationToken);
+
+        var record = Assert.Single(records, x => x.Id.Id == EventIds.PumpFailed);
+        Assert.Equal(LogLevel.Warning, record.Level);
+        Assert.Same(failure, record.Exception);
     }
 
     #endregion

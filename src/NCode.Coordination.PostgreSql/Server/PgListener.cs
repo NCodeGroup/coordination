@@ -1,6 +1,8 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using Microsoft.Extensions.Logging;
+using NCode.Coordination.PostgreSql.Logging;
 using Npgsql;
 
 namespace NCode.Coordination.PostgreSql.Server;
@@ -13,9 +15,13 @@ namespace NCode.Coordination.PostgreSql.Server;
 /// <param name="source">The source of the connection.</param>
 /// <param name="events">What the listener calls with each notification, after each reconnect and when the server's start time changed.</param>
 /// <param name="time">The clock that times the pings and the waits before a new connection.</param>
-internal sealed class PgListener(PgSource source, PgListenerEvents events, TimeProvider time)
-    : IAsyncDisposable,
-        IDisposable
+/// <param name="logger">The logger that reports a failed connection and a failed disposal of one.</param>
+internal sealed class PgListener(
+    PgSource source,
+    PgListenerEvents events,
+    TimeProvider time,
+    ILogger<PgListener> logger
+) : IAsyncDisposable, IDisposable
 {
     /// <summary>
     /// The statement that reads when the server started.
@@ -77,18 +83,24 @@ internal sealed class PgListener(PgSource source, PgListenerEvents events, TimeP
     }
 
     /// <summary>
-    /// Disposes a connection that may be broken.
+    /// Disposes a connection that may be broken, and logs a failed disposal.
     /// </summary>
     /// <param name="connection">The connection.</param>
-    private static async ValueTask DisposeQuietlyAsync(NpgsqlConnection connection)
+    /// <param name="failureLogger">The logger that reports a failed disposal.</param>
+    /// <returns>A task that completes when the disposal has, whether or not it failed.</returns>
+    internal static async ValueTask DisposeQuietlyAsync(
+        IAsyncDisposable connection,
+        ILogger failureLogger
+    )
     {
         try
         {
             await connection.DisposeAsync().ConfigureAwait(false);
         }
-        catch (Exception)
+        catch (Exception exception)
         {
             // A broken connection has nothing left to release.
+            failureLogger.ListenerDisposeFailed(exception);
         }
     }
 
@@ -117,6 +129,12 @@ internal sealed class PgListener(PgSource source, PgListenerEvents events, TimeP
     /// Gets the clock that times the listener's pings.
     /// </summary>
     private TimeProvider Time { get; } = time ?? throw new ArgumentNullException(nameof(time));
+
+    /// <summary>
+    /// Gets the logger that reports a failed connection and a failed disposal of one.
+    /// </summary>
+    private ILogger<PgListener> Logger { get; } =
+        logger ?? throw new ArgumentNullException(nameof(logger));
 
     /// <summary>
     /// Gets the lock that guards the references, the requests, the loop and the disposed flag.
@@ -331,18 +349,20 @@ internal sealed class PgListener(PgSource source, PgListenerEvents events, TimeP
             if (connection is not null)
             {
                 connection.Notification -= OnNotification;
-                await DisposeQuietlyAsync(connection).ConfigureAwait(false);
+                await DisposeQuietlyAsync(connection, Logger).ConfigureAwait(false);
             }
         }
     }
 
     /// <summary>
-    /// Clears the pool when the connection was lost, and fails every waiter, so a <c>LISTEN</c> asked for during an
-    /// outage fails instead of waiting for the server to return.
+    /// Logs the failure, clears the pool when the connection was lost, and fails every waiter, so a <c>LISTEN</c>
+    /// asked for during an outage fails instead of waiting for the server to return.
     /// </summary>
     /// <param name="exception">The failure of the connection.</param>
     private void HandleConnectionFailure(Exception exception)
     {
+        Logger.ListenerConnectionFailed(exception, ReconnectDelay);
+
         if (PgFailures.IsConnectionLost(exception))
         {
             Source.ClearPool();

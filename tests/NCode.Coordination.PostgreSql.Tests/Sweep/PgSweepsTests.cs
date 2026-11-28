@@ -124,7 +124,13 @@ public sealed class PgSweepsTests(PgServers servers)
             var keyspaceTokens = new PgRandomTokens();
             var keyspaces = new PgKeyspaces(server, schema, keyspaceTokens);
             var table = new PgRecordTable(server, keyspaces, settings);
-            await using var hub = new PgLogHub(source, keyspaces, settings, TimeProvider.System);
+            await using var hub = new PgLogHub(
+                source,
+                keyspaces,
+                settings,
+                TimeProvider.System,
+                NullLoggerFactory.Instance
+            );
             var polling = new PgPolling(TimeProvider.System);
             var sweeps = new PgSweeps(server, settings, table, NullLogger<PgSweeps>.Instance);
             var occurrences = new PgOccurrenceService(server, keyspaces, schema);

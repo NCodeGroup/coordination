@@ -148,7 +148,7 @@ internal sealed class PostgreSqlProvider : ICoordinationProvider, IAsyncDisposab
         Tokens = new PgRandomTokens();
         Keyspaces = new PgKeyspaces(Server, settings.Schema, Tokens);
         RecordTable = new PgRecordTable(Server, Keyspaces, settings);
-        Hub = new PgLogHub(source, Keyspaces, settings, TimeProvider.System);
+        Hub = new PgLogHub(source, Keyspaces, settings, TimeProvider.System, loggerFactory);
         ChangeLog = new PgChangeLog(Server, settings.Schema);
         var declared = Declare(profile);
         Declaration = new ProviderDeclaration(

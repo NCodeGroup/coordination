@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using System.Collections.Concurrent;
+using Microsoft.Extensions.Logging;
 using NCode.Coordination.PostgreSql.Keys;
+using NCode.Coordination.PostgreSql.Logging;
 using NCode.Coordination.PostgreSql.Server;
 
 namespace NCode.Coordination.PostgreSql.Subscriptions;
@@ -50,21 +52,35 @@ internal sealed class PgLogHub : IAsyncDisposable, IDisposable
     }
 
     /// <summary>
-    /// Pumps a fanout and swallows any failure of the pump, so that one failed read never ends the periodic checks.
+    /// Pumps a fanout and logs and swallows any failure of the pump, so that one failed read never ends the periodic
+    /// checks.
     /// </summary>
     /// <param name="pump">The fanout.</param>
+    /// <param name="logger">The logger that reports a failed pump.</param>
     /// <param name="stop">The token that cancels the pump.</param>
     /// <returns>A task that completes when the pump has.</returns>
-    private static async ValueTask PumpQuietlyAsync(IPgLogPump pump, CancellationToken stop)
+    private static async ValueTask PumpQuietlyAsync(
+        IPgLogPump pump,
+        ILogger logger,
+        CancellationToken stop
+    )
     {
         try
         {
             await pump.PumpAsync(stop).ConfigureAwait(false);
         }
-        catch (Exception) when (!stop.IsCancellationRequested)
+        catch (Exception exception)
+            when (exception is CoordinationException or PgKeyspaceMissingException
+                && !stop.IsCancellationRequested
+            )
         {
-            // A failed read leaves every subscriber's cursor where it was, and the next check reads again; the package
-            // has no logger to report it to.
+            // A failed read leaves every subscriber's cursor where it was, and the next check reads again.
+            logger.PumpFailed(exception);
+        }
+        catch (Exception exception) when (!stop.IsCancellationRequested)
+        {
+            // An unexpected failure leaves every subscriber's cursor where it was too, and the next check reads again.
+            logger.PumpFaulted(exception);
         }
         catch (OperationCanceledException) when (stop.IsCancellationRequested)
         {
@@ -79,16 +95,26 @@ internal sealed class PgLogHub : IAsyncDisposable, IDisposable
     /// <param name="keyspaces">The cache of keyspace ids, which is cleared when the server's identity changes.</param>
     /// <param name="settings">The settings of the provider.</param>
     /// <param name="time">The clock that times the checks and the listener.</param>
+    /// <param name="loggerFactory">The factory of the loggers that report the failures the hub and the listener catch.</param>
     /// <exception cref="ArgumentNullException">An argument is null.</exception>
-    public PgLogHub(PgSource source, PgKeyspaces keyspaces, PgSettings settings, TimeProvider time)
+    public PgLogHub(
+        PgSource source,
+        PgKeyspaces keyspaces,
+        PgSettings settings,
+        TimeProvider time,
+        ILoggerFactory loggerFactory
+    )
     {
         ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(loggerFactory);
 
         Keyspaces = keyspaces ?? throw new ArgumentNullException(nameof(keyspaces));
         Settings = settings ?? throw new ArgumentNullException(nameof(settings));
         Time = time ?? throw new ArgumentNullException(nameof(time));
+        Logger = loggerFactory.CreateLogger<PgLogHub>();
         var events = new PgListenerEvents(OnNotified, OnReconnected, OnIdentityChanged);
-        Listener = new PgListener(source, events, time);
+        var listenerLogger = loggerFactory.CreateLogger<PgListener>();
+        Listener = new PgListener(source, events, time, listenerLogger);
     }
 
     /// <summary>
@@ -105,6 +131,11 @@ internal sealed class PgLogHub : IAsyncDisposable, IDisposable
     /// Gets the clock that times the checks.
     /// </summary>
     private TimeProvider Time { get; }
+
+    /// <summary>
+    /// Gets the logger that reports a failed pump of a log.
+    /// </summary>
+    private ILogger<PgLogHub> Logger { get; }
 
     /// <summary>
     /// Gets the listening connection.
@@ -446,7 +477,7 @@ internal sealed class PgLogHub : IAsyncDisposable, IDisposable
         var pumps = new List<Task>(fanouts.Count);
         foreach (var pump in fanouts)
         {
-            var pumping = PumpQuietlyAsync(pump, stop).AsTask();
+            var pumping = PumpQuietlyAsync(pump, Logger, stop).AsTask();
             pumps.Add(pumping);
         }
 
@@ -474,7 +505,8 @@ internal sealed class PgLogHub : IAsyncDisposable, IDisposable
         }
 
         var stop = Cancellation.Token;
-        _ = Task.Run(() => PumpQuietlyAsync(pump, stop).AsTask(), CancellationToken.None);
+        var logger = Logger;
+        _ = Task.Run(() => PumpQuietlyAsync(pump, logger, stop).AsTask(), CancellationToken.None);
     }
 
     /// <summary>
