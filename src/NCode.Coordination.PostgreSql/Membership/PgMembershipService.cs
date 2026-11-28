@@ -308,14 +308,6 @@ internal sealed class PgMembershipService(PgRecordTable table, PgChangeLog chang
     }
 
     /// <summary>
-    /// Reads a row of the result of the statement that reads the deadline of a session's row.
-    /// </summary>
-    /// <param name="reader">The reader, on a row.</param>
-    /// <returns>The deadline, of kind UTC.</returns>
-    private static DateTime ReadSessionDeadline(NpgsqlDataReader reader) =>
-        PgColumns.ReadUtc(reader, 0);
-
-    /// <summary>
     /// Reads a row of the result of the statement that lists a group's members.
     /// </summary>
     /// <param name="reader">The reader, on a row.</param>
@@ -355,7 +347,7 @@ internal sealed class PgMembershipService(PgRecordTable table, PgChangeLog chang
             .ConfigureAwait(false);
         var rows = await results.ReadAsync(ReadGroupRow, cancellationToken).ConfigureAwait(false);
         var deadlines = await results
-            .ReadAsync(ReadSessionDeadline, cancellationToken)
+            .ReadAsync(reader => PgColumns.ReadUtc(reader, 0), cancellationToken)
             .ConfigureAwait(false);
 
         return (revisions, clocks, rows, deadlines);
@@ -680,10 +672,7 @@ internal sealed class PgMembershipService(PgRecordTable table, PgChangeLog chang
             .ExecuteAsync([statement], ReadMembersAsync, cancellationToken)
             .ConfigureAwait(false);
 
-        if (first.Length == 0)
-        {
-            throw new PgKeyspaceMissingException(PgKeyspaceMissingException.RowMissingMessage);
-        }
+        PgKeyspaceMissingException.ThrowIfNoRow(first.Length);
 
         if (!HoldsExpiredRow(first))
         {
@@ -694,10 +683,7 @@ internal sealed class PgMembershipService(PgRecordTable table, PgChangeLog chang
             .ReadAfterWritersAsync(id, statement, ReadMembersAsync, cancellationToken)
             .ConfigureAwait(false);
 
-        if (second.Length == 0)
-        {
-            throw new PgKeyspaceMissingException(PgKeyspaceMissingException.RowMissingMessage);
-        }
+        PgKeyspaceMissingException.ThrowIfNoRow(second.Length);
 
         return ToView(address.Group, second);
     }
@@ -906,10 +892,7 @@ internal sealed class PgMembershipService(PgRecordTable table, PgChangeLog chang
             .FirstAsync(statements, ReadStartAsync, cancellationToken)
             .ConfigureAwait(false);
 
-        if (read.Revisions.Length == 0)
-        {
-            throw new PgKeyspaceMissingException(PgKeyspaceMissingException.RowMissingMessage);
-        }
+        PgKeyspaceMissingException.ThrowIfNoRow(read.Revisions.Length);
 
         var now = read.Clocks[0];
         var origin = new PgChangeOrigin(keyspaceId, read.Revisions[0], now);

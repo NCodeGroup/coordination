@@ -121,7 +121,9 @@ internal sealed class PgCounterService(PgServer server, PgKeyspaces keyspaces, P
     )> ReadLockedAsync(PgResults results, CancellationToken cancellationToken)
     {
         var rows = await results.ReadAsync(ReadRow, cancellationToken).ConfigureAwait(false);
-        var clock = await results.ReadAsync(ReadClock, cancellationToken).ConfigureAwait(false);
+        var clock = await results
+            .ReadAsync(reader => PgColumns.ReadUtc(reader, 0), cancellationToken)
+            .ConfigureAwait(false);
 
         return (rows, clock[0]);
     }
@@ -139,16 +141,6 @@ internal sealed class PgCounterService(PgServer server, PgKeyspaces keyspaces, P
         var deadline = PgColumns.ReadUtc(reader, 3);
 
         return new PgCounterRow(index, depth, count, deadline);
-    }
-
-    /// <summary>
-    /// Reads the row that the clock statement returned.
-    /// </summary>
-    /// <param name="reader">The reader, at a row.</param>
-    /// <returns>The instant of the server's clock.</returns>
-    private static DateTime ReadClock(NpgsqlDataReader reader)
-    {
-        return PgColumns.ReadUtc(reader, 0);
     }
 
     /// <summary>

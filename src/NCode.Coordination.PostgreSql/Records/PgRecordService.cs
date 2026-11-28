@@ -791,10 +791,7 @@ internal sealed class PgRecordService(PgRecordTable table) : IRecordService
             .ExecuteAsync([statement], ReadListAsync, cancellationToken)
             .ConfigureAwait(false);
 
-        if (first.Length == 0)
-        {
-            throw new PgKeyspaceMissingException(PgKeyspaceMissingException.RowMissingMessage);
-        }
+        PgKeyspaceMissingException.ThrowIfNoRow(first.Length);
 
         var read = first;
         if (HoldsExpiredRow(first, request.Limit))
@@ -803,10 +800,7 @@ internal sealed class PgRecordService(PgRecordTable table) : IRecordService
                 .ReadAfterWritersAsync(id, statement, ReadListAsync, cancellationToken)
                 .ConfigureAwait(false);
 
-            if (read.Length == 0)
-            {
-                throw new PgKeyspaceMissingException(PgKeyspaceMissingException.RowMissingMessage);
-            }
+            PgKeyspaceMissingException.ThrowIfNoRow(read.Length);
         }
 
         return ToPage(request, read);

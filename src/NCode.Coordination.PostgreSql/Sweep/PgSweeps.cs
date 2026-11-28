@@ -319,16 +319,6 @@ internal sealed class PgSweeps(
     }
 
     /// <summary>
-    /// Reads the first column of the reader's current row as a time stamp.
-    /// </summary>
-    /// <param name="reader">The reader, on a row.</param>
-    /// <returns>The time stamp.</returns>
-    private static DateTime ReadFirstDateTime(NpgsqlDataReader reader)
-    {
-        return PgColumns.ReadUtc(reader, 0);
-    }
-
-    /// <summary>
     /// Reads the first column of the reader's current row as text.
     /// </summary>
     /// <param name="reader">The reader, on a row.</param>
@@ -406,7 +396,7 @@ internal sealed class PgSweeps(
             .ReadAsync(ReadFirstInt64, cancellationToken)
             .ConfigureAwait(false);
         var clocks = await results
-            .ReadAsync(ReadFirstDateTime, cancellationToken)
+            .ReadAsync(reader => PgColumns.ReadUtc(reader, 0), cancellationToken)
             .ConfigureAwait(false);
         var rows = await results
             .ReadAsync(ReadExpiredRecord, cancellationToken)
@@ -432,7 +422,7 @@ internal sealed class PgSweeps(
             .ReadAsync(ReadFirstInt64, cancellationToken)
             .ConfigureAwait(false);
         var clocks = await results
-            .ReadAsync(ReadFirstDateTime, cancellationToken)
+            .ReadAsync(reader => PgColumns.ReadUtc(reader, 0), cancellationToken)
             .ConfigureAwait(false);
         var sessions = await results
             .ReadAsync(ReadFirstText, cancellationToken)
@@ -590,12 +580,8 @@ internal sealed class PgSweeps(
                     .ConfigureAwait(false);
             } while (deleted == Settings.SweepBatchSize);
         }
-        catch (CoordinationException exception)
-        {
-            // The next sweep runs the pass again, and one failing pass must not stop the others.
-            Logger.SweepPassFailed(exception, pass.Name);
-        }
-        catch (PgKeyspaceMissingException exception)
+        catch (Exception exception)
+            when (exception is CoordinationException or PgKeyspaceMissingException)
         {
             // The next sweep runs the pass again, and one failing pass must not stop the others.
             Logger.SweepPassFailed(exception, pass.Name);
@@ -625,12 +611,8 @@ internal sealed class PgSweeps(
         {
             await run(cancellationToken).ConfigureAwait(false);
         }
-        catch (CoordinationException exception)
-        {
-            // The next sweep reads the rows again, and one failing step must not stop the others.
-            Logger.SweepStepFailed(exception, step);
-        }
-        catch (PgKeyspaceMissingException exception)
+        catch (Exception exception)
+            when (exception is CoordinationException or PgKeyspaceMissingException)
         {
             // The next sweep reads the rows again, and one failing step must not stop the others.
             Logger.SweepStepFailed(exception, step);

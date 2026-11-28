@@ -153,16 +153,6 @@ internal sealed class PgGrants(PgRecordTable table)
     }
 
     /// <summary>
-    /// Reads the deadline of a session's row from the first column.
-    /// </summary>
-    /// <param name="reader">The reader, on a row.</param>
-    /// <returns>The deadline, of kind UTC.</returns>
-    private static DateTime ReadSessionDeadline(NpgsqlDataReader reader)
-    {
-        return PgColumns.ReadUtc(reader, 0);
-    }
-
-    /// <summary>
     /// Reads the results of the first batch of a change to a resource's grants.
     /// </summary>
     /// <param name="results">The results of the batch.</param>
@@ -186,7 +176,7 @@ internal sealed class PgGrants(PgRecordTable table)
             .ReadAsync(reader => reader.GetInt64(0), cancellationToken)
             .ConfigureAwait(false);
         var deadlines = await results
-            .ReadAsync(ReadSessionDeadline, cancellationToken)
+            .ReadAsync(reader => PgColumns.ReadUtc(reader, 0), cancellationToken)
             .ConfigureAwait(false);
 
         return new PgGrantStartRead(revisions, clocks, rows, lasts, deadlines);
@@ -460,10 +450,7 @@ internal sealed class PgGrants(PgRecordTable table)
             .FirstAsync(statements, ReadStartAsync, cancellationToken)
             .ConfigureAwait(false);
 
-        if (read.Revisions.Length == 0)
-        {
-            throw new PgKeyspaceMissingException(PgKeyspaceMissingException.RowMissingMessage);
-        }
+        PgKeyspaceMissingException.ThrowIfNoRow(read.Revisions.Length);
 
         var now = read.Clocks[0];
         var origin = new PgChangeOrigin(keyspaceId, read.Revisions[0], now);

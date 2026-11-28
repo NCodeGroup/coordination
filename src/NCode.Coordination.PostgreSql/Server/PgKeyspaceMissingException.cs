@@ -15,6 +15,19 @@ internal sealed class PgKeyspaceMissingException : Exception
     public const string RowMissingMessage = "The keyspace's row does not exist.";
 
     /// <summary>
+    /// Throws when a read of a keyspace's row found none.
+    /// </summary>
+    /// <param name="rowCount">The number of rows the read found.</param>
+    /// <exception cref="PgKeyspaceMissingException">The read found no row.</exception>
+    public static void ThrowIfNoRow(int rowCount)
+    {
+        if (rowCount == 0)
+        {
+            throw new PgKeyspaceMissingException(RowMissingMessage);
+        }
+    }
+
+    /// <summary>
     /// Creates the exception without a message.
     /// </summary>
     public PgKeyspaceMissingException() { }

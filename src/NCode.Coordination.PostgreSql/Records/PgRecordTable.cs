@@ -691,10 +691,7 @@ internal sealed class PgRecordTable(PgServer server, PgKeyspaces keyspaces, PgSe
             .FirstAsync(statements, ReadStartAsync, cancellationToken)
             .ConfigureAwait(false);
 
-        if (read.Revisions.Length == 0)
-        {
-            throw new PgKeyspaceMissingException(PgKeyspaceMissingException.RowMissingMessage);
-        }
+        PgKeyspaceMissingException.ThrowIfNoRow(read.Revisions.Length);
 
         var now = read.Clocks[0];
         var origin = new PgChangeOrigin(keyspaceId, read.Revisions[0], now);
