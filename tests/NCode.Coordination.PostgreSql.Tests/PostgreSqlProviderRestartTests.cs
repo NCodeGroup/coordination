@@ -33,6 +33,11 @@ public sealed class PostgreSqlProviderRestartTests
     /// </summary>
     private const string BeforeName = "before";
 
+    /// <summary>
+    /// The name of the record that the tests write after the restart.
+    /// </summary>
+    private const string AfterName = "after";
+
     #region CreateAsync Tests
 
     [PgServerFact]
@@ -104,7 +109,7 @@ public sealed class PostgreSqlProviderRestartTests
 
         await Task.WhenAll(running);
 
-        var afterKey = keyspace.CreateKey("after");
+        var afterKey = keyspace.CreateKey(AfterName);
         await PgTestSupport.WaitUntilAnsweredAsync(
             async ct =>
             {

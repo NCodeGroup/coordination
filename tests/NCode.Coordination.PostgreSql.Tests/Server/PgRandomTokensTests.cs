@@ -29,4 +29,21 @@ public sealed class PgRandomTokensTests
     }
 
     #endregion
+
+    #region NextKeyspaceId Tests
+
+    [Fact]
+    public void NextKeyspaceId_CalledRepeatedly_IsNeverZero()
+    {
+        var tokens = new PgRandomTokens();
+
+        for (var draw = 0; draw < 100; draw++)
+        {
+            var id = tokens.NextKeyspaceId();
+
+            Assert.NotEqual(0L, id);
+        }
+    }
+
+    #endregion
 }

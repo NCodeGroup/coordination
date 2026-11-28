@@ -18,10 +18,8 @@ public sealed class PgCallTests
     [Fact]
     public void Check_Extension_ThrowsUnsupportedNotApplied()
     {
-        var options = new OperationOptions
-        {
-            Extensions = ImmutableDictionary<string, string>.Empty.Add("consul.lock-delay", "15s"),
-        };
+        var extensions = ImmutableDictionary<string, string>.Empty.Add("consul.lock-delay", "15s");
+        var options = new OperationOptions { Extensions = extensions };
 
         var exception = Assert.Throws<CoordinationException>(() =>
             PgCall.Check(options, CancellationToken.None)

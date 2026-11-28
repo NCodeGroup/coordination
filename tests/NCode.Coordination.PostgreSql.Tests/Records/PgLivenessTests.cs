@@ -30,10 +30,11 @@ public sealed class PgLivenessTests
 
         var deadline = Now.AddSeconds(deadlineSeconds);
 
+        var expectedState = Enum.Parse<PgRecordState>(expected);
+
         var state = PgLiveness.StateOf(deadline, session, sessionDeadline, Now);
 
-        var stateName = state.ToString();
-        Assert.Equal(expected, stateName);
+        Assert.Equal(expectedState, state);
     }
 
     #endregion

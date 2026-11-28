@@ -21,7 +21,8 @@ public sealed class PgRecordServiceServerTests(PgServers servers)
 
     private static CoordinationKey LongKey(Keyspace keyspace, int number)
     {
-        var segments = new List<KeySegment> { LongPrefixSegment() };
+        var prefix = LongPrefixSegment();
+        var segments = new List<KeySegment> { prefix };
         for (var index = 0; index < 14; index++)
         {
             var text = new string((char)('a' + index), 256);

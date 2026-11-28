@@ -13,6 +13,8 @@ namespace NCode.Coordination.PostgreSql.Records.Tests;
 
 public sealed class PgRecordWatchServerTests(PgServers servers)
 {
+    private const string LostTopicName = "lost";
+
     private static TimeSpan Patience { get; } = TimeSpan.FromSeconds(30);
 
     private static TimeSpan OneMinuteSpan { get; } = TimeSpan.FromMinutes(1);
@@ -406,7 +408,7 @@ public sealed class PgRecordWatchServerTests(PgServers servers)
         await WithProviderAsync(
             async context =>
             {
-                var topic = context.Keyspace.CreateKey("lost");
+                var topic = context.Keyspace.CreateKey(LostTopicName);
 
                 await using var notifications = context
                     .Notifications.SubscribeAsync(topic, null, cancellationToken)

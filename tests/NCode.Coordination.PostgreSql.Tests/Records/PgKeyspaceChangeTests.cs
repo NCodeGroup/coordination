@@ -190,7 +190,7 @@ public sealed class PgKeyspaceChangeTests
     #region Write Tests
 
     [Fact]
-    public void Write_Alone_TakesNoRevisionAndNotifiesNot()
+    public void Write_Alone_TakesNoRevisionAndSendsNoNotification()
     {
         var change = CreateChange(5);
 

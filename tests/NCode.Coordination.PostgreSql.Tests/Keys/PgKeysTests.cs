@@ -234,6 +234,10 @@ public sealed class PgKeysTests
         Assert.Equal(2, depth);
     }
 
+    #endregion
+
+    #region TryReadPageToken Tests
+
     [Fact]
     public void TryReadPageToken_OtherPrefix_ReturnsFalse()
     {

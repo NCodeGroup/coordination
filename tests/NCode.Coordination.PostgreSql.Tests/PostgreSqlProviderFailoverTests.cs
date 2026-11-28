@@ -43,6 +43,11 @@ public sealed class PostgreSqlProviderFailoverTests
     private const string LostName = "lost";
 
     /// <summary>
+    /// The name of the record that the tests write after the failover, through the new primary.
+    /// </summary>
+    private const string AfterName = "after";
+
+    /// <summary>
     /// Polls the primary until a backend waits for a synchronous standby to confirm its commit.
     /// </summary>
     /// <param name="connectionString">The connection string of the primary.</param>
@@ -118,7 +123,7 @@ public sealed class PostgreSqlProviderFailoverTests
         var before = new List<CoordinationKey>();
         for (var index = 0; index < Records; index++)
         {
-            var key = keyspace.CreateKey("before", index);
+            var key = keyspace.CreateKey(BeforeName, index);
             var created = await records.CreateAsync(
                 key,
                 value,
@@ -136,7 +141,7 @@ public sealed class PostgreSqlProviderFailoverTests
         var lost = new List<CoordinationKey>();
         for (var index = 0; index < Records; index++)
         {
-            var key = keyspace.CreateKey("lost", index);
+            var key = keyspace.CreateKey(LostName, index);
             var created = await records.CreateAsync(
                 key,
                 value,
@@ -151,7 +156,7 @@ public sealed class PostgreSqlProviderFailoverTests
         await server.PromoteStandbyAsync(cancellationToken);
         await server.StopPrimaryAsync(cancellationToken);
 
-        var afterKey = keyspace.CreateKey("after");
+        var afterKey = keyspace.CreateKey(AfterName);
         await PgTestSupport.WaitUntilAnsweredAsync(
             async ct =>
             {
@@ -278,7 +283,7 @@ public sealed class PostgreSqlProviderFailoverTests
             cancellationToken
         );
         var newRecords = PgTestSupport.GetService<IRecordService>(newPrimary);
-        var afterKey = keyspace.CreateKey("after");
+        var afterKey = keyspace.CreateKey(AfterName);
         var after = await newRecords.CreateAsync(
             afterKey,
             value,
