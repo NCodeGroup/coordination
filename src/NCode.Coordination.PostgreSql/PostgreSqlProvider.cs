@@ -4,7 +4,6 @@
 using System.Collections.Frozen;
 using System.Collections.Immutable;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
 using NCode.Coordination.PostgreSql.Claims;
 using NCode.Coordination.PostgreSql.Counters;
 using NCode.Coordination.PostgreSql.Elections;
@@ -118,7 +117,7 @@ internal sealed class PostgreSqlProvider : ICoordinationProvider, IAsyncDisposab
     /// <param name="settings">The settings of the provider.</param>
     /// <exception cref="ArgumentNullException">The source, the profile or the settings are null.</exception>
     public PostgreSqlProvider(PgSource source, PostgreSqlProfile profile, PgSettings settings)
-        : this(source, profile, settings, NullLoggerFactory.Instance) { }
+        : this(source, profile, settings, PgHostServices.Default) { }
 
     /// <summary>
     /// Creates the provider and the services that share its data source.
@@ -126,29 +125,29 @@ internal sealed class PostgreSqlProvider : ICoordinationProvider, IAsyncDisposab
     /// <param name="source">The source of the provider's connections. The provider disposes it, which disposes the data source only when the source owns it.</param>
     /// <param name="profile">The profile that the server must match.</param>
     /// <param name="settings">The settings of the provider.</param>
-    /// <param name="loggerFactory">The factory of the loggers that report the failures the provider's background work catches.</param>
-    /// <exception cref="ArgumentNullException">The source, the profile, the settings or the logger factory are null.</exception>
+    /// <param name="host">What the provider takes from its host: the factory of the loggers that report the failures the provider's background work catches, and the clock that its timers and polls run on.</param>
+    /// <exception cref="ArgumentNullException">The source, the profile, the settings or the host services are null.</exception>
     public PostgreSqlProvider(
         PgSource source,
         PostgreSqlProfile profile,
         PgSettings settings,
-        ILoggerFactory loggerFactory
+        PgHostServices host
     )
     {
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(profile);
         ArgumentNullException.ThrowIfNull(settings);
-        ArgumentNullException.ThrowIfNull(loggerFactory);
+        ArgumentNullException.ThrowIfNull(host);
 
         Source = source;
         Profile = profile;
         Settings = settings;
-        LoggerFactory = loggerFactory;
+        Host = host;
         Server = new PgServer(source, settings);
         Tokens = new PgRandomTokens();
         Keyspaces = new PgKeyspaces(Server, settings.Schema, Tokens);
         RecordTable = new PgRecordTable(Server, Keyspaces, settings);
-        Hub = new PgLogHub(source, Keyspaces, settings, TimeProvider.System, loggerFactory);
+        Hub = new PgLogHub(source, Keyspaces, settings, host.Time, host.LoggerFactory);
         ChangeLog = new PgChangeLog(Server, settings.Schema);
         var declared = Declare(profile);
         Declaration = new ProviderDeclaration(
@@ -178,9 +177,9 @@ internal sealed class PostgreSqlProvider : ICoordinationProvider, IAsyncDisposab
     private PgSettings Settings { get; }
 
     /// <summary>
-    /// Gets the factory of the loggers that report the failures the provider's background work catches.
+    /// Gets what the provider takes from its host: its logger factory and its clock.
     /// </summary>
-    private ILoggerFactory LoggerFactory { get; }
+    private PgHostServices Host { get; }
 
     /// <summary>
     /// Gets the seam between the provider and its server.
@@ -264,12 +263,13 @@ internal sealed class PostgreSqlProvider : ICoordinationProvider, IAsyncDisposab
     /// <returns>The sweeper, which isn't started.</returns>
     private PgSweeper CreateSweeper()
     {
-        var sweepsLogger = LoggerFactory.CreateLogger<PgSweeps>();
-        var sweeperLogger = LoggerFactory.CreateLogger<PgSweeper>();
+        var loggerFactory = Host.LoggerFactory;
+        var sweepsLogger = loggerFactory.CreateLogger<PgSweeps>();
+        var sweeperLogger = loggerFactory.CreateLogger<PgSweeper>();
         var sweeps = new PgSweeps(Server, Settings, RecordTable, sweepsLogger);
         var interval = Settings.SweepInterval;
 
-        return new PgSweeper(sweeps.SweepAsync, interval, TimeProvider.System, sweeperLogger);
+        return new PgSweeper(sweeps.SweepAsync, interval, Host.Time, sweeperLogger);
     }
 
     /// <summary>
@@ -280,7 +280,7 @@ internal sealed class PostgreSqlProvider : ICoordinationProvider, IAsyncDisposab
     {
         var schema = Settings.Schema;
         var grants = new PgGrants(RecordTable);
-        var polling = new PgPolling(TimeProvider.System);
+        var polling = new PgPolling(Host.Time);
 
         var services = new Dictionary<Type, object>
         {

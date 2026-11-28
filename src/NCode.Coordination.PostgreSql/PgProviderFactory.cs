@@ -1,8 +1,6 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
 using NCode.Coordination.PostgreSql.Server;
 using Npgsql;
 
@@ -28,14 +26,13 @@ internal sealed record PgProviderFactory(
     /// </summary>
     /// <param name="services">The services that the host's data source factory resolves from.</param>
     /// <returns>The provider.</returns>
+    /// <exception cref="InvalidOperationException">The options set neither a connection string nor a data source.</exception>
     public PostgreSqlProvider Create(IServiceProvider services)
     {
         var source = CreateSource(services);
-        var loggerFactory =
-            services.GetService(typeof(ILoggerFactory)) as ILoggerFactory
-            ?? NullLoggerFactory.Instance;
+        var host = PgHostServices.From(services);
 
-        return new PostgreSqlProvider(source, Profile, Settings, loggerFactory);
+        return new PostgreSqlProvider(source, Profile, Settings, host);
     }
 
     /// <summary>
@@ -43,15 +40,23 @@ internal sealed record PgProviderFactory(
     /// </summary>
     /// <param name="services">The services that the host's data source factory resolves from.</param>
     /// <returns>A source that owns a data source built from the connection string, or one that wraps the host's data source.</returns>
+    /// <exception cref="InvalidOperationException">The options set neither a connection string nor a data source.</exception>
     private PgSource CreateSource(IServiceProvider services)
     {
-        if (DataSourceFactory is null)
+        if (DataSourceFactory is not null)
         {
-            return PgSource.FromConnectionString(ConnectionString ?? string.Empty);
+            var dataSource = DataSourceFactory(services);
+
+            return PgSource.FromDataSource(dataSource);
         }
 
-        var dataSource = DataSourceFactory(services);
+        if (ConnectionString is not null)
+        {
+            return PgSource.FromConnectionString(ConnectionString);
+        }
 
-        return PgSource.FromDataSource(dataSource);
+        throw new InvalidOperationException(
+            "The PostgreSQL provider's options set neither PostgreSqlProviderOptions.ConnectionString nor PostgreSqlProviderOptions.DataSource."
+        );
     }
 }
