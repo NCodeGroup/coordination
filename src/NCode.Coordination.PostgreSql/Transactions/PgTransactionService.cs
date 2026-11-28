@@ -73,11 +73,46 @@ internal sealed class PgTransactionService(PgRecordTable table) : ITransactionSe
     /// <returns>The keys.</returns>
     private static CoordinationKey[] KeysOf(RecordTransaction transaction)
     {
-        var conditionKeys = transaction.Conditions.Select(condition => condition.Key);
-        var successKeys = transaction.OnSuccess.Select(write => write.Key);
-        var failureKeys = transaction.OnFailure.Select(write => write.Key);
+        var capacity =
+            transaction.Conditions.Length
+            + transaction.OnSuccess.Length
+            + transaction.OnFailure.Length;
+        var seen = new HashSet<CoordinationKey>(capacity);
+        var keys = new List<CoordinationKey>(capacity);
 
-        return conditionKeys.Concat(successKeys).Concat(failureKeys).Distinct().ToArray();
+        foreach (var condition in transaction.Conditions)
+        {
+            if (seen.Add(condition.Key))
+            {
+                keys.Add(condition.Key);
+            }
+        }
+
+        AddWriteKeys(transaction.OnSuccess, seen, keys);
+        AddWriteKeys(transaction.OnFailure, seen, keys);
+
+        return [.. keys];
+    }
+
+    /// <summary>
+    /// Adds the keys that a branch's writes name, each key once, after the keys already added.
+    /// </summary>
+    /// <param name="writes">The writes of the branch.</param>
+    /// <param name="seen">The keys that were added.</param>
+    /// <param name="keys">The keys, in first-seen order.</param>
+    private static void AddWriteKeys(
+        ImmutableArray<RecordWrite> writes,
+        HashSet<CoordinationKey> seen,
+        List<CoordinationKey> keys
+    )
+    {
+        foreach (var write in writes)
+        {
+            if (seen.Add(write.Key))
+            {
+                keys.Add(write.Key);
+            }
+        }
     }
 
     /// <summary>
@@ -88,14 +123,42 @@ internal sealed class PgTransactionService(PgRecordTable table) : ITransactionSe
     /// <returns>The sessions' ids.</returns>
     private static string[] SessionsOf(RecordTransaction transaction)
     {
-        return transaction
-            .OnSuccess.Concat(transaction.OnFailure)
-            .Select(write => write.Lifetime?.Session)
-            .OfType<SessionId>()
-            .Where(session => session.Keyspace == transaction.Keyspace)
-            .Select(session => session.Value)
-            .Distinct(StringComparer.Ordinal)
-            .ToArray();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var sessions = new List<string>();
+
+        AddSessions(transaction.OnSuccess, transaction.Keyspace, seen, sessions);
+        AddSessions(transaction.OnFailure, transaction.Keyspace, seen, sessions);
+
+        return [.. sessions];
+    }
+
+    /// <summary>
+    /// Adds the ids of the sessions of a keyspace that a branch's writes bind records to, each id once, after the
+    /// ids already added.
+    /// </summary>
+    /// <param name="writes">The writes of the branch.</param>
+    /// <param name="keyspace">The transaction's keyspace.</param>
+    /// <param name="seen">The ids that were added.</param>
+    /// <param name="sessions">The ids, in first-seen order.</param>
+    private static void AddSessions(
+        ImmutableArray<RecordWrite> writes,
+        Keyspace keyspace,
+        HashSet<string> seen,
+        List<string> sessions
+    )
+    {
+        foreach (var write in writes)
+        {
+            if (write.Lifetime?.Session is not { } session || session.Keyspace != keyspace)
+            {
+                continue;
+            }
+
+            if (seen.Add(session.Value))
+            {
+                sessions.Add(session.Value);
+            }
+        }
     }
 
     /// <summary>
@@ -141,9 +204,15 @@ internal sealed class PgTransactionService(PgRecordTable table) : ITransactionSe
         Keyspace keyspace
     )
     {
-        return writes.Any(write =>
-            write.Lifetime?.Session is { } session && IsEnded(start, keyspace, session)
-        );
+        foreach (var write in writes)
+        {
+            if (write.Lifetime?.Session is { } session && IsEnded(start, keyspace, session))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>
