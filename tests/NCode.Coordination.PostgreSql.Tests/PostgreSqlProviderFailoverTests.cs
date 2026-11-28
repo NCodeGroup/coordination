@@ -1,8 +1,13 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using System.Diagnostics;
 using System.Text;
+using NCode.Coordination.PostgreSql.Schema;
+using NCode.Coordination.PostgreSql.Server;
+using NCode.Coordination.PostgreSql.Tests.Conformance;
 using NCode.Coordination.PostgreSql.Tests.Servers;
+using Npgsql;
 
 namespace NCode.Coordination.PostgreSql.Tests;
 
@@ -60,6 +65,75 @@ public sealed class PostgreSqlProviderFailoverTests
             if (!isResync(item))
                 return item;
         }
+    }
+
+    /// <summary>
+    /// Polls the primary until a backend waits for a synchronous standby to confirm its commit.
+    /// </summary>
+    /// <param name="connectionString">The connection string of the primary.</param>
+    /// <param name="cancellationToken">The token that cancels the wait.</param>
+    /// <returns>A task that completes when a commit waits for a standby.</returns>
+    private static async ValueTask WaitForCommitWaitingAsync(
+        string connectionString,
+        CancellationToken cancellationToken
+    )
+    {
+        var builder = new NpgsqlConnectionStringBuilder(connectionString) { Pooling = false };
+        await using var connection = new NpgsqlConnection(builder.ConnectionString);
+        await connection.OpenAsync(cancellationToken);
+
+        var stopwatch = Stopwatch.StartNew();
+        while (true)
+        {
+            await using var command = new NpgsqlCommand(
+                "SELECT count(*) FROM pg_stat_activity WHERE wait_event = 'SyncRep'",
+                connection
+            );
+            var waiting = await command.ExecuteScalarAsync(cancellationToken);
+            if (waiting is > 0L)
+                return;
+
+            if (stopwatch.Elapsed > PgTestSupport.WaitLimit)
+                Assert.Fail("No commit waited for the standby.");
+
+            await Task.Delay(TimeSpan.FromMilliseconds(100), cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// Creates a provider on a server in a schema that the caller names, so that two providers on two servers that
+    /// replicate each other see the same tables, and probes it.
+    /// </summary>
+    /// <param name="connectionString">The connection string of the server.</param>
+    /// <param name="profile">The profile of the provider.</param>
+    /// <param name="schema">The schema of the provider's tables.</param>
+    /// <param name="cancellationToken">The token that cancels the creation.</param>
+    /// <returns>The probed provider, which the caller disposes.</returns>
+    private static async ValueTask<PostgreSqlProvider> CreateProviderInSchemaAsync(
+        string connectionString,
+        PostgreSqlProfile profile,
+        PgSchemaName schema,
+        CancellationToken cancellationToken
+    )
+    {
+        var settings = PgConformance.Settings with { Schema = schema };
+        var provider = new PostgreSqlProvider(
+            PgSource.FromConnectionString(connectionString),
+            profile,
+            settings
+        );
+
+        try
+        {
+            await provider.ProbeAsync(cancellationToken);
+        }
+        catch
+        {
+            await provider.DisposeAsync();
+            throw;
+        }
+
+        return provider;
     }
 
     #region ProbeAsync Tests
@@ -160,6 +234,130 @@ public sealed class PostgreSqlProviderFailoverTests
 
         var after = await records.ReadAsync(afterKey, null, cancellationToken);
         Assert.NotNull(after);
+    }
+
+    [PgServerFact]
+    public async Task CreateAsync_WhenASynchronousStandbyIsPromoted_LosesNoAcknowledgedWrite()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var server = await PgFailoverServer.StartAsync(true, cancellationToken);
+        await using var provider = await PgTestSupport.CreateProviderAsync(
+            server.ConnectionString,
+            PostgreSqlProfiles.Synchronous,
+            cancellationToken
+        );
+        var records = PgTestSupport.GetService<IRecordService>(provider);
+        var keyspace = PgTestSupport.CreateKeyspace(KeyspaceName);
+        var value = "v"u8.ToArray();
+
+        var before = new List<CoordinationKey>();
+        for (var index = 0; index < Records; index++)
+        {
+            var key = keyspace.CreateKey(BeforeName, index);
+            var created = await records.CreateAsync(
+                key,
+                value,
+                RecordLifetime.Persistent,
+                null,
+                cancellationToken
+            );
+            Assert.True(created.IsWritten);
+            before.Add(key);
+        }
+
+        await server.WaitForStandbyAsync(cancellationToken);
+        await server.CutReplicationAsync(cancellationToken);
+
+        var pending = records
+            .CreateAsync(
+                keyspace.CreateKey(LostName),
+                value,
+                RecordLifetime.Persistent,
+                null,
+                cancellationToken
+            )
+            .AsTask();
+        await WaitForCommitWaitingAsync(server.PrimaryAdmin, cancellationToken);
+
+        await server.PromoteStandbyAsync(cancellationToken);
+        await server.StopPrimaryAsync(cancellationToken);
+
+        var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
+            await pending.WaitAsync(PgTestSupport.WaitLimit, cancellationToken)
+        );
+        Assert.Equal(CoordinationErrorCodes.Unavailable, exception.Code);
+        Assert.True(exception.OutcomeUnknown);
+
+        foreach (var key in before)
+        {
+            await PgTestSupport.WaitUntilAnsweredAsync(
+                async ct =>
+                {
+                    var stored = await records.ReadAsync(key, null, ct);
+                    Assert.NotNull(stored);
+                },
+                cancellationToken
+            );
+        }
+    }
+
+    #endregion
+
+    #region ReadAsync Tests
+
+    [PgServerFact]
+    public async Task ReadAsync_OnTheOldPrimaryAfterThePromotion_MissesAWriteOfTheNewPrimary()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var server = await PgFailoverServer.StartAsync(true, cancellationToken);
+        var schema = PgSchemaName.Create($"t_{Guid.NewGuid():N}");
+        await using var oldPrimary = await CreateProviderInSchemaAsync(
+            server.PrimaryAdmin,
+            PostgreSqlProfiles.Synchronous,
+            schema,
+            cancellationToken
+        );
+        var oldRecords = PgTestSupport.GetService<IRecordService>(oldPrimary);
+        var keyspace = PgTestSupport.CreateKeyspace(KeyspaceName);
+        var value = "v"u8.ToArray();
+
+        var beforeKey = keyspace.CreateKey(BeforeName);
+        var before = await oldRecords.CreateAsync(
+            beforeKey,
+            value,
+            RecordLifetime.Persistent,
+            null,
+            cancellationToken
+        );
+        Assert.True(before.IsWritten);
+
+        await server.WaitForStandbyAsync(cancellationToken);
+        await server.CutReplicationAsync(cancellationToken);
+        await server.PromoteStandbyAsync(cancellationToken);
+
+        await using var newPrimary = await CreateProviderInSchemaAsync(
+            server.StandbyAdmin,
+            PostgreSqlProfiles.Asynchronous,
+            schema,
+            cancellationToken
+        );
+        var newRecords = PgTestSupport.GetService<IRecordService>(newPrimary);
+        var afterKey = keyspace.CreateKey("after");
+        var after = await newRecords.CreateAsync(
+            afterKey,
+            value,
+            RecordLifetime.Persistent,
+            null,
+            cancellationToken
+        );
+        Assert.True(after.IsWritten);
+
+        var onNew = await newRecords.ReadAsync(afterKey, null, cancellationToken);
+        Assert.NotNull(onNew);
+        var onOld = await oldRecords.ReadAsync(afterKey, null, cancellationToken);
+        Assert.Null(onOld);
+        var beforeOnOld = await oldRecords.ReadAsync(beforeKey, null, cancellationToken);
+        Assert.NotNull(beforeOnOld);
     }
 
     #endregion
