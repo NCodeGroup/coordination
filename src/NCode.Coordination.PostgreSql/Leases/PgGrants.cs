@@ -13,7 +13,8 @@ namespace NCode.Coordination.PostgreSql.Leases;
 /// <summary>
 /// The reads and writes that leases, semaphores and elections share: a grant is a row of the <c>grants</c> table of
 /// one kind, resource and slot, and a resource's fencing tokens are kept in its row of the <c>fencing</c> table, which
-/// outlives its grants. A change locks the keyspace's row but takes no revision and logs no entry.
+/// outlives its grants. A change locks the keyspace's row; a grant takes no revision and logs no entry of its own, and
+/// ending an expired session that a change meets takes one and logs the entry that names the session.
 /// </summary>
 /// <param name="table">The record table, whose keyspaces' ids, transactions and changes the grants share.</param>
 /// <exception cref="ArgumentNullException">The table is null.</exception>

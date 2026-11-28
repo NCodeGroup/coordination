@@ -4,7 +4,8 @@
 namespace NCode.Coordination.PostgreSql.Records;
 
 /// <summary>
-/// Holds the row that <see cref="PgRecordTable.ReadOneAsync"/> read, with the instant the server read it at.
+/// Holds the row that the one-record statement of <see cref="PgRecordTable"/> read, with the instant the server read it
+/// at.
 /// </summary>
 /// <param name="Now">The server's instant.</param>
 /// <param name="Value">The record's value.</param>

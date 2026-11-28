@@ -10,7 +10,8 @@ namespace NCode.Coordination.PostgreSql.Leases;
 /// resource's fencing tokens are kept in the <c>fencing</c> table, so a grant after a sweep still gets a greater one.
 /// Every change of a grant is a transaction that locks the keyspace's row, ends the expired sessions it meets and
 /// decides from the rows it read; a read is one statement, read again after the keyspace's writers when it meets an
-/// expired grant. A grant takes no revision and logs no entry. A wait for a release polls until no grant is live.
+/// expired grant. A grant takes no revision and logs no entry, though ending an expired session it meets does. A wait
+/// for a release polls until no grant is live.
 /// </summary>
 /// <param name="grants">The reads and writes that the grants share.</param>
 /// <param name="tokens">The source of owner tokens.</param>

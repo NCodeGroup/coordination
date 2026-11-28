@@ -572,8 +572,9 @@ internal sealed class PgRecordTable(PgServer server, PgKeyspaces keyspaces, PgSe
     }
 
     /// <summary>
-    /// Reads one record. A record that is live in the single statement is returned; one that is expired is read again
-    /// in a transaction that first waits for the keyspace's writers, so the answer follows a write that replaces it.
+    /// Reads one record. A record that is live in the single statement is returned; one that is expired, or
+    /// whose session is past its deadline, is read again in a transaction that first waits for the keyspace's writers,
+    /// so the answer follows a write that replaces it.
     /// </summary>
     /// <param name="key">The record's key.</param>
     /// <param name="cancellationToken">The token that cancels the call.</param>

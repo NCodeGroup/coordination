@@ -219,7 +219,7 @@ internal sealed class PgServer(PgSource source, PgSettings settings)
         if (PgFailures.IsKeyspaceMissing(exception))
         {
             return new PgKeyspaceMissingException(
-                "A statement found its keyspace's row missing.",
+                PgKeyspaceMissingException.RowMissingMessage,
                 exception
             );
         }
