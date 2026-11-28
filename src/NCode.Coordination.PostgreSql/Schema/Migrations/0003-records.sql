@@ -21,7 +21,6 @@ CREATE TABLE {schema}.changes (
     PRIMARY KEY (keyspace_id, revision)
 );
 CREATE INDEX changes_deadline ON {schema}.changes (deadline);
-CREATE INDEX changes_ended_session ON {schema}.changes (keyspace_id, ended_session) WHERE ended_session IS NOT NULL;
 CREATE TABLE {schema}.change_items (
     keyspace_id bigint NOT NULL,
     revision bigint NOT NULL,
