@@ -422,7 +422,7 @@ internal sealed class PgRecordService(PgRecordTable table) : IRecordService
         CancellationToken cancellationToken
     )
     {
-        var scope = new PgRecordScope(id, [request.Key], request.Sessions);
+        var scope = new PgRecordScope(id, [request.Key], [.. request.Sessions]);
         var start = await Table
             .BeginAsync(transaction, scope, cancellationToken)
             .ConfigureAwait(false);
@@ -533,7 +533,7 @@ internal sealed class PgRecordService(PgRecordTable table) : IRecordService
         CancellationToken cancellationToken
     )
     {
-        var scope = new PgRecordScope(id, [request.Key], request.Sessions);
+        var scope = new PgRecordScope(id, [request.Key], [.. request.Sessions]);
         var start = await Table
             .BeginAsync(transaction, scope, cancellationToken)
             .ConfigureAwait(false);

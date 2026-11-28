@@ -31,7 +31,7 @@ public static class PostgreSqlSchema
 
         var name = PgSchemaName.Create(schema);
 
-        var migrations = new List<PostgreSqlMigration>();
+        var migrations = new List<PostgreSqlMigration>(PgMigrations.All.Length);
         foreach (var migration in PgMigrations.All)
         {
             var statements = migration.Statements.Select(statement =>

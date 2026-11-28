@@ -1,6 +1,8 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using System.Collections.Immutable;
+
 namespace NCode.Coordination.PostgreSql.Records;
 
 /// <summary>
@@ -11,6 +13,6 @@ namespace NCode.Coordination.PostgreSql.Records;
 /// <param name="Sessions">The ids of the sessions that the writes bind to, whose rows to read.</param>
 internal sealed record PgRecordScope(
     long KeyspaceId,
-    IReadOnlyList<CoordinationKey> Keys,
-    IReadOnlyCollection<string> Sessions
+    ImmutableArray<CoordinationKey> Keys,
+    ImmutableArray<string> Sessions
 );

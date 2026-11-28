@@ -218,7 +218,7 @@ internal sealed class PgCounterService(PgServer server, PgKeyspaces keyspaces, P
         var ordered = entries.Values.ToList();
         ordered.Sort(CompareEntries);
 
-        return new PgCounterBatch(increments, [.. ordered]);
+        return new PgCounterBatch([.. increments], [.. ordered]);
     }
 
     /// <summary>
@@ -263,11 +263,11 @@ internal sealed class PgCounterService(PgServer server, PgKeyspaces keyspaces, P
     {
         var stored = FindUnexpired(rows, instant);
         var entries = batch.Entries.ToDictionary(entry => entry.Key);
-        var pending = new Dictionary<CoordinationKey, PgCounterWrite>(batch.Increments.Count);
-        var counts = new List<long>(batch.Increments.Count);
+        var pending = new Dictionary<CoordinationKey, PgCounterWrite>(batch.Increments.Length);
+        var counts = new List<long>(batch.Increments.Length);
         int? exceeded = null;
 
-        for (var position = 0; position < batch.Increments.Count; position++)
+        for (var position = 0; position < batch.Increments.Length; position++)
         {
             var increment = batch.Increments[position];
             if (!pending.TryGetValue(increment.Key, out var write))

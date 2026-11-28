@@ -435,8 +435,9 @@ internal sealed class PgLogHub : IAsyncDisposable, IDisposable
     /// <returns>A task that completes when every pump has.</returns>
     private Task PumpAllAsync(CancellationToken stop)
     {
-        var pumps = new List<Task>();
-        foreach (var pump in Fanouts.Values)
+        var fanouts = Fanouts.Values;
+        var pumps = new List<Task>(fanouts.Count);
+        foreach (var pump in fanouts)
         {
             var pumping = PumpQuietlyAsync(pump, stop);
             pumps.Add(pumping);

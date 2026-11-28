@@ -130,7 +130,7 @@ internal sealed class PgNotificationService(
             return new PgLogRead<PgMessage>(0, 0, []);
         }
 
-        var messages = ImmutableArray.CreateBuilder<PgMessage>();
+        var messages = ImmutableArray.CreateBuilder<PgMessage>(rows.Length);
         foreach (var row in rows)
         {
             if (row.Message is { } message)

@@ -347,7 +347,7 @@ internal sealed class PgMembershipService(PgRecordTable table, PgChangeLog chang
     /// <returns>The view at the keyspace's revision.</returns>
     private static MembershipView ToView(CoordinationKey group, ImmutableArray<PgMemberRow> rows)
     {
-        var members = new List<Member>();
+        var members = new List<Member>(rows.Length);
         foreach (var row in rows)
         {
             var member = ToLiveMember(group.Keyspace, row);
