@@ -166,6 +166,24 @@ public sealed class PgKeysTests
     }
 
     [Fact]
+    public void Index_KnownKey_IsTheDigestsOfItsEncodedSegments()
+    {
+        // SHA-256 of "ta%7Bb%7D", then SHA-256 of "n42", concatenated.
+        const string expected =
+            "c7d2ba7030d7ef4353a336cc10087e3783eba7a2c83c77bc81a01103602a8f21732fa6f2f761e0f3cb0559c0b5d5a3549c974b1786913882835b666d96fe1db9";
+        var key = new Keyspace("prod").CreateKey("a{b}", 42);
+
+        var first = PgKeys.EncodeSegment(key.Segments[0]);
+        var second = PgKeys.EncodeSegment(key.Segments[1]);
+        var index = PgKeys.Index(key);
+        var hex = Convert.ToHexStringLower(index);
+
+        Assert.Equal("ta%7Bb%7D", first);
+        Assert.Equal("n42", second);
+        Assert.Equal(expected, hex);
+    }
+
+    [Fact]
     public void Index_LongestKey_HasFiveHundredTwelveBytes()
     {
         var keyspace = new Keyspace("prod");

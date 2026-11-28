@@ -1,9 +1,6 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
-using System.Security.Cryptography;
-using System.Text;
-
 namespace NCode.Coordination.PostgreSql.Schema.Tests;
 
 public sealed class PgSchemaNameTests
@@ -54,16 +51,16 @@ public sealed class PgSchemaNameTests
     #region Hash Tests
 
     [Fact]
-    public void Hash_Name_IsEightLowercaseHexDigits()
+    public void Hash_DefaultName_IsTheKnownDigestPrefix()
     {
+        // The first eight hex digits of cbbeb3cc2d482a2ffd900c233cc3bc5a84f2770c9b2f546a5041e35d8216048c,
+        // the SHA-256 of "coordination".
+        const string expected = "cbbeb3cc";
         var schema = PgSchemaName.Create("coordination");
 
-        var expected = Convert.ToHexStringLower(
-            SHA256.HashData(Encoding.UTF8.GetBytes("coordination"))
-        )[..8];
+        var hash = schema.Hash;
 
-        Assert.Equal(8, schema.Hash.Length);
-        Assert.Equal(expected, schema.Hash);
+        Assert.Equal(expected, hash);
     }
 
     #endregion

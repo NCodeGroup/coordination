@@ -33,6 +33,14 @@ public sealed class PgChannelsTests
         Assert.EndsWith(".ffffffffffffffff", channel, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void ForKeyspace_DefaultSchemaAndKeyspaceFive_IsTheKnownName()
+    {
+        var channel = PgChannels.ForKeyspace(PgSchemaName.Default, 5);
+
+        Assert.Equal("ncode.cbbeb3cc.0000000000000005", channel);
+    }
+
     #endregion
 
     #region ChangePayload Tests
