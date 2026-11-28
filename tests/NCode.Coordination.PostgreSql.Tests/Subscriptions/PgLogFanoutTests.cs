@@ -36,6 +36,35 @@ public sealed class PgLogFanoutTests
         }
     }
 
+    private sealed class FixedPageLog(long current, long[] numbers)
+    {
+        public int Reads { get; private set; }
+
+        public ValueTask<PgLogRead<TestEntry>> ReadAsync(
+            long after,
+            int limit,
+            CancellationToken cancellationToken
+        )
+        {
+            Reads++;
+
+            var entries = numbers.Select(x => new TestEntry(x)).ToImmutableArray();
+            var read = new PgLogRead<TestEntry>(0, current, entries);
+            return ValueTask.FromResult(read);
+        }
+    }
+
+    private static long[] Numbers(int count)
+    {
+        var numbers = new long[count];
+        for (var index = 0; index < count; index++)
+        {
+            numbers[index] = index + 1;
+        }
+
+        return numbers;
+    }
+
     private static List<PgLogEvent<TestEntry>> Drain(PgLogSubscriber<TestEntry> subscriber)
     {
         var events = new List<PgLogEvent<TestEntry>>();
@@ -187,6 +216,75 @@ public sealed class PgLogFanoutTests
         Assert.Equal<PgLogEvent<TestEntry>>(expected, events);
         Assert.False(subscriber.NeedsResync);
         Assert.Equal(1_100, subscriber.Cursor);
+    }
+
+    [Fact]
+    public async Task PumpAsync_MoreThanAPageBehind_DeliversEveryEntryInOrderFromTwoReads()
+    {
+        const int pageSize = PgLogFanout<TestEntry>.PageSize;
+        const int current = pageSize + 10;
+        var numbers = Numbers(current);
+        var log = new FakeLog(0, current, numbers);
+        var fanout = new PgLogFanout<TestEntry>(log.ReadAsync);
+        var subscriber = fanout.AddAfter(0);
+
+        await fanout.PumpAsync(CancellationToken.None);
+
+        var expected = new List<PgLogEvent<TestEntry>>();
+        foreach (var number in numbers)
+        {
+            var delivered = Delivered(number);
+            expected.Add(delivered);
+        }
+
+        var events = Drain(subscriber);
+
+        Assert.Equal<PgLogEvent<TestEntry>>(expected, events);
+        Assert.Equal(current, subscriber.Cursor);
+        Assert.Equal(2, log.Reads);
+    }
+
+    [Fact]
+    public async Task PumpAsync_PageReachesTheCurrentNumber_ReadsOnce()
+    {
+        const int pageSize = PgLogFanout<TestEntry>.PageSize;
+        var numbers = Numbers(pageSize);
+        var log = new FakeLog(0, pageSize, numbers);
+        var fanout = new PgLogFanout<TestEntry>(log.ReadAsync);
+        var subscriber = fanout.AddAfter(0);
+
+        await fanout.PumpAsync(CancellationToken.None);
+
+        var events = Drain(subscriber);
+
+        Assert.Equal(pageSize, events.Count);
+        Assert.Equal(pageSize, subscriber.Cursor);
+        Assert.Equal(1, log.Reads);
+    }
+
+    [Fact]
+    public async Task PumpAsync_PageMovesNoCursor_StopsReading()
+    {
+        const int pageSize = PgLogFanout<TestEntry>.PageSize;
+        var numbers = Numbers(pageSize);
+        var log = new FixedPageLog(1_000, numbers);
+        var fanout = new PgLogFanout<TestEntry>(log.ReadAsync);
+        var subscriber = fanout.AddAfter(0);
+
+        await fanout.PumpAsync(CancellationToken.None);
+
+        var expected = new List<PgLogEvent<TestEntry>>();
+        foreach (var number in numbers)
+        {
+            var delivered = Delivered(number);
+            expected.Add(delivered);
+        }
+
+        var events = Drain(subscriber);
+
+        Assert.Equal<PgLogEvent<TestEntry>>(expected, events);
+        Assert.Equal(pageSize, subscriber.Cursor);
+        Assert.Equal(2, log.Reads);
     }
 
     #endregion
