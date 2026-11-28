@@ -271,19 +271,21 @@ internal sealed class PgRecordTable(PgServer server, PgKeyspaces keyspaces, PgSe
     }
 
     /// <summary>
-    /// Gets the keys of a scope without repeats, each in the place where it first appears.
+    /// Gets the items without repeats, each in the place where it first appears.
     /// </summary>
-    /// <param name="keys">The scope's keys.</param>
-    /// <returns>The distinct keys, in first-seen order.</returns>
-    private static CoordinationKey[] DistinctKeys(ImmutableArray<CoordinationKey> keys)
+    /// <typeparam name="T">The type of the items.</typeparam>
+    /// <param name="items">The items.</param>
+    /// <param name="comparer">The comparer that tells whether two items repeat.</param>
+    /// <returns>The distinct items, in first-seen order.</returns>
+    private static T[] DistinctInOrder<T>(ImmutableArray<T> items, IEqualityComparer<T> comparer)
     {
-        var seen = new HashSet<CoordinationKey>(keys.Length);
-        var distinct = new List<CoordinationKey>(keys.Length);
-        foreach (var key in keys)
+        var seen = new HashSet<T>(items.Length, comparer);
+        var distinct = new List<T>(items.Length);
+        foreach (var item in items)
         {
-            if (seen.Add(key))
+            if (seen.Add(item))
             {
-                distinct.Add(key);
+                distinct.Add(item);
             }
         }
 
@@ -307,26 +309,6 @@ internal sealed class PgRecordTable(PgServer server, PgKeyspaces keyspaces, PgSe
         }
 
         return (indexes, depths);
-    }
-
-    /// <summary>
-    /// Gets the ids of the sessions of a scope without repeats, each in the place where it first appears.
-    /// </summary>
-    /// <param name="sessions">The scope's session ids.</param>
-    /// <returns>The distinct ids, in first-seen order.</returns>
-    private static string[] DistinctSessions(ImmutableArray<string> sessions)
-    {
-        var seen = new HashSet<string>(sessions.Length, StringComparer.Ordinal);
-        var distinct = new List<string>(sessions.Length);
-        foreach (var session in sessions)
-        {
-            if (seen.Add(session))
-            {
-                distinct.Add(session);
-            }
-        }
-
-        return distinct.ToArray();
     }
 
     /// <summary>
@@ -682,9 +664,9 @@ internal sealed class PgRecordTable(PgServer server, PgKeyspaces keyspaces, PgSe
         ArgumentNullException.ThrowIfNull(transaction);
 
         var keyspaceId = scope.KeyspaceId;
-        var distinct = DistinctKeys(scope.Keys);
+        var distinct = DistinctInOrder(scope.Keys, EqualityComparer<CoordinationKey>.Default);
         var (indexes, depths) = IndexesAndDepthsOf(distinct);
-        var sessionIds = DistinctSessions(scope.Sessions);
+        var sessionIds = DistinctInOrder(scope.Sessions, StringComparer.Ordinal);
         var statements = StartStatements(keyspaceId, indexes, depths, sessionIds);
 
         var read = await transaction

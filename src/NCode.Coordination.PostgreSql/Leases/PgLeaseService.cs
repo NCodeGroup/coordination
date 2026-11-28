@@ -21,22 +21,18 @@ internal sealed class PgLeaseService(PgGrants grants, IPgTokens tokens, PgPollin
     : ILeaseService
 {
     /// <summary>
-    /// The slot that a lease's grant holds.
-    /// </summary>
-    private const int Slot = 0;
-
-    /// <summary>
-    /// The capacity that a lease's grant records.
-    /// </summary>
-    private const int Capacity = 1;
-
-    /// <summary>
     /// Builds the grant that a lease's grant stands for, as the grants' writes name it.
     /// </summary>
     /// <param name="grant">The lease's grant.</param>
     /// <returns>The held grant.</returns>
     private static PgHeldGrant HeldOf(LeaseGrant grant) =>
-        new(PgGrantKinds.Lease, grant.Resource, Slot, grant.FencingToken.Value, grant.Owner.Value);
+        new(
+            PgGrantKinds.Lease,
+            grant.Resource,
+            PgGrants.SingleHolderSlot,
+            grant.FencingToken.Value,
+            grant.Owner.Value
+        );
 
     /// <summary>
     /// Decides an attempt to acquire a lease that a live grant holds: the attempt's own session is the holder's when
@@ -222,7 +218,7 @@ internal sealed class PgLeaseService(PgGrants grants, IPgTokens tokens, PgPollin
             return LeaseAcquireResult.SessionEnded;
         }
 
-        var live = start.LiveIn(Slot);
+        var live = start.LiveIn(PgGrants.SingleHolderSlot);
 
         if (live is not null)
         {
@@ -245,7 +241,13 @@ internal sealed class PgLeaseService(PgGrants grants, IPgTokens tokens, PgPollin
         var owner = Tokens.Next(PgTokenPrefixes.Owner);
         var deadline = PgGrants.DeadlineOf(start.Change.Now, request.Terms);
 
-        var newGrant = new PgNewGrant(PgGrantKinds.Lease, resource, Slot, Capacity, owner)
+        var newGrant = new PgNewGrant(
+            PgGrantKinds.Lease,
+            resource,
+            PgGrants.SingleHolderSlot,
+            PgGrants.SingleHolderCapacity,
+            owner
+        )
         {
             Session = request.SessionId,
             Deadline = deadline,

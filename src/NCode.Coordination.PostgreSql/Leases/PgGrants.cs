@@ -95,6 +95,16 @@ internal sealed class PgGrants(PgRecordTable table)
         """;
 
     /// <summary>
+    /// The slot of a grant whose resource has one holder: a lease's or a leadership's.
+    /// </summary>
+    public const int SingleHolderSlot = 0;
+
+    /// <summary>
+    /// The capacity that such a grant records.
+    /// </summary>
+    public const int SingleHolderCapacity = 1;
+
+    /// <summary>
     /// Gets the instant a new grant expires.
     /// </summary>
     /// <param name="now">The instant the transaction read on the server's clock.</param>
@@ -346,27 +356,6 @@ internal sealed class PgGrants(PgRecordTable table)
     public ValueTask<T> RunInKeyspaceAsync<T>(
         Keyspace keyspace,
         Func<long, CancellationToken, ValueTask<T>> operation,
-        CancellationToken cancellationToken
-    )
-    {
-        return Table.RunInKeyspaceAsync(keyspace, operation, cancellationToken);
-    }
-
-    /// <summary>
-    /// Runs an operation with a keyspace's id; when the operation finds the keyspace's row missing, resolves the id
-    /// again and runs it once more.
-    /// </summary>
-    /// <param name="keyspace">The keyspace.</param>
-    /// <param name="operation">The operation, which takes the keyspace's id.</param>
-    /// <param name="cancellationToken">The token that cancels the call.</param>
-    /// <returns>A task that completes when the operation has.</returns>
-    /// <exception cref="ArgumentNullException">The keyspace or the operation is null.</exception>
-    /// <exception cref="CoordinationException">
-    /// The server failed, or the row was missing on both runs, which did not apply.
-    /// </exception>
-    public ValueTask RunInKeyspaceAsync(
-        Keyspace keyspace,
-        Func<long, CancellationToken, ValueTask> operation,
         CancellationToken cancellationToken
     )
     {

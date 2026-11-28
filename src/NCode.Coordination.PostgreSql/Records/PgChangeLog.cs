@@ -104,8 +104,8 @@ internal sealed class PgChangeLog(PgServer server, PgSchemaName schema)
     private static PgChangeRow ReadChangeRow(NpgsqlDataReader reader)
     {
         var revision = reader.GetInt64(0);
-        var endedSession = reader.IsDBNull(1) ? null : reader.GetString(1);
-        var groupIndex = reader.IsDBNull(2) ? null : reader.GetFieldValue<byte[]>(2);
+        var endedSession = PgColumns.ReadNullableText(reader, 1);
+        var groupIndex = PgColumns.ReadNullableBytes(reader, 2);
         short? groupDepth = reader.IsDBNull(3) ? null : reader.GetInt16(3);
         var item = ReadChangeItem(reader);
         return new PgChangeRow(revision, endedSession, groupIndex, groupDepth, item);
@@ -127,7 +127,7 @@ internal sealed class PgChangeLog(PgServer server, PgSchemaName schema)
         var index = reader.GetFieldValue<byte[]>(5);
         var depth = reader.GetInt16(6);
         var key = reader.GetString(7);
-        var value = reader.IsDBNull(8) ? null : reader.GetFieldValue<byte[]>(8);
+        var value = PgColumns.ReadNullableBytes(reader, 8);
         return new PgChangeItem(kind, index, depth, key, value);
     }
 

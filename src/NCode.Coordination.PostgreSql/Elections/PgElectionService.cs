@@ -25,16 +25,6 @@ internal sealed class PgElectionService(PgGrants grants, IPgTokens tokens, PgPol
     : IElectionService
 {
     /// <summary>
-    /// The slot that a leadership's grant holds.
-    /// </summary>
-    private const int Slot = 0;
-
-    /// <summary>
-    /// The capacity that a leadership's grant records.
-    /// </summary>
-    private const int Capacity = 1;
-
-    /// <summary>
     /// Builds the grant that a leadership stands for, as the grants' writes name it.
     /// </summary>
     /// <param name="leadership">The leadership.</param>
@@ -43,7 +33,7 @@ internal sealed class PgElectionService(PgGrants grants, IPgTokens tokens, PgPol
         new(
             PgGrantKinds.Election,
             leadership.Leader.Role,
-            Slot,
+            PgGrants.SingleHolderSlot,
             leadership.Leader.Term.Value,
             leadership.Owner.Value
         );
@@ -57,7 +47,7 @@ internal sealed class PgElectionService(PgGrants grants, IPgTokens tokens, PgPol
     {
         foreach (var row in rows)
         {
-            if (row.Slot == Slot)
+            if (row.Slot == PgGrants.SingleHolderSlot)
             {
                 return row;
             }
@@ -324,7 +314,7 @@ internal sealed class PgElectionService(PgGrants grants, IPgTokens tokens, PgPol
             return ElectionResult.SessionEnded;
         }
 
-        var live = start.LiveIn(Slot);
+        var live = start.LiveIn(PgGrants.SingleHolderSlot);
 
         if (live is not null)
         {
@@ -347,7 +337,13 @@ internal sealed class PgElectionService(PgGrants grants, IPgTokens tokens, PgPol
         var owner = Tokens.Next(PgTokenPrefixes.Owner);
         var deadline = PgGrants.DeadlineOf(start.Change.Now, request.Terms);
 
-        var newGrant = new PgNewGrant(PgGrantKinds.Election, role, Slot, Capacity, owner)
+        var newGrant = new PgNewGrant(
+            PgGrantKinds.Election,
+            role,
+            PgGrants.SingleHolderSlot,
+            PgGrants.SingleHolderCapacity,
+            owner
+        )
         {
             Session = request.SessionId,
             Deadline = deadline,

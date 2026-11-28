@@ -342,7 +342,7 @@ internal sealed class PgSweeps(
         var value = reader.GetFieldValue<byte[]>(3);
         var revision = reader.GetInt64(4);
         var deadline = PgColumns.ReadNullableUtc(reader, 5);
-        var session = reader.IsDBNull(6) ? null : reader.GetString(6);
+        var session = PgColumns.ReadNullableText(reader, 6);
 
         return new PgRecordRow(index, depth, key, value, revision, deadline, session);
     }
