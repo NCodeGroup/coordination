@@ -55,6 +55,16 @@ public sealed class PgServerStatementTests(PgServers servers)
         return rows[0];
     }
 
+    private static async ValueTask<bool> ReadTwoResultsAsync(
+        PgResults results,
+        CancellationToken cancellationToken
+    )
+    {
+        await results.ReadAsync(r => r.GetInt32(0), cancellationToken);
+        await results.ReadAsync(r => r.GetInt32(0), cancellationToken);
+        return true;
+    }
+
     private static async Task TerminateAsync(
         string adminConnectionString,
         string applicationName,
@@ -91,6 +101,21 @@ public sealed class PgServerStatementTests(PgServers servers)
         );
 
         Assert.Equal([42], rows);
+    }
+
+    [PgServerFact]
+    public async Task ExecuteAsync_ReadPastTheLastResult_ThrowsInvalidOperation()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var source = PgSource.FromConnectionString(servers.Admin19);
+        var server = NewServer(source);
+        PgStatement[] statements = [new PgStatement("SELECT 1")];
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await server.ExecuteAsync(statements, ReadTwoResultsAsync, cancellationToken)
+        );
+
+        Assert.Equal("The batch has no further result.", exception.Message);
     }
 
     [PgServerFact]
