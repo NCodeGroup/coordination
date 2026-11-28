@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging.Testing;
 using Microsoft.Extensions.Time.Testing;
 using NCode.Coordination.PostgreSql.Logging;
+using NCode.Coordination.PostgreSql.Tests;
 
 namespace NCode.Coordination.PostgreSql.Sweep.Tests;
 
@@ -64,6 +65,27 @@ public sealed class PgSweeperTests
 
             Second.TrySetResult();
             return ValueTask.CompletedTask;
+        }
+    }
+
+    private sealed class StopFailingSweep
+    {
+        private TaskCompletionSource Entered { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Task EnteredTask => Entered.Task;
+
+        public async ValueTask SweepAsync(CancellationToken cancellationToken)
+        {
+            Entered.TrySetResult();
+            try
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                throw new InvalidOperationException("stopped");
+            }
         }
     }
 
@@ -190,6 +212,24 @@ public sealed class PgSweeperTests
 
             Assert.Equal(1, sweep.Calls);
         });
+    }
+
+    [Fact]
+    public async Task DisposeAsync_SweepFailsOnTheStop_CompletesWithoutALog()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var sweep = new StopFailingSweep();
+        var time = new FakeTimeProvider();
+        var logger = new FakeLogger<PgSweeper>();
+        var sweeper = new PgSweeper(sweep.SweepAsync, Interval, time, logger);
+        sweeper.Start();
+        time.Advance(Interval);
+        await sweep.EnteredTask.WaitAsync(PgTestSupport.WaitLimit, cancellationToken);
+
+        await sweeper.DisposeAsync();
+
+        var records = logger.Collector.GetSnapshot();
+        Assert.Empty(records);
     }
 
     #endregion

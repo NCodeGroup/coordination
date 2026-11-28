@@ -59,7 +59,7 @@ internal sealed class PgLogHub : IAsyncDisposable, IDisposable
     /// <param name="logger">The logger that reports a failed pump.</param>
     /// <param name="stop">The token that cancels the pump.</param>
     /// <returns>A task that completes when the pump has.</returns>
-    private static async ValueTask PumpQuietlyAsync(
+    internal static async ValueTask PumpQuietlyAsync(
         IPgLogPump pump,
         ILogger logger,
         CancellationToken stop
@@ -82,9 +82,9 @@ internal sealed class PgLogHub : IAsyncDisposable, IDisposable
             // An unexpected failure leaves every subscriber's cursor where it was too, and the next check reads again.
             logger.PumpFaulted(exception);
         }
-        catch (OperationCanceledException) when (stop.IsCancellationRequested)
+        catch (Exception) when (stop.IsCancellationRequested)
         {
-            // The hub is disposed.
+            // The hub is disposed; a read that the disposal interrupted needs no report.
         }
     }
 

@@ -158,9 +158,9 @@ internal sealed class PgSweeper(
                 await SweepQuietlyAsync(cancellationToken).ConfigureAwait(false);
             }
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        catch (Exception) when (cancellationToken.IsCancellationRequested)
         {
-            // The sweeper is stopped.
+            // The sweeper is stopped; a sweep that the stop interrupted needs no report.
         }
     }
 

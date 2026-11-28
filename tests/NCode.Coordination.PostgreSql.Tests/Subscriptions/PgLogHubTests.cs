@@ -1,6 +1,7 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using Microsoft.Extensions.Logging.Testing;
 using NCode.Coordination.PostgreSql.Schema;
 using NCode.Coordination.PostgreSql.Server;
 
@@ -63,4 +64,40 @@ public sealed class PgLogHubTests
     }
 
     #endregion
+
+    #region PumpQuietlyAsync Tests
+
+    [Fact]
+    public async Task PumpQuietlyAsync_FailsAfterTheStop_CompletesWithoutALog()
+    {
+        var pump = new FailingPump();
+        var logger = new FakeLogger();
+        var stop = new CancellationToken(canceled: true);
+
+        await PgLogHub.PumpQuietlyAsync(pump, logger, stop);
+
+        var records = logger.Collector.GetSnapshot();
+        Assert.Empty(records);
+    }
+
+    #endregion
+
+    private sealed class FailingPump : IPgLogPump
+    {
+        public int Count => 0;
+
+        public ValueTask PumpAsync(CancellationToken cancellationToken)
+        {
+            var failure = new CoordinationException(
+                CoordinationErrorCodes.Unavailable,
+                false,
+                "down"
+            );
+            return ValueTask.FromException(failure);
+        }
+
+        public bool TryMarkWake() => false;
+
+        public void ResyncAll() { }
+    }
 }
