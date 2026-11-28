@@ -39,9 +39,15 @@ internal sealed record PgGrantStart(
     {
         var now = Change.Now;
 
-        return Rows.FirstOrDefault(row =>
-            row.Slot == slot && row.StateAt(now) == PgRecordState.Live
-        );
+        foreach (var row in Rows)
+        {
+            if (row.Slot == slot && row.StateAt(now) == PgRecordState.Live)
+            {
+                return row;
+            }
+        }
+
+        return null;
     }
 
     /// <summary>

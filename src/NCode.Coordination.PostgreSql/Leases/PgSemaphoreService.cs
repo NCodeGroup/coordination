@@ -21,9 +21,58 @@ internal sealed class PgSemaphoreService(PgGrants grants, IPgTokens tokens, PgPo
     : ISemaphoreService
 {
     /// <summary>
-    /// The kind of the grant rows of semaphores.
+    /// Builds the grant that a semaphore's grant stands for, as the grants' writes name it.
     /// </summary>
-    private const short Kind = 2;
+    /// <param name="grant">The semaphore grant.</param>
+    /// <returns>The held grant.</returns>
+    private static PgHeldGrant HeldOf(SemaphoreGrant grant) =>
+        new(
+            PgGrantKinds.Semaphore,
+            grant.Resource,
+            grant.Slot,
+            grant.FencingToken.Value,
+            grant.Owner.Value
+        );
+
+    /// <summary>
+    /// Collects the grant rows of a read that are live at the instant of the read.
+    /// </summary>
+    /// <param name="start">What the transaction's first batch read.</param>
+    /// <returns>The live rows, in slot order.</returns>
+    private static List<PgGrantRow> LiveRowsOf(PgGrantStart start)
+    {
+        var now = start.Change.Now;
+        var live = new List<PgGrantRow>(start.Rows.Length);
+
+        foreach (var row in start.Rows)
+        {
+            if (row.StateAt(now) == PgRecordState.Live)
+            {
+                live.Add(row);
+            }
+        }
+
+        return live;
+    }
+
+    /// <summary>
+    /// Tells whether a live grant of the semaphore was made with a capacity other than the request's.
+    /// </summary>
+    /// <param name="live">The live grants of the semaphore.</param>
+    /// <param name="capacity">The capacity that the request names.</param>
+    /// <returns><see langword="true"/> when a live grant's capacity differs.</returns>
+    private static bool CapacityDiffers(IReadOnlyList<PgGrantRow> live, int capacity)
+    {
+        foreach (var row in live)
+        {
+            if (row.Capacity != capacity)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     /// <summary>
     /// Finds the lowest slot of a semaphore that no live grant holds.
@@ -31,7 +80,7 @@ internal sealed class PgSemaphoreService(PgGrants grants, IPgTokens tokens, PgPo
     /// <param name="live">The live grants of the semaphore.</param>
     /// <param name="capacity">The semaphore's capacity.</param>
     /// <returns>The lowest free slot, or -1 when every slot is held.</returns>
-    private static int LowestFreeSlot(List<PgGrantRow> live, int capacity)
+    private static int LowestFreeSlot(IReadOnlyList<PgGrantRow> live, int capacity)
     {
         var taken = new bool[capacity];
 
@@ -52,14 +101,25 @@ internal sealed class PgSemaphoreService(PgGrants grants, IPgTokens tokens, PgPo
     /// <param name="live">The live grants of the semaphore.</param>
     /// <param name="sessionId">The id of the attempt's session, or null when it has none.</param>
     /// <returns>The row, or null when the session holds no slot.</returns>
-    private static PgGrantRow? FindOwnSessionGrant(List<PgGrantRow> live, string? sessionId)
+    private static PgGrantRow? FindOwnSessionGrant(
+        IReadOnlyList<PgGrantRow> live,
+        string? sessionId
+    )
     {
         if (sessionId is null)
         {
             return null;
         }
 
-        return live.Find(row => string.Equals(row.Session, sessionId, StringComparison.Ordinal));
+        foreach (var row in live)
+        {
+            if (string.Equals(row.Session, sessionId, StringComparison.Ordinal))
+            {
+                return row;
+            }
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -148,13 +208,7 @@ internal sealed class PgSemaphoreService(PgGrants grants, IPgTokens tokens, PgPo
             );
         }
 
-        var held = new PgHeldGrant(
-            Kind,
-            grant.Resource,
-            grant.Slot,
-            grant.FencingToken.Value,
-            grant.Owner.Value
-        );
+        var held = HeldOf(grant);
 
         return await Grants
             .RenewHeldAsync(held, timeToLive, cancellationToken)
@@ -171,13 +225,7 @@ internal sealed class PgSemaphoreService(PgGrants grants, IPgTokens tokens, PgPo
         ArgumentNullException.ThrowIfNull(grant);
         PgCall.Check(options, cancellationToken);
 
-        var held = new PgHeldGrant(
-            Kind,
-            grant.Resource,
-            grant.Slot,
-            grant.FencingToken.Value,
-            grant.Owner.Value
-        );
+        var held = HeldOf(grant);
 
         return await Grants.ReleaseHeldAsync(held, cancellationToken).ConfigureAwait(false);
     }
@@ -234,7 +282,7 @@ internal sealed class PgSemaphoreService(PgGrants grants, IPgTokens tokens, PgPo
         CancellationToken cancellationToken
     )
     {
-        var scope = new PgGrantScope(id, Kind, request.Resource);
+        var scope = new PgGrantScope(id, PgGrantKinds.Semaphore, request.Resource);
 
         var start = await Grants
             .BeginAsync(transaction, scope, request.SessionId, cancellationToken)
@@ -268,10 +316,9 @@ internal sealed class PgSemaphoreService(PgGrants grants, IPgTokens tokens, PgPo
             return SemaphoreAcquireResult.SessionEnded;
         }
 
-        var now = start.Change.Now;
-        var live = start.Rows.Where(row => row.StateAt(now) == PgRecordState.Live).ToList();
+        var live = LiveRowsOf(start);
 
-        if (live.Any(row => row.Capacity != request.Capacity))
+        if (CapacityDiffers(live, request.Capacity))
         {
             return SemaphoreAcquireResult.CapacityConflict;
         }
@@ -296,7 +343,7 @@ internal sealed class PgSemaphoreService(PgGrants grants, IPgTokens tokens, PgPo
     private SemaphoreAcquireResult GrantSlot(
         long id,
         PgGrantStart start,
-        List<PgGrantRow> live,
+        IReadOnlyList<PgGrantRow> live,
         PgSemaphoreRequest request
     )
     {
@@ -310,7 +357,13 @@ internal sealed class PgSemaphoreService(PgGrants grants, IPgTokens tokens, PgPo
         var owner = Tokens.Next(PgTokenPrefixes.Owner);
         var deadline = PgGrants.DeadlineOf(start.Change.Now, request.Terms);
 
-        var newGrant = new PgNewGrant(Kind, resource, slot, request.Capacity, owner)
+        var newGrant = new PgNewGrant(
+            PgGrantKinds.Semaphore,
+            resource,
+            slot,
+            request.Capacity,
+            owner
+        )
         {
             Session = request.SessionId,
             Deadline = deadline,
@@ -359,7 +412,7 @@ internal sealed class PgSemaphoreService(PgGrants grants, IPgTokens tokens, PgPo
         CancellationToken cancellationToken
     )
     {
-        var scope = new PgGrantScope(id, Kind, resource);
+        var scope = new PgGrantScope(id, PgGrantKinds.Semaphore, resource);
 
         return Grants.ReadAsync(scope, cancellationToken);
     }

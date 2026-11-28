@@ -265,9 +265,19 @@ internal sealed class PgGrants(PgRecordTable table)
     {
         var rows = await results.ReadAsync(ReadNowAndRow, cancellationToken).ConfigureAwait(false);
 
-        var existing = rows.Select(row => row.Row).OfType<PgGrantRow>().ToImmutableArray();
+        var existing = ImmutableArray.CreateBuilder<PgGrantRow>(rows.Length);
 
-        return new PgGrantRead(rows[0].Now, existing);
+        foreach (var row in rows)
+        {
+            if (row.Row is { } grant)
+            {
+                existing.Add(grant);
+            }
+        }
+
+        var grants = existing.ToImmutable();
+
+        return new PgGrantRead(rows[0].Now, grants);
     }
 
     /// <summary>
@@ -285,8 +295,38 @@ internal sealed class PgGrants(PgRecordTable table)
     /// </summary>
     /// <param name="read">What the read returned.</param>
     /// <returns>The live grants.</returns>
-    private static ImmutableArray<PgGrantRow> Live(PgGrantRead read) =>
-        [.. read.Rows.Where(row => row.StateAt(read.Now) == PgRecordState.Live)];
+    private static ImmutableArray<PgGrantRow> Live(PgGrantRead read)
+    {
+        var live = ImmutableArray.CreateBuilder<PgGrantRow>(read.Rows.Length);
+
+        foreach (var row in read.Rows)
+        {
+            if (row.StateAt(read.Now) == PgRecordState.Live)
+            {
+                live.Add(row);
+            }
+        }
+
+        return live.ToImmutable();
+    }
+
+    /// <summary>
+    /// Tells whether a read met a grant whose own deadline or whose session's deadline has passed.
+    /// </summary>
+    /// <param name="read">What the read returned.</param>
+    /// <returns><see langword="true"/> when a grant of the read is expired or its session is.</returns>
+    private static bool HoldsExpired(PgGrantRead read)
+    {
+        foreach (var row in read.Rows)
+        {
+            if (IsExpired(row, read.Now))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     /// <summary>
     /// Finds the grant row of a held grant when the grant is still the live one: the slot, the fencing token and the
@@ -299,12 +339,20 @@ internal sealed class PgGrants(PgRecordTable table)
     {
         var now = start.Change.Now;
 
-        return start.Rows.FirstOrDefault(row =>
-            row.Slot == held.Slot
-            && row.Fencing == held.Fencing
-            && string.Equals(row.Owner, held.Owner, StringComparison.Ordinal)
-            && row.StateAt(now) == PgRecordState.Live
-        );
+        foreach (var row in start.Rows)
+        {
+            if (
+                row.Slot == held.Slot
+                && row.Fencing == held.Fencing
+                && string.Equals(row.Owner, held.Owner, StringComparison.Ordinal)
+                && row.StateAt(now) == PgRecordState.Live
+            )
+            {
+                return row;
+            }
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -792,7 +840,7 @@ internal sealed class PgGrants(PgRecordTable table)
             .ExecuteAsync([statement], ReadRowsAsync, cancellationToken)
             .ConfigureAwait(false);
 
-        if (!first.Rows.Any(row => IsExpired(row, first.Now)))
+        if (!HoldsExpired(first))
         {
             return Live(first);
         }

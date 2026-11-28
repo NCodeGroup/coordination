@@ -23,11 +23,6 @@ internal sealed class PgElectionService(PgGrants grants, IPgTokens tokens, PgPol
     : IElectionService
 {
     /// <summary>
-    /// The kind of the grant rows of elections.
-    /// </summary>
-    private const short Kind = 3;
-
-    /// <summary>
     /// The slot that a leadership's grant holds.
     /// </summary>
     private const int Slot = 0;
@@ -36,6 +31,38 @@ internal sealed class PgElectionService(PgGrants grants, IPgTokens tokens, PgPol
     /// The capacity that a leadership's grant records.
     /// </summary>
     private const int Capacity = 1;
+
+    /// <summary>
+    /// Builds the grant that a leadership stands for, as the grants' writes name it.
+    /// </summary>
+    /// <param name="leadership">The leadership.</param>
+    /// <returns>The held grant.</returns>
+    private static PgHeldGrant HeldOf(Leadership leadership) =>
+        new(
+            PgGrantKinds.Election,
+            leadership.Leader.Role,
+            Slot,
+            leadership.Leader.Term.Value,
+            leadership.Owner.Value
+        );
+
+    /// <summary>
+    /// Finds the grant row that holds a role's leadership.
+    /// </summary>
+    /// <param name="rows">The live grants of the role.</param>
+    /// <returns>The row of the leadership's slot, or null when the role has none.</returns>
+    private static PgGrantRow? RowOfSlot(ImmutableArray<PgGrantRow> rows)
+    {
+        foreach (var row in rows)
+        {
+            if (row.Slot == Slot)
+            {
+                return row;
+            }
+        }
+
+        return null;
+    }
 
     /// <summary>
     /// Checks that a value is no longer than the largest value.
@@ -155,13 +182,7 @@ internal sealed class PgElectionService(PgGrants grants, IPgTokens tokens, PgPol
             );
         }
 
-        var held = new PgHeldGrant(
-            Kind,
-            leadership.Leader.Role,
-            Slot,
-            leadership.Leader.Term.Value,
-            leadership.Owner.Value
-        );
+        var held = HeldOf(leadership);
 
         return await Grants
             .RenewHeldAsync(held, timeToLive, cancellationToken)
@@ -178,13 +199,7 @@ internal sealed class PgElectionService(PgGrants grants, IPgTokens tokens, PgPol
         ArgumentNullException.ThrowIfNull(leadership);
         PgCall.Check(options, cancellationToken);
 
-        var held = new PgHeldGrant(
-            Kind,
-            leadership.Leader.Role,
-            Slot,
-            leadership.Leader.Term.Value,
-            leadership.Owner.Value
-        );
+        var held = HeldOf(leadership);
 
         return await Grants.ReleaseHeldAsync(held, cancellationToken).ConfigureAwait(false);
     }
@@ -207,7 +222,7 @@ internal sealed class PgElectionService(PgGrants grants, IPgTokens tokens, PgPol
             )
             .ConfigureAwait(false);
 
-        var row = rows.FirstOrDefault(candidate => candidate.Slot == Slot);
+        var row = RowOfSlot(rows);
         var leader = ToLeader(role, row);
 
         return new ElectionView(role, leader);
@@ -252,7 +267,7 @@ internal sealed class PgElectionService(PgGrants grants, IPgTokens tokens, PgPol
         CancellationToken cancellationToken
     )
     {
-        var scope = new PgGrantScope(id, Kind, role);
+        var scope = new PgGrantScope(id, PgGrantKinds.Election, role);
 
         return Grants.ReadAsync(scope, cancellationToken);
     }
@@ -294,7 +309,7 @@ internal sealed class PgElectionService(PgGrants grants, IPgTokens tokens, PgPol
         CancellationToken cancellationToken
     )
     {
-        var scope = new PgGrantScope(id, Kind, request.Role);
+        var scope = new PgGrantScope(id, PgGrantKinds.Election, request.Role);
 
         var start = await Grants
             .BeginAsync(transaction, scope, request.SessionId, cancellationToken)
@@ -347,7 +362,7 @@ internal sealed class PgElectionService(PgGrants grants, IPgTokens tokens, PgPol
         var owner = Tokens.Next(PgTokenPrefixes.Owner);
         var deadline = PgGrants.DeadlineOf(start.Change.Now, request.Terms);
 
-        var newGrant = new PgNewGrant(Kind, role, Slot, Capacity, owner)
+        var newGrant = new PgNewGrant(PgGrantKinds.Election, role, Slot, Capacity, owner)
         {
             Session = request.SessionId,
             Deadline = deadline,
