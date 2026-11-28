@@ -10,6 +10,7 @@ CREATE TABLE {schema}.records (
     PRIMARY KEY (keyspace_id, idx, depth)
 );
 CREATE INDEX records_deadline ON {schema}.records (deadline) WHERE deadline IS NOT NULL;
+CREATE INDEX records_keyspace_deadline ON {schema}.records (keyspace_id, deadline) WHERE deadline IS NOT NULL;
 CREATE INDEX records_session ON {schema}.records (keyspace_id, session_id, idx, depth) WHERE session_id IS NOT NULL;
 CREATE TABLE {schema}.changes (
     keyspace_id bigint NOT NULL REFERENCES {schema}.keyspaces (id),
