@@ -21,19 +21,11 @@ internal sealed class PgTransactionService(PgRecordTable table) : ITransactionSe
     /// this transaction because it had expired.
     /// </summary>
     /// <param name="start">What the transaction's first batch read.</param>
-    /// <param name="ended">The sessions that the transaction ended because they had expired.</param>
     /// <param name="keyspace">The transaction's keyspace.</param>
     /// <param name="session">The session that a write binds a record to.</param>
     /// <returns>True when the session is not live.</returns>
-    private static bool IsEnded(
-        PgChangeStart start,
-        ImmutableHashSet<string> ended,
-        Keyspace keyspace,
-        SessionId session
-    ) =>
-        session.Keyspace != keyspace
-        || ended.Contains(session.Value)
-        || !start.Sessions.ContainsKey(session.Value);
+    private static bool IsEnded(PgChangeStart start, Keyspace keyspace, SessionId session) =>
+        session.Keyspace != keyspace || !start.IsLiveSession(session.Value);
 
     /// <summary>
     /// Checks whether every condition of a transaction holds over the live rows.
@@ -113,9 +105,9 @@ internal sealed class PgTransactionService(PgRecordTable table) : ITransactionSe
     /// <returns>The live rows, the rows that a write may replace and the rows that have expired.</returns>
     private static PgTransactionRows ClassifyRows(PgChangeStart start)
     {
-        var live = new Dictionary<CoordinationKey, PgRecordRow>();
-        var replaceable = new Dictionary<CoordinationKey, PgRecordRow>();
-        var expired = new List<PgRecordRow>();
+        var live = new Dictionary<CoordinationKey, PgRecordRow>(start.Rows.Count);
+        var replaceable = new Dictionary<CoordinationKey, PgRecordRow>(start.Rows.Count);
+        var expired = new List<PgRecordRow>(start.Rows.Count);
 
         foreach (var (key, row) in start.Rows)
         {
@@ -141,18 +133,16 @@ internal sealed class PgTransactionService(PgRecordTable table) : ITransactionSe
     /// </summary>
     /// <param name="writes">The writes of the branch.</param>
     /// <param name="start">What the transaction's first batch read.</param>
-    /// <param name="ended">The sessions that the transaction ended because they had expired.</param>
     /// <param name="keyspace">The transaction's keyspace.</param>
     /// <returns>True when a write binds to a session that is not live.</returns>
     private static bool WritesBindToEndedSession(
         ImmutableArray<RecordWrite> writes,
         PgChangeStart start,
-        ImmutableHashSet<string> ended,
         Keyspace keyspace
     )
     {
         return writes.Any(write =>
-            write.Lifetime?.Session is { } session && IsEnded(start, ended, keyspace, session)
+            write.Lifetime?.Session is { } session && IsEnded(start, keyspace, session)
         );
     }
 
@@ -173,17 +163,17 @@ internal sealed class PgTransactionService(PgRecordTable table) : ITransactionSe
     }
 
     /// <summary>
-    /// Takes the row that a write replaces out of the replaceable rows, and gets the session it was bound to.
+    /// Gets the session that the row a write replaces was bound to.
     /// </summary>
     /// <param name="replaceable">The rows that a write may replace, by key.</param>
     /// <param name="key">The key that the write names.</param>
     /// <returns>The id of the ended session whose row the write replaces, or null.</returns>
-    private static string? TakeReplacedSession(
+    private static string? ReplacedSessionOf(
         Dictionary<CoordinationKey, PgRecordRow> replaceable,
         CoordinationKey key
     )
     {
-        return replaceable.Remove(key, out var replaced) ? replaced.Session : null;
+        return replaceable.TryGetValue(key, out var replaced) ? replaced.Session : null;
     }
 
     /// <summary>
@@ -202,7 +192,7 @@ internal sealed class PgTransactionService(PgRecordTable table) : ITransactionSe
     {
         var deadline = DeadlineOf(change, lifetime);
         var session = lifetime.Session?.Value;
-        var replacedSession = TakeReplacedSession(replaceable, write.Key);
+        var replacedSession = ReplacedSessionOf(replaceable, write.Key);
 
         var put = new PgRecordPut(write.Key, write.Value, deadline, session)
         {
@@ -230,6 +220,7 @@ internal sealed class PgTransactionService(PgRecordTable table) : ITransactionSe
             if (write.Lifetime is { } lifetime)
             {
                 PutRecord(change, write, lifetime, rows.Replaceable);
+                rows.Replaceable.Remove(write.Key);
             }
             else if (rows.Live.Remove(write.Key, out var row))
             {
@@ -312,7 +303,7 @@ internal sealed class PgTransactionService(PgRecordTable table) : ITransactionSe
             .ConfigureAwait(false);
 
         var change = start.Change;
-        var ended = start.EndExpiredSessions();
+        start.EndExpiredSessions();
         var rows = ClassifyRows(start);
         change.Expire(rows.Expired);
 
@@ -320,7 +311,7 @@ internal sealed class PgTransactionService(PgRecordTable table) : ITransactionSe
         var writes = succeeded ? transaction.OnSuccess : transaction.OnFailure;
         var status = succeeded ? TransactionStatus.Succeeded : TransactionStatus.Failed;
 
-        if (WritesBindToEndedSession(writes, start, ended, transaction.Keyspace))
+        if (WritesBindToEndedSession(writes, start, transaction.Keyspace))
         {
             status = TransactionStatus.SessionEnded;
         }

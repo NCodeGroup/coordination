@@ -72,25 +72,25 @@ internal sealed class PgRecordService(PgRecordTable table) : IRecordService
             : null;
 
     /// <summary>
-    /// Gets the row of a key when it is live, and logs the removal of the row when it has expired.
+    /// Gets the row of a key when it is live.
+    /// </summary>
+    /// <param name="row">The key's row, or null when the key has none.</param>
+    /// <param name="now">The instant the transaction read on the server's clock.</param>
+    /// <returns>The row when it is live; otherwise, null.</returns>
+    private static PgRecordRow? LiveRowOf(PgRecordRow? row, DateTime now) =>
+        row?.StateAt(now) == PgRecordState.Live ? row : null;
+
+    /// <summary>
+    /// Logs the removal of a key's row when it has expired.
     /// </summary>
     /// <param name="change">The change that the transaction builds.</param>
     /// <param name="row">The key's row, or null when the key has none.</param>
-    /// <returns>The row when it is live; otherwise, null.</returns>
-    private static PgRecordRow? TakeLiveRow(PgKeyspaceChange change, PgRecordRow? row)
+    private static void ExpireIfExpired(PgKeyspaceChange change, PgRecordRow? row)
     {
-        if (row is null)
-        {
-            return null;
-        }
-
-        var state = row.StateAt(change.Now);
-        if (state == PgRecordState.Expired)
+        if (row is not null && row.StateAt(change.Now) == PgRecordState.Expired)
         {
             change.Expire([row]);
         }
-
-        return state == PgRecordState.Live ? row : null;
     }
 
     /// <summary>
@@ -135,48 +135,29 @@ internal sealed class PgRecordService(PgRecordTable table) : IRecordService
     }
 
     /// <summary>
-    /// Decides a create from the rows that were read.
+    /// Decides whether a create is refused, from the rows that were read.
     /// </summary>
-    /// <param name="request">What the write needs.</param>
-    /// <param name="change">The change that the transaction builds.</param>
-    /// <param name="row">The key's row, or null when the key has none.</param>
     /// <param name="liveRow">The key's row when it is live; otherwise, null.</param>
     /// <param name="bindsToEndedSession">Whether the lifetime binds to a session that is not live.</param>
-    /// <returns>The result of the create, having made its writes in the change.</returns>
-    private static RecordWriteResult DecideCreate(
-        PgPutRequest request,
-        PgKeyspaceChange change,
-        PgRecordRow? row,
-        PgRecordRow? liveRow,
-        bool bindsToEndedSession
-    )
+    /// <returns>The result that refuses the create, or null when the create may write.</returns>
+    private static RecordWriteResult? RefuseCreate(PgRecordRow? liveRow, bool bindsToEndedSession)
     {
         if (bindsToEndedSession)
         {
             return RecordWriteResult.SessionEnded;
         }
 
-        if (liveRow is not null)
-        {
-            return RecordWriteResult.Conflict;
-        }
-
-        var replacedSession = ReplacedSession(row, change.Now);
-        return WriteRecord(request, change, replacedSession);
+        return liveRow is null ? null : RecordWriteResult.Conflict;
     }
 
     /// <summary>
-    /// Decides a compare and swap from the rows that were read.
+    /// Decides whether a compare and swap is refused, from the rows that were read.
     /// </summary>
-    /// <param name="request">What the write needs.</param>
-    /// <param name="change">The change that the transaction builds.</param>
     /// <param name="liveRow">The key's row when it is live; otherwise, null.</param>
     /// <param name="expectedRevision">The revision that the record must have.</param>
     /// <param name="bindsToEndedSession">Whether the lifetime binds to a session that is not live.</param>
-    /// <returns>The result of the swap, having made its writes in the change.</returns>
-    private static RecordWriteResult DecideSwap(
-        PgPutRequest request,
-        PgKeyspaceChange change,
+    /// <returns>The result that refuses the swap, or null when the swap may write.</returns>
+    private static RecordWriteResult? RefuseSwap(
         PgRecordRow? liveRow,
         long expectedRevision,
         bool bindsToEndedSession
@@ -192,65 +173,46 @@ internal sealed class PgRecordService(PgRecordTable table) : IRecordService
             return RecordWriteResult.NotFound;
         }
 
-        if (liveRow.Revision != expectedRevision)
-        {
-            return RecordWriteResult.Conflict;
-        }
-
-        return WriteRecord(request, change, null);
+        return liveRow.Revision == expectedRevision ? null : RecordWriteResult.Conflict;
     }
 
     /// <summary>
-    /// Decides a compare and delete from the rows that were read.
+    /// Decides whether a compare and delete is refused, from the rows that were read.
     /// </summary>
-    /// <param name="change">The change that the transaction builds.</param>
     /// <param name="liveRow">The key's row when it is live; otherwise, null.</param>
     /// <param name="expectedRevision">The revision that the record must have.</param>
-    /// <returns>The status of the delete, having made its writes in the change.</returns>
-    private static RecordDeleteStatus DecideDelete(
-        PgKeyspaceChange change,
-        PgRecordRow? liveRow,
-        long expectedRevision
-    )
+    /// <returns>The status that refuses the delete, or null when the delete may write.</returns>
+    private static RecordDeleteStatus? RefuseDelete(PgRecordRow? liveRow, long expectedRevision)
     {
         if (liveRow is null)
         {
             return RecordDeleteStatus.NotFound;
         }
 
-        if (liveRow.Revision != expectedRevision)
-        {
-            return RecordDeleteStatus.Conflict;
-        }
-
-        change.Begin();
-        change.Delete(liveRow);
-        return RecordDeleteStatus.Deleted;
+        return liveRow.Revision == expectedRevision ? null : RecordDeleteStatus.Conflict;
     }
 
     /// <summary>
-    /// Takes a live record in the change: deletes its row and returns the record.
+    /// Takes a revision and deletes a live row in it.
     /// </summary>
     /// <param name="change">The change that the transaction builds.</param>
-    /// <param name="key">The record's key.</param>
-    /// <param name="liveRow">The key's row when it is live; otherwise, null.</param>
-    /// <returns>The record that was taken, or null when the key has no live row.</returns>
-    private static StoredRecord? DecideTake(
-        PgKeyspaceChange change,
-        CoordinationKey key,
-        PgRecordRow? liveRow
-    )
+    /// <param name="liveRow">The row to delete.</param>
+    private static void DeleteRecord(PgKeyspaceChange change, PgRecordRow liveRow)
     {
-        if (liveRow is null)
-        {
-            return null;
-        }
-
         change.Begin();
         change.Delete(liveRow);
+    }
 
-        var revision = new Revision(liveRow.Revision);
-        return new StoredRecord(key, liveRow.Value, revision);
+    /// <summary>
+    /// Builds the record that a row holds.
+    /// </summary>
+    /// <param name="key">The record's key.</param>
+    /// <param name="row">The record's row.</param>
+    /// <returns>The record.</returns>
+    private static StoredRecord ToStoredRecord(CoordinationKey key, PgRecordRow row)
+    {
+        var revision = new Revision(row.Revision);
+        return new StoredRecord(key, row.Value, revision);
     }
 
     /// <summary>
@@ -466,16 +428,15 @@ internal sealed class PgRecordService(PgRecordTable table) : IRecordService
             .ConfigureAwait(false);
 
         var change = start.Change;
-        var ended = start.EndExpiredSessions();
+        start.EndExpiredSessions();
         start.Rows.TryGetValue(request.Key, out var row);
-        var liveRow = TakeLiveRow(change, row);
-        var bindsToEndedSession = start.BindsToEndedSession(
-            request.Lifetime,
-            request.Session,
-            ended
-        );
+        var liveRow = LiveRowOf(row, change.Now);
+        ExpireIfExpired(change, row);
+        var bindsToEndedSession = start.BindsToEndedSession(request.Lifetime, request.Session);
 
-        var result = DecideCreate(request, change, row, liveRow, bindsToEndedSession);
+        var refusal = RefuseCreate(liveRow, bindsToEndedSession);
+        var replacedSession = ReplacedSession(row, change.Now);
+        var result = refusal ?? WriteRecord(request, change, replacedSession);
 
         await Table.CommitAsync(transaction, change, id, cancellationToken).ConfigureAwait(false);
         return result;
@@ -578,16 +539,14 @@ internal sealed class PgRecordService(PgRecordTable table) : IRecordService
             .ConfigureAwait(false);
 
         var change = start.Change;
-        var ended = start.EndExpiredSessions();
+        start.EndExpiredSessions();
         start.Rows.TryGetValue(request.Key, out var row);
-        var liveRow = TakeLiveRow(change, row);
-        var bindsToEndedSession = start.BindsToEndedSession(
-            request.Lifetime,
-            request.Session,
-            ended
-        );
+        var liveRow = LiveRowOf(row, change.Now);
+        ExpireIfExpired(change, row);
+        var bindsToEndedSession = start.BindsToEndedSession(request.Lifetime, request.Session);
 
-        var result = DecideSwap(request, change, liveRow, expectedRevision, bindsToEndedSession);
+        var refusal = RefuseSwap(liveRow, expectedRevision, bindsToEndedSession);
+        var result = refusal ?? WriteRecord(request, change, null);
 
         await Table.CommitAsync(transaction, change, id, cancellationToken).ConfigureAwait(false);
         return result;
@@ -672,9 +631,16 @@ internal sealed class PgRecordService(PgRecordTable table) : IRecordService
         var change = start.Change;
         start.EndExpiredSessions();
         start.Rows.TryGetValue(key, out var row);
-        var liveRow = TakeLiveRow(change, row);
+        var liveRow = LiveRowOf(row, change.Now);
+        ExpireIfExpired(change, row);
 
-        var status = DecideDelete(change, liveRow, expectedRevision);
+        var refusal = RefuseDelete(liveRow, expectedRevision);
+        if (refusal is null && liveRow is not null)
+        {
+            DeleteRecord(change, liveRow);
+        }
+
+        var status = refusal ?? RecordDeleteStatus.Deleted;
 
         await Table.CommitAsync(transaction, change, id, cancellationToken).ConfigureAwait(false);
         return status;
@@ -744,9 +710,15 @@ internal sealed class PgRecordService(PgRecordTable table) : IRecordService
         var change = start.Change;
         start.EndExpiredSessions();
         start.Rows.TryGetValue(key, out var row);
-        var liveRow = TakeLiveRow(change, row);
+        var liveRow = LiveRowOf(row, change.Now);
+        ExpireIfExpired(change, row);
 
-        var taken = DecideTake(change, key, liveRow);
+        StoredRecord? taken = null;
+        if (liveRow is not null)
+        {
+            DeleteRecord(change, liveRow);
+            taken = ToStoredRecord(key, liveRow);
+        }
 
         await Table.CommitAsync(transaction, change, id, cancellationToken).ConfigureAwait(false);
         return taken;

@@ -21,8 +21,7 @@ internal sealed record PgChangeStart(
     /// <summary>
     /// Ends every session that the read met past its deadline, whether a row is bound to it or it was asked for.
     /// </summary>
-    /// <returns>The ids of the sessions that were ended.</returns>
-    public ImmutableHashSet<string> EndExpiredSessions()
+    public void EndExpiredSessions()
     {
         var expired = new SortedSet<string>(StringComparer.Ordinal);
 
@@ -46,30 +45,26 @@ internal sealed record PgChangeStart(
             }
         }
 
-        var ended = ImmutableHashSet.CreateBuilder<string>(StringComparer.Ordinal);
         foreach (var session in expired)
         {
-            if (Change.EndSession(session))
-            {
-                ended.Add(session);
-            }
+            Change.EndSession(session);
         }
-
-        return ended.ToImmutable();
     }
+
+    /// <summary>
+    /// Tells whether a session was asked for, exists and has not passed its deadline.
+    /// </summary>
+    /// <param name="session">The session's id.</param>
+    /// <returns>True when the session is live.</returns>
+    public bool IsLiveSession(string session) =>
+        Sessions.TryGetValue(session, out var deadline) && deadline > Change.Now;
 
     /// <summary>
     /// Tells whether a lifetime binds a record to a session that has ended or was never opened in the keyspace.
     /// </summary>
     /// <param name="lifetime">The lifetime.</param>
     /// <param name="session">The id of the lifetime's session in the keyspace, or null when it has none there.</param>
-    /// <param name="ended">The sessions that the transaction ended because they had expired.</param>
     /// <returns>True when the lifetime binds to a session that is not live.</returns>
-    public bool BindsToEndedSession(
-        RecordLifetime lifetime,
-        string? session,
-        ImmutableHashSet<string> ended
-    ) =>
-        lifetime.Session is not null
-        && (session is null || ended.Contains(session) || !Sessions.ContainsKey(session));
+    public bool BindsToEndedSession(RecordLifetime lifetime, string? session) =>
+        lifetime.Session is not null && (session is null || !IsLiveSession(session));
 }

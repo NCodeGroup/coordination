@@ -466,8 +466,8 @@ internal sealed class PgRecordTable(PgServer server, PgKeyspaces keyspaces, PgSe
     }
 
     /// <summary>
-    /// Reads after the writers of a keyspace's row: in a transaction whose first batch waits for them, which reads
-    /// past the lock's row and returns what the caller's reader reads from the results of the read.
+    /// Runs a read after the keyspace's writers have finished: a transaction that takes a share lock on the keyspace's
+    /// row, then runs the read and returns what <paramref name="readResults"/> decodes from it.
     /// </summary>
     /// <typeparam name="T">The type that <paramref name="readResults"/> returns.</typeparam>
     /// <param name="keyspaceId">The keyspace's id.</param>
