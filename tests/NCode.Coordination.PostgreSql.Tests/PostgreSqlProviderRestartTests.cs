@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using System.Collections.Concurrent;
+using System.Text;
 using NCode.Coordination.PostgreSql.Tests.Servers;
 
 namespace NCode.Coordination.PostgreSql.Tests;
@@ -26,6 +27,11 @@ public sealed class PostgreSqlProviderRestartTests
     /// The number of records that each client writes.
     /// </summary>
     private const int Steps = 12;
+
+    /// <summary>
+    /// The payload of the message, and the name of the record, that the tests write before the restart.
+    /// </summary>
+    private const string BeforeName = "before";
 
     #region CreateAsync Tests
 
@@ -120,6 +126,127 @@ public sealed class PostgreSqlProviderRestartTests
 
         var after = await records.ReadAsync(afterKey, null, cancellationToken);
         Assert.NotNull(after);
+    }
+
+    #endregion
+
+    #region SubscribeAsync Tests
+
+    [PgServerFact]
+    public async Task SubscribeAsync_WhenTheServerRestarts_ResyncsAndDeliversLaterChanges()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var server = await PgRestartableServer.StartAsync(cancellationToken);
+        await using var provider = await PgTestSupport.CreateProviderAsync(
+            server.ConnectionString,
+            PostgreSqlProfiles.Standalone,
+            cancellationToken
+        );
+        var notifications = PgTestSupport.GetService<INotificationService>(provider);
+        var records = PgTestSupport.GetService<IRecordService>(provider);
+        var watches = PgTestSupport.GetService<IRecordWatchService>(provider);
+        var keyspace = PgTestSupport.CreateKeyspace(KeyspaceName);
+        var value = "v"u8.ToArray();
+        var topic = keyspace.CreateKey(PgTestSupport.TopicName);
+        var prefix = keyspace.CreateKey(PgTestSupport.WatchedName);
+
+        var messages = notifications.SubscribeAsync(topic, null, cancellationToken);
+        await using var messageEnumerator = messages.GetAsyncEnumerator(cancellationToken);
+        var changes = watches.WatchPrefixAsync(prefix, null, null, cancellationToken);
+        await using var changeEnumerator = changes.GetAsyncEnumerator(cancellationToken);
+
+        var messageStart = await PgTestSupport.NextAsync(messageEnumerator, cancellationToken);
+        Assert.True(messageStart.IsResync);
+        var changeStart = await PgTestSupport.NextAsync(changeEnumerator, cancellationToken);
+        Assert.True(changeStart.IsResync);
+
+        var beforePayload = Encoding.UTF8.GetBytes(BeforeName);
+        await notifications.PublishAsync(topic, beforePayload, null, cancellationToken);
+        var beforeKey = keyspace.CreateKey(PgTestSupport.WatchedName, BeforeName);
+        await records.CreateAsync(
+            beforeKey,
+            value,
+            RecordLifetime.Persistent,
+            null,
+            cancellationToken
+        );
+
+        var beforeMessage = await PgTestSupport.NextAsync(messageEnumerator, cancellationToken);
+        Assert.Equal(NotificationKind.Message, beforeMessage.Kind);
+        var beforeReceived = beforeMessage.Payload.ToArray();
+        Assert.Equal(beforePayload, beforeReceived);
+        var beforeChange = await PgTestSupport.NextAsync(changeEnumerator, cancellationToken);
+        Assert.Equal(RecordChangeKind.Written, beforeChange.Kind);
+        Assert.Equal(beforeKey, beforeChange.Key);
+
+        await server.StopAsync(cancellationToken);
+        await server.StartAgainAsync(cancellationToken);
+
+        await PgTestSupport.AssertTopicResyncsThenDeliversAsync(
+            notifications,
+            topic,
+            messageEnumerator,
+            cancellationToken
+        );
+        await PgTestSupport.AssertWatchResyncsThenDeliversAsync(
+            records,
+            keyspace,
+            changeEnumerator,
+            cancellationToken
+        );
+    }
+
+    #endregion
+
+    #region WatchKeyAsync Tests
+
+    [PgServerFact]
+    public async Task WatchKeyAsync_AfterARevisionFromBeforeTheRestart_StartsWithAResync()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var server = await PgRestartableServer.StartAsync(cancellationToken);
+        await using var provider = await PgTestSupport.CreateProviderAsync(
+            server.ConnectionString,
+            PostgreSqlProfiles.Standalone,
+            cancellationToken
+        );
+        var records = PgTestSupport.GetService<IRecordService>(provider);
+        var watches = PgTestSupport.GetService<IRecordWatchService>(provider);
+        var keyspace = PgTestSupport.CreateKeyspace(KeyspaceName);
+        var value = "v"u8.ToArray();
+        var prefix = keyspace.CreateKey(PgTestSupport.WatchedName);
+
+        var changes = watches.WatchPrefixAsync(prefix, null, null, cancellationToken);
+        await using var changeEnumerator = changes.GetAsyncEnumerator(cancellationToken);
+        var changeStart = await PgTestSupport.NextAsync(changeEnumerator, cancellationToken);
+        Assert.True(changeStart.IsResync);
+
+        var beforeKey = keyspace.CreateKey(PgTestSupport.WatchedName, BeforeName);
+        await records.CreateAsync(
+            beforeKey,
+            value,
+            RecordLifetime.Persistent,
+            null,
+            cancellationToken
+        );
+        var beforeChange = await PgTestSupport.NextAsync(changeEnumerator, cancellationToken);
+        Assert.Equal(RecordChangeKind.Written, beforeChange.Kind);
+        var earlier = beforeChange.Revision;
+
+        await server.StopAsync(cancellationToken);
+        await server.StartAgainAsync(cancellationToken);
+
+        await PgTestSupport.AssertWatchResyncsThenDeliversAsync(
+            records,
+            keyspace,
+            changeEnumerator,
+            cancellationToken
+        );
+
+        var replay = watches.WatchKeyAsync(beforeKey, earlier, null, cancellationToken);
+        await using var replayEnumerator = replay.GetAsyncEnumerator(cancellationToken);
+        var first = await PgTestSupport.NextAsync(replayEnumerator, cancellationToken);
+        Assert.True(first.IsResync);
     }
 
     #endregion
