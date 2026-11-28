@@ -115,7 +115,7 @@ public sealed class PgServerStatementTests(PgServers servers)
             await server.ExecuteAsync(statements, ReadTwoResultsAsync, cancellationToken)
         );
 
-        Assert.Equal("The batch has no further result.", exception.Message);
+        Assert.Equal(PgResults.NoFurtherResultMessage, exception.Message);
     }
 
     [PgServerFact]

@@ -78,6 +78,22 @@ internal sealed class PgCounterService(PgServer server, PgKeyspaces keyspaces, P
         """;
 
     /// <summary>
+    /// The message that refuses a batch holding a null increment.
+    /// </summary>
+    internal const string NullIncrementMessage = "A batch holds no null increment.";
+
+    /// <summary>
+    /// The message that refuses a batch whose increments are in more than one keyspace.
+    /// </summary>
+    internal const string OneKeyspaceMessage = "Every increment of a batch is in one keyspace.";
+
+    /// <summary>
+    /// Gets the message that refuses a batch with too few or too many increments.
+    /// </summary>
+    internal static string BatchSizeMessage { get; } =
+        $"A batch has 1 to {CoordinationLimits.MaxBatchIncrements} increments.";
+
+    /// <summary>
     /// Reads the counts that a statement returned.
     /// </summary>
     /// <param name="results">The results of the batch.</param>
@@ -149,10 +165,7 @@ internal sealed class PgCounterService(PgServer server, PgKeyspaces keyspaces, P
 
         if (increments.Count < 1 || increments.Count > CoordinationLimits.MaxBatchIncrements)
         {
-            throw new ArgumentException(
-                $"A batch has 1 to {CoordinationLimits.MaxBatchIncrements} increments.",
-                nameof(increments)
-            );
+            throw new ArgumentException(BatchSizeMessage, nameof(increments));
         }
 
         ValidateOneKeyspace(increments);
@@ -170,16 +183,13 @@ internal sealed class PgCounterService(PgServer server, PgKeyspaces keyspaces, P
         {
             if (increment is null)
             {
-                throw new ArgumentException("A batch holds no null increment.", nameof(increments));
+                throw new ArgumentException(NullIncrementMessage, nameof(increments));
             }
 
             keyspace ??= increment.Key.Keyspace;
             if (increment.Key.Keyspace != keyspace)
             {
-                throw new ArgumentException(
-                    "Every increment of a batch is in one keyspace.",
-                    nameof(increments)
-                );
+                throw new ArgumentException(OneKeyspaceMessage, nameof(increments));
             }
         }
     }

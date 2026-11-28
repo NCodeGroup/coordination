@@ -49,7 +49,7 @@ public sealed class PgListenerTests
         );
 
         Assert.Equal("channel", exception.ParamName);
-        Assert.Contains("The name is not a channel of the provider.", exception.Message);
+        Assert.StartsWith(PgListener.NotAChannelMessage, exception.Message);
     }
 
     [Fact]

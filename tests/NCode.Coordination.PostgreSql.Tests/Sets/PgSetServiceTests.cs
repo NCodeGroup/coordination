@@ -49,10 +49,7 @@ public sealed class PgSetServiceTests
 
         Assert.Equal(CoordinationErrorCodes.Unavailable, exception.Code);
         Assert.False(exception.OutcomeUnknown);
-        Assert.Equal(
-            "The server returned a set member the provider didn't write.",
-            exception.Message
-        );
+        Assert.Equal(PgSetService.UnknownMemberMessage, exception.Message);
     }
 
     #endregion

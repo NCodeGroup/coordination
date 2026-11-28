@@ -84,6 +84,11 @@ internal sealed class PgKeyspaceChange(PgSettings settings, PgChangeOrigin origi
         """;
 
     /// <summary>
+    /// The message of the failure that a write before <see cref="Begin"/> carries.
+    /// </summary>
+    internal const string NotBegunMessage = "Begin must be called before a write.";
+
+    /// <summary>
     /// Builds an array argument that holds one element of each write.
     /// </summary>
     /// <typeparam name="T">The type of an element.</typeparam>
@@ -502,7 +507,7 @@ internal sealed class PgKeyspaceChange(PgSettings settings, PgChangeOrigin origi
     {
         if (Entries.Count == 0)
         {
-            throw new InvalidOperationException("Begin must be called before a write.");
+            throw new InvalidOperationException(NotBegunMessage);
         }
 
         return Entries[^1];

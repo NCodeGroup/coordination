@@ -154,7 +154,7 @@ public sealed class PgKeyspaceChangeTests
 
         var exception = Assert.Throws<InvalidOperationException>(() => change.Put(put));
 
-        Assert.Equal("Begin must be called before a write.", exception.Message);
+        Assert.Equal(PgKeyspaceChange.NotBegunMessage, exception.Message);
     }
 
     #endregion

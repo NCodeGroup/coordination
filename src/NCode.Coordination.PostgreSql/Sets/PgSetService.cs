@@ -126,6 +126,12 @@ internal sealed class PgSetService(PgServer server, PgKeyspaces keyspaces, PgSch
         """;
 
     /// <summary>
+    /// The message of the failure that a list carries when the server returns a member the provider didn't write.
+    /// </summary>
+    internal const string UnknownMemberMessage =
+        "The server returned a set member the provider didn't write.";
+
+    /// <summary>
     /// Reads the results of the add batch: the row lock, then whether the member was present and whether it was
     /// written.
     /// </summary>
@@ -222,7 +228,7 @@ internal sealed class PgSetService(PgServer server, PgKeyspaces keyspaces, PgSch
                 throw new CoordinationException(
                     CoordinationErrorCodes.Unavailable,
                     outcomeUnknown: false,
-                    "The server returned a set member the provider didn't write."
+                    UnknownMemberMessage
                 );
             }
 

@@ -7,8 +7,6 @@ namespace NCode.Coordination.PostgreSql.Counters.Tests;
 
 public sealed class PgCounterServiceTests
 {
-    private const string BatchSizeMessage = "A batch has 1 to 16 increments.";
-
     private static PgCounterService CreateService(PgOfflineServer offline)
     {
         var server = offline.Server;
@@ -86,7 +84,7 @@ public sealed class PgCounterServiceTests
         );
 
         Assert.Equal("increments", exception.ParamName);
-        Assert.StartsWith(BatchSizeMessage, exception.Message);
+        Assert.StartsWith(PgCounterService.BatchSizeMessage, exception.Message);
     }
 
     [Fact]
@@ -112,7 +110,7 @@ public sealed class PgCounterServiceTests
         );
 
         Assert.Equal("increments", exception.ParamName);
-        Assert.StartsWith("Every increment of a batch is in one keyspace.", exception.Message);
+        Assert.StartsWith(PgCounterService.OneKeyspaceMessage, exception.Message);
     }
 
     [Fact]
@@ -128,7 +126,7 @@ public sealed class PgCounterServiceTests
         );
 
         Assert.Equal("increments", exception.ParamName);
-        Assert.StartsWith(BatchSizeMessage, exception.Message);
+        Assert.StartsWith(PgCounterService.BatchSizeMessage, exception.Message);
     }
 
     [Fact]
@@ -178,7 +176,7 @@ public sealed class PgCounterServiceTests
         );
 
         Assert.Equal("increments", exception.ParamName);
-        Assert.StartsWith("A batch holds no null increment.", exception.Message);
+        Assert.StartsWith(PgCounterService.NullIncrementMessage, exception.Message);
     }
 
     #endregion

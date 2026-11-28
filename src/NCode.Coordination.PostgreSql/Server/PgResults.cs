@@ -13,6 +13,11 @@ namespace NCode.Coordination.PostgreSql.Server;
 internal sealed class PgResults(NpgsqlDataReader reader)
 {
     /// <summary>
+    /// The message of the failure that a read of a result carries when the batch has none left.
+    /// </summary>
+    internal const string NoFurtherResultMessage = "The batch has no further result.";
+
+    /// <summary>
     /// Reads nothing from the results of a batch that holds no result to read.
     /// </summary>
     /// <param name="results">The results of the batch.</param>
@@ -54,7 +59,7 @@ internal sealed class PgResults(NpgsqlDataReader reader)
 
         if (!await MoveNextAsync(cancellationToken).ConfigureAwait(false))
         {
-            throw new InvalidOperationException("The batch has no further result.");
+            throw new InvalidOperationException(NoFurtherResultMessage);
         }
 
         var rows = ImmutableArray.CreateBuilder<T>();
@@ -77,7 +82,7 @@ internal sealed class PgResults(NpgsqlDataReader reader)
     {
         if (!await MoveNextAsync(cancellationToken).ConfigureAwait(false))
         {
-            throw new InvalidOperationException("The batch has no further result.");
+            throw new InvalidOperationException(NoFurtherResultMessage);
         }
 
         while (await Reader.ReadAsync(cancellationToken).ConfigureAwait(false)) { }

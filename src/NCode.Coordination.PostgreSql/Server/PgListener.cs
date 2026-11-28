@@ -34,6 +34,11 @@ internal sealed class PgListener(
     private const string PingSql = "SELECT 1";
 
     /// <summary>
+    /// The message that refuses to listen to a name that is not a channel of the provider.
+    /// </summary>
+    internal const string NotAChannelMessage = "The name is not a channel of the provider.";
+
+    /// <summary>
     /// How long one wait for a notification lasts, between the requests the loop runs.
     /// </summary>
     private static TimeSpan WaitSlice { get; } = TimeSpan.FromMilliseconds(100);
@@ -232,10 +237,7 @@ internal sealed class PgListener(
         ArgumentNullException.ThrowIfNull(channel);
         if (!PgChannels.IsChannel(channel))
         {
-            throw new ArgumentException(
-                "The name is not a channel of the provider.",
-                nameof(channel)
-            );
+            throw new ArgumentException(NotAChannelMessage, nameof(channel));
         }
 
         cancellationToken.ThrowIfCancellationRequested();
