@@ -94,6 +94,22 @@ internal sealed class PgGrants(PgRecordTable table)
         """;
 
     /// <summary>
+    /// Gets the instant a new grant expires.
+    /// </summary>
+    /// <param name="now">The instant the transaction read on the server's clock.</param>
+    /// <param name="terms">The terms of the grant.</param>
+    /// <returns>The deadline, or null when the grant is bound to a session and lives as it does.</returns>
+    public static DateTime? DeadlineOf(DateTime now, LeaseTerms terms)
+    {
+        if (terms.IsBoundToSession)
+        {
+            return null;
+        }
+
+        return PgCall.DeadlineAfter(now, terms.TimeToLive);
+    }
+
+    /// <summary>
     /// Reads a column of an instant as UTC.
     /// </summary>
     /// <param name="reader">The reader, on a row.</param>
@@ -423,28 +439,26 @@ internal sealed class PgGrants(PgRecordTable table)
     /// fencing token of the resource and the row of the terms' session.
     /// </summary>
     /// <param name="transaction">The transaction, which has not run a batch.</param>
-    /// <param name="keyspaceId">The keyspace's id.</param>
-    /// <param name="kind">The kind of the grants: 1 for leases, 2 for semaphores, 3 for elections.</param>
-    /// <param name="resource">The resource that the grants guard.</param>
+    /// <param name="scope">The keyspace, kind and resource whose grants the change reads.</param>
     /// <param name="session">The id of the session that the terms bind to, or null when they bind to none.</param>
     /// <param name="cancellationToken">The token that cancels the call.</param>
     /// <returns>The change and what the batch read.</returns>
-    /// <exception cref="ArgumentNullException">The transaction or the resource is null.</exception>
+    /// <exception cref="ArgumentNullException">The transaction or the scope is null.</exception>
     /// <exception cref="PgKeyspaceMissingException">The keyspace's row does not exist.</exception>
     public async ValueTask<PgGrantStart> BeginAsync(
         PgTransaction transaction,
-        long keyspaceId,
-        short kind,
-        CoordinationKey resource,
+        PgGrantScope scope,
         string? session,
         CancellationToken cancellationToken
     )
     {
         ArgumentNullException.ThrowIfNull(transaction);
-        ArgumentNullException.ThrowIfNull(resource);
+        ArgumentNullException.ThrowIfNull(scope);
 
-        var index = PgKeys.Index(resource);
-        var depth = (short)resource.PartitionDepth;
+        var keyspaceId = scope.KeyspaceId;
+        var kind = scope.Kind;
+        var index = PgKeys.Index(scope.Resource);
+        var depth = (short)scope.Resource.PartitionDepth;
         var indexArgument = PgArgument.Typed(index, NpgsqlDbType.Bytea);
         var sessionArgument = PgArgument.Typed(session, NpgsqlDbType.Text);
 
@@ -624,14 +638,9 @@ internal sealed class PgGrants(PgRecordTable table)
         CancellationToken cancellationToken
     )
     {
-        var start = await BeginAsync(
-                transaction,
-                keyspaceId,
-                held.Kind,
-                held.Resource,
-                null,
-                cancellationToken
-            )
+        var scope = new PgGrantScope(keyspaceId, held.Kind, held.Resource);
+
+        var start = await BeginAsync(transaction, scope, null, cancellationToken)
             .ConfigureAwait(false);
 
         start.EndExpiredSessions(null);
@@ -764,26 +773,19 @@ internal sealed class PgGrants(PgRecordTable table)
     /// deadline has passed runs again in a transaction that first waits for the keyspace's writers, so the answer
     /// follows a write that renews or replaces the grant.
     /// </summary>
-    /// <param name="keyspaceId">The keyspace's id.</param>
-    /// <param name="kind">The kind of the grants.</param>
-    /// <param name="resource">The resource that the grants guard.</param>
+    /// <param name="scope">The keyspace, kind and resource whose grants are read.</param>
     /// <param name="cancellationToken">The token that cancels the call.</param>
     /// <returns>The live grants, by slot; none when the resource is free.</returns>
-    /// <exception cref="ArgumentNullException">The resource is null.</exception>
+    /// <exception cref="ArgumentNullException">The scope is null.</exception>
     /// <exception cref="CoordinationException">The server could not be reached or failed.</exception>
     public async ValueTask<ImmutableArray<PgGrantRow>> ReadAsync(
-        long keyspaceId,
-        short kind,
-        CoordinationKey resource,
+        PgGrantScope scope,
         CancellationToken cancellationToken
     )
     {
-        ArgumentNullException.ThrowIfNull(resource);
+        ArgumentNullException.ThrowIfNull(scope);
 
-        var index = PgKeys.Index(resource);
-        var depth = (short)resource.PartitionDepth;
-
-        var statement = SelectNowStatement(keyspaceId, kind, index, depth);
+        var statement = SelectNowStatement(scope);
 
         var first = await Table
             .ExecuteAsync([statement], ReadRowsAsync, cancellationToken)
@@ -795,7 +797,7 @@ internal sealed class PgGrants(PgRecordTable table)
         }
 
         var second = await Table
-            .ReadAfterWritersAsync(keyspaceId, statement, ReadRowsAsync, cancellationToken)
+            .ReadAfterWritersAsync(scope.KeyspaceId, statement, ReadRowsAsync, cancellationToken)
             .ConfigureAwait(false);
 
         return Live(second);
@@ -804,15 +806,14 @@ internal sealed class PgGrants(PgRecordTable table)
     /// <summary>
     /// Builds the statement that reads the server's instant and a resource's grant rows.
     /// </summary>
-    /// <param name="keyspaceId">The keyspace's id.</param>
-    /// <param name="kind">The kind of the grants.</param>
-    /// <param name="index">The resource's index value.</param>
-    /// <param name="depth">The resource's partition depth.</param>
+    /// <param name="scope">The keyspace, kind and resource whose grants are read.</param>
     /// <returns>The statement.</returns>
-    private PgStatement SelectNowStatement(long keyspaceId, short kind, byte[] index, short depth)
+    private PgStatement SelectNowStatement(PgGrantScope scope)
     {
+        var index = PgKeys.Index(scope.Resource);
+        var depth = (short)scope.Resource.PartitionDepth;
         var indexArgument = PgArgument.Typed(index, NpgsqlDbType.Bytea);
 
-        return new PgStatement(SelectNowSql, keyspaceId, kind, indexArgument, depth);
+        return new PgStatement(SelectNowSql, scope.KeyspaceId, scope.Kind, indexArgument, depth);
     }
 }

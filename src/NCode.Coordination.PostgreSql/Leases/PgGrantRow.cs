@@ -28,6 +28,14 @@ internal sealed record PgGrantRow(
 )
 {
     /// <summary>
+    /// Tells whether the grant is bound to a session.
+    /// </summary>
+    /// <param name="session">The id of the session, or null when there is none.</param>
+    /// <returns><see langword="true"/> when <paramref name="session"/> is not null and is the grant's session.</returns>
+    public bool IsBoundTo(string? session) =>
+        session is not null && string.Equals(Session, session, StringComparison.Ordinal);
+
+    /// <summary>
     /// Tells whether the grant still holds at an instant.
     /// </summary>
     /// <param name="now">The instant, on the server's clock.</param>

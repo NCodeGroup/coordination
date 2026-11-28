@@ -31,6 +31,20 @@ internal sealed record PgGrantStart(
         session is not null && (SessionDeadline is not { } deadline || deadline <= Change.Now);
 
     /// <summary>
+    /// Finds the grant row of a slot that is live at the instant of the read.
+    /// </summary>
+    /// <param name="slot">The slot.</param>
+    /// <returns>The row, or null when no live grant holds the slot.</returns>
+    public PgGrantRow? LiveIn(int slot)
+    {
+        var now = Change.Now;
+
+        return Rows.FirstOrDefault(row =>
+            row.Slot == slot && row.StateAt(now) == PgRecordState.Live
+        );
+    }
+
+    /// <summary>
     /// Ends every session that the read met past its deadline, whether a grant is bound to it or it is the terms'.
     /// </summary>
     /// <param name="session">The id of the terms' session, or null when there is none.</param>

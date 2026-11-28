@@ -1,7 +1,6 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
-using NCode.Coordination.PostgreSql.Records;
 using NCode.Coordination.PostgreSql.Server;
 
 namespace NCode.Coordination.PostgreSql.Leases;
@@ -41,11 +40,7 @@ internal sealed class PgLeaseService(PgGrants grants, IPgTokens tokens) : ILease
     /// <returns>The result that says the lease is held by another, or that the attempt's session already holds it.</returns>
     private static LeaseAcquireResult DecideHeld(PgGrantRow live, PgLeaseRequest request)
     {
-        var isOwnSession =
-            request.SessionId is not null
-            && string.Equals(live.Session, request.SessionId, StringComparison.Ordinal);
-
-        if (!isOwnSession)
+        if (!live.IsBoundTo(request.SessionId))
         {
             return LeaseAcquireResult.Held;
         }
@@ -54,22 +49,6 @@ internal sealed class PgLeaseService(PgGrants grants, IPgTokens tokens) : ILease
         var ownerToken = new OwnerToken(live.Owner);
         var grant = new LeaseGrant(request.Resource, fencingToken, ownerToken, request.Terms);
         return LeaseAcquireResult.Acquired(grant);
-    }
-
-    /// <summary>
-    /// Gets the instant a new lease's grant expires.
-    /// </summary>
-    /// <param name="now">The instant the transaction read on the server's clock.</param>
-    /// <param name="terms">The terms of the lease.</param>
-    /// <returns>The deadline, or null when the lease is bound to a session and lives as it does.</returns>
-    private static DateTime? GrantDeadlineOf(DateTime now, LeaseTerms terms)
-    {
-        if (terms.IsBoundToSession)
-        {
-            return null;
-        }
-
-        return PgCall.DeadlineAfter(now, terms.TimeToLive);
     }
 
     /// <summary>
@@ -212,15 +191,10 @@ internal sealed class PgLeaseService(PgGrants grants, IPgTokens tokens) : ILease
         CancellationToken cancellationToken
     )
     {
+        var scope = new PgGrantScope(id, Kind, request.Resource);
+
         var start = await Grants
-            .BeginAsync(
-                transaction,
-                id,
-                Kind,
-                request.Resource,
-                request.SessionId,
-                cancellationToken
-            )
+            .BeginAsync(transaction, scope, request.SessionId, cancellationToken)
             .ConfigureAwait(false);
 
         start.EndExpiredSessions(request.SessionId);
@@ -247,10 +221,7 @@ internal sealed class PgLeaseService(PgGrants grants, IPgTokens tokens) : ILease
             return LeaseAcquireResult.SessionEnded;
         }
 
-        var now = start.Change.Now;
-        var live = start.Rows.FirstOrDefault(row =>
-            row.Slot == Slot && row.StateAt(now) == PgRecordState.Live
-        );
+        var live = start.LiveIn(Slot);
 
         if (live is not null)
         {
@@ -271,7 +242,7 @@ internal sealed class PgLeaseService(PgGrants grants, IPgTokens tokens) : ILease
     {
         var resource = request.Resource;
         var owner = Tokens.Next(PgTokenPrefixes.Owner);
-        var deadline = GrantDeadlineOf(start.Change.Now, request.Terms);
+        var deadline = PgGrants.DeadlineOf(start.Change.Now, request.Terms);
 
         var newGrant = new PgNewGrant(Kind, resource, Slot, Capacity, owner)
         {
@@ -322,9 +293,8 @@ internal sealed class PgLeaseService(PgGrants grants, IPgTokens tokens) : ILease
         CancellationToken cancellationToken
     )
     {
-        var live = await Grants
-            .ReadAsync(id, Kind, resource, cancellationToken)
-            .ConfigureAwait(false);
+        var scope = new PgGrantScope(id, Kind, resource);
+        var live = await Grants.ReadAsync(scope, cancellationToken).ConfigureAwait(false);
 
         return live.Length;
     }

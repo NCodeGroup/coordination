@@ -1,6 +1,7 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using System.Collections.Immutable;
 using NCode.Coordination.PostgreSql.Records;
 using NCode.Coordination.PostgreSql.Server;
 
@@ -30,15 +31,17 @@ internal sealed class PgSemaphoreService(PgGrants grants, IPgTokens tokens) : IS
     /// <returns>The lowest free slot, or -1 when every slot is held.</returns>
     private static int LowestFreeSlot(List<PgGrantRow> live, int capacity)
     {
-        for (var slot = 0; slot < capacity; slot++)
+        var taken = new bool[capacity];
+
+        foreach (var row in live)
         {
-            if (!live.Exists(row => row.Slot == slot))
+            if (row.Slot >= 0 && row.Slot < capacity)
             {
-                return slot;
+                taken[row.Slot] = true;
             }
         }
 
-        return -1;
+        return Array.IndexOf(taken, false);
     }
 
     /// <summary>
@@ -75,22 +78,6 @@ internal sealed class PgSemaphoreService(PgGrants grants, IPgTokens tokens) : IS
             request.Terms
         );
         return SemaphoreAcquireResult.Acquired(grant);
-    }
-
-    /// <summary>
-    /// Gets the instant a new grant expires.
-    /// </summary>
-    /// <param name="now">The instant the transaction read on the server's clock.</param>
-    /// <param name="terms">The terms of the grant.</param>
-    /// <returns>The deadline, or null when the grant is bound to a session and lives as it does.</returns>
-    private static DateTime? GrantDeadlineOf(DateTime now, LeaseTerms terms)
-    {
-        if (terms.IsBoundToSession)
-        {
-            return null;
-        }
-
-        return PgCall.DeadlineAfter(now, terms.TimeToLive);
     }
 
     /// <summary>
@@ -239,15 +226,10 @@ internal sealed class PgSemaphoreService(PgGrants grants, IPgTokens tokens) : IS
         CancellationToken cancellationToken
     )
     {
+        var scope = new PgGrantScope(id, Kind, request.Resource);
+
         var start = await Grants
-            .BeginAsync(
-                transaction,
-                id,
-                Kind,
-                request.Resource,
-                request.SessionId,
-                cancellationToken
-            )
+            .BeginAsync(transaction, scope, request.SessionId, cancellationToken)
             .ConfigureAwait(false);
 
         start.EndExpiredSessions(request.SessionId);
@@ -281,7 +263,7 @@ internal sealed class PgSemaphoreService(PgGrants grants, IPgTokens tokens) : IS
         var now = start.Change.Now;
         var live = start.Rows.Where(row => row.StateAt(now) == PgRecordState.Live).ToList();
 
-        if (live.Exists(row => row.Capacity != request.Capacity))
+        if (live.Any(row => row.Capacity != request.Capacity))
         {
             return SemaphoreAcquireResult.CapacityConflict;
         }
@@ -318,7 +300,7 @@ internal sealed class PgSemaphoreService(PgGrants grants, IPgTokens tokens) : IS
 
         var resource = request.Resource;
         var owner = Tokens.Next(PgTokenPrefixes.Owner);
-        var deadline = GrantDeadlineOf(start.Change.Now, request.Terms);
+        var deadline = PgGrants.DeadlineOf(start.Change.Now, request.Terms);
 
         var newGrant = new PgNewGrant(Kind, resource, slot, request.Capacity, owner)
         {
@@ -348,11 +330,29 @@ internal sealed class PgSemaphoreService(PgGrants grants, IPgTokens tokens) : IS
         var live = await Grants
             .RunInKeyspaceAsync(
                 resource.Keyspace,
-                (id, token) => Grants.ReadAsync(id, Kind, resource, token),
+                (id, token) => ReadLiveAsync(id, resource, token),
                 cancellationToken
             )
             .ConfigureAwait(false);
 
         return live.Length == 0 || live.Length < live[0].Capacity;
+    }
+
+    /// <summary>
+    /// Reads the live grants of a semaphore's resource in a keyspace.
+    /// </summary>
+    /// <param name="id">The keyspace's id.</param>
+    /// <param name="resource">The resource that the semaphore guards.</param>
+    /// <param name="cancellationToken">The token that cancels the call.</param>
+    /// <returns>The live grants, by slot.</returns>
+    private ValueTask<ImmutableArray<PgGrantRow>> ReadLiveAsync(
+        long id,
+        CoordinationKey resource,
+        CancellationToken cancellationToken
+    )
+    {
+        var scope = new PgGrantScope(id, Kind, resource);
+
+        return Grants.ReadAsync(scope, cancellationToken);
     }
 }

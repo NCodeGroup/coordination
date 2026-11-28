@@ -4,7 +4,6 @@
 using System.Collections.Immutable;
 using System.Runtime.CompilerServices;
 using NCode.Coordination.PostgreSql.Leases;
-using NCode.Coordination.PostgreSql.Records;
 using NCode.Coordination.PostgreSql.Server;
 
 namespace NCode.Coordination.PostgreSql.Elections;
@@ -62,11 +61,7 @@ internal sealed class PgElectionService(PgGrants grants, IPgTokens tokens) : IEl
     /// <returns>The result that says the role is led by another, or that the attempt's session already leads it.</returns>
     private static ElectionResult DecideLed(PgGrantRow live, PgLeadRequest request)
     {
-        var isOwnSession =
-            request.SessionId is not null
-            && string.Equals(live.Session, request.SessionId, StringComparison.Ordinal);
-
-        if (!isOwnSession)
+        if (!live.IsBoundTo(request.SessionId))
         {
             return ElectionResult.Led;
         }
@@ -76,22 +71,6 @@ internal sealed class PgElectionService(PgGrants grants, IPgTokens tokens) : IEl
         var ownerToken = new OwnerToken(live.Owner);
         var leadership = new Leadership(leader, ownerToken, request.Terms);
         return ElectionResult.Elected(leadership);
-    }
-
-    /// <summary>
-    /// Gets the instant a new leadership's grant expires.
-    /// </summary>
-    /// <param name="now">The instant the transaction read on the server's clock.</param>
-    /// <param name="terms">The terms of the leadership.</param>
-    /// <returns>The deadline, or null when the leadership is bound to a session and lives as it does.</returns>
-    private static DateTime? GrantDeadlineOf(DateTime now, LeaseTerms terms)
-    {
-        if (terms.IsBoundToSession)
-        {
-            return null;
-        }
-
-        return PgCall.DeadlineAfter(now, terms.TimeToLive);
     }
 
     /// <summary>
@@ -215,7 +194,7 @@ internal sealed class PgElectionService(PgGrants grants, IPgTokens tokens) : IEl
         var rows = await Grants
             .RunInKeyspaceAsync<ImmutableArray<PgGrantRow>>(
                 role.Keyspace,
-                (id, token) => Grants.ReadAsync(id, Kind, role, token),
+                (id, token) => ReadRowsAsync(id, role, token),
                 cancellationToken
             )
             .ConfigureAwait(false);
@@ -250,6 +229,24 @@ internal sealed class PgElectionService(PgGrants grants, IPgTokens tokens) : IEl
                 yield return view;
             }
         }
+    }
+
+    /// <summary>
+    /// Reads the live grants of a role in a keyspace.
+    /// </summary>
+    /// <param name="id">The keyspace's id.</param>
+    /// <param name="role">The role.</param>
+    /// <param name="cancellationToken">The token that cancels the call.</param>
+    /// <returns>The live grants, by slot.</returns>
+    private ValueTask<ImmutableArray<PgGrantRow>> ReadRowsAsync(
+        long id,
+        CoordinationKey role,
+        CancellationToken cancellationToken
+    )
+    {
+        var scope = new PgGrantScope(id, Kind, role);
+
+        return Grants.ReadAsync(scope, cancellationToken);
     }
 
     /// <summary>
@@ -289,8 +286,10 @@ internal sealed class PgElectionService(PgGrants grants, IPgTokens tokens) : IEl
         CancellationToken cancellationToken
     )
     {
+        var scope = new PgGrantScope(id, Kind, request.Role);
+
         var start = await Grants
-            .BeginAsync(transaction, id, Kind, request.Role, request.SessionId, cancellationToken)
+            .BeginAsync(transaction, scope, request.SessionId, cancellationToken)
             .ConfigureAwait(false);
 
         start.EndExpiredSessions(request.SessionId);
@@ -317,10 +316,7 @@ internal sealed class PgElectionService(PgGrants grants, IPgTokens tokens) : IEl
             return ElectionResult.SessionEnded;
         }
 
-        var now = start.Change.Now;
-        var live = start.Rows.FirstOrDefault(row =>
-            row.Slot == Slot && row.StateAt(now) == PgRecordState.Live
-        );
+        var live = start.LiveIn(Slot);
 
         if (live is not null)
         {
@@ -341,7 +337,7 @@ internal sealed class PgElectionService(PgGrants grants, IPgTokens tokens) : IEl
     {
         var role = request.Role;
         var owner = Tokens.Next(PgTokenPrefixes.Owner);
-        var deadline = GrantDeadlineOf(start.Change.Now, request.Terms);
+        var deadline = PgGrants.DeadlineOf(start.Change.Now, request.Terms);
 
         var newGrant = new PgNewGrant(Kind, role, Slot, Capacity, owner)
         {
