@@ -273,9 +273,10 @@ public sealed class PgSweepsTests(PgServers servers)
             async context =>
             {
                 var key = context.KeyOf(0);
+                byte[] value = [1];
                 var result = await context.Records.CreateAsync(
                     key,
-                    new byte[] { 1 },
+                    value,
                     LiveLifetime,
                     null,
                     cancellationToken
@@ -315,12 +316,13 @@ public sealed class PgSweepsTests(PgServers servers)
         await WithSweepsAsync(
             async context =>
             {
+                byte[] value = [1];
                 for (var number = 0; number < 5; number++)
                 {
                     var key = context.KeyOf(number);
                     var result = await context.Records.CreateAsync(
                         key,
-                        new byte[] { 1 },
+                        value,
                         LiveLifetime,
                         null,
                         cancellationToken
@@ -354,12 +356,13 @@ public sealed class PgSweepsTests(PgServers servers)
         await WithSweepsAsync(
             async context =>
             {
+                byte[] value = [1];
                 for (var number = 0; number < 2; number++)
                 {
                     var key = context.KeyOf(number);
                     await context.Records.CreateAsync(
                         key,
-                        new byte[] { 1 },
+                        value,
                         RecordLifetime.Persistent,
                         null,
                         cancellationToken
@@ -395,15 +398,11 @@ public sealed class PgSweepsTests(PgServers servers)
         await WithSweepsAsync(
             async context =>
             {
+                byte[] payload = [1];
                 for (var number = 0; number < 3; number++)
                 {
                     var key = context.KeyOf(0);
-                    await context.Notifications.PublishAsync(
-                        key,
-                        new byte[] { 1 },
-                        null,
-                        cancellationToken
-                    );
+                    await context.Notifications.PublishAsync(key, payload, null, cancellationToken);
                 }
 
                 var before = await context.CountAsync("messages", cancellationToken);
@@ -477,9 +476,10 @@ public sealed class PgSweepsTests(PgServers servers)
                 );
                 var key = context.KeyOf(0);
                 var lifetime = RecordLifetime.ForSession(grant.Id);
+                byte[] value = [1];
                 var result = await context.Records.CreateAsync(
                     key,
-                    new byte[] { 1 },
+                    value,
                     lifetime,
                     null,
                     cancellationToken
@@ -515,9 +515,10 @@ public sealed class PgSweepsTests(PgServers servers)
                 );
                 var key = context.KeyOf(0);
                 var lifetime = RecordLifetime.ForSession(grant.Id);
+                byte[] value = [1];
                 var result = await context.Records.CreateAsync(
                     key,
-                    new byte[] { 1 },
+                    value,
                     lifetime,
                     null,
                     cancellationToken
@@ -558,9 +559,10 @@ public sealed class PgSweepsTests(PgServers servers)
                 );
                 var key = context.KeyOf(0);
                 var lifetime = RecordLifetime.ForSession(grant.Id);
+                byte[] value = [1];
                 var result = await context.Records.CreateAsync(
                     key,
-                    new byte[] { 1 },
+                    value,
                     lifetime,
                     null,
                     cancellationToken

@@ -19,7 +19,7 @@ public sealed class PgKeyspaceChangeTests
     }
 
     private static PgRecordPut CreatePut(CoordinationKey key, DateTime? deadline) =>
-        new(key, new byte[] { 9 }, deadline, null);
+        new(key, [9], deadline, null);
 
     private static CoordinationKey CreateKey(string name)
     {

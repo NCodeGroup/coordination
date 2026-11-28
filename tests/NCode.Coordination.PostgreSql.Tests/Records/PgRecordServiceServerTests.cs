@@ -162,6 +162,7 @@ public sealed class PgRecordServiceServerTests(PgServers servers)
                     cancellationToken
                 );
                 var channel = PgChannels.ForKeyspace(context.Schema, keyspaceId);
+                byte[] value = [7, 8, 9];
 
                 var payloads = new ConcurrentQueue<string>();
                 await using var listener = new NpgsqlConnection(context.AdminConnectionString);
@@ -172,7 +173,7 @@ public sealed class PgRecordServiceServerTests(PgServers servers)
 
                 var result = await context.Records.CreateAsync(
                     key,
-                    new byte[] { 7, 8, 9 },
+                    value,
                     RecordLifetime.Persistent,
                     null,
                     cancellationToken
@@ -225,9 +226,11 @@ public sealed class PgRecordServiceServerTests(PgServers servers)
             {
                 var key = context.KeyOf("expiring");
                 var oneMinuteLifetime = RecordLifetime.ForTimeToLive(OneMinute);
+                byte[] firstValue = [1];
+                byte[] secondValue = [2];
                 var first = await context.Records.CreateAsync(
                     key,
-                    new byte[] { 1 },
+                    firstValue,
                     oneMinuteLifetime,
                     null,
                     cancellationToken
@@ -243,7 +246,7 @@ public sealed class PgRecordServiceServerTests(PgServers servers)
 
                 var second = await context.Records.CreateAsync(
                     key,
-                    new byte[] { 2 },
+                    secondValue,
                     RecordLifetime.Persistent,
                     null,
                     cancellationToken
@@ -285,9 +288,11 @@ public sealed class PgRecordServiceServerTests(PgServers servers)
             {
                 var key = context.KeyOf("swapped");
                 var oneMinuteLifetime = RecordLifetime.ForTimeToLive(OneMinute);
+                byte[] createdValue = [1];
+                byte[] swappedValue = [2];
                 var created = await context.Records.CreateAsync(
                     key,
-                    new byte[] { 1 },
+                    createdValue,
                     oneMinuteLifetime,
                     null,
                     cancellationToken
@@ -312,7 +317,7 @@ public sealed class PgRecordServiceServerTests(PgServers servers)
                         .PausedRecords.CompareAndSwapAsync(
                             key,
                             created.Revision,
-                            new byte[] { 2 },
+                            swappedValue,
                             RecordLifetime.Persistent,
                             null,
                             cancellationToken
@@ -369,12 +374,13 @@ public sealed class PgRecordServiceServerTests(PgServers servers)
             async context =>
             {
                 var expected = new HashSet<string>(StringComparer.Ordinal);
+                byte[] value = [1];
                 for (var number = 0; number < 30; number++)
                 {
                     var key = LongKey(context.Keyspace, number);
                     var result = await context.Records.CreateAsync(
                         key,
-                        new byte[] { 1 },
+                        value,
                         RecordLifetime.Persistent,
                         null,
                         cancellationToken

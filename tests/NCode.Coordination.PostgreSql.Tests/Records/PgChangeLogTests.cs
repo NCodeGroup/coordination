@@ -88,16 +88,18 @@ public sealed class PgChangeLogTests(PgServers servers)
             {
                 var keyOne = context.KeyOf("one");
                 var keyTwo = context.KeyOf("two");
+                byte[] firstValue = [1];
+                byte[] secondValue = [2, 3];
                 var first = await context.Records.CreateAsync(
                     keyOne,
-                    new byte[] { 1 },
+                    firstValue,
                     RecordLifetime.Persistent,
                     null,
                     cancellationToken
                 );
                 var second = await context.Records.CreateAsync(
                     keyTwo,
-                    new byte[] { 2, 3 },
+                    secondValue,
                     RecordLifetime.Persistent,
                     null,
                     cancellationToken
@@ -153,11 +155,12 @@ public sealed class PgChangeLogTests(PgServers servers)
                     context.KeyOf("b"),
                     context.KeyOf("c"),
                 ];
+                byte[] value = [1];
                 foreach (var key in keys)
                 {
                     var created = await context.Records.CreateAsync(
                         key,
-                        new byte[] { 1 },
+                        value,
                         lifetime,
                         null,
                         cancellationToken
@@ -200,10 +203,12 @@ public sealed class PgChangeLogTests(PgServers servers)
                 );
                 var key = context.KeyOf("replaced");
                 var sessionLifetime = RecordLifetime.ForSession(grant.Id);
+                byte[] firstValue = [1];
+                byte[] secondValue = [2];
 
                 var first = await context.Records.CreateAsync(
                     key,
-                    new byte[] { 1 },
+                    firstValue,
                     sessionLifetime,
                     null,
                     cancellationToken
@@ -214,7 +219,7 @@ public sealed class PgChangeLogTests(PgServers servers)
 
                 var second = await context.Records.CreateAsync(
                     key,
-                    new byte[] { 2 },
+                    secondValue,
                     RecordLifetime.Persistent,
                     null,
                     cancellationToken
@@ -272,23 +277,24 @@ public sealed class PgChangeLogTests(PgServers servers)
                 var keyA1 = context.KeyOf("a1");
                 var keyA2 = context.KeyOf("a2");
                 var keyB1 = context.KeyOf("b1");
+                byte[] value = [1];
                 var createdA1 = await context.Records.CreateAsync(
                     keyA1,
-                    new byte[] { 1 },
+                    value,
                     firstLifetime,
                     null,
                     cancellationToken
                 );
                 var createdA2 = await context.Records.CreateAsync(
                     keyA2,
-                    new byte[] { 1 },
+                    value,
                     firstLifetime,
                     null,
                     cancellationToken
                 );
                 var createdB1 = await context.Records.CreateAsync(
                     keyB1,
-                    new byte[] { 1 },
+                    value,
                     secondLifetime,
                     null,
                     cancellationToken
@@ -342,6 +348,7 @@ public sealed class PgChangeLogTests(PgServers servers)
                     cancellationToken
                 );
                 var lifetime = RecordLifetime.ForSession(grant.Id);
+                byte[] value = [1];
 
                 var keys = new List<CoordinationKey>();
                 for (var number = 0; number < count; number++)
@@ -350,7 +357,7 @@ public sealed class PgChangeLogTests(PgServers servers)
                     var key = context.KeyOf(name);
                     var created = await context.Records.CreateAsync(
                         key,
-                        new byte[] { 1 },
+                        value,
                         lifetime,
                         null,
                         cancellationToken

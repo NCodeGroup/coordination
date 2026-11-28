@@ -126,11 +126,12 @@ public sealed class PgSessionServerTests(PgServers servers)
                     context.KeyOf("b"),
                     context.KeyOf("c"),
                 ];
+                byte[] value = [1];
                 foreach (var key in keys)
                 {
                     var created = await context.Records.CreateAsync(
                         key,
-                        new byte[] { 1 },
+                        value,
                         lifetime,
                         null,
                         cancellationToken
@@ -199,10 +200,11 @@ public sealed class PgSessionServerTests(PgServers servers)
 
                 var key = context.KeyOf("late");
                 var lifetime = RecordLifetime.ForSession(grant.Id);
+                byte[] value = [1];
 
                 var result = await context.Records.CreateAsync(
                     key,
-                    new byte[] { 1 },
+                    value,
                     lifetime,
                     null,
                     cancellationToken
@@ -242,10 +244,12 @@ public sealed class PgSessionServerTests(PgServers servers)
                 );
                 var key = context.KeyOf("replaced");
                 var lifetime = RecordLifetime.ForSession(grant.Id);
+                byte[] firstValue = [1];
+                byte[] secondValue = [2];
 
                 var first = await context.Records.CreateAsync(
                     key,
-                    new byte[] { 1 },
+                    firstValue,
                     lifetime,
                     null,
                     cancellationToken
@@ -256,7 +260,7 @@ public sealed class PgSessionServerTests(PgServers servers)
 
                 var second = await context.Records.CreateAsync(
                     key,
-                    new byte[] { 2 },
+                    secondValue,
                     RecordLifetime.Persistent,
                     null,
                     cancellationToken

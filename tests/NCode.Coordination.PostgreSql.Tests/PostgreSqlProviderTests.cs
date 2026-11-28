@@ -7,6 +7,8 @@ namespace NCode.Coordination.PostgreSql.Tests;
 
 public sealed class PostgreSqlProviderTests
 {
+    private const string UnreachableConnectionString = "Host=127.0.0.1;Port=1";
+
     public static TheoryData<PostgreSqlProfile> Profiles =>
         [PostgreSqlProfiles.Standalone, PostgreSqlProfiles.Asynchronous];
 
@@ -22,7 +24,7 @@ public sealed class PostgreSqlProviderTests
     [Fact]
     public async Task Declaration_Always_NamesThePostgreSqlProviderAndProfile()
     {
-        await using var provider = CreateProvider("Host=127.0.0.1;Port=1");
+        await using var provider = CreateProvider(UnreachableConnectionString);
 
         var declaration = provider.Declaration;
 
@@ -30,9 +32,13 @@ public sealed class PostgreSqlProviderTests
         Assert.Equal("postgresql-asynchronous", declaration.Profile);
     }
 
+    #endregion
+
+    #region Declare Tests
+
     [Theory]
     [MemberData(nameof(Profiles))]
-    public void Declaration_Always_DeclaresEveryServedPrimitive(PostgreSqlProfile profile)
+    public void Declare_Profile_ReturnsEveryServedPrimitive(PostgreSqlProfile profile)
     {
         var primitives = PostgreSqlProvider.Declare(profile);
 
@@ -220,7 +226,7 @@ public sealed class PostgreSqlProviderTests
     [InlineData(typeof(INotificationService))]
     public async Task GetPrimitiveService_ServedPrimitive_ReturnsItsService(Type serviceType)
     {
-        await using var provider = CreateProvider("Host=127.0.0.1;Port=1");
+        await using var provider = CreateProvider(UnreachableConnectionString);
 
         var service = provider.GetPrimitiveService(serviceType);
 
@@ -231,7 +237,7 @@ public sealed class PostgreSqlProviderTests
     [Fact]
     public async Task GetPrimitiveService_UnservedPrimitive_ReturnsNull()
     {
-        await using var provider = CreateProvider("Host=127.0.0.1;Port=1");
+        await using var provider = CreateProvider(UnreachableConnectionString);
 
         var service = provider.GetPrimitiveService(typeof(IDisposable));
 
@@ -245,7 +251,8 @@ public sealed class PostgreSqlProviderTests
     [Fact]
     public async Task ProbeAsync_MultiplexingDataSource_ThrowsUnsupported()
     {
-        await using var provider = CreateProvider("Host=127.0.0.1;Port=1;Multiplexing=true");
+        const string connectionString = UnreachableConnectionString + ";Multiplexing=true";
+        await using var provider = CreateProvider(connectionString);
 
         var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
             await provider.ProbeAsync(CancellationToken.None)

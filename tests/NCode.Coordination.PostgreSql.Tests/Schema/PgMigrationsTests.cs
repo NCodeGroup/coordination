@@ -48,7 +48,7 @@ public sealed partial class PgMigrationsTests
             "SELECT 'a;b';\nSELECT 2;  \r\n\r\n  SELECT 3 ;\nSELECT 4"
         );
 
-        Assert.Equal(["SELECT 'a;b'", "SELECT 2", "SELECT 3", "SELECT 4"], statements);
+        Assert.Equal<string>(["SELECT 'a;b'", "SELECT 2", "SELECT 3", "SELECT 4"], statements);
     }
 
     #endregion

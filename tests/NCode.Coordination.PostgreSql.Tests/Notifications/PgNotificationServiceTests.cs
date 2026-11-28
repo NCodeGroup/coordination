@@ -50,9 +50,10 @@ public sealed class PgNotificationServiceTests
         var topic = new Keyspace("prod").CreateKey("t");
         var extensions = ImmutableDictionary<string, string>.Empty.Add("consul.lock-delay", "15s");
         var options = new OperationOptions { Extensions = extensions };
+        byte[] payload = [1];
 
         var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
-            await service.PublishAsync(topic, new byte[] { 1 }, options, cancellationToken)
+            await service.PublishAsync(topic, payload, options, cancellationToken)
         );
 
         Assert.Equal(CoordinationErrorCodes.Unsupported, exception.Code);

@@ -78,16 +78,23 @@ public sealed class PgSourceRulesTests
     }
 
     [Fact]
-    public void Check_CallInsideALambdaArgument_ChecksOnlyTheLambdasOwnArguments()
+    public void Check_PlainCallInsideALambdaArgument_ReportsNothing()
     {
-        const string plain = "class C { void M() { Run(x => Foo(x)); } }";
-        const string nested = "class C { void M() { Run(x => Foo(Bar(x))); } }";
+        const string source = "class C { void M() { Run(x => Foo(x)); } }";
 
-        var plainViolations = PgSourceRules.Check(plain);
-        var nestedViolations = PgSourceRules.Check(nested);
+        var violations = PgSourceRules.Check(source);
 
-        Assert.Empty(plainViolations);
-        Assert.Equal<string>(["1: nested-call: Bar(x)"], nestedViolations);
+        Assert.Empty(violations);
+    }
+
+    [Fact]
+    public void Check_NestedCallInsideALambdaArgument_ReportsNestedCall()
+    {
+        const string source = "class C { void M() { Run(x => Foo(Bar(x))); } }";
+
+        var violations = PgSourceRules.Check(source);
+
+        Assert.Equal<string>(["1: nested-call: Bar(x)"], violations);
     }
 
     [Fact]

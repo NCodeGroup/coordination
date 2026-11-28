@@ -52,7 +52,8 @@ public sealed class PgElectionServiceTests
         var keyspace = new Keyspace("prod");
         var role = keyspace.CreateKey("r");
         var fencingToken = new FencingToken(1);
-        var leader = new Leader(role, fencingToken, new byte[] { 1 });
+        byte[] value = [1];
+        var leader = new Leader(role, fencingToken, value);
         var owner = new OwnerToken("o-1");
         var sessionId = new SessionId(keyspace, "s-1");
         var terms = LeaseTerms.ForSession(sessionId);

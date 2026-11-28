@@ -12,10 +12,6 @@ namespace NCode.Coordination.PostgreSql.Keys.Tests;
 
 public sealed class PgKeyspacesTests(PgServers servers) : IDisposable
 {
-    private MockRepository Mocks { get; } = new(MockBehavior.Strict);
-
-    public void Dispose() => Mocks.Verify();
-
     private static async Task WithKeyspacesAsync(
         string connectionString,
         IPgTokens tokens,
@@ -72,6 +68,10 @@ public sealed class PgKeyspacesTests(PgServers servers) : IDisposable
 
         return ids;
     }
+
+    private MockRepository Mocks { get; } = new(MockBehavior.Strict);
+
+    public void Dispose() => Mocks.Verify();
 
     #region ResolveAsync Tests
 

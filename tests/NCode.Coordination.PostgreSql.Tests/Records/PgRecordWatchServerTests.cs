@@ -45,9 +45,10 @@ public sealed class PgRecordWatchServerTests(PgServers servers)
         CancellationToken cancellationToken
     )
     {
+        byte[] bytes = [value];
         var result = await context.Records.CreateAsync(
             key,
-            new byte[] { value },
+            bytes,
             lifetime,
             null,
             cancellationToken
@@ -64,10 +65,11 @@ public sealed class PgRecordWatchServerTests(PgServers servers)
         CancellationToken cancellationToken
     )
     {
+        byte[] bytes = [value];
         var result = await context.Records.CompareAndSwapAsync(
             key,
             expected,
-            new byte[] { value },
+            bytes,
             RecordLifetime.Persistent,
             null,
             cancellationToken
@@ -417,22 +419,14 @@ public sealed class PgRecordWatchServerTests(PgServers servers)
                 var notification = await NextAsync(notifications, Patience, cancellationToken);
                 Assert.True(notification.IsResync);
 
-                await context.Notifications.PublishAsync(
-                    topic,
-                    new byte[] { 1 },
-                    null,
-                    cancellationToken
-                );
+                byte[] published = [1];
+                await context.Notifications.PublishAsync(topic, published, null, cancellationToken);
 
                 notification = await NextAsync(notifications, Patience, cancellationToken);
                 Assert.Equal(NotificationKind.Message, notification.Kind);
                 Assert.Equal(1, notification.Sequence);
 
-                await context.InsertMessageWithoutWakeUpAsync(
-                    topic,
-                    new byte[] { 2 },
-                    cancellationToken
-                );
+                await context.InsertMessageWithoutWakeUpAsync(topic, [2], cancellationToken);
 
                 notification = await NextAsync(notifications, twoChecks, cancellationToken);
                 Assert.Equal(NotificationKind.Message, notification.Kind);
