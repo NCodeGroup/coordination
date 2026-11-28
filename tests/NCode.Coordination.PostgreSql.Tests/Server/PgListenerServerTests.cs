@@ -103,6 +103,29 @@ public sealed class PgListenerServerTests(PgServers servers)
         Assert.Equal("c:7", notification.Payload);
     }
 
+    [PgServerFact]
+    public async Task ListenAsync_ServerStoppedAfterTheFirstListen_ThrowsUnavailable()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var first = NewChannel();
+        var second = NewChannel();
+        var events = new PgListenerEvents((_, _) => { }, () => { }, () => { });
+
+        await using var server = await PgRestartableServer.StartAsync(cancellationToken);
+        await using var source = PgSource.FromConnectionString(server.ConnectionString);
+        await using var listener = new PgListener(source, events, TimeProvider.System);
+
+        await listener.ListenAsync(first, cancellationToken);
+        await server.StopAsync(cancellationToken);
+
+        var listening = listener.ListenAsync(second, cancellationToken).AsTask();
+        var exception = await Assert.ThrowsAsync<CoordinationException>(() =>
+            listening.WaitAsync(Patience, cancellationToken)
+        );
+
+        Assert.Equal(CoordinationErrorCodes.Unavailable, exception.Code);
+    }
+
     #endregion
 
     #region Unlisten Tests

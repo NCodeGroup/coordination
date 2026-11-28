@@ -170,7 +170,7 @@ internal sealed class PgListener(PgSource source, PgListenerEvents events, TimeP
     /// <param name="cancellationToken">The token that cancels the wait for the server.</param>
     /// <returns>A task that completes once the server listens to the channel.</returns>
     /// <exception cref="ArgumentException">The name is not a channel of the provider.</exception>
-    /// <exception cref="CoordinationException">The listener never reached the server.</exception>
+    /// <exception cref="CoordinationException">The listening connection failed before the server listened.</exception>
     /// <exception cref="ObjectDisposedException">The listener is disposed.</exception>
     public async ValueTask ListenAsync(string channel, CancellationToken cancellationToken)
     {
@@ -336,7 +336,8 @@ internal sealed class PgListener(PgSource source, PgListenerEvents events, TimeP
     }
 
     /// <summary>
-    /// Clears the pool when the connection was lost, and fails the waiters when no connection has listened yet.
+    /// Clears the pool when the connection was lost, and fails every waiter, so a <c>LISTEN</c> asked for during an
+    /// outage fails instead of waiting for the server to return.
     /// </summary>
     /// <param name="exception">The failure of the connection.</param>
     private void HandleConnectionFailure(Exception exception)
@@ -346,11 +347,8 @@ internal sealed class PgListener(PgSource source, PgListenerEvents events, TimeP
             Source.ClearPool();
         }
 
-        if (!ConnectedOnce)
-        {
-            var failure = Unavailable(exception);
-            FailWaiters(failure);
-        }
+        var failure = Unavailable(exception);
+        FailWaiters(failure);
     }
 
     /// <summary>

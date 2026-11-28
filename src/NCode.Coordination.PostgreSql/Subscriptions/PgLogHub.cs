@@ -291,6 +291,10 @@ internal sealed class PgLogHub : IAsyncDisposable, IDisposable
     /// <param name="id">The log.</param>
     /// <param name="subscriber">The subscriber that <see cref="SubscribeAsync{TEntry}"/> returned.</param>
     /// <returns>A task that completes when the subscriber is removed.</returns>
+    /// <remarks>
+    /// It takes no token because it runs from a subscription's cleanup, which must finish. The lock it waits for is held
+    /// only while a <c>LISTEN</c> runs, which fails rather than waits when the listening connection does.
+    /// </remarks>
     /// <exception cref="ArgumentNullException">The subscriber is null.</exception>
     public async ValueTask UnsubscribeAsync<TEntry>(PgLogId id, PgLogSubscriber<TEntry> subscriber)
         where TEntry : IPgLogEntry
