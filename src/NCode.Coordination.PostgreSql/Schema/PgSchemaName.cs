@@ -48,6 +48,14 @@ internal sealed partial class PgSchemaName
     public static PgSchemaName Create(string name) => Create(name, nameof(name));
 
     /// <summary>
+    /// Gets the message that refuses a schema name.
+    /// </summary>
+    /// <param name="name">The refused name.</param>
+    /// <returns>The message, which names the name.</returns>
+    internal static string InvalidNameMessage(string? name) =>
+        $"'{name}' is not a schema name the provider takes: use 1 to 63 lowercase letters, digits and underscores, starting with a letter or an underscore.";
+
+    /// <summary>
     /// Creates a schema name after validating it, naming the caller's parameter when it refuses.
     /// </summary>
     /// <param name="name">The name.</param>
@@ -59,10 +67,8 @@ internal sealed partial class PgSchemaName
     {
         if (name is null || name.Length > MaxLength || !NamePattern().IsMatch(name))
         {
-            throw new ArgumentException(
-                $"'{name}' is not a schema name the provider takes: use 1 to 63 lowercase letters, digits and underscores, starting with a letter or an underscore.",
-                paramName
-            );
+            var message = InvalidNameMessage(name);
+            throw new ArgumentException(message, paramName);
         }
 
         return new PgSchemaName(name);

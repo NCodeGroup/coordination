@@ -27,7 +27,7 @@ public sealed class PgSchemaNameTests
     [InlineData("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")]
     public void Create_InvalidName_Throws(string name)
     {
-        var expected = $"'{name}' is not a schema name the provider takes";
+        var expected = PgSchemaName.InvalidNameMessage(name);
 
         var exception = Assert.Throws<ArgumentException>(() => PgSchemaName.Create(name));
 

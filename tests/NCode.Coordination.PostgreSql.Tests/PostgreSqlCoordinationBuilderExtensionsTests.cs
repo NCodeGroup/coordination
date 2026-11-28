@@ -3,6 +3,7 @@
 
 using Microsoft.Extensions.DependencyInjection;
 using Moq;
+using NCode.Coordination.PostgreSql.Schema;
 using Npgsql;
 
 namespace NCode.Coordination.PostgreSql.Tests;
@@ -47,8 +48,8 @@ public sealed class PostgreSqlCoordinationBuilderExtensionsTests : IDisposable
 
     private static string RangeOf(string option) =>
         option == "LogRetention"
-            ? "PostgreSqlProviderOptions.LogRetention is from one second to one day."
-            : $"PostgreSqlProviderOptions.{option} is at least one millisecond and less than one hour.";
+            ? PostgreSqlCoordinationBuilderExtensions.LogRetentionMessage
+            : PostgreSqlCoordinationBuilderExtensions.ShortDurationMessage(option);
 
     private MockRepository Mocks { get; } = new(MockBehavior.Strict);
 
@@ -118,6 +119,7 @@ public sealed class PostgreSqlCoordinationBuilderExtensionsTests : IDisposable
     public void AddPostgreSqlProvider_InvalidSchema_Throws(string schema)
     {
         var builder = CreateBuilder();
+        var expected = PgSchemaName.InvalidNameMessage(schema);
 
         var exception = Assert.Throws<ArgumentException>(() =>
             builder.Object.AddPostgreSqlProvider(options =>
@@ -128,10 +130,7 @@ public sealed class PostgreSqlCoordinationBuilderExtensionsTests : IDisposable
         );
 
         Assert.Equal("configure", exception.ParamName);
-        Assert.StartsWith(
-            $"'{schema}' is not a schema name the provider takes: use 1 to 63 lowercase letters, digits and underscores, starting with a letter or an underscore.",
-            exception.Message
-        );
+        Assert.StartsWith(expected, exception.Message);
     }
 
     [Fact]
@@ -253,7 +252,7 @@ public sealed class PostgreSqlCoordinationBuilderExtensionsTests : IDisposable
 
         Assert.Equal("configure", exception.ParamName);
         Assert.StartsWith(
-            "PostgreSqlProviderOptions.SweepBatchSize is from 1 to 100000.",
+            PostgreSqlCoordinationBuilderExtensions.SweepBatchSizeMessage,
             exception.Message,
             StringComparison.Ordinal
         );

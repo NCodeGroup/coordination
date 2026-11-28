@@ -12,6 +12,11 @@ namespace NCode.Coordination.PostgreSql.Server;
 internal static class PgFailures
 {
     /// <summary>
+    /// The start of the message of a failure that a server call translates, which its detail follows.
+    /// </summary>
+    internal const string CallFailedPrefix = "The PostgreSQL server call failed: ";
+
+    /// <summary>
     /// The state of a foreign key violation, which says a statement's keyspace row is missing.
     /// </summary>
     private const string ForeignKeyViolation = "23503";
@@ -109,7 +114,7 @@ internal static class PgFailures
         return new CoordinationException(
             code,
             outcomeUnknown,
-            "The PostgreSQL server call failed: " + detail,
+            CallFailedPrefix + detail,
             exception
         );
     }

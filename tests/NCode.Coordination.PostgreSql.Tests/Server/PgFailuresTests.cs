@@ -44,7 +44,7 @@ public sealed class PgFailuresTests
         Assert.Equal(expectedCode, result.Code);
         Assert.Equal(expectedUnknown, result.OutcomeUnknown);
         Assert.Same(exception, result.InnerException);
-        Assert.Equal($"The PostgreSQL server call failed: {state} failed", result.Message);
+        Assert.Equal($"{PgFailures.CallFailedPrefix}{state} failed", result.Message);
     }
 
     [Fact]
@@ -57,7 +57,7 @@ public sealed class PgFailuresTests
         Assert.Equal(CoordinationErrorCodes.Unavailable, result.Code);
         Assert.True(result.OutcomeUnknown);
         Assert.Same(exception, result.InnerException);
-        Assert.Equal("The PostgreSQL server call failed: down", result.Message);
+        Assert.Equal(PgFailures.CallFailedPrefix + "down", result.Message);
     }
 
     [Fact]

@@ -34,6 +34,12 @@ public static class PostgreSqlCoordinationBuilderExtensions
         "Set exactly one of PostgreSqlProviderOptions.ConnectionString and PostgreSqlProviderOptions.DataSource.";
 
     /// <summary>
+    /// The message that refuses a log retention outside its range.
+    /// </summary>
+    internal const string LogRetentionMessage =
+        "PostgreSqlProviderOptions.LogRetention is from one second to one day.";
+
+    /// <summary>
     /// The least value of a timeout or an interval, which is included.
     /// </summary>
     private static TimeSpan MinShortDuration { get; } = TimeSpan.FromMilliseconds(1);
@@ -52,6 +58,12 @@ public static class PostgreSqlCoordinationBuilderExtensions
     /// The greatest value of <see cref="PostgreSqlProviderOptions.LogRetention"/>.
     /// </summary>
     private static TimeSpan MaxLogRetention { get; } = TimeSpan.FromDays(1);
+
+    /// <summary>
+    /// The message that refuses a sweep batch size outside its range.
+    /// </summary>
+    internal static string SweepBatchSizeMessage { get; } =
+        $"PostgreSqlProviderOptions.SweepBatchSize is from {MinSweepBatchSize} to {MaxSweepBatchSize}.";
 
     extension(ICoordinationBuilder builder)
     {
@@ -205,6 +217,14 @@ public static class PostgreSqlCoordinationBuilderExtensions
     }
 
     /// <summary>
+    /// Gets the message that refuses a timeout or an interval outside its range.
+    /// </summary>
+    /// <param name="option">The name of the option.</param>
+    /// <returns>The message, which names the option.</returns>
+    internal static string ShortDurationMessage(string option) =>
+        $"PostgreSqlProviderOptions.{option} is at least one millisecond and less than one hour.";
+
+    /// <summary>
     /// Checks that a duration is at least one millisecond and less than one hour.
     /// </summary>
     /// <param name="value">The duration.</param>
@@ -216,11 +236,8 @@ public static class PostgreSqlCoordinationBuilderExtensions
     {
         if (value < MinShortDuration || value >= MaxShortDuration)
         {
-            throw new ArgumentOutOfRangeException(
-                paramName,
-                value,
-                $"PostgreSqlProviderOptions.{option} is at least one millisecond and less than one hour."
-            );
+            var message = ShortDurationMessage(option);
+            throw new ArgumentOutOfRangeException(paramName, value, message);
         }
 
         return value;
@@ -237,11 +254,7 @@ public static class PostgreSqlCoordinationBuilderExtensions
     {
         if (value < MinLogRetention || value > MaxLogRetention)
         {
-            throw new ArgumentOutOfRangeException(
-                paramName,
-                value,
-                "PostgreSqlProviderOptions.LogRetention is from one second to one day."
-            );
+            throw new ArgumentOutOfRangeException(paramName, value, LogRetentionMessage);
         }
 
         return value;
@@ -258,11 +271,7 @@ public static class PostgreSqlCoordinationBuilderExtensions
     {
         if (value < MinSweepBatchSize || value > MaxSweepBatchSize)
         {
-            throw new ArgumentOutOfRangeException(
-                paramName,
-                value,
-                $"PostgreSqlProviderOptions.SweepBatchSize is from {MinSweepBatchSize} to {MaxSweepBatchSize}."
-            );
+            throw new ArgumentOutOfRangeException(paramName, value, SweepBatchSizeMessage);
         }
 
         return value;
