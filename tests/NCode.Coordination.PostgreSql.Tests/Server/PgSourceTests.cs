@@ -1,6 +1,7 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using NCode.Coordination.PostgreSql.Tests;
 using Npgsql;
 
 namespace NCode.Coordination.PostgreSql.Server.Tests;
@@ -79,13 +80,15 @@ public sealed class PgSourceTests
     [Fact]
     public async Task DisposeAsync_Shared_LeavesTheDataSource()
     {
-        await using var dataSource = NpgsqlDataSource.Create(BaseConnectionString);
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var dataSource = NpgsqlDataSource.Create(PgOfflineServer.ConnectionString);
         var source = PgSource.FromDataSource(dataSource);
 
         await source.DisposeAsync();
 
-        await using var connection = dataSource.CreateConnection();
-        Assert.Equal(System.Data.ConnectionState.Closed, connection.State);
+        await Assert.ThrowsAsync<NpgsqlException>(async () =>
+            await dataSource.OpenConnectionAsync(cancellationToken)
+        );
     }
 
     #endregion

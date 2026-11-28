@@ -384,7 +384,7 @@ public sealed class PgRecordServiceServerTests(PgServers servers)
                     token = page.ContinuationToken;
                     if (token is not null)
                     {
-                        Assert.True(token.Length <= 1_024);
+                        Assert.True(token.Length <= 684);
                     }
                 } while (token is not null);
 
