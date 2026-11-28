@@ -5,6 +5,7 @@ using System.Collections.Immutable;
 using NCode.Coordination.PostgreSql.Keys;
 using NCode.Coordination.PostgreSql.Records;
 using NCode.Coordination.PostgreSql.Server;
+using NCode.Coordination.PostgreSql.Subscriptions;
 
 namespace NCode.Coordination.PostgreSql.Membership.Tests;
 
@@ -19,8 +20,10 @@ public sealed class PgMembershipServiceTests
         var server = new PgServer(source, settings);
         var keyspaces = new PgKeyspaces(server, settings.Schema);
         var table = new PgRecordTable(server, keyspaces, settings);
+        await using var hub = new PgLogHub(source, keyspaces, settings, TimeProvider.System);
+        var changeLog = new PgChangeLog(server, settings.Schema);
 
-        await test(new PgMembershipService(table));
+        await test(new PgMembershipService(table, changeLog, hub));
     }
 
     #region JoinAsync Tests

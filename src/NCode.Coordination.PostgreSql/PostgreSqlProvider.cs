@@ -179,7 +179,7 @@ internal sealed class PostgreSqlProvider : ICoordinationProvider, IAsyncDisposab
             [typeof(ICounterService)] = new PgCounterService(Server, Keyspaces, settings.Schema),
             [typeof(ISequenceService)] = new PgSequenceService(Server, Keyspaces, settings.Schema),
             [typeof(ISessionService)] = new PgSessionService(RecordTable, tokens),
-            [typeof(IMembershipService)] = new PgMembershipService(RecordTable),
+            [typeof(IMembershipService)] = new PgMembershipService(RecordTable, ChangeLog, Hub),
             [typeof(ILeaseService)] = new PgLeaseService(grants, tokens),
             [typeof(ISemaphoreService)] = new PgSemaphoreService(grants, tokens),
             [typeof(IElectionService)] = new PgElectionService(grants, tokens),

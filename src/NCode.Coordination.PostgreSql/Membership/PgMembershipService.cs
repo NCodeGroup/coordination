@@ -6,6 +6,7 @@ using System.Runtime.CompilerServices;
 using NCode.Coordination.PostgreSql.Keys;
 using NCode.Coordination.PostgreSql.Records;
 using NCode.Coordination.PostgreSql.Server;
+using NCode.Coordination.PostgreSql.Subscriptions;
 using NpgsqlTypes;
 
 namespace NCode.Coordination.PostgreSql.Membership;
@@ -14,11 +15,15 @@ namespace NCode.Coordination.PostgreSql.Membership;
 /// The membership groups of the PostgreSQL provider: each member is a row of the <c>members</c> table bound to its
 /// session, so it is absent once its session ends. A join and a leave are transactions that lock the keyspace's row,
 /// end the expired sessions they meet and log one entry that names the group. A read is one statement, and a watch
-/// reads the group again every polling interval and yields a view whose members differ from the last one yielded.
+/// subscribes to the keyspace's change log and reads the group again after a resync and after each entry that names
+/// the group or ends a session, yielding the view when its revision is above the last one yielded.
 /// </summary>
 /// <param name="table">The record table, whose keyspaces' ids and transactions the service shares.</param>
-/// <exception cref="ArgumentNullException">The table is null.</exception>
-internal sealed class PgMembershipService(PgRecordTable table) : IMembershipService
+/// <param name="changeLog">The reader of a keyspace's change log.</param>
+/// <param name="hub">The owner of the provider's listening connection and logs' fanouts.</param>
+/// <exception cref="ArgumentNullException">An argument is null.</exception>
+internal sealed class PgMembershipService(PgRecordTable table, PgChangeLog changeLog, PgLogHub hub)
+    : IMembershipService
 {
     /// <summary>The template of the statement that reads a group's rows beside the deadlines of their sessions.</summary>
     private const string SelectGroup = """
@@ -70,6 +75,17 @@ internal sealed class PgMembershipService(PgRecordTable table) : IMembershipServ
     /// Gets the record table, whose keyspaces' ids and transactions the service shares.
     /// </summary>
     private PgRecordTable Table { get; } = table ?? throw new ArgumentNullException(nameof(table));
+
+    /// <summary>
+    /// Gets the reader of a keyspace's change log.
+    /// </summary>
+    private PgChangeLog ChangeLog { get; } =
+        changeLog ?? throw new ArgumentNullException(nameof(changeLog));
+
+    /// <summary>
+    /// Gets the owner of the provider's listening connection and logs' fanouts.
+    /// </summary>
+    private PgLogHub Hub { get; } = hub ?? throw new ArgumentNullException(nameof(hub));
 
     /// <summary>Gets the statement that reads a group's rows beside the deadlines of their sessions.</summary>
     private string SelectGroupSql { get; } = table.Settings.Schema.Apply(SelectGroup);
@@ -294,8 +310,9 @@ internal sealed class PgMembershipService(PgRecordTable table) : IMembershipServ
     }
 
     /// <summary>
-    /// Streams the views of a watch: the group at the start, then a view each time that a read, which it makes every
-    /// polling interval, finds members that differ from those of the last view yielded.
+    /// Streams the views of a watch: the group at the start, then a view each time that a read, which it makes after a
+    /// resync and after each entry of the change log that names the group or ends a session, finds a revision above
+    /// that of the last view yielded.
     /// </summary>
     /// <param name="group">The group to watch.</param>
     /// <param name="cancellationToken">The token that cancels the stream.</param>
@@ -305,63 +322,70 @@ internal sealed class PgMembershipService(PgRecordTable table) : IMembershipServ
         [EnumeratorCancellation] CancellationToken cancellationToken
     )
     {
-        var last = await ReadViewAsync(group, cancellationToken).ConfigureAwait(false);
-        yield return last;
+        var keyspaceId = await Table
+            .Keyspaces.ResolveAsync(group.Keyspace, cancellationToken)
+            .ConfigureAwait(false);
+        var index = PgKeys.Index(group);
+        var depth = (short)group.PartitionDepth;
 
-        while (true)
+        var logId = new PgLogId(keyspaceId, null);
+        var subscriber = await Hub.SubscribeAsync(
+                logId,
+                () =>
+                    new PgLogFanout<PgChange>(
+                        (cursor, limit, readToken) =>
+                            ChangeLog.ReadAsync(keyspaceId, cursor, limit, readToken)
+                    ),
+                null,
+                cancellationToken
+            )
+            .ConfigureAwait(false);
+
+        try
         {
-            await Task.Delay(PgPolling.Interval, cancellationToken).ConfigureAwait(false);
+            var last = await ReadViewAsync(group, cancellationToken).ConfigureAwait(false);
+            yield return last;
 
-            var view = await ReadViewAsync(group, cancellationToken).ConfigureAwait(false);
-            if (!SameMembers(last, view))
+            await foreach (
+                var item in subscriber.Reader.ReadAllAsync(cancellationToken).ConfigureAwait(false)
+            )
             {
-                last = view;
-                yield return view;
+                if (!item.IsResync && !Concerns(item.Entry, index, depth))
+                {
+                    continue;
+                }
+
+                var view = await ReadViewAsync(group, cancellationToken).ConfigureAwait(false);
+                if (view.Revision.Value > last.Revision.Value)
+                {
+                    last = view;
+                    yield return view;
+                }
             }
+        }
+        finally
+        {
+            await Hub.UnsubscribeAsync(logId, subscriber).ConfigureAwait(false);
         }
     }
 
     /// <summary>
-    /// Tells whether two views hold the same members, in the same order.
+    /// Tells whether an entry of the change log may change a group's members: it names the group or ends a session.
     /// </summary>
-    /// <param name="left">The first view.</param>
-    /// <param name="right">The second view.</param>
-    /// <returns><see langword="true"/> when each member of one equals the member of the other at its position.</returns>
-    private static bool SameMembers(MembershipView left, MembershipView right)
-    {
-        if (left.Members.Length != right.Members.Length)
-        {
-            return false;
-        }
-
-        for (var position = 0; position < left.Members.Length; position++)
-        {
-            var a = left.Members[position];
-            var b = right.Members[position];
-            if (
-                !a.Session.Equals(b.Session)
-                || !string.Equals(a.NodeId, b.NodeId, StringComparison.Ordinal)
-                || !string.Equals(a.Address, b.Address, StringComparison.Ordinal)
-                || a.Metadata.Count != b.Metadata.Count
+    /// <param name="entry">The entry, or null.</param>
+    /// <param name="index">The group's index value.</param>
+    /// <param name="depth">The group's partition depth.</param>
+    /// <returns><see langword="true"/> when the group's view may have changed.</returns>
+    private static bool Concerns(PgChange? entry, byte[] index, short depth) =>
+        entry is not null
+        && (
+            entry.EndedSession is not null
+            || (
+                entry.GroupDepth == depth
+                && entry.GroupIndex is { } groupIndex
+                && groupIndex.AsSpan().SequenceEqual(index)
             )
-            {
-                return false;
-            }
-
-            foreach (var (name, value) in a.Metadata)
-            {
-                if (
-                    !b.Metadata.TryGetValue(name, out var other)
-                    || !string.Equals(value, other, StringComparison.Ordinal)
-                )
-                {
-                    return false;
-                }
-            }
-        }
-
-        return true;
-    }
+        );
 
     /// <summary>
     /// Reads a group's live members at the keyspace's revision. A member whose session's deadline has passed makes the
