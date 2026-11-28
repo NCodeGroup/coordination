@@ -13,11 +13,11 @@ namespace NCode.Coordination.PostgreSql.Records.Tests;
 
 public sealed class PgRecordWatchServerTests(PgServers servers)
 {
-    private static readonly TimeSpan Patience = TimeSpan.FromSeconds(30);
+    private static TimeSpan Patience { get; } = TimeSpan.FromSeconds(30);
 
     private static TimeSpan OneMinuteSpan { get; } = TimeSpan.FromMinutes(1);
 
-    private static readonly TimeToLive OneMinute = new(OneMinuteSpan);
+    private static TimeToLive OneMinute { get; } = new(OneMinuteSpan);
 
     private static async Task<T> NextAsync<T>(
         IAsyncEnumerator<T> enumerator,

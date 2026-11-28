@@ -17,7 +17,7 @@ public sealed class PgRecordServiceServerTests(PgServers servers)
 
     private static TimeSpan TenSeconds { get; } = TimeSpan.FromSeconds(10);
 
-    private static readonly TimeToLive OneMinute = new(OneMinuteSpan);
+    private static TimeToLive OneMinute { get; } = new(OneMinuteSpan);
 
     private static CoordinationKey LongKey(Keyspace keyspace, int number)
     {

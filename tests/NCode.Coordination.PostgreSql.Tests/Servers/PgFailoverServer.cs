@@ -52,12 +52,12 @@ internal sealed class PgFailoverServer(IContainer container, int primaryPort, in
     /// <summary>
     /// The longest that a wait for the standby or for a cut replication lasts before it fails.
     /// </summary>
-    private static readonly TimeSpan WaitLimit = TimeSpan.FromSeconds(60);
+    private static TimeSpan WaitLimit { get; } = TimeSpan.FromSeconds(60);
 
     /// <summary>
     /// The time between two polls of a server.
     /// </summary>
-    private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(100);
+    private static TimeSpan PollInterval { get; } = TimeSpan.FromMilliseconds(100);
 
     /// <summary>
     /// Starts a primary and a standby of it, which the primary streams to.

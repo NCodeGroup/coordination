@@ -10,7 +10,7 @@ namespace NCode.Coordination.PostgreSql.Server.Tests;
 
 public sealed class PgListenerServerTests(PgServers servers)
 {
-    private static readonly TimeSpan Patience = TimeSpan.FromSeconds(30);
+    private static TimeSpan Patience { get; } = TimeSpan.FromSeconds(30);
 
     private static string NewChannel()
     {

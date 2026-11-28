@@ -18,7 +18,7 @@ namespace NCode.Coordination.PostgreSql.Sweep.Tests;
 
 public sealed class PgSweepsTests(PgServers servers)
 {
-    private static readonly TimeSpan Live = TimeSpan.FromMinutes(1);
+    private static TimeSpan Live { get; } = TimeSpan.FromMinutes(1);
 
     private static TimeSpan LockedSweepLimit { get; } = TimeSpan.FromSeconds(3);
 

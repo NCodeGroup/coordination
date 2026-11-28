@@ -7,7 +7,7 @@ namespace NCode.Coordination.PostgreSql.Sweep.Tests;
 
 public sealed class PgSweeperTests
 {
-    private static readonly TimeSpan Interval = TimeSpan.FromSeconds(5);
+    private static TimeSpan Interval { get; } = TimeSpan.FromSeconds(5);
 
     private static TimeSpan WaitLimit { get; } = TimeSpan.FromSeconds(10);
 
@@ -31,26 +31,26 @@ public sealed class PgSweeperTests
 
     private sealed class CountingSweep(bool failFirst)
     {
-        private readonly TaskCompletionSource _first = new(
-            TaskCreationOptions.RunContinuationsAsynchronously
-        );
-        private readonly TaskCompletionSource _second = new(
-            TaskCreationOptions.RunContinuationsAsynchronously
-        );
+        private TaskCompletionSource First { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        private TaskCompletionSource Second { get; } =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+
         private int _calls;
 
         public int Calls => Volatile.Read(ref _calls);
 
-        public Task FirstCall => _first.Task;
+        public Task FirstCall => First.Task;
 
-        public Task SecondCall => _second.Task;
+        public Task SecondCall => Second.Task;
 
         public ValueTask SweepAsync(CancellationToken cancellationToken)
         {
             var call = Interlocked.Increment(ref _calls);
             if (call == 1)
             {
-                _first.TrySetResult();
+                First.TrySetResult();
                 if (!failFirst)
                     return ValueTask.CompletedTask;
 
@@ -58,7 +58,7 @@ public sealed class PgSweeperTests
                 return ValueTask.FromException(failure);
             }
 
-            _second.TrySetResult();
+            Second.TrySetResult();
             return ValueTask.CompletedTask;
         }
     }

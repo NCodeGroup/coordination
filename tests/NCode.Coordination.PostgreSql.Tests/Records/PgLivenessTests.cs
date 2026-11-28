@@ -5,7 +5,7 @@ namespace NCode.Coordination.PostgreSql.Records.Tests;
 
 public sealed class PgLivenessTests
 {
-    private static readonly DateTime Now = new(2026, 11, 27, 12, 0, 0, DateTimeKind.Utc);
+    private static DateTime Now { get; } = new(2026, 11, 27, 12, 0, 0, DateTimeKind.Utc);
 
     #region StateOf Tests
 

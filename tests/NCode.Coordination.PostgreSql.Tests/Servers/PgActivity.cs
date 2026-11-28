@@ -12,9 +12,9 @@ namespace NCode.Coordination.PostgreSql.Tests.Servers;
 /// </summary>
 internal static class PgActivity
 {
-    private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(15);
+    private static TimeSpan Timeout { get; } = TimeSpan.FromSeconds(15);
 
-    private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(50);
+    private static TimeSpan PollInterval { get; } = TimeSpan.FromMilliseconds(50);
 
     /// <summary>
     /// Polls <c>pg_stat_activity</c> every 50 ms for at most 15 seconds, until the count of the backends that match

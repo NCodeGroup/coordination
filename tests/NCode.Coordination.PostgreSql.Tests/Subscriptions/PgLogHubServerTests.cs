@@ -11,7 +11,7 @@ namespace NCode.Coordination.PostgreSql.Subscriptions.Tests;
 
 public sealed class PgLogHubServerTests(PgServers servers)
 {
-    private static readonly TimeSpan Patience = TimeSpan.FromSeconds(15);
+    private static TimeSpan Patience { get; } = TimeSpan.FromSeconds(15);
 
     private sealed record TestEntry(long Number) : IPgLogEntry;
 

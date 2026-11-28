@@ -13,9 +13,9 @@ namespace NCode.Coordination.PostgreSql.Sessions.Tests;
 
 public sealed class PgSessionServerTests(PgServers servers)
 {
-    private static readonly TimeSpan OneMinuteSpan = TimeSpan.FromMinutes(1);
+    private static TimeSpan OneMinuteSpan { get; } = TimeSpan.FromMinutes(1);
 
-    private static readonly TimeToLive OneMinute = new(OneMinuteSpan);
+    private static TimeToLive OneMinute { get; } = new(OneMinuteSpan);
 
     private sealed record Context(
         string AdminConnectionString,

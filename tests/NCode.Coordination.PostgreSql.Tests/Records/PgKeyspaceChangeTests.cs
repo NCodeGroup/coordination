@@ -10,7 +10,7 @@ public sealed class PgKeyspaceChangeTests
 {
     private const long KeyspaceId = 7;
 
-    private static readonly DateTime Now = new(2026, 11, 27, 12, 0, 0, DateTimeKind.Utc);
+    private static DateTime Now { get; } = new(2026, 11, 27, 12, 0, 0, DateTimeKind.Utc);
 
     private static PgKeyspaceChange CreateChange(long revision = 5)
     {

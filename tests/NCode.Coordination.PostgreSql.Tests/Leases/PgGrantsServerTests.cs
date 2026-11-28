@@ -15,9 +15,9 @@ namespace NCode.Coordination.PostgreSql.Leases.Tests;
 
 public sealed class PgGrantsServerTests(PgServers servers)
 {
-    private static readonly TimeSpan OneMinuteSpan = TimeSpan.FromMinutes(1);
+    private static TimeSpan OneMinuteSpan { get; } = TimeSpan.FromMinutes(1);
 
-    private static readonly TimeToLive OneMinute = new(OneMinuteSpan);
+    private static TimeToLive OneMinute { get; } = new(OneMinuteSpan);
 
     private static LeaseGrant GrantOf(LeaseAcquireResult result)
     {

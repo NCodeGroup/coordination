@@ -10,12 +10,10 @@ public sealed class PgLogHubTests
 {
     private const long KeyspaceId = 42;
 
-    private static readonly string Channel = PgChannels.ForKeyspace(
-        PgSchemaName.Default,
-        KeyspaceId
-    );
+    private static string Channel { get; } =
+        PgChannels.ForKeyspace(PgSchemaName.Default, KeyspaceId);
 
-    private static readonly Dictionary<string, long> Channels = new() { [Channel] = KeyspaceId };
+    private static Dictionary<string, long> Channels { get; } = new() { [Channel] = KeyspaceId };
 
     #region TryRoute Tests
 
