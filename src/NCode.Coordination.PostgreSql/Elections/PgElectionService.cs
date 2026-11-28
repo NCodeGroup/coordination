@@ -11,8 +11,9 @@ namespace NCode.Coordination.PostgreSql.Elections;
 /// <summary>
 /// The elections of the PostgreSQL provider: each leadership is a row of the <c>grants</c> table of kind 3 and slot 0
 /// that holds the leader's value, and the role's fencing tokens, which are the terms, are kept in the <c>fencing</c>
-/// table, so a leadership after a sweep still gets a greater one. Every operation is a transaction that locks the
-/// keyspace's row, ends the expired sessions it meets and decides from the rows it read. A leadership takes no revision
+/// table, so a leadership after a sweep still gets a greater one. Every change of a leadership is a transaction that
+/// locks the keyspace's row, ends the expired sessions it meets and decides from the rows it read; a read is one
+/// statement, read again after the keyspace's writers when it meets an expired grant. A leadership takes no revision
 /// and logs no entry, so a watch polls the role until the caller cancels.
 /// </summary>
 /// <param name="grants">The reads and writes that the grants share.</param>

@@ -22,7 +22,8 @@ internal sealed class PgSource : IAsyncDisposable, IDisposable
     /// </summary>
     /// <param name="connectionString">The connection string.</param>
     /// <returns>A source that disposes its data source when it is disposed.</returns>
-    /// <exception cref="ArgumentException">The connection string is null or empty.</exception>
+    /// <exception cref="ArgumentNullException">The connection string is null.</exception>
+    /// <exception cref="ArgumentException">The connection string is empty.</exception>
     public static PgSource FromConnectionString(string connectionString)
     {
         ArgumentException.ThrowIfNullOrEmpty(connectionString);

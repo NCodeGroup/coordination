@@ -10,8 +10,9 @@ namespace NCode.Coordination.PostgreSql.Leases;
 /// <summary>
 /// The semaphores of the PostgreSQL provider: each slot is a row of the <c>grants</c> table of kind 2, and the
 /// resource's fencing tokens are kept in the <c>fencing</c> table, so a grant after a sweep still gets a greater one.
-/// Every operation is a transaction that locks the keyspace's row, ends the expired sessions it meets and decides from
-/// the rows it read. A grant takes no revision and logs no entry. A wait for a release polls until a slot is free.
+/// Every change of a grant is a transaction that locks the keyspace's row, ends the expired sessions it meets and
+/// decides from the rows it read; a read is one statement, read again after the keyspace's writers when it meets an
+/// expired grant. A grant takes no revision and logs no entry. A wait for a release polls until a slot is free.
 /// </summary>
 /// <param name="grants">The reads and writes that the grants share.</param>
 /// <param name="tokens">The source of owner tokens.</param>
