@@ -32,7 +32,7 @@ public sealed class PgSessionServerTests(PgServers servers)
             return Keyspace.CreateKey(segment);
         }
 
-        public async Task<List<T>> QueryAsync<T>(
+        public async ValueTask<List<T>> QueryAsync<T>(
             string sql,
             Func<NpgsqlDataReader, T> read,
             CancellationToken cancellationToken

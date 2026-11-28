@@ -20,5 +20,18 @@ public sealed class PgRecordTableTests
         Assert.False(failure.OutcomeUnknown);
     }
 
+    [Fact]
+    public void DecodeKey_DepthPastTheSegments_ThrowsUnavailable()
+    {
+        var keyspace = new Keyspace("prod", "records");
+
+        var failure = Assert.Throws<CoordinationException>(() =>
+            PgRecordTable.DecodeKey(keyspace, "tabc", 5)
+        );
+
+        Assert.Equal(CoordinationErrorCodes.Unavailable, failure.Code);
+        Assert.False(failure.OutcomeUnknown);
+    }
+
     #endregion
 }

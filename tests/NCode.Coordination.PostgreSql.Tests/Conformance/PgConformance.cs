@@ -144,7 +144,7 @@ internal static class PgConformance
         await using var terminate = new NpgsqlCommand(TerminateSql, connection);
         var terminateParameter = new NpgsqlParameter { Value = pids };
         terminate.Parameters.Add(terminateParameter);
-        await terminate.ExecuteScalarAsync(cancellationToken);
+        _ = await terminate.ExecuteScalarAsync(cancellationToken);
 
         var deadline = Stopwatch.StartNew();
         while (deadline.Elapsed < DropLimit)

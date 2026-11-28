@@ -42,6 +42,22 @@ public sealed class PgNotificationServiceTests
     }
 
     [Fact]
+    public async Task PublishAsync_PayloadAtTheLimit_ReachesTheServer()
+    {
+        await using var offline = new PgOfflineServer();
+        var service = CreateService(offline);
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var topic = new Keyspace("prod").CreateKey("t");
+        var payload = new byte[CoordinationLimits.MaxPayloadLength];
+
+        var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
+            await service.PublishAsync(topic, payload, null, cancellationToken)
+        );
+
+        Assert.Equal(CoordinationErrorCodes.Unavailable, exception.Code);
+    }
+
+    [Fact]
     public async Task PublishAsync_Extension_ThrowsUnsupported()
     {
         await using var offline = new PgOfflineServer();

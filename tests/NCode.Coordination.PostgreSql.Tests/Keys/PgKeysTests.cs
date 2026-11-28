@@ -1,6 +1,8 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using System.Security.Cryptography;
+
 namespace NCode.Coordination.PostgreSql.Keys.Tests;
 
 public sealed class PgKeysTests
@@ -135,10 +137,11 @@ public sealed class PgKeysTests
             .Select(number => KeySegment.FromInt64(number))
             .ToArray();
         var key = new CoordinationKey(keyspace, segments);
+        var expected = SHA256.HashSizeInBytes * count;
 
         var index = PgKeys.Index(key);
 
-        Assert.Equal(32 * count, index.Length);
+        Assert.Equal(expected, index.Length);
     }
 
     [Fact]
@@ -196,10 +199,11 @@ public sealed class PgKeysTests
             .Select(_ => KeySegment.FromString(text))
             .ToArray();
         var key = new CoordinationKey(keyspace, segments);
+        const int expected = SHA256.HashSizeInBytes * CoordinationKey.MaxSegments;
 
         var index = PgKeys.Index(key);
 
-        Assert.Equal(512, index.Length);
+        Assert.Equal(expected, index.Length);
     }
 
     #endregion
@@ -229,12 +233,11 @@ public sealed class PgKeysTests
     [Fact]
     public void PageToken_LongestKey_FitsTheTokenLimit()
     {
-        var index = new byte[512];
+        var index = new byte[SHA256.HashSizeInBytes * CoordinationKey.MaxSegments];
 
         var token = PgKeys.PageToken(index, 16);
 
         Assert.True(token.Length <= CoordinationLimits.MaxContinuationTokenLength);
-        Assert.True(token.Length <= 684);
     }
 
     [Fact]
@@ -292,7 +295,7 @@ public sealed class PgKeysTests
     [Fact]
     public void TryReadPageToken_DepthBeyondSegments_ReturnsFalse()
     {
-        var token = PgKeys.PageToken(new byte[32], 2);
+        var token = PgKeys.PageToken(new byte[SHA256.HashSizeInBytes], 2);
 
         var read = PgKeys.TryReadPageToken(token, [], out var result, out _);
 

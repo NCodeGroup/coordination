@@ -252,7 +252,11 @@ public sealed class PostgreSqlCoordinationBuilderExtensionsTests : IDisposable
         );
 
         Assert.Equal("configure", exception.ParamName);
-        Assert.Contains("SweepBatchSize", exception.Message);
+        Assert.StartsWith(
+            "PostgreSqlProviderOptions.SweepBatchSize is from 1 to 100000.",
+            exception.Message,
+            StringComparison.Ordinal
+        );
     }
 
     [Fact]
