@@ -294,35 +294,6 @@ internal sealed class PgMembershipService(PgRecordTable table, PgChangeLog chang
     }
 
     /// <summary>
-    /// Reads a timestamp column as an instant of kind UTC.
-    /// </summary>
-    /// <param name="reader">The reader, on a row.</param>
-    /// <param name="ordinal">The column's position.</param>
-    /// <returns>The instant.</returns>
-    private static DateTime ReadUtc(NpgsqlDataReader reader, int ordinal)
-    {
-        var instant = reader.GetDateTime(ordinal);
-
-        return DateTime.SpecifyKind(instant, DateTimeKind.Utc);
-    }
-
-    /// <summary>
-    /// Reads a timestamp column that may be null as an instant of kind UTC.
-    /// </summary>
-    /// <param name="reader">The reader, on a row.</param>
-    /// <param name="ordinal">The column's position.</param>
-    /// <returns>The instant, or null.</returns>
-    private static DateTime? ReadNullableUtc(NpgsqlDataReader reader, int ordinal)
-    {
-        if (reader.IsDBNull(ordinal))
-        {
-            return null;
-        }
-
-        return ReadUtc(reader, ordinal);
-    }
-
-    /// <summary>
     /// Reads a text column that may be null.
     /// </summary>
     /// <param name="reader">The reader, on a row.</param>
@@ -363,7 +334,7 @@ internal sealed class PgMembershipService(PgRecordTable table, PgChangeLog chang
     {
         var session = reader.GetString(0);
         var nodeId = reader.GetString(1);
-        var deadline = ReadNullableUtc(reader, 2);
+        var deadline = PgColumns.ReadNullableUtc(reader, 2);
 
         return new PgGroupRow(session, nodeId, deadline);
     }
@@ -373,7 +344,8 @@ internal sealed class PgMembershipService(PgRecordTable table, PgChangeLog chang
     /// </summary>
     /// <param name="reader">The reader, on a row.</param>
     /// <returns>The deadline, of kind UTC.</returns>
-    private static DateTime ReadSessionDeadline(NpgsqlDataReader reader) => ReadUtc(reader, 0);
+    private static DateTime ReadSessionDeadline(NpgsqlDataReader reader) =>
+        PgColumns.ReadUtc(reader, 0);
 
     /// <summary>
     /// Reads a row of the result of the statement that lists a group's members.
@@ -383,13 +355,13 @@ internal sealed class PgMembershipService(PgRecordTable table, PgChangeLog chang
     private static PgMemberRow ReadMemberRow(NpgsqlDataReader reader)
     {
         var revision = reader.GetInt64(0);
-        var now = ReadUtc(reader, 1);
+        var now = PgColumns.ReadUtc(reader, 1);
         var session = ReadNullableText(reader, 2);
         var nodeId = ReadNullableText(reader, 3);
         var address = ReadNullableText(reader, 4);
         var names = ReadNullableTexts(reader, 5);
         var values = ReadNullableTexts(reader, 6);
-        var deadline = ReadNullableUtc(reader, 7);
+        var deadline = PgColumns.ReadNullableUtc(reader, 7);
 
         return new PgMemberRow(revision, now, session, nodeId, address, names, values, deadline);
     }

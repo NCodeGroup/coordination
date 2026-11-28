@@ -339,23 +339,6 @@ internal sealed class PgSweeps(
     }
 
     /// <summary>
-    /// Reads a time stamp column that can be null as an instant on the server's clock.
-    /// </summary>
-    /// <param name="reader">The reader, on a row.</param>
-    /// <param name="ordinal">The column's ordinal.</param>
-    /// <returns>The instant, as UTC, or null when the column is null.</returns>
-    private static DateTime? ReadNullableUtc(NpgsqlDataReader reader, int ordinal)
-    {
-        if (reader.IsDBNull(ordinal))
-        {
-            return null;
-        }
-
-        var value = reader.GetDateTime(ordinal);
-        return DateTime.SpecifyKind(value, DateTimeKind.Utc);
-    }
-
-    /// <summary>
     /// Reads an expired record from the reader's current row of seven columns: the index value, the depth, the key's
     /// text, the value, the revision, the deadline and the session's id.
     /// </summary>
@@ -368,7 +351,7 @@ internal sealed class PgSweeps(
         var key = reader.GetString(2);
         var value = reader.GetFieldValue<byte[]>(3);
         var revision = reader.GetInt64(4);
-        var deadline = ReadNullableUtc(reader, 5);
+        var deadline = PgColumns.ReadNullableUtc(reader, 5);
         var session = reader.IsDBNull(6) ? null : reader.GetString(6);
 
         return new PgRecordRow(index, depth, key, value, revision, deadline, session);

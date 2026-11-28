@@ -65,29 +65,6 @@ internal sealed class PgRecordTable(PgServer server, PgKeyspaces keyspaces, PgSe
         """;
 
     /// <summary>
-    /// Reads a time stamp column as an instant on the server's clock.
-    /// </summary>
-    /// <param name="reader">The reader, on a row.</param>
-    /// <param name="ordinal">The column's ordinal.</param>
-    /// <returns>The instant, as UTC.</returns>
-    private static DateTime ReadUtc(NpgsqlDataReader reader, int ordinal)
-    {
-        var value = reader.GetDateTime(ordinal);
-        return DateTime.SpecifyKind(value, DateTimeKind.Utc);
-    }
-
-    /// <summary>
-    /// Reads a time stamp column that can be null as an instant on the server's clock.
-    /// </summary>
-    /// <param name="reader">The reader, on a row.</param>
-    /// <param name="ordinal">The column's ordinal.</param>
-    /// <returns>The instant, as UTC, or null when the column is null.</returns>
-    private static DateTime? ReadNullableUtc(NpgsqlDataReader reader, int ordinal)
-    {
-        return reader.IsDBNull(ordinal) ? null : ReadUtc(reader, ordinal);
-    }
-
-    /// <summary>
     /// Reads a text column that can be null.
     /// </summary>
     /// <param name="reader">The reader, on a row.</param>
@@ -112,9 +89,9 @@ internal sealed class PgRecordTable(PgServer server, PgKeyspaces keyspaces, PgSe
         var key = reader.GetString(first + 2);
         var value = reader.GetFieldValue<byte[]>(first + 3);
         var revision = reader.GetInt64(first + 4);
-        var deadline = ReadNullableUtc(reader, first + 5);
+        var deadline = PgColumns.ReadNullableUtc(reader, first + 5);
         var session = ReadNullableText(reader, first + 6);
-        var sessionDeadline = ReadNullableUtc(reader, first + 7);
+        var sessionDeadline = PgColumns.ReadNullableUtc(reader, first + 7);
 
         return new PgRecordRow(
             index,
@@ -146,7 +123,7 @@ internal sealed class PgRecordTable(PgServer server, PgKeyspaces keyspaces, PgSe
     private static (string Id, DateTime Deadline) ReadSessionDeadline(NpgsqlDataReader reader)
     {
         var id = reader.GetString(0);
-        var deadline = ReadUtc(reader, 1);
+        var deadline = PgColumns.ReadUtc(reader, 1);
 
         return (id, deadline);
     }
@@ -163,12 +140,12 @@ internal sealed class PgRecordTable(PgServer server, PgKeyspaces keyspaces, PgSe
             return null;
         }
 
-        var now = ReadUtc(reader, 0);
+        var now = PgColumns.ReadUtc(reader, 0);
         var value = reader.GetFieldValue<byte[]>(1);
         var revision = reader.GetInt64(2);
-        var deadline = ReadNullableUtc(reader, 3);
+        var deadline = PgColumns.ReadNullableUtc(reader, 3);
         var session = ReadNullableText(reader, 4);
-        var sessionDeadline = ReadNullableUtc(reader, 5);
+        var sessionDeadline = PgColumns.ReadNullableUtc(reader, 5);
 
         return new PgOneRead(now, value, revision, deadline, session, sessionDeadline);
     }

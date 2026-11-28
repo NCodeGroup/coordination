@@ -110,35 +110,6 @@ internal sealed class PgGrants(PgRecordTable table)
     }
 
     /// <summary>
-    /// Reads a column of an instant as UTC.
-    /// </summary>
-    /// <param name="reader">The reader, on a row.</param>
-    /// <param name="ordinal">The column's ordinal.</param>
-    /// <returns>The instant, of kind UTC.</returns>
-    private static DateTime ReadUtc(NpgsqlDataReader reader, int ordinal)
-    {
-        var instant = reader.GetDateTime(ordinal);
-
-        return DateTime.SpecifyKind(instant, DateTimeKind.Utc);
-    }
-
-    /// <summary>
-    /// Reads a column of an instant that may be null, as UTC.
-    /// </summary>
-    /// <param name="reader">The reader, on a row.</param>
-    /// <param name="ordinal">The column's ordinal.</param>
-    /// <returns>The instant, of kind UTC, or null.</returns>
-    private static DateTime? ReadNullableUtc(NpgsqlDataReader reader, int ordinal)
-    {
-        if (reader.IsDBNull(ordinal))
-        {
-            return null;
-        }
-
-        return ReadUtc(reader, ordinal);
-    }
-
-    /// <summary>
     /// Reads a column of text that may be null.
     /// </summary>
     /// <param name="reader">The reader, on a row.</param>
@@ -183,9 +154,9 @@ internal sealed class PgGrants(PgRecordTable table)
         var fencing = reader.GetInt64(offset + 2);
         var owner = reader.GetString(offset + 3);
         var session = ReadNullableText(reader, offset + 4);
-        var deadline = ReadNullableUtc(reader, offset + 5);
+        var deadline = PgColumns.ReadNullableUtc(reader, offset + 5);
         var value = ReadNullableBytes(reader, offset + 6);
-        var sessionDeadline = ReadNullableUtc(reader, offset + 7);
+        var sessionDeadline = PgColumns.ReadNullableUtc(reader, offset + 7);
 
         return new PgGrantRow(
             slot,
@@ -206,7 +177,7 @@ internal sealed class PgGrants(PgRecordTable table)
     /// <returns>The server's instant and the grant row, or null when the resource has none.</returns>
     private static (DateTime Now, PgGrantRow? Row) ReadNowAndRow(NpgsqlDataReader reader)
     {
-        var now = ReadUtc(reader, 0);
+        var now = PgColumns.ReadUtc(reader, 0);
         var row = reader.IsDBNull(1) ? null : MapRow(reader, 1);
 
         return (now, row);
@@ -219,7 +190,7 @@ internal sealed class PgGrants(PgRecordTable table)
     /// <returns>The deadline, of kind UTC.</returns>
     private static DateTime ReadSessionDeadline(NpgsqlDataReader reader)
     {
-        return ReadUtc(reader, 0);
+        return PgColumns.ReadUtc(reader, 0);
     }
 
     /// <summary>
