@@ -17,8 +17,12 @@ public sealed class PgClaimServiceTests
         return new PgClaimService(server, keyspaces, schema);
     }
 
-    private static TimeWindow CreateWindow() =>
-        new(DateTimeOffset.UnixEpoch, TimeSpan.FromHours(1));
+    private static TimeWindow CreateWindow()
+    {
+        var length = TimeSpan.FromHours(1);
+
+        return new TimeWindow(DateTimeOffset.UnixEpoch, length);
+    }
 
     #region TryClaimAsync Tests
 
@@ -30,15 +34,12 @@ public sealed class PgClaimServiceTests
         var cancellationToken = TestContext.Current.CancellationToken;
         var segments = Enumerable.Repeat<KeySegment>("a", CoordinationKey.MaxSegments);
         var name = new Keyspace("prod").CreateKey(segments);
+        var window = CreateWindow();
+        var duration = TimeSpan.FromMinutes(1);
+        var timeToLive = new TimeToLive(duration);
 
         var exception = await Assert.ThrowsAsync<ArgumentException>(async () =>
-            await service.TryClaimAsync(
-                name,
-                CreateWindow(),
-                new TimeToLive(TimeSpan.FromMinutes(1)),
-                null,
-                cancellationToken
-            )
+            await service.TryClaimAsync(name, window, timeToLive, null, cancellationToken)
         );
 
         Assert.Equal("name", exception.ParamName);
@@ -51,19 +52,14 @@ public sealed class PgClaimServiceTests
         var service = CreateService(offline);
         var cancellationToken = TestContext.Current.CancellationToken;
         var name = new Keyspace("prod").CreateKey("k");
-        var options = new OperationOptions
-        {
-            Extensions = ImmutableDictionary<string, string>.Empty.Add("consul.lock-delay", "15s"),
-        };
+        var window = CreateWindow();
+        var duration = TimeSpan.FromMinutes(1);
+        var timeToLive = new TimeToLive(duration);
+        var extensions = ImmutableDictionary<string, string>.Empty.Add("consul.lock-delay", "15s");
+        var options = new OperationOptions { Extensions = extensions };
 
         var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
-            await service.TryClaimAsync(
-                name,
-                CreateWindow(),
-                new TimeToLive(TimeSpan.FromMinutes(1)),
-                options,
-                cancellationToken
-            )
+            await service.TryClaimAsync(name, window, timeToLive, options, cancellationToken)
         );
 
         Assert.Equal(CoordinationErrorCodes.Unsupported, exception.Code);

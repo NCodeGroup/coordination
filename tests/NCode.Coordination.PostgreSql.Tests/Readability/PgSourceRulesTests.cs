@@ -32,6 +32,11 @@ public sealed class PgSourceRulesTests
         "Notifications",
         "Membership",
         "Server",
+        "Keys",
+        "Claims",
+        "Counters",
+        "Elections",
+        "Occurrences",
     ];
 
     private static List<string> FindPackageFolders()

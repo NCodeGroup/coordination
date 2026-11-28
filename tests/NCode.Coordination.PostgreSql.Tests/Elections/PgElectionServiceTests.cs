@@ -27,7 +27,9 @@ public sealed class PgElectionServiceTests
         var service = CreateService(offline);
         var cancellationToken = TestContext.Current.CancellationToken;
         var role = new Keyspace("prod").CreateKey("r");
-        var terms = LeaseTerms.ForTimeToLive(new TimeToLive(TimeSpan.FromSeconds(5)));
+        var duration = TimeSpan.FromSeconds(5);
+        var timeToLive = new TimeToLive(duration);
+        var terms = LeaseTerms.ForTimeToLive(timeToLive);
         var value = new byte[CoordinationLimits.MaxValueLength + 1];
 
         var exception = await Assert.ThrowsAsync<ArgumentException>(async () =>
@@ -48,19 +50,18 @@ public sealed class PgElectionServiceTests
         var service = CreateService(offline);
         var cancellationToken = TestContext.Current.CancellationToken;
         var keyspace = new Keyspace("prod");
-        var leadership = new Leadership(
-            new Leader(keyspace.CreateKey("r"), new FencingToken(1), new byte[] { 1 }),
-            new OwnerToken("o-1"),
-            LeaseTerms.ForSession(new SessionId(keyspace, "s-1"))
-        );
+        var role = keyspace.CreateKey("r");
+        var fencingToken = new FencingToken(1);
+        var leader = new Leader(role, fencingToken, new byte[] { 1 });
+        var owner = new OwnerToken("o-1");
+        var sessionId = new SessionId(keyspace, "s-1");
+        var terms = LeaseTerms.ForSession(sessionId);
+        var leadership = new Leadership(leader, owner, terms);
+        var duration = TimeSpan.FromSeconds(5);
+        var timeToLive = new TimeToLive(duration);
 
         var exception = await Assert.ThrowsAsync<ArgumentException>(async () =>
-            await service.RenewAsync(
-                leadership,
-                new TimeToLive(TimeSpan.FromSeconds(5)),
-                null,
-                cancellationToken
-            )
+            await service.RenewAsync(leadership, timeToLive, null, cancellationToken)
         );
 
         Assert.Equal("leadership", exception.ParamName);

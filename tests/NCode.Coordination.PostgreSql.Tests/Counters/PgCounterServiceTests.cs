@@ -26,15 +26,11 @@ public sealed class PgCounterServiceTests
         var service = CreateService(offline);
         var cancellationToken = TestContext.Current.CancellationToken;
         var key = new Keyspace("prod").CreateKey("k");
+        var duration = TimeSpan.FromSeconds(5);
+        var timeToLive = new TimeToLive(duration);
 
         var exception = await Assert.ThrowsAsync<ArgumentOutOfRangeException>(async () =>
-            await service.IncrementAsync(
-                key,
-                0,
-                new TimeToLive(TimeSpan.FromSeconds(5)),
-                null,
-                cancellationToken
-            )
+            await service.IncrementAsync(key, 0, timeToLive, null, cancellationToken)
         );
 
         Assert.Equal("amount", exception.ParamName);
@@ -47,19 +43,13 @@ public sealed class PgCounterServiceTests
         var service = CreateService(offline);
         var cancellationToken = TestContext.Current.CancellationToken;
         var key = new Keyspace("prod").CreateKey("k");
-        var options = new OperationOptions
-        {
-            Extensions = ImmutableDictionary<string, string>.Empty.Add("consul.lock-delay", "15s"),
-        };
+        var duration = TimeSpan.FromSeconds(5);
+        var timeToLive = new TimeToLive(duration);
+        var extensions = ImmutableDictionary<string, string>.Empty.Add("consul.lock-delay", "15s");
+        var options = new OperationOptions { Extensions = extensions };
 
         var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
-            await service.IncrementAsync(
-                key,
-                1,
-                new TimeToLive(TimeSpan.FromSeconds(5)),
-                options,
-                cancellationToken
-            )
+            await service.IncrementAsync(key, 1, timeToLive, options, cancellationToken)
         );
 
         Assert.Equal(CoordinationErrorCodes.Unsupported, exception.Code);
@@ -90,11 +80,16 @@ public sealed class PgCounterServiceTests
         await using var offline = new PgOfflineServer();
         var service = CreateService(offline);
         var cancellationToken = TestContext.Current.CancellationToken;
-        var timeToLive = new TimeToLive(TimeSpan.FromSeconds(5));
+        var duration = TimeSpan.FromSeconds(5);
+        var timeToLive = new TimeToLive(duration);
+        var prod = new Keyspace("prod");
+        var staging = new Keyspace("staging");
+        var prodKey = prod.CreateKey("a");
+        var stagingKey = staging.CreateKey("b");
         CounterIncrement[] increments =
         [
-            new CounterIncrement(new Keyspace("prod").CreateKey("a"), 1, 10, timeToLive),
-            new CounterIncrement(new Keyspace("staging").CreateKey("b"), 1, 10, timeToLive),
+            new CounterIncrement(prodKey, 1, 10, timeToLive),
+            new CounterIncrement(stagingKey, 1, 10, timeToLive),
         ];
 
         var exception = await Assert.ThrowsAsync<ArgumentException>(async () =>

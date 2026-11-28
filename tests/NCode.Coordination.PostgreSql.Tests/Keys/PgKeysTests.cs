@@ -108,7 +108,8 @@ public sealed class PgKeysTests
     public void TryDecodeKey_KeyText_RoundTripsWithDepth()
     {
         var keyspace = new Keyspace("prod");
-        var uuid = KeySegment.FromGuid(Guid.NewGuid());
+        var guid = Guid.NewGuid();
+        var uuid = KeySegment.FromGuid(guid);
         var key = keyspace.CreateKey("a{b}/c %\u00e9", -42, uuid) with { PartitionDepth = 2 };
         var text = PgKeys.KeyText(key);
 
@@ -222,7 +223,8 @@ public sealed class PgKeysTests
         var keyspace = new Keyspace("prod");
         var key = keyspace.CreateKey("a", 1, "b");
         var index = PgKeys.Index(key);
-        var prefix = PgKeys.Index(keyspace.CreateKey("a"));
+        var prefixKey = keyspace.CreateKey("a");
+        var prefix = PgKeys.Index(prefixKey);
         var token = PgKeys.PageToken(index, 2);
 
         var read = PgKeys.TryReadPageToken(token, prefix, out var result, out var depth);
@@ -236,8 +238,10 @@ public sealed class PgKeysTests
     public void TryReadPageToken_OtherPrefix_ReturnsFalse()
     {
         var keyspace = new Keyspace("prod");
-        var index = PgKeys.Index(keyspace.CreateKey("a", 1));
-        var prefix = PgKeys.Index(keyspace.CreateKey("b"));
+        var indexKey = keyspace.CreateKey("a", 1);
+        var prefixKey = keyspace.CreateKey("b");
+        var index = PgKeys.Index(indexKey);
+        var prefix = PgKeys.Index(prefixKey);
         var token = PgKeys.PageToken(index, 1);
 
         var read = PgKeys.TryReadPageToken(token, prefix, out var result, out var depth);

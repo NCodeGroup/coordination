@@ -25,14 +25,11 @@ public sealed class PgOccurrenceServiceTests
         await using var offline = new PgOfflineServer();
         var service = CreateService(offline);
         var cancellationToken = TestContext.Current.CancellationToken;
+        var duration = TimeSpan.FromSeconds(5);
+        var timeToLive = new TimeToLive(duration);
 
         await Assert.ThrowsAsync<ArgumentNullException>(async () =>
-            await service.TryRecordAsync(
-                null!,
-                new TimeToLive(TimeSpan.FromSeconds(5)),
-                null,
-                cancellationToken
-            )
+            await service.TryRecordAsync(null!, timeToLive, null, cancellationToken)
         );
     }
 
@@ -43,18 +40,13 @@ public sealed class PgOccurrenceServiceTests
         var service = CreateService(offline);
         var cancellationToken = TestContext.Current.CancellationToken;
         var key = new Keyspace("prod").CreateKey("k");
-        var options = new OperationOptions
-        {
-            Extensions = ImmutableDictionary<string, string>.Empty.Add("consul.lock-delay", "15s"),
-        };
+        var duration = TimeSpan.FromSeconds(5);
+        var timeToLive = new TimeToLive(duration);
+        var extensions = ImmutableDictionary<string, string>.Empty.Add("consul.lock-delay", "15s");
+        var options = new OperationOptions { Extensions = extensions };
 
         var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
-            await service.TryRecordAsync(
-                key,
-                new TimeToLive(TimeSpan.FromSeconds(5)),
-                options,
-                cancellationToken
-            )
+            await service.TryRecordAsync(key, timeToLive, options, cancellationToken)
         );
 
         Assert.Equal(CoordinationErrorCodes.Unsupported, exception.Code);
@@ -67,16 +59,13 @@ public sealed class PgOccurrenceServiceTests
         await using var offline = new PgOfflineServer();
         var service = CreateService(offline);
         var key = new Keyspace("prod").CreateKey("k");
+        var duration = TimeSpan.FromSeconds(5);
+        var timeToLive = new TimeToLive(duration);
         using var cts = new CancellationTokenSource();
         await cts.CancelAsync();
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(async () =>
-            await service.TryRecordAsync(
-                key,
-                new TimeToLive(TimeSpan.FromSeconds(5)),
-                null,
-                cts.Token
-            )
+            await service.TryRecordAsync(key, timeToLive, null, cts.Token)
         );
     }
 

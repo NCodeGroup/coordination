@@ -32,7 +32,8 @@ public sealed class PgKeyspacesTests(PgServers servers) : IDisposable
         {
             await PgMigrations.ApplyAsync(server, schema, cancellationToken);
 
-            await test(schemaName, new PgKeyspaces(server, schema, tokens));
+            var keyspaces = new PgKeyspaces(server, schema, tokens);
+            await test(schemaName, keyspaces);
         }
         finally
         {
@@ -58,13 +59,15 @@ public sealed class PgKeyspacesTests(PgServers servers) : IDisposable
             $"SELECT id FROM \"{schema}\".keyspaces WHERE name = $1",
             connection
         );
-        command.Parameters.Add(new NpgsqlParameter { Value = name });
+        var parameter = new NpgsqlParameter { Value = name };
+        command.Parameters.Add(parameter);
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
 
         var ids = new List<long>();
         while (await reader.ReadAsync(cancellationToken))
         {
-            ids.Add(reader.GetInt64(0));
+            var id = reader.GetInt64(0);
+            ids.Add(id);
         }
 
         return ids;
@@ -76,12 +79,14 @@ public sealed class PgKeyspacesTests(PgServers servers) : IDisposable
     public async Task ResolveAsync_SameKeyspace_GivesOneId()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
+        var tokens = new PgRandomTokens();
         await WithKeyspacesAsync(
             servers.Admin19,
-            new PgRandomTokens(),
+            tokens,
             async (schema, keyspaces) =>
             {
-                var keyspace = new Keyspace("cell", KeySegment.FromString("orders"));
+                var orders = KeySegment.FromString("orders");
+                var keyspace = new Keyspace("cell", orders);
 
                 var first = await keyspaces.ResolveAsync(keyspace, cancellationToken);
                 var second = await keyspaces.ResolveAsync(keyspace, cancellationToken);
@@ -103,19 +108,19 @@ public sealed class PgKeyspacesTests(PgServers servers) : IDisposable
     public async Task ResolveAsync_TwoKeyspaces_GiveDifferentIds()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
+        var tokens = new PgRandomTokens();
         await WithKeyspacesAsync(
             servers.Admin19,
-            new PgRandomTokens(),
+            tokens,
             async (_, keyspaces) =>
             {
-                var first = await keyspaces.ResolveAsync(
-                    new Keyspace("cell", KeySegment.FromString("orders")),
-                    cancellationToken
-                );
-                var second = await keyspaces.ResolveAsync(
-                    new Keyspace("cell", KeySegment.FromString("invoices")),
-                    cancellationToken
-                );
+                var ordersSegment = KeySegment.FromString("orders");
+                var invoicesSegment = KeySegment.FromString("invoices");
+                var orders = new Keyspace("cell", ordersSegment);
+                var invoices = new Keyspace("cell", invoicesSegment);
+
+                var first = await keyspaces.ResolveAsync(orders, cancellationToken);
+                var second = await keyspaces.ResolveAsync(invoices, cancellationToken);
 
                 Assert.NotEqual(first, second);
             },
@@ -134,22 +139,22 @@ public sealed class PgKeyspacesTests(PgServers servers) : IDisposable
             tokens.Object,
             async (_, keyspaces) =>
             {
-                var first = await keyspaces.ResolveAsync(
-                    new Keyspace("cell", KeySegment.FromString("orders")),
-                    cancellationToken
-                );
+                var ordersSegment = KeySegment.FromString("orders");
+                var invoicesSegment = KeySegment.FromString("invoices");
+                var orders = new Keyspace("cell", ordersSegment);
+                var invoices = new Keyspace("cell", invoicesSegment);
+
+                var first = await keyspaces.ResolveAsync(orders, cancellationToken);
 
                 var failure = await Assert.ThrowsAsync<CoordinationException>(async () =>
-                    await keyspaces.ResolveAsync(
-                        new Keyspace("cell", KeySegment.FromString("invoices")),
-                        cancellationToken
-                    )
+                    await keyspaces.ResolveAsync(invoices, cancellationToken)
                 );
 
                 Assert.Equal(42, first);
                 Assert.Equal(CoordinationErrorCodes.Unavailable, failure.Code);
                 Assert.False(failure.OutcomeUnknown);
-                tokens.Verify(x => x.NextKeyspaceId(), Times.Exactly(4));
+                var exactlyFour = Times.Exactly(4);
+                tokens.Verify(x => x.NextKeyspaceId(), exactlyFour);
             },
             cancellationToken
         );
@@ -163,12 +168,14 @@ public sealed class PgKeyspacesTests(PgServers servers) : IDisposable
     public async Task RunAsync_RowMissing_ResolvesAgainAndRetriesOnce()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
+        var tokens = new PgRandomTokens();
         await WithKeyspacesAsync(
             servers.Admin19,
-            new PgRandomTokens(),
+            tokens,
             async (schema, keyspaces) =>
             {
-                var keyspace = new Keyspace("cell", KeySegment.FromString("orders"));
+                var orders = KeySegment.FromString("orders");
+                var keyspace = new Keyspace("cell", orders);
                 var name = PgKeys.KeyspaceName(keyspace);
                 var seen = new List<long>();
 
@@ -209,18 +216,21 @@ public sealed class PgKeyspacesTests(PgServers servers) : IDisposable
     public async Task RunAsync_MissingTwice_ThrowsUnavailable()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
+        var tokens = new PgRandomTokens();
         await WithKeyspacesAsync(
             servers.Admin19,
-            new PgRandomTokens(),
+            tokens,
             async (_, keyspaces) =>
             {
-                var keyspace = new Keyspace("cell", KeySegment.FromString("orders"));
+                var orders = KeySegment.FromString("orders");
+                var keyspace = new Keyspace("cell", orders);
                 var calls = 0;
 
                 ValueTask<string> Operation(long id, CancellationToken token)
                 {
                     calls++;
-                    return ValueTask.FromException<string>(new PgKeyspaceMissingException());
+                    var missing = new PgKeyspaceMissingException();
+                    return ValueTask.FromException<string>(missing);
                 }
 
                 var failure = await Assert.ThrowsAsync<CoordinationException>(async () =>
