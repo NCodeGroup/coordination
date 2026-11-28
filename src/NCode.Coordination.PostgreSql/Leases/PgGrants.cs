@@ -105,6 +105,12 @@ internal sealed class PgGrants(PgRecordTable table)
     public const int SingleHolderCapacity = 1;
 
     /// <summary>
+    /// The message that refuses to renew a grant bound to a session.
+    /// </summary>
+    public const string SessionBoundRenewalMessage =
+        "A grant bound to a session lives as its session does, so it is never renewed.";
+
+    /// <summary>
     /// Gets the instant a new grant expires.
     /// </summary>
     /// <param name="now">The instant the transaction read on the server's clock.</param>

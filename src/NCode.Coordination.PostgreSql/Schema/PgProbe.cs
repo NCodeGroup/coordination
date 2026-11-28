@@ -219,6 +219,20 @@ internal sealed class PgProbe(
     }
 
     /// <summary>
+    /// Builds the message that refuses a server without the synchronous standby a profile requires.
+    /// </summary>
+    /// <param name="profileName">The name of the profile that requires the standby.</param>
+    /// <param name="names">The server's synchronous_standby_names setting.</param>
+    /// <param name="commit">The synchronous_commit setting that the provider's sessions see.</param>
+    /// <returns>The message, which names the profile and both settings.</returns>
+    internal static string NoSynchronousStandbyMessage(
+        string profileName,
+        string names,
+        string commit
+    ) =>
+        $"The '{profileName}' profile needs synchronous_standby_names to name a standby and synchronous_commit on or remote_apply, and the provider's sessions see '{names}' and '{commit}'.";
+
+    /// <summary>
     /// Refuses a server without a synchronous standby when the profile requires one.
     /// </summary>
     /// <param name="standbyProfile">The profile whose requirements the server must meet.</param>
@@ -242,9 +256,8 @@ internal sealed class PgProbe(
 
         if (string.IsNullOrWhiteSpace(names) || !commitWaitsForStandby)
         {
-            throw Unsupported(
-                $"The '{standbyProfile.Name}' profile needs synchronous_standby_names to name a standby and synchronous_commit on or remote_apply, and the provider's sessions see '{names}' and '{commit}'."
-            );
+            var message = NoSynchronousStandbyMessage(standbyProfile.Name, names, commit);
+            throw Unsupported(message);
         }
     }
 

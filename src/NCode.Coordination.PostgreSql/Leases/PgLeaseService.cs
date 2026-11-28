@@ -108,10 +108,7 @@ internal sealed class PgLeaseService(PgGrants grants, IPgTokens tokens, PgPollin
 
         if (grant.Terms.IsBoundToSession)
         {
-            throw new ArgumentException(
-                "A grant bound to a session lives as its session does, so it is never renewed.",
-                nameof(grant)
-            );
+            throw new ArgumentException(PgGrants.SessionBoundRenewalMessage, nameof(grant));
         }
 
         var held = HeldOf(grant);

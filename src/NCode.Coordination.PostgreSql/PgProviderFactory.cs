@@ -22,6 +22,12 @@ internal sealed record PgProviderFactory(
 )
 {
     /// <summary>
+    /// The message that refuses options that set no source.
+    /// </summary>
+    internal const string NoSourceMessage =
+        "The PostgreSQL provider's options set neither PostgreSqlProviderOptions.ConnectionString nor PostgreSqlProviderOptions.DataSource.";
+
+    /// <summary>
     /// Creates the provider over the source that the options named.
     /// </summary>
     /// <param name="services">The services that the host's data source factory resolves from.</param>
@@ -55,8 +61,6 @@ internal sealed record PgProviderFactory(
             return PgSource.FromConnectionString(ConnectionString);
         }
 
-        throw new InvalidOperationException(
-            "The PostgreSQL provider's options set neither PostgreSqlProviderOptions.ConnectionString nor PostgreSqlProviderOptions.DataSource."
-        );
+        throw new InvalidOperationException(NoSourceMessage);
     }
 }

@@ -24,8 +24,7 @@ public sealed class PgProviderFactoryTests
 
         var exception = Assert.Throws<InvalidOperationException>(() => factory.Create(services));
 
-        Assert.Contains("PostgreSqlProviderOptions.ConnectionString", exception.Message);
-        Assert.Contains("PostgreSqlProviderOptions.DataSource", exception.Message);
+        Assert.Equal(PgProviderFactory.NoSourceMessage, exception.Message);
     }
 
     #endregion

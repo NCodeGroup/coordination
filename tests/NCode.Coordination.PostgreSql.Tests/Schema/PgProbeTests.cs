@@ -93,8 +93,14 @@ public sealed class PgProbeTests
             PgProbe.CheckSynchronousStandby(PostgreSqlProfiles.Synchronous, commit, names)
         );
 
+        var expected = PgProbe.NoSynchronousStandbyMessage(
+            PostgreSqlProfiles.Synchronous.Name,
+            names,
+            commit
+        );
+
         Assert.Equal(CoordinationErrorCodes.Unsupported, exception.Code);
-        Assert.Contains("synchronous_standby_names", exception.Message, StringComparison.Ordinal);
+        Assert.Equal(expected, exception.Message);
     }
 
     #endregion
