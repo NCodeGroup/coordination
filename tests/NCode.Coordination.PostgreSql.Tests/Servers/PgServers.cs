@@ -14,33 +14,51 @@ namespace NCode.Coordination.PostgreSql.Tests.Servers;
 /// </summary>
 public sealed class PgServers : IAsyncLifetime
 {
-    /// <summary>The environment variable that turns the server tests on when its value is <c>docker</c>.</summary>
+    /// <summary>
+    /// The environment variable that turns the server tests on when its value is <c>docker</c>.
+    /// </summary>
     public const string EnvironmentVariable = "NCODE_COORDINATION_POSTGRESQL_SERVERS";
 
-    /// <summary>The PostgreSQL 19 image the tests run against, pinned by its tag and the digest of its multi-architecture index.</summary>
+    /// <summary>
+    /// The PostgreSQL 19 image the tests run against, pinned by its tag and the digest of its multi-architecture index.
+    /// </summary>
     public const string Image19 =
         "postgres:19.0@sha256:4ea94de574c17f0372722806c949757050fbb1cd7648410fe45d6bba275cc00e";
 
-    /// <summary>The PostgreSQL 15 image the tests run against, pinned by its tag and the digest of its multi-architecture index.</summary>
+    /// <summary>
+    /// The PostgreSQL 15 image the tests run against, pinned by its tag and the digest of its multi-architecture index.
+    /// </summary>
     public const string Image15 =
         "postgres:15.20@sha256:868b5ee219026c0f34c99d696d4494ccb3705cf1a18bed1e0b9de64d9c011ccd";
 
-    /// <summary>The data volume of the PostgreSQL 19 image, which from PostgreSQL 18 holds a directory per major version.</summary>
+    /// <summary>
+    /// The data volume of the PostgreSQL 19 image, which from PostgreSQL 18 holds a directory per major version.
+    /// </summary>
     private const string DataPath19 = "/var/lib/postgresql";
 
-    /// <summary>The data volume of the PostgreSQL 15 image, which is its data directory.</summary>
+    /// <summary>
+    /// The data volume of the PostgreSQL 15 image, which is its data directory.
+    /// </summary>
     private const string DataPath15 = "/var/lib/postgresql/data";
 
-    /// <summary>The name of the non-superuser role that the conformance tests connect as.</summary>
+    /// <summary>
+    /// The name of the non-superuser role that the conformance tests connect as.
+    /// </summary>
     public const string Role = "coordinator";
 
-    /// <summary>The password of <see cref="Role"/>.</summary>
+    /// <summary>
+    /// The password of <see cref="Role"/>.
+    /// </summary>
     public const string RolePassword = "coordinator";
 
-    /// <summary>The name of the database that the servers create and the tests use.</summary>
+    /// <summary>
+    /// The name of the database that the servers create and the tests use.
+    /// </summary>
     private const string Database = "postgres";
 
-    /// <summary>Gets a value indicating whether the server tests run.</summary>
+    /// <summary>
+    /// Gets a value indicating whether the server tests run.
+    /// </summary>
     public static bool Enabled =>
         Environment.GetEnvironmentVariable(EnvironmentVariable) == "docker";
 
@@ -50,30 +68,6 @@ public sealed class PgServers : IAsyncLifetime
     /// </summary>
     internal static IReadOnlyList<string> DurableCommand { get; } =
     ["-c", "fsync=on", "-c", "full_page_writes=on", "-c", "synchronous_commit=on"];
-
-    /// <summary>Gets the connection string of PostgreSQL 19 as <see cref="Role"/>, empty until it is started.</summary>
-    public string PostgreSql19 { get; private set; } = "";
-
-    /// <summary>Gets the connection string of PostgreSQL 15 as <see cref="Role"/>, empty until it is started.</summary>
-    public string PostgreSql15 { get; private set; } = "";
-
-    /// <summary>Gets the connection string of PostgreSQL 19 as <c>postgres</c>, empty until it is started.</summary>
-    public string Admin19 { get; private set; } = "";
-
-    /// <summary>Gets the connection string of PostgreSQL 15 as <c>postgres</c>, empty until it is started.</summary>
-    public string Admin15 { get; private set; } = "";
-
-    /// <summary>
-    /// Gets the connection string, as <c>postgres</c>, of the PostgreSQL 19 server that runs without
-    /// <see cref="DurableCommand"/>, empty until it is started.
-    /// </summary>
-    public string Unsafe19 { get; private set; } = "";
-
-    private PostgreSqlContainer? Container19 { get; set; }
-
-    private PostgreSqlContainer? Container15 { get; set; }
-
-    private PostgreSqlContainer? UnsafeContainer19 { get; set; }
 
     /// <summary>
     /// Copies a connection string with another user and password.
@@ -193,6 +187,38 @@ public sealed class PgServers : IAsyncLifetime
             cancellationToken
         );
     }
+
+    /// <summary>
+    /// Gets the connection string of PostgreSQL 19 as <see cref="Role"/>, empty until it is started.
+    /// </summary>
+    public string PostgreSql19 { get; private set; } = "";
+
+    /// <summary>
+    /// Gets the connection string of PostgreSQL 15 as <see cref="Role"/>, empty until it is started.
+    /// </summary>
+    public string PostgreSql15 { get; private set; } = "";
+
+    /// <summary>
+    /// Gets the connection string of PostgreSQL 19 as <c>postgres</c>, empty until it is started.
+    /// </summary>
+    public string Admin19 { get; private set; } = "";
+
+    /// <summary>
+    /// Gets the connection string of PostgreSQL 15 as <c>postgres</c>, empty until it is started.
+    /// </summary>
+    public string Admin15 { get; private set; } = "";
+
+    /// <summary>
+    /// Gets the connection string, as <c>postgres</c>, of the PostgreSQL 19 server that runs without
+    /// <see cref="DurableCommand"/>, empty until it is started.
+    /// </summary>
+    public string Unsafe19 { get; private set; } = "";
+
+    private PostgreSqlContainer? Container19 { get; set; }
+
+    private PostgreSqlContainer? Container15 { get; set; }
+
+    private PostgreSqlContainer? UnsafeContainer19 { get; set; }
 
     /// <inheritdoc />
     public async ValueTask InitializeAsync()

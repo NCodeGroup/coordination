@@ -4,8 +4,6 @@
 using System.Diagnostics;
 using System.Text;
 using NCode.Coordination.PostgreSql.Schema;
-using NCode.Coordination.PostgreSql.Server;
-using NCode.Coordination.PostgreSql.Tests.Conformance;
 using NCode.Coordination.PostgreSql.Tests.Servers;
 using Npgsql;
 
@@ -75,42 +73,6 @@ public sealed class PostgreSqlProviderFailoverTests
 
             await Task.Delay(TimeSpan.FromMilliseconds(100), cancellationToken);
         }
-    }
-
-    /// <summary>
-    /// Creates a provider on a server in a schema that the caller names, so that two providers on two servers that
-    /// replicate each other see the same tables, and probes it.
-    /// </summary>
-    /// <param name="connectionString">The connection string of the server.</param>
-    /// <param name="profile">The profile of the provider.</param>
-    /// <param name="schema">The schema of the provider's tables.</param>
-    /// <param name="cancellationToken">The token that cancels the creation.</param>
-    /// <returns>The probed provider, which the caller disposes.</returns>
-    private static async ValueTask<PostgreSqlProvider> CreateProviderInSchemaAsync(
-        string connectionString,
-        PostgreSqlProfile profile,
-        PgSchemaName schema,
-        CancellationToken cancellationToken
-    )
-    {
-        var settings = PgConformance.Settings with { Schema = schema };
-        var provider = new PostgreSqlProvider(
-            PgSource.FromConnectionString(connectionString),
-            profile,
-            settings
-        );
-
-        try
-        {
-            await provider.ProbeAsync(cancellationToken);
-        }
-        catch
-        {
-            await provider.DisposeAsync();
-            throw;
-        }
-
-        return provider;
     }
 
     #region ProbeAsync Tests
@@ -288,7 +250,7 @@ public sealed class PostgreSqlProviderFailoverTests
         var cancellationToken = TestContext.Current.CancellationToken;
         await using var server = await PgFailoverServer.StartAsync(true, cancellationToken);
         var schema = PgSchemaName.Create($"t_{Guid.NewGuid():N}");
-        await using var oldPrimary = await CreateProviderInSchemaAsync(
+        await using var oldPrimary = await PgTestSupport.CreateProviderAsync(
             server.PrimaryAdmin,
             PostgreSqlProfiles.Synchronous,
             schema,
@@ -312,7 +274,7 @@ public sealed class PostgreSqlProviderFailoverTests
         await server.CutReplicationAsync(cancellationToken);
         await server.PromoteStandbyAsync(cancellationToken);
 
-        await using var newPrimary = await CreateProviderInSchemaAsync(
+        await using var newPrimary = await PgTestSupport.CreateProviderAsync(
             server.StandbyAdmin,
             PostgreSqlProfiles.Asynchronous,
             schema,

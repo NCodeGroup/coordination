@@ -94,33 +94,26 @@ public sealed class PgSweepsTests(PgServers servers)
 
         try
         {
-            await using (var source = PgSource.FromConnectionString(connectionString))
-            {
-                var server = new PgServer(source, settings);
-                var probe = new PgProbe(server, source, PostgreSqlProfiles.Standalone, settings);
-                await probe.RunAsync(cancellationToken);
+            await using var source = PgSource.FromConnectionString(connectionString);
+            var server = new PgServer(source, settings);
+            var probe = new PgProbe(server, source, PostgreSqlProfiles.Standalone, settings);
+            await probe.RunAsync(cancellationToken);
 
-                var keyspaces = new PgKeyspaces(server, schema, new PgRandomTokens());
-                var table = new PgRecordTable(server, keyspaces, settings);
-                await using var hub = new PgLogHub(
-                    source,
-                    keyspaces,
-                    settings,
-                    TimeProvider.System
-                );
-                await test(
-                    new Context(
-                        adminConnectionString,
-                        schemaName,
-                        new PgSweeps(server, settings, table),
-                        new PgOccurrenceService(server, keyspaces, schema),
-                        new PgSetService(server, keyspaces, schema),
-                        new PgRecordService(table),
-                        new PgSessionService(table, new PgRandomTokens()),
-                        new PgNotificationService(server, keyspaces, settings, hub)
-                    )
-                );
-            }
+            var keyspaces = new PgKeyspaces(server, schema, new PgRandomTokens());
+            var table = new PgRecordTable(server, keyspaces, settings);
+            await using var hub = new PgLogHub(source, keyspaces, settings, TimeProvider.System);
+            await test(
+                new Context(
+                    adminConnectionString,
+                    schemaName,
+                    new PgSweeps(server, settings, table),
+                    new PgOccurrenceService(server, keyspaces, schema),
+                    new PgSetService(server, keyspaces, schema),
+                    new PgRecordService(table),
+                    new PgSessionService(table, new PgRandomTokens()),
+                    new PgNotificationService(server, keyspaces, settings, hub)
+                )
+            );
         }
         finally
         {

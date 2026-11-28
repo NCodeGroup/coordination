@@ -18,6 +18,16 @@ public sealed class PgListenerServerTests(PgServers servers)
         return $"ncode.{hex[..8]}.{hex[8..24]}";
     }
 
+    private static async Task<(string Channel, string Payload)> ReadAsync(
+        ChannelReader<(string Channel, string Payload)> reader,
+        CancellationToken cancellationToken
+    )
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(Patience);
+        return await reader.ReadAsync(timeout.Token);
+    }
+
     private string NewListenerConnectionString(string applicationName)
     {
         var builder = new NpgsqlConnectionStringBuilder(servers.Admin19)
@@ -65,16 +75,6 @@ public sealed class PgListenerServerTests(PgServers servers)
             CultureInfo.InvariantCulture
         );
         Assert.True(terminated > 0);
-    }
-
-    private static async Task<(string Channel, string Payload)> ReadAsync(
-        ChannelReader<(string Channel, string Payload)> reader,
-        CancellationToken cancellationToken
-    )
-    {
-        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeout.CancelAfter(Patience);
-        return await reader.ReadAsync(timeout.Token);
     }
 
     #region ListenAsync Tests

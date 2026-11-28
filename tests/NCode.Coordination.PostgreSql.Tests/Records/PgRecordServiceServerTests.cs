@@ -15,6 +15,25 @@ public sealed class PgRecordServiceServerTests(PgServers servers)
 {
     private static readonly TimeToLive OneMinute = new(TimeSpan.FromMinutes(1));
 
+    private static CoordinationKey LongKey(Keyspace keyspace, int number)
+    {
+        var segments = new List<KeySegment> { LongPrefixSegment() };
+        for (var index = 0; index < 14; index++)
+        {
+            segments.Add(KeySegment.FromString(new string((char)('a' + index), 256)));
+        }
+
+        segments.Add(
+            KeySegment.FromString(
+                number.ToString("D3", CultureInfo.InvariantCulture).PadRight(256, 'z')
+            )
+        );
+
+        return keyspace.CreateKey(segments);
+    }
+
+    private static KeySegment LongPrefixSegment() => KeySegment.FromString(new string('p', 256));
+
     private sealed record Context(
         string AdminConnectionString,
         string SchemaName,
@@ -76,31 +95,27 @@ public sealed class PgRecordServiceServerTests(PgServers servers)
 
         try
         {
-            await using (var source = PgSource.FromConnectionString(servers.PostgreSql19))
-            {
-                var server = new PgServer(source, settings);
-                var probe = new PgProbe(server, source, PostgreSqlProfiles.Standalone, settings);
-                await probe.RunAsync(cancellationToken);
+            await using var source = PgSource.FromConnectionString(servers.PostgreSql19);
+            var server = new PgServer(source, settings);
+            var probe = new PgProbe(server, source, PostgreSqlProfiles.Standalone, settings);
+            await probe.RunAsync(cancellationToken);
 
-                var tokens = new PgRandomTokens();
-                var keyspaces = new PgKeyspaces(server, schema, tokens);
-                var pausedServer = new PgServer(source, settings);
-                var pausedKeyspaces = new PgKeyspaces(pausedServer, schema, tokens);
+            var tokens = new PgRandomTokens();
+            var keyspaces = new PgKeyspaces(server, schema, tokens);
+            var pausedServer = new PgServer(source, settings);
+            var pausedKeyspaces = new PgKeyspaces(pausedServer, schema, tokens);
 
-                await test(
-                    new Context(
-                        servers.Admin19,
-                        schemaName,
-                        schema,
-                        keyspaces,
-                        pausedServer,
-                        new PgRecordService(new PgRecordTable(server, keyspaces, settings)),
-                        new PgRecordService(
-                            new PgRecordTable(pausedServer, pausedKeyspaces, settings)
-                        )
-                    )
-                );
-            }
+            await test(
+                new Context(
+                    servers.Admin19,
+                    schemaName,
+                    schema,
+                    keyspaces,
+                    pausedServer,
+                    new PgRecordService(new PgRecordTable(server, keyspaces, settings)),
+                    new PgRecordService(new PgRecordTable(pausedServer, pausedKeyspaces, settings))
+                )
+            );
         }
         finally
         {
@@ -111,25 +126,6 @@ public sealed class PgRecordServiceServerTests(PgServers servers)
             );
         }
     }
-
-    private static CoordinationKey LongKey(Keyspace keyspace, int number)
-    {
-        var segments = new List<KeySegment> { LongPrefixSegment() };
-        for (var index = 0; index < 14; index++)
-        {
-            segments.Add(KeySegment.FromString(new string((char)('a' + index), 256)));
-        }
-
-        segments.Add(
-            KeySegment.FromString(
-                number.ToString("D3", CultureInfo.InvariantCulture).PadRight(256, 'z')
-            )
-        );
-
-        return keyspace.CreateKey(segments);
-    }
-
-    private static KeySegment LongPrefixSegment() => KeySegment.FromString(new string('p', 256));
 
     #region CreateAsync Tests
 
@@ -151,10 +147,8 @@ public sealed class PgRecordServiceServerTests(PgServers servers)
                 await using var listener = new NpgsqlConnection(context.AdminConnectionString);
                 await listener.OpenAsync(cancellationToken);
                 listener.Notification += (_, e) => payloads.Enqueue(e.Payload);
-                await using (var listen = new NpgsqlCommand($"LISTEN \"{channel}\"", listener))
-                {
-                    await listen.ExecuteNonQueryAsync(cancellationToken);
-                }
+                await using var listen = new NpgsqlCommand($"LISTEN \"{channel}\"", listener);
+                await listen.ExecuteNonQueryAsync(cancellationToken);
 
                 var result = await context.Records.CreateAsync(
                     key,

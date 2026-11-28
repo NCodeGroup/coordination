@@ -5,10 +5,14 @@ using System.Runtime.CompilerServices;
 
 namespace NCode.Coordination.PostgreSql.Tests.Servers;
 
-/// <summary>A fact that runs only when <see cref="PgServers.Enabled"/> is true, and is skipped otherwise.</summary>
+/// <summary>
+/// A fact that runs only when <see cref="PgServers.Enabled"/> is true, and is skipped otherwise.
+/// </summary>
 public sealed class PgServerFactAttribute : FactAttribute
 {
-    /// <summary>Initializes a new instance of the <see cref="PgServerFactAttribute"/> class.</summary>
+    /// <summary>
+    /// Initializes a new instance of the <see cref="PgServerFactAttribute"/> class.
+    /// </summary>
     /// <param name="sourceFilePath">The source file of the test, filled in by the compiler.</param>
     /// <param name="sourceLineNumber">The source line of the test, filled in by the compiler.</param>
     public PgServerFactAttribute(

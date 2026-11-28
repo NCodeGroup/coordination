@@ -375,16 +375,12 @@ public sealed class PgServerTransactionTests(PgServers servers)
                 await using var holderTransaction = await holder.BeginTransactionAsync(
                     cancellationToken
                 );
-                await using (
-                    var lockCommand = new NpgsqlCommand(
-                        $"SELECT id FROM {schema}.t WHERE id = 1 FOR UPDATE",
-                        holder,
-                        holderTransaction
-                    )
-                )
-                {
-                    await lockCommand.ExecuteScalarAsync(cancellationToken);
-                }
+                await using var lockCommand = new NpgsqlCommand(
+                    $"SELECT id FROM {schema}.t WHERE id = 1 FOR UPDATE",
+                    holder,
+                    holderTransaction
+                );
+                await lockCommand.ExecuteScalarAsync(cancellationToken);
 
                 await using var source = PgSource.FromConnectionString(servers.Admin19);
                 var server = new PgServer(

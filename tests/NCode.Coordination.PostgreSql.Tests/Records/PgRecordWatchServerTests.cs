@@ -17,6 +17,61 @@ public sealed class PgRecordWatchServerTests(PgServers servers)
 
     private static readonly TimeToLive OneMinute = new(TimeSpan.FromMinutes(1));
 
+    private static async Task<T> NextAsync<T>(
+        IAsyncEnumerator<T> enumerator,
+        TimeSpan timeout,
+        CancellationToken cancellationToken
+    )
+    {
+        var moved = await enumerator.MoveNextAsync().AsTask().WaitAsync(timeout, cancellationToken);
+        Assert.True(moved);
+        return enumerator.Current;
+    }
+
+    private static Task<RecordChange> NextAsync(
+        IAsyncEnumerator<RecordChange> enumerator,
+        CancellationToken cancellationToken
+    ) => NextAsync(enumerator, Patience, cancellationToken);
+
+    private static async Task<Revision> CreateAsync(
+        Context context,
+        CoordinationKey key,
+        byte value,
+        RecordLifetime lifetime,
+        CancellationToken cancellationToken
+    )
+    {
+        var result = await context.Records.CreateAsync(
+            key,
+            new[] { value },
+            lifetime,
+            null,
+            cancellationToken
+        );
+        Assert.True(result.IsWritten);
+        return result.Revision;
+    }
+
+    private static async Task<Revision> SwapAsync(
+        Context context,
+        CoordinationKey key,
+        Revision expected,
+        byte value,
+        CancellationToken cancellationToken
+    )
+    {
+        var result = await context.Records.CompareAndSwapAsync(
+            key,
+            expected,
+            new[] { value },
+            RecordLifetime.Persistent,
+            null,
+            cancellationToken
+        );
+        Assert.True(result.IsWritten);
+        return result.Revision;
+    }
+
     private sealed record Context(
         string AdminConnectionString,
         string SchemaName,
@@ -154,61 +209,6 @@ public sealed class PgRecordWatchServerTests(PgServers servers)
                 CancellationToken.None
             );
         }
-    }
-
-    private static async Task<T> NextAsync<T>(
-        IAsyncEnumerator<T> enumerator,
-        TimeSpan timeout,
-        CancellationToken cancellationToken
-    )
-    {
-        var moved = await enumerator.MoveNextAsync().AsTask().WaitAsync(timeout, cancellationToken);
-        Assert.True(moved);
-        return enumerator.Current;
-    }
-
-    private static Task<RecordChange> NextAsync(
-        IAsyncEnumerator<RecordChange> enumerator,
-        CancellationToken cancellationToken
-    ) => NextAsync(enumerator, Patience, cancellationToken);
-
-    private static async Task<Revision> CreateAsync(
-        Context context,
-        CoordinationKey key,
-        byte value,
-        RecordLifetime lifetime,
-        CancellationToken cancellationToken
-    )
-    {
-        var result = await context.Records.CreateAsync(
-            key,
-            new[] { value },
-            lifetime,
-            null,
-            cancellationToken
-        );
-        Assert.True(result.IsWritten);
-        return result.Revision;
-    }
-
-    private static async Task<Revision> SwapAsync(
-        Context context,
-        CoordinationKey key,
-        Revision expected,
-        byte value,
-        CancellationToken cancellationToken
-    )
-    {
-        var result = await context.Records.CompareAndSwapAsync(
-            key,
-            expected,
-            new[] { value },
-            RecordLifetime.Persistent,
-            null,
-            cancellationToken
-        );
-        Assert.True(result.IsWritten);
-        return result.Revision;
     }
 
     #region WatchKeyAsync Tests

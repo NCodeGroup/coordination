@@ -14,15 +14,21 @@ namespace NCode.Coordination.PostgreSql.Tests.Conformance;
 // The target drops only its own provider's connections, by application name, since every test shares the servers.
 internal static class PgConformance
 {
-    /// <summary>The statement that lists the backends of the provider under test.</summary>
+    /// <summary>
+    /// The statement that lists the backends of the provider under test.
+    /// </summary>
     private const string SelectPidsSql =
         "SELECT array_agg(pid) FROM pg_stat_activity WHERE application_name = $1";
 
-    /// <summary>The statement that ends the backends.</summary>
+    /// <summary>
+    /// The statement that ends the backends.
+    /// </summary>
     private const string TerminateSql =
         "SELECT count(pg_terminate_backend(p)) FROM unnest($1::int[]) AS p";
 
-    /// <summary>The statement that counts the backends that have not exited.</summary>
+    /// <summary>
+    /// The statement that counts the backends that have not exited.
+    /// </summary>
     private const string CountSql =
         "SELECT count(*) FROM pg_stat_activity WHERE pid = ANY($1::int[])";
 
@@ -108,23 +114,18 @@ internal static class PgConformance
         await using var connection = new NpgsqlConnection(builder.ConnectionString);
         await connection.OpenAsync(cancellationToken);
 
-        int[]? pids;
-        await using (var select = new NpgsqlCommand(SelectPidsSql, connection))
-        {
-            select.Parameters.Add(new NpgsqlParameter { Value = applicationName });
-            pids = await select.ExecuteScalarAsync(cancellationToken) as int[];
-        }
+        await using var select = new NpgsqlCommand(SelectPidsSql, connection);
+        select.Parameters.Add(new NpgsqlParameter { Value = applicationName });
+        var pids = await select.ExecuteScalarAsync(cancellationToken) as int[];
 
         Assert.True(
             pids is { Length: > 0 },
             "The drop found no connection of the provider to end."
         );
 
-        await using (var terminate = new NpgsqlCommand(TerminateSql, connection))
-        {
-            terminate.Parameters.Add(new NpgsqlParameter { Value = pids });
-            await terminate.ExecuteScalarAsync(cancellationToken);
-        }
+        await using var terminate = new NpgsqlCommand(TerminateSql, connection);
+        terminate.Parameters.Add(new NpgsqlParameter { Value = pids });
+        await terminate.ExecuteScalarAsync(cancellationToken);
 
         var deadline = Stopwatch.StartNew();
         while (deadline.Elapsed < TimeSpan.FromSeconds(10))

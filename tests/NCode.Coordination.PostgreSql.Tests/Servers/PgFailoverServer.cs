@@ -138,40 +138,6 @@ internal sealed class PgFailoverServer(IContainer container, int primaryPort, in
     }
 
     /// <summary>
-    /// Gets the container that runs both servers.
-    /// </summary>
-    private IContainer Container { get; } = container;
-
-    /// <summary>
-    /// Gets the host port of the primary.
-    /// </summary>
-    private int PrimaryPort { get; } = primaryPort;
-
-    /// <summary>
-    /// Gets the host port of the standby.
-    /// </summary>
-    private int StandbyPort { get; } = standbyPort;
-
-    /// <summary>
-    /// Gets the connection string of the primary as <c>postgres</c>.
-    /// </summary>
-    public string PrimaryAdmin => BuildConnectionString($"{Container.Hostname}:{PrimaryPort}");
-
-    /// <summary>
-    /// Gets the connection string of the standby as <c>postgres</c>, which a promotion turns into a primary's.
-    /// </summary>
-    public string StandbyAdmin => BuildConnectionString($"{Container.Hostname}:{StandbyPort}");
-
-    /// <summary>
-    /// Gets the connection string, as <c>postgres</c>, that names both servers and rechecks them every second, so a
-    /// data source that asks for a primary finds the one that a promotion makes.
-    /// </summary>
-    public string ConnectionString =>
-        BuildConnectionString(
-            $"{Container.Hostname}:{PrimaryPort},{Container.Hostname}:{StandbyPort}"
-        );
-
-    /// <summary>
     /// Builds a connection string as <c>postgres</c> that rechecks its hosts every second.
     /// </summary>
     /// <param name="hosts">The value of the <c>Host</c> keyword.</param>
@@ -256,6 +222,40 @@ internal sealed class PgFailoverServer(IContainer container, int primaryPort, in
             throw new TimeoutException($"Waited {WaitLimit} until {description}.");
         }
     }
+
+    /// <summary>
+    /// Gets the container that runs both servers.
+    /// </summary>
+    private IContainer Container { get; } = container;
+
+    /// <summary>
+    /// Gets the host port of the primary.
+    /// </summary>
+    private int PrimaryPort { get; } = primaryPort;
+
+    /// <summary>
+    /// Gets the host port of the standby.
+    /// </summary>
+    private int StandbyPort { get; } = standbyPort;
+
+    /// <summary>
+    /// Gets the connection string of the primary as <c>postgres</c>.
+    /// </summary>
+    public string PrimaryAdmin => BuildConnectionString($"{Container.Hostname}:{PrimaryPort}");
+
+    /// <summary>
+    /// Gets the connection string of the standby as <c>postgres</c>, which a promotion turns into a primary's.
+    /// </summary>
+    public string StandbyAdmin => BuildConnectionString($"{Container.Hostname}:{StandbyPort}");
+
+    /// <summary>
+    /// Gets the connection string, as <c>postgres</c>, that names both servers and rechecks them every second, so a
+    /// data source that asks for a primary finds the one that a promotion makes.
+    /// </summary>
+    public string ConnectionString =>
+        BuildConnectionString(
+            $"{Container.Hostname}:{PrimaryPort},{Container.Hostname}:{StandbyPort}"
+        );
 
     /// <summary>
     /// Waits until the standby has replayed everything that the primary has written so far.

@@ -64,13 +64,33 @@ internal static class PgTestSupport
     /// <param name="profile">The profile of the provider.</param>
     /// <param name="cancellationToken">The token that cancels the creation.</param>
     /// <returns>The probed provider, which the caller disposes.</returns>
-    public static async ValueTask<PostgreSqlProvider> CreateProviderAsync(
+    public static ValueTask<PostgreSqlProvider> CreateProviderAsync(
         string connectionString,
         PostgreSqlProfile profile,
         CancellationToken cancellationToken
     )
     {
         var schema = PgSchemaName.Create($"t_{Guid.NewGuid():N}");
+
+        return CreateProviderAsync(connectionString, profile, schema, cancellationToken);
+    }
+
+    /// <summary>
+    /// Creates a provider on a server in a schema that the caller names, so that two providers on two servers that
+    /// replicate each other see the same tables, and probes it.
+    /// </summary>
+    /// <param name="connectionString">The connection string of the server.</param>
+    /// <param name="profile">The profile of the provider.</param>
+    /// <param name="schema">The schema of the provider's tables.</param>
+    /// <param name="cancellationToken">The token that cancels the creation.</param>
+    /// <returns>The probed provider, which the caller disposes.</returns>
+    public static async ValueTask<PostgreSqlProvider> CreateProviderAsync(
+        string connectionString,
+        PostgreSqlProfile profile,
+        PgSchemaName schema,
+        CancellationToken cancellationToken
+    )
+    {
         var settings = PgConformance.Settings with { Schema = schema };
         var provider = new PostgreSqlProvider(
             PgSource.FromConnectionString(connectionString),

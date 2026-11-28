@@ -73,24 +73,22 @@ public sealed class PgSessionServerTests(PgServers servers)
 
         try
         {
-            await using (var source = PgSource.FromConnectionString(servers.PostgreSql19))
-            {
-                var server = new PgServer(source, settings);
-                var probe = new PgProbe(server, source, PostgreSqlProfiles.Standalone, settings);
-                await probe.RunAsync(cancellationToken);
+            await using var source = PgSource.FromConnectionString(servers.PostgreSql19);
+            var server = new PgServer(source, settings);
+            var probe = new PgProbe(server, source, PostgreSqlProfiles.Standalone, settings);
+            await probe.RunAsync(cancellationToken);
 
-                var keyspaces = new PgKeyspaces(server, schema, new PgRandomTokens());
-                var table = new PgRecordTable(server, keyspaces, settings);
+            var keyspaces = new PgKeyspaces(server, schema, new PgRandomTokens());
+            var table = new PgRecordTable(server, keyspaces, settings);
 
-                await test(
-                    new Context(
-                        servers.Admin19,
-                        schemaName,
-                        new PgSessionService(table, new PgRandomTokens()),
-                        new PgRecordService(table)
-                    )
-                );
-            }
+            await test(
+                new Context(
+                    servers.Admin19,
+                    schemaName,
+                    new PgSessionService(table, new PgRandomTokens()),
+                    new PgRecordService(table)
+                )
+            );
         }
         finally
         {
