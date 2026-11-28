@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using System.Globalization;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging.Testing;
 using NCode.Coordination.PostgreSql.Keys;
@@ -101,6 +102,12 @@ public sealed class PgSweepsTests(PgServers servers)
     {
         var matching = records.Where(record => record.Id.Id == eventId);
         return [.. matching.Select(record => record.GetStructuredStateValue(name) ?? string.Empty)];
+    }
+
+    private static ValueTask ThrowUnexpectedAsync(CancellationToken cancellationToken)
+    {
+        var failure = new InvalidOperationException("broken");
+        return ValueTask.FromException(failure);
     }
 
     private static async Task WithSweepsAsync(
@@ -657,6 +664,29 @@ public sealed class PgSweepsTests(PgServers servers)
         var steps = ValuesOf(records, EventIds.SweepStepFailed, "Step");
         Assert.Equal(expectedPasses, passes);
         Assert.Equal(expectedSteps, steps);
+    }
+
+    #endregion
+
+    #region IgnoreFailureAsync Tests
+
+    [Fact]
+    public async Task IgnoreFailureAsync_StepThrowsUnexpectedly_LogsSweepStepFaultedOnce()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await using var offline = new PgOfflineServer();
+        var logger = new FakeLogger<PgSweeps>();
+        var sweeps = new PgSweeps(offline.Server, offline.Settings, offline.Table, logger);
+        const string step = "broken step";
+
+        await sweeps.IgnoreFailureAsync(step, ThrowUnexpectedAsync, cancellationToken);
+
+        var records = logger.Collector.GetSnapshot();
+        var record = Assert.Single(records);
+        var logged = record.GetStructuredStateValue("Step");
+        Assert.Equal(EventIds.SweepStepFaulted, record.Id.Id);
+        Assert.Equal(LogLevel.Error, record.Level);
+        Assert.Equal(step, logged);
     }
 
     #endregion

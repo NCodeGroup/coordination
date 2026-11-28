@@ -136,6 +136,8 @@ It logs each failure its background work catches and goes on from, once per fail
 | 4005 | `PumpFaulted` | Error | Reading a log for its subscribers failed unexpectedly; the next wake-up or check reads it again |
 | 4006 | `ListenerConnectionFailed` | Warning | The listening connection failed; the listener connects again after the delay the entry names |
 | 4007 | `ListenerDisposeFailed` | Debug | Disposing a broken listening connection failed; it holds nothing left to release |
+| 4008 | `SweepPassFaulted` | Error | One pass of the sweep failed unexpectedly, named in the entry; the next sweep runs it again |
+| 4009 | `SweepStepFaulted` | Error | One step of the sweep failed unexpectedly, named in the entry; the next sweep runs it again |
 
 Each entry carries the failure as its exception. No entry carries a keyspace, key, channel, topic or connection string,
 since they can name a tenant or hold a secret, so an entry shows that something failed, not for whom. See

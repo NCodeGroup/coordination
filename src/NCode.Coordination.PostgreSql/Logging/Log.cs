@@ -110,4 +110,38 @@ internal static partial class Log
         Message = "Disposing a broken listening connection failed; it holds nothing left to release."
     )]
     public static partial void ListenerDisposeFailed(this ILogger logger, Exception exception);
+
+    /// <summary>
+    /// Logs that one pass of the sweep failed unexpectedly and that the next sweep runs it again.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="exception">The failure.</param>
+    /// <param name="pass">The name of the pass.</param>
+    [LoggerMessage(
+        EventId = EventIds.SweepPassFaulted,
+        Level = LogLevel.Error,
+        Message = "The sweep's {Pass} pass failed unexpectedly; the next sweep runs it again."
+    )]
+    public static partial void SweepPassFaulted(
+        this ILogger logger,
+        Exception exception,
+        string pass
+    );
+
+    /// <summary>
+    /// Logs that one step of the sweep failed unexpectedly and that the next sweep runs it again.
+    /// </summary>
+    /// <param name="logger">The logger.</param>
+    /// <param name="exception">The failure.</param>
+    /// <param name="step">The name of the step.</param>
+    [LoggerMessage(
+        EventId = EventIds.SweepStepFaulted,
+        Level = LogLevel.Error,
+        Message = "The sweep's {Step} step failed unexpectedly; the next sweep runs it again."
+    )]
+    public static partial void SweepStepFaulted(
+        this ILogger logger,
+        Exception exception,
+        string step
+    );
 }

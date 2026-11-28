@@ -76,8 +76,11 @@ the entry: the failure stays caught, and the next round repeats the work or the 
    | 4005 | `PumpFaulted` | Error | A pump's read of a log, by an exception the pump doesn't expect |
    | 4006 | `ListenerConnectionFailed` | Warning | The listening connection |
    | 4007 | `ListenerDisposeFailed` | Debug | The disposal of a broken listening connection |
+   | 4008 | `SweepPassFaulted` | Error | One pass of the sweep, by an exception the sweep doesn't expect |
+   | 4009 | `SweepStepFaulted` | Error | One step of the sweep, by an exception the sweep doesn't expect |
 3. **Levels.** `Warning` for a failure the next round repeats: a `CoordinationException`, or PostgreSQL's missing
-   keyspace. `Error` for an exception the code doesn't expect (4001, 4005), as ADR-1021 rule 13 logs a faulted loop.
+   keyspace. `Error` for an exception the code doesn't expect (4001, 4005, 4008, 4009), as ADR-1021 rule 13 logs a
+   faulted loop.
    `Debug` for a failure at teardown that leaves nothing to do (3004, 4007).
 4. **Messages.** Each message is a source-generated `[LoggerMessage]` extension method in the provider's internal
    static partial `Logging/Log.cs`. No message carries a keyspace, key, segment, channel, topic or connection string,
@@ -112,7 +115,8 @@ the entry: the failure stays caught, and the next round repeats the work or the 
 
 - A failed round logs once, and a round is a pass, a step, a read or an attempt, so an outage logs at these rates:
   - The PostgreSQL sweep logs one entry for each of its twelve passes and two steps that fail, at every
-    `SweepInterval`: 4002 and 4003, up to fourteen entries, and 4001 only for an unexpected failure.
+    `SweepInterval`: 4002 and 4003 for coded failures and 4008 and 4009 for unexpected ones, up to fourteen entries,
+    and 4001 only for a failure outside every pass and step.
   - A log's pump logs once for each failed read, and a wake-up, a check or a reconnect starts a read, so a burst of
     wake-ups logs a burst; coalescing leaves at most one waiting pump per log.
   - The listening connection logs once for each failed connection attempt, a second apart (`ReconnectDelay`), until

@@ -47,4 +47,14 @@ internal static class EventIds
     /// Disposing a broken listening connection failed.
     /// </summary>
     public const int ListenerDisposeFailed = Base + 7;
+
+    /// <summary>
+    /// One pass of the sweep failed unexpectedly.
+    /// </summary>
+    public const int SweepPassFaulted = Base + 8;
+
+    /// <summary>
+    /// One step of the sweep failed unexpectedly.
+    /// </summary>
+    public const int SweepStepFaulted = Base + 9;
 }

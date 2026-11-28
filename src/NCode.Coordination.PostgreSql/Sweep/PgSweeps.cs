@@ -600,6 +600,11 @@ internal sealed class PgSweeps(
             // The next sweep runs the pass again, and one failing pass must not stop the others.
             Logger.SweepPassFailed(exception, pass.Name);
         }
+        catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
+        {
+            // An unexpected failure of one pass (or step) must not stop the others; the next sweep runs it again.
+            Logger.SweepPassFaulted(exception, pass.Name);
+        }
     }
 
     /// <summary>
@@ -610,7 +615,7 @@ internal sealed class PgSweeps(
     /// <param name="cancellationToken">The token that cancels the sweep.</param>
     /// <returns>A task that completes after the step ran or failed.</returns>
     /// <exception cref="OperationCanceledException">The token was cancelled.</exception>
-    private async ValueTask IgnoreFailureAsync(
+    internal async ValueTask IgnoreFailureAsync(
         string step,
         Func<CancellationToken, ValueTask> run,
         CancellationToken cancellationToken
@@ -629,6 +634,11 @@ internal sealed class PgSweeps(
         {
             // The next sweep reads the rows again, and one failing step must not stop the others.
             Logger.SweepStepFailed(exception, step);
+        }
+        catch (Exception exception) when (!cancellationToken.IsCancellationRequested)
+        {
+            // An unexpected failure of one pass (or step) must not stop the others; the next sweep runs it again.
+            Logger.SweepStepFaulted(exception, step);
         }
     }
 

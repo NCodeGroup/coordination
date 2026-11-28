@@ -125,6 +125,7 @@ internal sealed class PgSweeper(
         {
             Cancel();
             Timer?.Dispose();
+            Cancellation.Dispose();
         }
     }
 
