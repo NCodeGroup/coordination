@@ -19,6 +19,11 @@ namespace NCode.Coordination.PostgreSql.Sweep;
 internal sealed class PgSweeps(PgServer server, PgSettings settings, PgRecordTable table)
 {
     /// <summary>
+    /// The most keyspaces one sweep visits for expired records or for expired sessions; the next sweep lists again.
+    /// </summary>
+    private const int KeyspacesPerSweep = 100;
+
+    /// <summary>
     /// The statement that deletes expired occurrences.
     /// </summary>
     private const string OccurrencesSql = """
@@ -86,7 +91,7 @@ internal sealed class PgSweeps(PgServer server, PgSettings settings, PgRecordTab
     private const string ExpiredKeyspacesSql = """
         SELECT DISTINCT keyspace_id FROM {schema}.records
         WHERE deadline <= clock_timestamp()
-        LIMIT 100
+        LIMIT $1
         """;
 
     /// <summary>
@@ -118,7 +123,7 @@ internal sealed class PgSweeps(PgServer server, PgSettings settings, PgRecordTab
     private const string ExpiredSessionKeyspacesSql = """
         SELECT DISTINCT keyspace_id FROM {schema}.sessions
         WHERE deadline <= clock_timestamp()
-        LIMIT 100
+        LIMIT $1
         """;
 
     /// <summary>
@@ -639,7 +644,7 @@ internal sealed class PgSweeps(PgServer server, PgSettings settings, PgRecordTab
     /// <summary>
     /// Lists the keyspaces that a listing statement names.
     /// </summary>
-    /// <param name="sql">The listing statement, which takes no argument.</param>
+    /// <param name="sql">The listing statement, whose one argument is the most keyspaces to list.</param>
     /// <param name="cancellationToken">The token that cancels the sweep.</param>
     /// <returns>The keyspaces' ids.</returns>
     /// <exception cref="CoordinationException">The server could not be reached or failed.</exception>
@@ -648,7 +653,7 @@ internal sealed class PgSweeps(PgServer server, PgSettings settings, PgRecordTab
         CancellationToken cancellationToken
     )
     {
-        var statement = new PgStatement(sql);
+        var statement = new PgStatement(sql, KeyspacesPerSweep);
         return await Server
             .ExecuteAsync([statement], ReadKeyspaceIdsAsync, cancellationToken)
             .ConfigureAwait(false);

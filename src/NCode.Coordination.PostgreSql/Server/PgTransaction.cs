@@ -137,11 +137,7 @@ internal sealed class PgTransaction(
         CancellationToken cancellationToken
     )
     {
-        await CommitAsync(
-                statements,
-                static (_, _) => ValueTask.FromResult(true),
-                cancellationToken
-            )
+        await CommitAsync(statements, PgResults.IgnoreAsync, cancellationToken)
             .ConfigureAwait(false);
     }
 
@@ -179,12 +175,7 @@ internal sealed class PgTransaction(
     public async ValueTask RollbackAsync(CancellationToken cancellationToken)
     {
         await PgServer
-            .RunBatchAsync(
-                Connection,
-                [Rollback],
-                static (_, _) => ValueTask.FromResult(true),
-                cancellationToken
-            )
+            .RunBatchAsync(Connection, [Rollback], PgResults.IgnoreAsync, cancellationToken)
             .ConfigureAwait(false);
 
         Completed = true;

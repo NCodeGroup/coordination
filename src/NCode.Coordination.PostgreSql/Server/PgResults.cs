@@ -13,6 +13,20 @@ namespace NCode.Coordination.PostgreSql.Server;
 internal sealed class PgResults(NpgsqlDataReader reader)
 {
     /// <summary>
+    /// Reads nothing from the results of a batch that holds no result to read.
+    /// </summary>
+    /// <param name="results">The results of the batch.</param>
+    /// <param name="cancellationToken">The token is unused because the batch holds no result to read.</param>
+    /// <returns>True, as the batch has been sent.</returns>
+    public static ValueTask<bool> IgnoreAsync(
+        PgResults results,
+        CancellationToken cancellationToken
+    )
+    {
+        return ValueTask.FromResult(true);
+    }
+
+    /// <summary>
     /// Gets or sets whether the current result of the reader was handed out.
     /// </summary>
     private bool Started { get; set; }

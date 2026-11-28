@@ -94,20 +94,6 @@ internal sealed class PgCounterService(PgServer server, PgKeyspaces keyspaces, P
     }
 
     /// <summary>
-    /// Reads the results of a batch that has nothing to read.
-    /// </summary>
-    /// <param name="results">The results of the batch.</param>
-    /// <param name="cancellationToken">The token that cancels the read.</param>
-    /// <returns>True, as the batch has been sent.</returns>
-    private static ValueTask<bool> ReadCleared(
-        PgResults results,
-        CancellationToken cancellationToken
-    )
-    {
-        return ValueTask.FromResult(true);
-    }
-
-    /// <summary>
     /// Reads the results of a batch's first batch: the locked rows, then the server's clock.
     /// </summary>
     /// <param name="results">The results of the batch.</param>
@@ -560,7 +546,7 @@ internal sealed class PgCounterService(PgServer server, PgKeyspaces keyspaces, P
 
         var statement = new PgStatement(Reset, id, index, depth);
         await Server
-            .ExecuteAsync([statement], ReadCleared, cancellationToken)
+            .ExecuteAsync([statement], PgResults.IgnoreAsync, cancellationToken)
             .ConfigureAwait(false);
     }
 

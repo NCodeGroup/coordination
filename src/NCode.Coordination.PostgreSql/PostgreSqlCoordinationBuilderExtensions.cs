@@ -17,6 +17,16 @@ public static class PostgreSqlCoordinationBuilderExtensions
     /// </summary>
     public const string ProviderName = "postgresql";
 
+    /// <summary>
+    /// The least value of <see cref="PostgreSqlProviderOptions.SweepBatchSize"/>.
+    /// </summary>
+    private const int MinSweepBatchSize = 1;
+
+    /// <summary>
+    /// The greatest value of <see cref="PostgreSqlProviderOptions.SweepBatchSize"/>.
+    /// </summary>
+    private const int MaxSweepBatchSize = 100_000;
+
     extension(ICoordinationBuilder builder)
     {
         /// <summary>
@@ -223,12 +233,12 @@ public static class PostgreSqlCoordinationBuilderExtensions
     /// <exception cref="ArgumentOutOfRangeException">The batch size is out of range.</exception>
     private static int CheckBatchSize(int value, string paramName)
     {
-        if (value < 1 || value > 100_000)
+        if (value < MinSweepBatchSize || value > MaxSweepBatchSize)
         {
             throw new ArgumentOutOfRangeException(
                 paramName,
                 value,
-                "PostgreSqlProviderOptions.SweepBatchSize is from 1 to 100,000."
+                $"PostgreSqlProviderOptions.SweepBatchSize is from {MinSweepBatchSize} to {MaxSweepBatchSize}."
             );
         }
 

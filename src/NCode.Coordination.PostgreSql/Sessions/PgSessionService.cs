@@ -242,11 +242,7 @@ internal sealed class PgSessionService(PgRecordTable table, IPgTokens tokens, Pg
         var statement = new PgStatement(InsertSql, id, sessionToken, microseconds);
 
         await Table
-            .ExecuteAsync(
-                [statement],
-                static (_, _) => ValueTask.FromResult(true),
-                cancellationToken
-            )
+            .ExecuteAsync([statement], PgResults.IgnoreAsync, cancellationToken)
             .ConfigureAwait(false);
     }
 

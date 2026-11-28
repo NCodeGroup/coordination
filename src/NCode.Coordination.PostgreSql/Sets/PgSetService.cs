@@ -216,20 +216,6 @@ internal sealed class PgSetService(PgServer server, PgKeyspaces keyspaces, PgSch
     }
 
     /// <summary>
-    /// Reads the results of the clear batch, which hold nothing to read.
-    /// </summary>
-    /// <param name="results">The results of the batch.</param>
-    /// <param name="cancellationToken">The token that cancels the read.</param>
-    /// <returns>True, as the batch has been sent.</returns>
-    private static ValueTask<bool> ReadCleared(
-        PgResults results,
-        CancellationToken cancellationToken
-    )
-    {
-        return ValueTask.FromResult(true);
-    }
-
-    /// <summary>
     /// Decodes the members that the server returned.
     /// </summary>
     /// <param name="rows">The encoded members.</param>
@@ -525,7 +511,7 @@ internal sealed class PgSetService(PgServer server, PgKeyspaces keyspaces, PgSch
         await Server
             .ExecuteAsync(
                 [clearSetStatement, clearMembersStatement],
-                ReadCleared,
+                PgResults.IgnoreAsync,
                 cancellationToken
             )
             .ConfigureAwait(false);
