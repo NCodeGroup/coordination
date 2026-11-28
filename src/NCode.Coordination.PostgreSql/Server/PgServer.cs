@@ -199,9 +199,12 @@ internal sealed class PgServer(PgSource source, PgSettings settings)
     /// </summary>
     /// <param name="exception">The failure of the client.</param>
     /// <param name="committingStepSent">Whether the step that commits was sent before the failure.</param>
-    /// <returns>The exception to throw, which says whether the call may have taken effect.</returns>
-    /// <exception cref="PgKeyspaceMissingException">A statement found its keyspace's row missing.</exception>
-    private CoordinationException Fail(Exception exception, bool committingStepSent)
+    /// <returns>
+    /// The exception to throw: a <see cref="PgKeyspaceMissingException"/> when a statement found its keyspace's row
+    /// missing, else the translated <see cref="CoordinationException"/>, which says whether the call may have taken
+    /// effect.
+    /// </returns>
+    private Exception Fail(Exception exception, bool committingStepSent)
     {
         if (PgFailures.IsConnectionLost(exception))
         {
@@ -210,7 +213,7 @@ internal sealed class PgServer(PgSource source, PgSettings settings)
 
         if (PgFailures.IsKeyspaceMissing(exception))
         {
-            throw new PgKeyspaceMissingException(
+            return new PgKeyspaceMissingException(
                 "A statement found its keyspace's row missing.",
                 exception
             );

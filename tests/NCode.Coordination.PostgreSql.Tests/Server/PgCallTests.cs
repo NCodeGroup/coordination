@@ -79,9 +79,9 @@ public sealed class PgCallTests
     public void DeadlineAfter_PartialMicrosecond_RoundsUp()
     {
         var now = new DateTime(2026, 11, 27, 20, 0, 0, DateTimeKind.Utc);
-        var duration = TimeSpan.FromTicks(11);
+        var timeToLive = new TimeToLive(TimeSpan.FromTicks(11));
 
-        var deadline = PgCall.DeadlineAfter(now, duration);
+        var deadline = PgCall.DeadlineAfter(now, timeToLive);
 
         var expected = now.AddTicks(20);
         Assert.Equal(expected, deadline);

@@ -69,18 +69,6 @@ internal static class PgCall
     }
 
     /// <summary>
-    /// Adds a duration to a time, in whole microseconds rounded up, never down.
-    /// </summary>
-    /// <param name="now">The time to add to.</param>
-    /// <param name="duration">The duration.</param>
-    /// <returns>The time when the duration ends.</returns>
-    public static DateTime DeadlineAfter(DateTime now, TimeSpan duration)
-    {
-        var microseconds = ToMicroseconds(duration);
-        return now.AddTicks(microseconds * TimeSpan.TicksPerMicrosecond);
-    }
-
-    /// <summary>
     /// Converts whole microseconds to a duration.
     /// </summary>
     /// <param name="microseconds">The number of microseconds.</param>

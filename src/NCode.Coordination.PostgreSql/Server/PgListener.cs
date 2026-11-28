@@ -30,17 +30,18 @@ internal sealed class PgListener(PgSource source, PgListenerEvents events, TimeP
     /// <summary>
     /// How long one wait for a notification lasts, between the requests the loop runs.
     /// </summary>
-    private static readonly TimeSpan WaitSlice = TimeSpan.FromMilliseconds(100);
+    private static TimeSpan WaitSlice { get; } = TimeSpan.FromMilliseconds(100);
 
     /// <summary>
     /// How long the connection may go without traffic before it is pinged.
     /// </summary>
-    private static readonly TimeSpan PingAfter = TimeSpan.FromSeconds(15);
+    private static TimeSpan PingAfter { get; } =
+        TimeSpan.FromSeconds(PgSource.DefaultKeepAliveSeconds);
 
     /// <summary>
     /// How long the loop waits before it connects again.
     /// </summary>
-    private static readonly TimeSpan ReconnectDelay = TimeSpan.FromSeconds(1);
+    private static TimeSpan ReconnectDelay { get; } = TimeSpan.FromSeconds(1);
 
     /// <summary>
     /// Runs one statement that returns no rows that matter.

@@ -12,6 +12,12 @@ namespace NCode.Coordination.PostgreSql.Server;
 internal sealed class PgSource : IAsyncDisposable, IDisposable
 {
     /// <summary>
+    /// The keep-alive, in seconds, that a data source the provider builds gets when its connection string leaves it at
+    /// 0, which is also how long the listening connection stays idle before it pings.
+    /// </summary>
+    internal const int DefaultKeepAliveSeconds = 15;
+
+    /// <summary>
     /// Builds a data source that the source owns, from a connection string.
     /// </summary>
     /// <param name="connectionString">The connection string.</param>
@@ -26,7 +32,7 @@ internal sealed class PgSource : IAsyncDisposable, IDisposable
         connectionStringBuilder.Enlist = false;
         if (connectionStringBuilder.KeepAlive == 0)
         {
-            connectionStringBuilder.KeepAlive = 15;
+            connectionStringBuilder.KeepAlive = DefaultKeepAliveSeconds;
         }
 
         if (connectionStringBuilder.Host?.Contains(',') == true)
