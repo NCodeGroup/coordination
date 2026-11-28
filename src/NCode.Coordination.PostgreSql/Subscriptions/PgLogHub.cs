@@ -215,7 +215,7 @@ internal sealed class PgLogHub : IAsyncDisposable, IDisposable
         }
         catch
         {
-            await UnsubscribeAsync(id, subscriber).ConfigureAwait(false);
+            await UnsubscribeAsync(id, subscriber, CancellationToken.None).ConfigureAwait(false);
             throw;
         }
 
@@ -321,18 +321,23 @@ internal sealed class PgLogHub : IAsyncDisposable, IDisposable
     /// <typeparam name="TEntry">The type of the log's entries.</typeparam>
     /// <param name="id">The log.</param>
     /// <param name="subscriber">The subscriber that <see cref="SubscribeAsync{TEntry}"/> returned.</param>
+    /// <param name="cancellationToken">The token that cancels the call.</param>
     /// <returns>A task that completes when the subscriber is removed.</returns>
     /// <remarks>
-    /// It takes no token because it runs from a subscription's cleanup, which must finish. The lock it waits for is held
-    /// only while a <c>LISTEN</c> runs, which fails rather than waits when the listening connection does.
+    /// A subscription's cleanup passes <see cref="CancellationToken.None"/>, so it finishes. The lock it waits for is
+    /// held only while a <c>LISTEN</c> runs, which fails rather than waits when the listening connection does.
     /// </remarks>
     /// <exception cref="ArgumentNullException">The subscriber is null.</exception>
-    public async ValueTask UnsubscribeAsync<TEntry>(PgLogId id, PgLogSubscriber<TEntry> subscriber)
+    public async ValueTask UnsubscribeAsync<TEntry>(
+        PgLogId id,
+        PgLogSubscriber<TEntry> subscriber,
+        CancellationToken cancellationToken
+    )
         where TEntry : IPgLogEntry
     {
         ArgumentNullException.ThrowIfNull(subscriber);
 
-        await Sync.WaitAsync(CancellationToken.None).ConfigureAwait(false);
+        await Sync.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             if (

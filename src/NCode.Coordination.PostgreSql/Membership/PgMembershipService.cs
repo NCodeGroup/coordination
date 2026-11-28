@@ -624,7 +624,8 @@ internal sealed class PgMembershipService(PgRecordTable table, PgChangeLog chang
         }
         finally
         {
-            await Hub.UnsubscribeAsync(logId, subscriber).ConfigureAwait(false);
+            await Hub.UnsubscribeAsync(logId, subscriber, CancellationToken.None)
+                .ConfigureAwait(false);
         }
     }
 

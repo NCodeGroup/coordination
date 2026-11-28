@@ -15,6 +15,7 @@ namespace NCode.Coordination.PostgreSql.Keys;
 /// <param name="server">The seam to the server.</param>
 /// <param name="schema">The schema that holds the keyspaces' table.</param>
 /// <param name="tokens">The source of the keyspace ids.</param>
+/// <exception cref="ArgumentNullException">The server or the tokens are null.</exception>
 internal sealed class PgKeyspaces(PgServer server, PgSchemaName schema, IPgTokens tokens)
 {
     /// <summary>
@@ -72,12 +73,12 @@ internal sealed class PgKeyspaces(PgServer server, PgSchemaName schema, IPgToken
     /// <summary>
     /// Gets the seam to the server.
     /// </summary>
-    private PgServer Server { get; } = server;
+    private PgServer Server { get; } = server ?? throw new ArgumentNullException(nameof(server));
 
     /// <summary>
     /// Gets the source of the keyspace ids.
     /// </summary>
-    private IPgTokens Tokens { get; } = tokens;
+    private IPgTokens Tokens { get; } = tokens ?? throw new ArgumentNullException(nameof(tokens));
 
     /// <summary>
     /// Gets the cached id of each keyspace's row.

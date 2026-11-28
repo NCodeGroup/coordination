@@ -206,7 +206,8 @@ internal sealed class PgRecordWatchService(PgKeyspaces keyspaces, PgChangeLog lo
         }
         finally
         {
-            await Hub.UnsubscribeAsync(logId, subscriber).ConfigureAwait(false);
+            await Hub.UnsubscribeAsync(logId, subscriber, CancellationToken.None)
+                .ConfigureAwait(false);
         }
     }
 

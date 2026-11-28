@@ -260,7 +260,8 @@ internal sealed class PgNotificationService(
         }
         finally
         {
-            await Hub.UnsubscribeAsync(logId, subscriber).ConfigureAwait(false);
+            await Hub.UnsubscribeAsync(logId, subscriber, CancellationToken.None)
+                .ConfigureAwait(false);
         }
     }
 
