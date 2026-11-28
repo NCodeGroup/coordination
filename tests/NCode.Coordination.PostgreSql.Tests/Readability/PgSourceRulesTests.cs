@@ -5,48 +5,43 @@ namespace NCode.Coordination.PostgreSql.Tests.Readability;
 
 public sealed class PgSourceRulesTests
 {
-    public static TheoryData<string> CheckedPaths
+    public static TheoryData<string> CheckedPaths => BuildCheckedPaths(PgSourceRules.PackageRoot);
+
+    public static TheoryData<string> CheckedTestPaths
     {
         get
         {
-            var data = new TheoryData<string> { "." };
-            foreach (var folder in FindPackageFolders())
-            {
-                data.Add(folder);
-            }
-
-            return data;
+            var testRoot = FindTestRoot();
+            return BuildCheckedPaths(testRoot);
         }
     }
 
-    public static TheoryData<string> CheckedTestPaths { get; } =
-    [
-        ".",
-        "Readability",
-        "Servers",
-        "Conformance",
-        "Schema",
-        "Transactions",
-        "Sets",
-        "Sequences",
-        "Notifications",
-        "Membership",
-        "Server",
-        "Keys",
-        "Claims",
-        "Counters",
-        "Elections",
-        "Occurrences",
-        "Leases",
-        "Sessions",
-        "Subscriptions",
-        "Records",
-    ];
-
-    private static List<string> FindPackageFolders()
+    private static string FindTestRoot()
     {
-        var packageRoot = PgSourceRules.PackageRoot;
-        var folders = Directory.GetDirectories(packageRoot);
+        var relativePath = Path.Combine(
+            PgSourceRules.PackageRoot,
+            "..",
+            "..",
+            "tests",
+            "NCode.Coordination.PostgreSql.Tests"
+        );
+        return Path.GetFullPath(relativePath);
+    }
+
+    private static TheoryData<string> BuildCheckedPaths(string root)
+    {
+        var data = new TheoryData<string> { "." };
+        foreach (var folder in FindFolders(root))
+        {
+            data.Add(folder);
+        }
+
+        return data;
+    }
+
+    private static List<string> FindFolders(string root)
+    {
+        var folders = Directory.GetDirectories(root);
         var names = folders.Select(folder => Path.GetFileName(folder));
         var sources = names.Where(name => name is not ("bin" or "obj"));
         return sources.Order(StringComparer.Ordinal).ToList();

@@ -9,6 +9,8 @@ public sealed class PgSweeperTests
 {
     private static readonly TimeSpan Interval = TimeSpan.FromSeconds(5);
 
+    private static TimeSpan WaitLimit { get; } = TimeSpan.FromSeconds(10);
+
     private sealed class CountingTimeProvider : FakeTimeProvider
     {
         private int _timers;
@@ -49,9 +51,11 @@ public sealed class PgSweeperTests
             if (call == 1)
             {
                 _first.TrySetResult();
-                return failFirst
-                    ? ValueTask.FromException(new InvalidOperationException())
-                    : ValueTask.CompletedTask;
+                if (!failFirst)
+                    return ValueTask.CompletedTask;
+
+                var failure = new InvalidOperationException();
+                return ValueTask.FromException(failure);
             }
 
             _second.TrySetResult();
@@ -109,7 +113,7 @@ public sealed class PgSweeperTests
 
             time.Advance(Interval);
 
-            await sweep.FirstCall.WaitAsync(TimeSpan.FromSeconds(10), cancellationToken);
+            await sweep.FirstCall.WaitAsync(WaitLimit, cancellationToken);
             Assert.Equal(1, sweep.Calls);
         });
     }
@@ -122,11 +126,11 @@ public sealed class PgSweeperTests
         {
             sweeper.Start();
             time.Advance(Interval);
-            await sweep.FirstCall.WaitAsync(TimeSpan.FromSeconds(10), cancellationToken);
+            await sweep.FirstCall.WaitAsync(WaitLimit, cancellationToken);
 
             time.Advance(Interval);
 
-            await sweep.SecondCall.WaitAsync(TimeSpan.FromSeconds(10), cancellationToken);
+            await sweep.SecondCall.WaitAsync(WaitLimit, cancellationToken);
         });
     }
 
@@ -142,12 +146,9 @@ public sealed class PgSweeperTests
         {
             sweeper.Start();
             time.Advance(Interval);
-            await sweep.FirstCall.WaitAsync(TimeSpan.FromSeconds(10), cancellationToken);
+            await sweep.FirstCall.WaitAsync(WaitLimit, cancellationToken);
 
-            await sweeper
-                .DisposeAsync()
-                .AsTask()
-                .WaitAsync(TimeSpan.FromSeconds(10), cancellationToken);
+            await sweeper.DisposeAsync().AsTask().WaitAsync(WaitLimit, cancellationToken);
 
             time.Advance(Interval);
 

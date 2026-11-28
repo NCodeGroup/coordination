@@ -20,6 +20,13 @@ public sealed class PgSweepsTests(PgServers servers)
 {
     private static readonly TimeSpan Live = TimeSpan.FromMinutes(1);
 
+    private static TimeSpan LockedSweepLimit { get; } = TimeSpan.FromSeconds(3);
+
+    private static TimeToLive LiveTimeToLive { get; } = new(Live);
+
+    private static RecordLifetime LiveLifetime { get; } =
+        RecordLifetime.ForTimeToLive(LiveTimeToLive);
+
     private sealed record Context(
         string AdminConnectionString,
         string Schema,
@@ -33,8 +40,11 @@ public sealed class PgSweepsTests(PgServers servers)
     {
         public Keyspace Keyspace { get; } = new("sweep");
 
-        public CoordinationKey KeyOf(int number) =>
-            Keyspace.CreateKey("k" + number.ToString(CultureInfo.InvariantCulture));
+        public CoordinationKey KeyOf(int number)
+        {
+            var name = "k" + number.ToString(CultureInfo.InvariantCulture);
+            return Keyspace.CreateKey(name);
+        }
 
         public Task ExpireAsync(string table, CancellationToken cancellationToken) =>
             PgServers
@@ -70,9 +80,11 @@ public sealed class PgSweepsTests(PgServers servers)
         {
             for (var number = 0; number < count; number++)
             {
+                var key = KeyOf(number);
+                var lifetime = new TimeToLive(timeToLive);
                 var status = await Occurrences.TryRecordAsync(
-                    KeyOf(number),
-                    new TimeToLive(timeToLive),
+                    key,
+                    lifetime,
                     null,
                     cancellationToken
                 );
@@ -99,22 +111,29 @@ public sealed class PgSweepsTests(PgServers servers)
             var probe = new PgProbe(server, source, PostgreSqlProfiles.Standalone, settings);
             await probe.RunAsync(cancellationToken);
 
-            var keyspaces = new PgKeyspaces(server, schema, new PgRandomTokens());
+            var keyspaceTokens = new PgRandomTokens();
+            var keyspaces = new PgKeyspaces(server, schema, keyspaceTokens);
             var table = new PgRecordTable(server, keyspaces, settings);
             await using var hub = new PgLogHub(source, keyspaces, settings, TimeProvider.System);
             var polling = new PgPolling(TimeProvider.System);
-            await test(
-                new Context(
-                    adminConnectionString,
-                    schemaName,
-                    new PgSweeps(server, settings, table),
-                    new PgOccurrenceService(server, keyspaces, schema),
-                    new PgSetService(server, keyspaces, schema),
-                    new PgRecordService(table),
-                    new PgSessionService(table, new PgRandomTokens(), polling),
-                    new PgNotificationService(server, keyspaces, settings, hub)
-                )
+            var sweeps = new PgSweeps(server, settings, table);
+            var occurrences = new PgOccurrenceService(server, keyspaces, schema);
+            var sets = new PgSetService(server, keyspaces, schema);
+            var records = new PgRecordService(table);
+            var sessionTokens = new PgRandomTokens();
+            var sessions = new PgSessionService(table, sessionTokens, polling);
+            var notifications = new PgNotificationService(server, keyspaces, settings, hub);
+            var context = new Context(
+                adminConnectionString,
+                schemaName,
+                sweeps,
+                occurrences,
+                sets,
+                records,
+                sessions,
+                notifications
             );
+            await test(context);
         }
         finally
         {
@@ -160,7 +179,8 @@ public sealed class PgSweepsTests(PgServers servers)
                 await context.RecordAsync(3, Live, cancellationToken);
                 await context.ExpireAsync("occurrences", cancellationToken);
 
-                var keyText = PgKeys.KeyText(context.KeyOf(0));
+                var key = context.KeyOf(0);
+                var keyText = PgKeys.KeyText(key);
                 await using var holder = new NpgsqlConnection(context.AdminConnectionString);
                 await holder.OpenAsync(cancellationToken);
                 await using var transaction = await holder.BeginTransactionAsync(cancellationToken);
@@ -177,7 +197,7 @@ public sealed class PgSweepsTests(PgServers servers)
                 await context
                     .Sweeps.SweepAsync(cancellationToken)
                     .AsTask()
-                    .WaitAsync(TimeSpan.FromSeconds(3), cancellationToken);
+                    .WaitAsync(LockedSweepLimit, cancellationToken);
 
                 var remaining = await context.CountAsync("occurrences", cancellationToken);
 
@@ -197,10 +217,12 @@ public sealed class PgSweepsTests(PgServers servers)
             async context =>
             {
                 await context.RecordAsync(3, Live, cancellationToken);
+                var member = KeySegment.FromString("member");
+                var setKey = context.KeyOf(100);
                 await context.Sets.AddAsync(
-                    context.KeyOf(100),
-                    KeySegment.FromString("member"),
-                    new TimeToLive(Live),
+                    setKey,
+                    member,
+                    LiveTimeToLive,
                     null,
                     cancellationToken
                 );
@@ -227,10 +249,11 @@ public sealed class PgSweepsTests(PgServers servers)
         await WithSweepsAsync(
             async context =>
             {
+                var key = context.KeyOf(0);
                 var result = await context.Records.CreateAsync(
-                    context.KeyOf(0),
+                    key,
                     new byte[] { 1 },
-                    RecordLifetime.ForTimeToLive(new TimeToLive(Live)),
+                    LiveLifetime,
                     null,
                     cancellationToken
                 );
@@ -271,10 +294,11 @@ public sealed class PgSweepsTests(PgServers servers)
             {
                 for (var number = 0; number < 5; number++)
                 {
+                    var key = context.KeyOf(number);
                     var result = await context.Records.CreateAsync(
-                        context.KeyOf(number),
+                        key,
                         new byte[] { 1 },
-                        RecordLifetime.ForTimeToLive(new TimeToLive(Live)),
+                        LiveLifetime,
                         null,
                         cancellationToken
                     );
@@ -309,8 +333,9 @@ public sealed class PgSweepsTests(PgServers servers)
             {
                 for (var number = 0; number < 2; number++)
                 {
+                    var key = context.KeyOf(number);
                     await context.Records.CreateAsync(
-                        context.KeyOf(number),
+                        key,
                         new byte[] { 1 },
                         RecordLifetime.Persistent,
                         null,
@@ -349,8 +374,9 @@ public sealed class PgSweepsTests(PgServers servers)
             {
                 for (var number = 0; number < 3; number++)
                 {
+                    var key = context.KeyOf(0);
                     await context.Notifications.PublishAsync(
-                        context.KeyOf(0),
+                        key,
                         new byte[] { 1 },
                         null,
                         cancellationToken
@@ -382,7 +408,7 @@ public sealed class PgSweepsTests(PgServers servers)
             {
                 await context.Sessions.OpenAsync(
                     context.Keyspace,
-                    new TimeToLive(Live),
+                    LiveTimeToLive,
                     null,
                     cancellationToken
                 );
@@ -422,14 +448,16 @@ public sealed class PgSweepsTests(PgServers servers)
             {
                 var grant = await context.Sessions.OpenAsync(
                     context.Keyspace,
-                    new TimeToLive(Live),
+                    LiveTimeToLive,
                     null,
                     cancellationToken
                 );
+                var key = context.KeyOf(0);
+                var lifetime = RecordLifetime.ForSession(grant.Id);
                 var result = await context.Records.CreateAsync(
-                    context.KeyOf(0),
+                    key,
                     new byte[] { 1 },
-                    RecordLifetime.ForSession(grant.Id),
+                    lifetime,
                     null,
                     cancellationToken
                 );
@@ -458,14 +486,16 @@ public sealed class PgSweepsTests(PgServers servers)
             {
                 var grant = await context.Sessions.OpenAsync(
                     context.Keyspace,
-                    new TimeToLive(Live),
+                    LiveTimeToLive,
                     null,
                     cancellationToken
                 );
+                var key = context.KeyOf(0);
+                var lifetime = RecordLifetime.ForSession(grant.Id);
                 var result = await context.Records.CreateAsync(
-                    context.KeyOf(0),
+                    key,
                     new byte[] { 1 },
-                    RecordLifetime.ForSession(grant.Id),
+                    lifetime,
                     null,
                     cancellationToken
                 );
@@ -499,14 +529,16 @@ public sealed class PgSweepsTests(PgServers servers)
             {
                 var grant = await context.Sessions.OpenAsync(
                     context.Keyspace,
-                    new TimeToLive(Live),
+                    LiveTimeToLive,
                     null,
                     cancellationToken
                 );
+                var key = context.KeyOf(0);
+                var lifetime = RecordLifetime.ForSession(grant.Id);
                 var result = await context.Records.CreateAsync(
-                    context.KeyOf(0),
+                    key,
                     new byte[] { 1 },
-                    RecordLifetime.ForSession(grant.Id),
+                    lifetime,
                     null,
                     cancellationToken
                 );
@@ -536,13 +568,9 @@ public sealed class PgSweepsTests(PgServers servers)
         await WithSweepsAsync(
             async context =>
             {
-                await context.Sets.AddAsync(
-                    context.KeyOf(0),
-                    KeySegment.FromString("member"),
-                    new TimeToLive(Live),
-                    null,
-                    cancellationToken
-                );
+                var key = context.KeyOf(0);
+                var member = KeySegment.FromString("member");
+                await context.Sets.AddAsync(key, member, LiveTimeToLive, null, cancellationToken);
                 await context.ExpireAsync("set_members", cancellationToken);
                 await context.ExpireAsync("sets", cancellationToken);
 
@@ -568,13 +596,7 @@ public sealed class PgSweepsTests(PgServers servers)
             {
                 var key = context.KeyOf(0);
                 var member = KeySegment.FromString("member");
-                await context.Sets.AddAsync(
-                    key,
-                    member,
-                    new TimeToLive(Live),
-                    null,
-                    cancellationToken
-                );
+                await context.Sets.AddAsync(key, member, LiveTimeToLive, null, cancellationToken);
                 await context.Sets.RemoveAsync(key, member, null, cancellationToken);
 
                 await context.Sweeps.SweepAsync(cancellationToken);
