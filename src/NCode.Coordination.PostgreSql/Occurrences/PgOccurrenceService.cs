@@ -75,16 +75,7 @@ internal sealed class PgOccurrenceService(
                 {
                     var rows = await Server
                         .ExecuteAsync(
-                            [
-                                new PgStatement(
-                                    Record,
-                                    PgArgument.Of(id),
-                                    PgArgument.Of(index),
-                                    PgArgument.Of(depth),
-                                    PgArgument.Of(text),
-                                    PgArgument.Of(microseconds)
-                                ),
-                            ],
+                            [new PgStatement(Record, id, index, depth, text, microseconds)],
                             async (results, readToken) =>
                                 await results
                                     .ReadAsync(reader => reader.GetInt32(0), readToken)

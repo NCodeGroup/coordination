@@ -48,4 +48,37 @@ public sealed class PgStatementTests
     {
         Assert.Throws<ArgumentNullException>(() => PgArgument.Of(null!));
     }
+
+    [Fact]
+    public void ImplicitConversion_Long_GivesTheArgumentOfBuilds()
+    {
+        PgArgument argument = 7L;
+
+        Assert.Equal(PgArgument.Of(7L), argument);
+    }
+
+    [Fact]
+    public void ImplicitConversion_String_GivesTheArgumentOfBuilds()
+    {
+        PgArgument argument = "text";
+
+        Assert.Equal(PgArgument.Of("text"), argument);
+    }
+
+    [Fact]
+    public void ImplicitConversion_Bytes_GivesTheArgumentOfBuilds()
+    {
+        var bytes = new byte[] { 1, 2 };
+        PgArgument argument = bytes;
+
+        Assert.Equal(PgArgument.Of(bytes), argument);
+    }
+
+    [Fact]
+    public void ImplicitConversion_NullString_Throws()
+    {
+        string text = null!;
+
+        Assert.Throws<ArgumentNullException>(() => (PgArgument)text);
+    }
 }

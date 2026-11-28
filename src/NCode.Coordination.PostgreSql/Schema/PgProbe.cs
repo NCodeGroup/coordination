@@ -188,11 +188,13 @@ internal sealed class PgProbe(
         var name = settings.Schema.Name;
         var tables = PgMigrations.Tables.ToArray();
 
+        var tablesArgument = PgArgument.Of(tables);
+
         var (usage, denied) = await server
             .ExecuteAsync(
                 [
-                    new PgStatement(SchemaPrivilegeSql, PgArgument.Of(name)),
-                    new PgStatement(TablePrivilegesSql, PgArgument.Of(name), PgArgument.Of(tables)),
+                    new PgStatement(SchemaPrivilegeSql, name),
+                    new PgStatement(TablePrivilegesSql, name, tablesArgument),
                 ],
                 async (results, token) =>
                 {

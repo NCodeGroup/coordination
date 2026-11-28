@@ -143,12 +143,12 @@ internal sealed class PgCounterService(PgServer server, PgKeyspaces keyspaces, P
                             [
                                 new PgStatement(
                                     Increment,
-                                    PgArgument.Of(id),
-                                    PgArgument.Of(index),
-                                    PgArgument.Of(depth),
-                                    PgArgument.Of(text),
-                                    PgArgument.Of(amount),
-                                    PgArgument.Of(microseconds)
+                                    id,
+                                    index,
+                                    depth,
+                                    text,
+                                    amount,
+                                    microseconds
                                 ),
                             ],
                             async (results, readToken) =>
@@ -189,14 +189,7 @@ internal sealed class PgCounterService(PgServer server, PgKeyspaces keyspaces, P
                 {
                     var rows = await Server
                         .ExecuteAsync(
-                            [
-                                new PgStatement(
-                                    Read,
-                                    PgArgument.Of(id),
-                                    PgArgument.Of(index),
-                                    PgArgument.Of(depth)
-                                ),
-                            ],
+                            [new PgStatement(Read, id, index, depth)],
                             async (results, readToken) =>
                                 await results
                                     .ReadAsync(reader => reader.GetInt64(0), readToken)
@@ -234,14 +227,7 @@ internal sealed class PgCounterService(PgServer server, PgKeyspaces keyspaces, P
                 async (id, token) =>
                     await Server
                         .ExecuteAsync(
-                            [
-                                new PgStatement(
-                                    Reset,
-                                    PgArgument.Of(id),
-                                    PgArgument.Of(index),
-                                    PgArgument.Of(depth)
-                                ),
-                            ],
+                            [new PgStatement(Reset, id, index, depth)],
                             (_, _) => ValueTask.FromResult(true),
                             token
                         )
@@ -320,6 +306,9 @@ internal sealed class PgCounterService(PgServer server, PgKeyspaces keyspaces, P
         var indexes = sorted.Select(pair => pair.Value.Index).ToArray();
         var depths = sorted.Select(pair => pair.Value.Depth).ToArray();
         var texts = sorted.Select(pair => pair.Value.Text).ToArray();
+        var indexesArgument = PgArgument.Typed(indexes, NpgsqlDbType.Array | NpgsqlDbType.Bytea);
+        var depthsArgument = PgArgument.Typed(depths, NpgsqlDbType.Array | NpgsqlDbType.Smallint);
+        var textsArgument = PgArgument.Typed(texts, NpgsqlDbType.Array | NpgsqlDbType.Text);
 
         return await Keyspaces
             .RunAsync(
@@ -335,19 +324,10 @@ internal sealed class PgCounterService(PgServer server, PgKeyspaces keyspaces, P
                                         [
                                             new PgStatement(
                                                 BatchUpsert,
-                                                PgArgument.Of(id),
-                                                PgArgument.Typed(
-                                                    indexes,
-                                                    NpgsqlDbType.Array | NpgsqlDbType.Bytea
-                                                ),
-                                                PgArgument.Typed(
-                                                    depths,
-                                                    NpgsqlDbType.Array | NpgsqlDbType.Smallint
-                                                ),
-                                                PgArgument.Typed(
-                                                    texts,
-                                                    NpgsqlDbType.Array | NpgsqlDbType.Text
-                                                )
+                                                id,
+                                                indexesArgument,
+                                                depthsArgument,
+                                                textsArgument
                                             ),
                                             new PgStatement(BatchClock),
                                         ],
@@ -470,28 +450,33 @@ internal sealed class PgCounterService(PgServer server, PgKeyspaces keyspaces, P
                                     changedDeadlines.Add(deadline);
                                 }
 
+                                var changedIndexesArgument = PgArgument.Typed(
+                                    changedIndexes.ToArray(),
+                                    NpgsqlDbType.Array | NpgsqlDbType.Bytea
+                                );
+                                var changedDepthsArgument = PgArgument.Typed(
+                                    changedDepths.ToArray(),
+                                    NpgsqlDbType.Array | NpgsqlDbType.Smallint
+                                );
+                                var changedCountsArgument = PgArgument.Typed(
+                                    changedCounts.ToArray(),
+                                    NpgsqlDbType.Array | NpgsqlDbType.Bigint
+                                );
+                                var changedDeadlinesArgument = PgArgument.Typed(
+                                    changedDeadlines.ToArray(),
+                                    NpgsqlDbType.Array | NpgsqlDbType.TimestampTz
+                                );
+
                                 await transaction
                                     .CommitAsync(
                                         [
                                             new PgStatement(
                                                 BatchCommit,
-                                                PgArgument.Of(id),
-                                                PgArgument.Typed(
-                                                    changedIndexes.ToArray(),
-                                                    NpgsqlDbType.Array | NpgsqlDbType.Bytea
-                                                ),
-                                                PgArgument.Typed(
-                                                    changedDepths.ToArray(),
-                                                    NpgsqlDbType.Array | NpgsqlDbType.Smallint
-                                                ),
-                                                PgArgument.Typed(
-                                                    changedCounts.ToArray(),
-                                                    NpgsqlDbType.Array | NpgsqlDbType.Bigint
-                                                ),
-                                                PgArgument.Typed(
-                                                    changedDeadlines.ToArray(),
-                                                    NpgsqlDbType.Array | NpgsqlDbType.TimestampTz
-                                                )
+                                                id,
+                                                changedIndexesArgument,
+                                                changedDepthsArgument,
+                                                changedCountsArgument,
+                                                changedDeadlinesArgument
                                             ),
                                         ],
                                         token

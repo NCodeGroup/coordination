@@ -174,9 +174,7 @@ internal sealed class PgKeyspaceChange(
 
         Begin();
         Entries[^1].EndedSession = session;
-        Extras.Add(
-            new PgStatement(DeleteSessionSql, PgArgument.Of(keyspaceId), PgArgument.Of(session))
-        );
+        Extras.Add(new PgStatement(DeleteSessionSql, keyspaceId, session));
         return true;
     }
 
@@ -281,42 +279,52 @@ internal sealed class PgKeyspaceChange(
         }
 
         var logDeadline = Now + retention;
+        var logDeadlineArgument = PgArgument.Typed(logDeadline, NpgsqlDbType.TimestampTz);
 
         foreach (var entry in Entries)
         {
             foreach (var write in entry.Writes)
             {
-                statements.Add(
-                    write.Kind == WrittenKind
-                        ? new PgStatement(
+                var index = PgArgument.Typed(write.Index, NpgsqlDbType.Bytea);
+                if (write.Kind == WrittenKind)
+                {
+                    var value = PgArgument.Typed(write.Value, NpgsqlDbType.Bytea);
+                    var deadline = PgArgument.Typed(write.Deadline, NpgsqlDbType.TimestampTz);
+                    var session = PgArgument.Typed(write.Session, NpgsqlDbType.Text);
+                    statements.Add(
+                        new PgStatement(
                             UpsertRecordSql,
-                            PgArgument.Of(keyspaceId),
-                            PgArgument.Typed(write.Index, NpgsqlDbType.Bytea),
-                            PgArgument.Of(write.Depth),
-                            PgArgument.Of(write.Key),
-                            PgArgument.Typed(write.Value, NpgsqlDbType.Bytea),
-                            PgArgument.Of(entry.Revision),
-                            PgArgument.Typed(write.Deadline, NpgsqlDbType.TimestampTz),
-                            PgArgument.Typed(write.Session, NpgsqlDbType.Text)
+                            keyspaceId,
+                            index,
+                            write.Depth,
+                            write.Key,
+                            value,
+                            entry.Revision,
+                            deadline,
+                            session
                         )
-                        : new PgStatement(
-                            DeleteRecordSql,
-                            PgArgument.Of(keyspaceId),
-                            PgArgument.Typed(write.Index, NpgsqlDbType.Bytea),
-                            PgArgument.Of(write.Depth)
-                        )
-                );
+                    );
+                }
+                else
+                {
+                    statements.Add(
+                        new PgStatement(DeleteRecordSql, keyspaceId, index, write.Depth)
+                    );
+                }
             }
 
+            var endedSession = PgArgument.Typed(entry.EndedSession, NpgsqlDbType.Text);
+            var groupIndex = PgArgument.Typed(entry.GroupIndex, NpgsqlDbType.Bytea);
+            var groupDepth = PgArgument.Typed(entry.GroupDepth, NpgsqlDbType.Smallint);
             statements.Add(
                 new PgStatement(
                     InsertChangeSql,
-                    PgArgument.Of(keyspaceId),
-                    PgArgument.Of(entry.Revision),
-                    PgArgument.Typed(logDeadline, NpgsqlDbType.TimestampTz),
-                    PgArgument.Typed(entry.EndedSession, NpgsqlDbType.Text),
-                    PgArgument.Typed(entry.GroupIndex, NpgsqlDbType.Bytea),
-                    PgArgument.Typed(entry.GroupDepth, NpgsqlDbType.Smallint)
+                    keyspaceId,
+                    entry.Revision,
+                    logDeadlineArgument,
+                    endedSession,
+                    groupIndex,
+                    groupDepth
                 )
             );
 
@@ -326,16 +334,9 @@ internal sealed class PgKeyspaceChange(
             }
         }
 
-        statements.Add(
-            new PgStatement(UpdateRevisionSql, PgArgument.Of(keyspaceId), PgArgument.Of(Revision))
-        );
-        statements.Add(
-            new PgStatement(
-                NotifySql,
-                PgArgument.Of(channel),
-                PgArgument.Of(PgChannels.ChangePayload(Revision))
-            )
-        );
+        var payload = PgChannels.ChangePayload(Revision);
+        statements.Add(new PgStatement(UpdateRevisionSql, keyspaceId, Revision));
+        statements.Add(new PgStatement(NotifySql, channel, payload));
 
         return statements.ToImmutable();
     }
@@ -349,46 +350,56 @@ internal sealed class PgKeyspaceChange(
     {
         var writes = entry.Writes;
 
+        var ordinals = PgArgument.Typed(
+            Enumerable.Range(0, writes.Count).Select(ordinal => (short)ordinal).ToArray(),
+            NpgsqlDbType.Array | NpgsqlDbType.Smallint
+        );
+        var kinds = PgArgument.Typed(
+            writes.Select(write => write.Kind).ToArray(),
+            NpgsqlDbType.Array | NpgsqlDbType.Smallint
+        );
+        var indexes = PgArgument.Typed(
+            writes.Select(write => write.Index).ToArray(),
+            NpgsqlDbType.Array | NpgsqlDbType.Bytea
+        );
+        var depths = PgArgument.Typed(
+            writes.Select(write => write.Depth).ToArray(),
+            NpgsqlDbType.Array | NpgsqlDbType.Smallint
+        );
+        var keys = PgArgument.Typed(
+            writes.Select(write => write.Key).ToArray(),
+            NpgsqlDbType.Array | NpgsqlDbType.Text
+        );
+        var values = PgArgument.Typed(
+            writes.Select(write => write.Value).ToArray(),
+            NpgsqlDbType.Array | NpgsqlDbType.Bytea
+        );
+        var deadlines = PgArgument.Typed(
+            writes.Select(write => write.Deadline).ToArray(),
+            NpgsqlDbType.Array | NpgsqlDbType.TimestampTz
+        );
+        var sessions = PgArgument.Typed(
+            writes.Select(write => write.Session).ToArray(),
+            NpgsqlDbType.Array | NpgsqlDbType.Text
+        );
+        var replacedSessions = PgArgument.Typed(
+            writes.Select(write => write.ReplacedSession).ToArray(),
+            NpgsqlDbType.Array | NpgsqlDbType.Text
+        );
+
         return new PgStatement(
             InsertItemsSql,
-            PgArgument.Of(keyspaceId),
-            PgArgument.Of(entry.Revision),
-            PgArgument.Typed(
-                Enumerable.Range(0, writes.Count).Select(ordinal => (short)ordinal).ToArray(),
-                NpgsqlDbType.Array | NpgsqlDbType.Smallint
-            ),
-            PgArgument.Typed(
-                writes.Select(write => write.Kind).ToArray(),
-                NpgsqlDbType.Array | NpgsqlDbType.Smallint
-            ),
-            PgArgument.Typed(
-                writes.Select(write => write.Index).ToArray(),
-                NpgsqlDbType.Array | NpgsqlDbType.Bytea
-            ),
-            PgArgument.Typed(
-                writes.Select(write => write.Depth).ToArray(),
-                NpgsqlDbType.Array | NpgsqlDbType.Smallint
-            ),
-            PgArgument.Typed(
-                writes.Select(write => write.Key).ToArray(),
-                NpgsqlDbType.Array | NpgsqlDbType.Text
-            ),
-            PgArgument.Typed(
-                writes.Select(write => write.Value).ToArray(),
-                NpgsqlDbType.Array | NpgsqlDbType.Bytea
-            ),
-            PgArgument.Typed(
-                writes.Select(write => write.Deadline).ToArray(),
-                NpgsqlDbType.Array | NpgsqlDbType.TimestampTz
-            ),
-            PgArgument.Typed(
-                writes.Select(write => write.Session).ToArray(),
-                NpgsqlDbType.Array | NpgsqlDbType.Text
-            ),
-            PgArgument.Typed(
-                writes.Select(write => write.ReplacedSession).ToArray(),
-                NpgsqlDbType.Array | NpgsqlDbType.Text
-            )
+            keyspaceId,
+            entry.Revision,
+            ordinals,
+            kinds,
+            indexes,
+            depths,
+            keys,
+            values,
+            deadlines,
+            sessions,
+            replacedSessions
         );
     }
 

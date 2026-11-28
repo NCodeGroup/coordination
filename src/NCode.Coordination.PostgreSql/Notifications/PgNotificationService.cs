@@ -130,14 +130,14 @@ internal sealed class PgNotificationService(
                             [
                                 new PgStatement(
                                     Publish,
-                                    PgArgument.Of(id),
-                                    PgArgument.Of(index),
-                                    PgArgument.Of(depth),
-                                    PgArgument.Of(text),
-                                    PgArgument.Of(body),
-                                    PgArgument.Of(retention),
-                                    PgArgument.Of(channel),
-                                    PgArgument.Of(announcement)
+                                    id,
+                                    index,
+                                    depth,
+                                    text,
+                                    body,
+                                    retention,
+                                    channel,
+                                    announcement
                                 ),
                             ],
                             async (results, readToken) =>
@@ -247,16 +247,7 @@ internal sealed class PgNotificationService(
     {
         var rows = await Server
             .ExecuteAsync(
-                [
-                    new PgStatement(
-                        ReadLog,
-                        PgArgument.Of(keyspaceId),
-                        PgArgument.Of(index),
-                        PgArgument.Of(depth),
-                        PgArgument.Of(after),
-                        PgArgument.Of((long)limit)
-                    ),
-                ],
+                [new PgStatement(ReadLog, keyspaceId, index, depth, after, (long)limit)],
                 async (results, readToken) =>
                     await results
                         .ReadAsync(

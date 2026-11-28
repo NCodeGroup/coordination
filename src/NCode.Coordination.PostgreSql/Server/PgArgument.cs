@@ -28,6 +28,78 @@ internal readonly record struct PgArgument(object? Value, NpgsqlDbType? Type)
     }
 
     /// <summary>
+    /// Converts a <see cref="long"/> to an argument whose type Npgsql infers.
+    /// </summary>
+    /// <param name="value">The value.</param>
+    /// <returns>The argument <see cref="Of"/> builds.</returns>
+    public static implicit operator PgArgument(long value)
+    {
+        return Of(value);
+    }
+
+    /// <summary>
+    /// Converts an <see cref="int"/> to an argument whose type Npgsql infers.
+    /// </summary>
+    /// <param name="value">The value.</param>
+    /// <returns>The argument <see cref="Of"/> builds.</returns>
+    public static implicit operator PgArgument(int value)
+    {
+        return Of(value);
+    }
+
+    /// <summary>
+    /// Converts a <see cref="short"/> to an argument whose type Npgsql infers.
+    /// </summary>
+    /// <param name="value">The value.</param>
+    /// <returns>The argument <see cref="Of"/> builds.</returns>
+    public static implicit operator PgArgument(short value)
+    {
+        return Of(value);
+    }
+
+    /// <summary>
+    /// Converts a <see cref="string"/> to an argument whose type Npgsql infers.
+    /// </summary>
+    /// <param name="value">The value, which is not null.</param>
+    /// <returns>The argument <see cref="Of"/> builds.</returns>
+    /// <exception cref="ArgumentNullException">The value is null.</exception>
+    public static implicit operator PgArgument(string value)
+    {
+        return Of(value);
+    }
+
+    /// <summary>
+    /// Converts a byte array to an argument whose type Npgsql infers.
+    /// </summary>
+    /// <param name="value">The value, which is not null.</param>
+    /// <returns>The argument <see cref="Of"/> builds.</returns>
+    /// <exception cref="ArgumentNullException">The value is null.</exception>
+    public static implicit operator PgArgument(byte[] value)
+    {
+        return Of(value);
+    }
+
+    /// <summary>
+    /// Converts a <see cref="bool"/> to an argument whose type Npgsql infers.
+    /// </summary>
+    /// <param name="value">The value.</param>
+    /// <returns>The argument <see cref="Of"/> builds.</returns>
+    public static implicit operator PgArgument(bool value)
+    {
+        return Of(value);
+    }
+
+    /// <summary>
+    /// Converts a <see cref="DateTime"/> to an argument whose type Npgsql infers.
+    /// </summary>
+    /// <param name="value">The value.</param>
+    /// <returns>The argument <see cref="Of"/> builds.</returns>
+    public static implicit operator PgArgument(DateTime value)
+    {
+        return Of(value);
+    }
+
+    /// <summary>
     /// Creates an argument of a named PostgreSQL type, which may be null.
     /// </summary>
     /// <param name="value">The value, or null for a SQL null.</param>

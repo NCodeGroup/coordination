@@ -313,7 +313,7 @@ internal sealed class PgSweeps(PgServer server, PgSettings settings, PgRecordTab
         {
             await Server
                 .ExecuteAsync(
-                    [new PgStatement(sql, PgArgument.Of(Settings.SweepBatchSize))],
+                    [new PgStatement(sql, Settings.SweepBatchSize)],
                     (_, _) => ValueTask.FromResult(true),
                     cancellationToken
                 )
@@ -373,12 +373,12 @@ internal sealed class PgSweeps(PgServer server, PgSettings settings, PgRecordTab
                     var (revisions, clocks, rows) = await transaction
                         .FirstAsync(
                             [
-                                new PgStatement(LockKeyspace, PgArgument.Of(keyspaceId)),
+                                new PgStatement(LockKeyspace, keyspaceId),
                                 new PgStatement(ClockSql),
                                 new PgStatement(
                                     ExpiredRecords,
-                                    PgArgument.Of(keyspaceId),
-                                    PgArgument.Of(Settings.SweepBatchSize)
+                                    keyspaceId,
+                                    Settings.SweepBatchSize
                                 ),
                             ],
                             async (results, readToken) =>
@@ -494,12 +494,12 @@ internal sealed class PgSweeps(PgServer server, PgSettings settings, PgRecordTab
                     var (revisions, clocks, sessions) = await transaction
                         .FirstAsync(
                             [
-                                new PgStatement(LockKeyspace, PgArgument.Of(keyspaceId)),
+                                new PgStatement(LockKeyspace, keyspaceId),
                                 new PgStatement(ClockSql),
                                 new PgStatement(
                                     ExpiredSessions,
-                                    PgArgument.Of(keyspaceId),
-                                    PgArgument.Of(Settings.SweepBatchSize)
+                                    keyspaceId,
+                                    Settings.SweepBatchSize
                                 ),
                             ],
                             async (results, readToken) =>

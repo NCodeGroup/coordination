@@ -123,6 +123,10 @@ internal sealed class PgMembershipService(PgRecordTable table, PgChangeLog chang
         var ordered = member.Metadata.OrderBy(pair => pair.Key, StringComparer.Ordinal).ToArray();
         var names = ordered.Select(pair => pair.Key).ToArray();
         var values = ordered.Select(pair => pair.Value).ToArray();
+        var indexArgument = PgArgument.Typed(index, NpgsqlDbType.Bytea);
+        var groupText = PgKeys.KeyText(group);
+        var namesArgument = PgArgument.Typed(names, NpgsqlDbType.Array | NpgsqlDbType.Text);
+        var valuesArgument = PgArgument.Typed(values, NpgsqlDbType.Array | NpgsqlDbType.Text);
 
         return await Table
             .Keyspaces.RunAsync<MembershipJoinStatus>(
@@ -176,21 +180,15 @@ internal sealed class PgMembershipService(PgRecordTable table, PgChangeLog chang
                                     start.Change.Write(
                                         new PgStatement(
                                             UpsertMemberSql,
-                                            PgArgument.Of(id),
-                                            PgArgument.Typed(index, NpgsqlDbType.Bytea),
-                                            PgArgument.Of(depth),
-                                            PgArgument.Of(PgKeys.KeyText(group)),
-                                            PgArgument.Of(sessionId),
-                                            PgArgument.Of(member.NodeId),
-                                            PgArgument.Of(member.Address),
-                                            PgArgument.Typed(
-                                                names,
-                                                NpgsqlDbType.Array | NpgsqlDbType.Text
-                                            ),
-                                            PgArgument.Typed(
-                                                values,
-                                                NpgsqlDbType.Array | NpgsqlDbType.Text
-                                            )
+                                            id,
+                                            indexArgument,
+                                            depth,
+                                            groupText,
+                                            sessionId,
+                                            member.NodeId,
+                                            member.Address,
+                                            namesArgument,
+                                            valuesArgument
                                         )
                                     );
                                     status = MembershipJoinStatus.Joined;
@@ -223,6 +221,7 @@ internal sealed class PgMembershipService(PgRecordTable table, PgChangeLog chang
 
         var index = PgKeys.Index(group);
         var depth = (short)group.PartitionDepth;
+        var indexArgument = PgArgument.Typed(index, NpgsqlDbType.Bytea);
 
         await Table
             .Keyspaces.RunAsync(
@@ -262,10 +261,10 @@ internal sealed class PgMembershipService(PgRecordTable table, PgChangeLog chang
                                     start.Change.Write(
                                         new PgStatement(
                                             DeleteMemberSql,
-                                            PgArgument.Of(id),
-                                            PgArgument.Typed(index, NpgsqlDbType.Bytea),
-                                            PgArgument.Of(depth),
-                                            PgArgument.Of(session.Value)
+                                            id,
+                                            indexArgument,
+                                            depth,
+                                            session.Value
                                         )
                                     );
                                 }
@@ -433,7 +432,7 @@ internal sealed class PgMembershipService(PgRecordTable table, PgChangeLog chang
                                 await transaction
                                     .FirstAsync(
                                         [
-                                            new PgStatement(LockShareSql, PgArgument.Of(id)),
+                                            new PgStatement(LockShareSql, id),
                                             SelectMembersStatement(id, index, depth),
                                         ],
                                         async (results, readToken) =>
@@ -470,13 +469,12 @@ internal sealed class PgMembershipService(PgRecordTable table, PgChangeLog chang
     /// <param name="index">The group's index value.</param>
     /// <param name="depth">The group's partition depth.</param>
     /// <returns>The statement.</returns>
-    private PgStatement SelectMembersStatement(long keyspaceId, byte[] index, short depth) =>
-        new(
-            SelectMembersSql,
-            PgArgument.Of(keyspaceId),
-            PgArgument.Typed(index, NpgsqlDbType.Bytea),
-            PgArgument.Of(depth)
-        );
+    private PgStatement SelectMembersStatement(long keyspaceId, byte[] index, short depth)
+    {
+        var indexArgument = PgArgument.Typed(index, NpgsqlDbType.Bytea);
+
+        return new PgStatement(SelectMembersSql, keyspaceId, indexArgument, depth);
+    }
 
     /// <summary>
     /// Reads the result of the statement that lists a group's members.
@@ -570,22 +568,14 @@ internal sealed class PgMembershipService(PgRecordTable table, PgChangeLog chang
         CancellationToken cancellationToken
     )
     {
+        var indexArgument = PgArgument.Typed(index, NpgsqlDbType.Bytea);
         var (revisions, clocks, rows, deadlines) = await transaction
             .FirstAsync(
                 [
                     Table.LockKeyspace(keyspaceId),
                     Table.Clock(),
-                    new PgStatement(
-                        SelectGroupSql,
-                        PgArgument.Of(keyspaceId),
-                        PgArgument.Typed(index, NpgsqlDbType.Bytea),
-                        PgArgument.Of(depth)
-                    ),
-                    new PgStatement(
-                        SelectSessionSql,
-                        PgArgument.Of(keyspaceId),
-                        PgArgument.Of(session)
-                    ),
+                    new PgStatement(SelectGroupSql, keyspaceId, indexArgument, depth),
+                    new PgStatement(SelectSessionSql, keyspaceId, session),
                 ],
                 async (results, token) =>
                 {

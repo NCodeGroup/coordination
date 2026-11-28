@@ -103,16 +103,7 @@ internal sealed class PgSequenceService(PgServer server, PgKeyspaces keyspaces, 
                 {
                     var rows = await Server
                         .ExecuteAsync(
-                            [
-                                new PgStatement(
-                                    Add,
-                                    PgArgument.Of(id),
-                                    PgArgument.Of(index),
-                                    PgArgument.Of(depth),
-                                    PgArgument.Of(text),
-                                    PgArgument.Of(amount)
-                                ),
-                            ],
+                            [new PgStatement(Add, id, index, depth, text, amount)],
                             async (results, readToken) =>
                                 await results
                                     .ReadAsync(reader => reader.GetInt64(0), readToken)

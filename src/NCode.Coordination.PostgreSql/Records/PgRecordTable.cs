@@ -84,8 +84,7 @@ internal sealed class PgRecordTable(PgServer server, PgKeyspaces keyspaces, PgSe
     /// </summary>
     /// <param name="keyspaceId">The keyspace's id.</param>
     /// <returns>The statement, whose result holds the revision, or no row when the keyspace's row does not exist.</returns>
-    public PgStatement LockKeyspace(long keyspaceId) =>
-        new(SelectRevisionSql, PgArgument.Of(keyspaceId));
+    public PgStatement LockKeyspace(long keyspaceId) => new(SelectRevisionSql, keyspaceId);
 
     /// <summary>
     /// Builds the statement that reads the server's instant.
@@ -158,7 +157,7 @@ internal sealed class PgRecordTable(PgServer server, PgKeyspaces keyspaces, PgSe
                                 await transaction
                                     .FirstAsync(
                                         [
-                                            new PgStatement(LockShareSql, PgArgument.Of(id)),
+                                            new PgStatement(LockShareSql, id),
                                             SelectOneStatement(id, index, depth),
                                         ],
                                         async (results, readToken) =>
@@ -193,7 +192,7 @@ internal sealed class PgRecordTable(PgServer server, PgKeyspaces keyspaces, PgSe
     /// <param name="depth">The key's partition depth.</param>
     /// <returns>The statement.</returns>
     private PgStatement SelectOneStatement(long keyspaceId, byte[] index, short depth) =>
-        new(SelectOneSql, PgArgument.Of(keyspaceId), PgArgument.Of(index), PgArgument.Of(depth));
+        new(SelectOneSql, keyspaceId, index, depth);
 
     /// <summary>
     /// Reads the result of <see cref="SelectOne"/>.
@@ -289,23 +288,20 @@ internal sealed class PgRecordTable(PgServer server, PgKeyspaces keyspaces, PgSe
         var indexes = distinct.Select(PgKeys.Index).ToArray();
         var depths = distinct.Select(key => (short)key.PartitionDepth).ToArray();
         var sessionIds = sessions.Distinct(StringComparer.Ordinal).ToArray();
+        var indexesArgument = PgArgument.Typed(indexes, NpgsqlDbType.Array | NpgsqlDbType.Bytea);
+        var depthsArgument = PgArgument.Typed(depths, NpgsqlDbType.Array | NpgsqlDbType.Smallint);
+        var sessionIdsArgument = PgArgument.Typed(
+            sessionIds,
+            NpgsqlDbType.Array | NpgsqlDbType.Text
+        );
 
         var (revisions, clocks, rows, sessionRows) = await transaction
             .FirstAsync(
                 [
-                    new PgStatement(SelectRevisionSql, PgArgument.Of(keyspaceId)),
+                    new PgStatement(SelectRevisionSql, keyspaceId),
                     new PgStatement(SelectClock),
-                    new PgStatement(
-                        SelectRowsSql,
-                        PgArgument.Of(keyspaceId),
-                        PgArgument.Typed(indexes, NpgsqlDbType.Array | NpgsqlDbType.Bytea),
-                        PgArgument.Typed(depths, NpgsqlDbType.Array | NpgsqlDbType.Smallint)
-                    ),
-                    new PgStatement(
-                        SelectSessionsSql,
-                        PgArgument.Of(keyspaceId),
-                        PgArgument.Typed(sessionIds, NpgsqlDbType.Array | NpgsqlDbType.Text)
-                    ),
+                    new PgStatement(SelectRowsSql, keyspaceId, indexesArgument, depthsArgument),
+                    new PgStatement(SelectSessionsSql, keyspaceId, sessionIdsArgument),
                 ],
                 async (results, token) =>
                 {

@@ -195,21 +195,15 @@ internal sealed class PgSetService(PgServer server, PgKeyspaces keyspaces, PgSch
                     await Server
                         .ExecuteAsync(
                             [
-                                new PgStatement(
-                                    Lock,
-                                    PgArgument.Of(id),
-                                    PgArgument.Of(index),
-                                    PgArgument.Of(depth),
-                                    PgArgument.Of(text)
-                                ),
+                                new PgStatement(Lock, id, index, depth, text),
                                 new PgStatement(
                                     Add,
-                                    PgArgument.Of(id),
-                                    PgArgument.Of(index),
-                                    PgArgument.Of(depth),
-                                    PgArgument.Of(encoded),
-                                    PgArgument.Of(microseconds),
-                                    PgArgument.Of((long)CoordinationLimits.MaxSetMembers)
+                                    id,
+                                    index,
+                                    depth,
+                                    encoded,
+                                    microseconds,
+                                    (long)CoordinationLimits.MaxSetMembers
                                 ),
                             ],
                             async (results, readToken) =>
@@ -273,19 +267,8 @@ internal sealed class PgSetService(PgServer server, PgKeyspaces keyspaces, PgSch
                     await Server
                         .ExecuteAsync(
                             [
-                                new PgStatement(
-                                    LockExisting,
-                                    PgArgument.Of(id),
-                                    PgArgument.Of(index),
-                                    PgArgument.Of(depth)
-                                ),
-                                new PgStatement(
-                                    Remove,
-                                    PgArgument.Of(id),
-                                    PgArgument.Of(index),
-                                    PgArgument.Of(depth),
-                                    PgArgument.Of(encoded)
-                                ),
+                                new PgStatement(LockExisting, id, index, depth),
+                                new PgStatement(Remove, id, index, depth, encoded),
                             ],
                             async (results, readToken) =>
                             {
@@ -330,14 +313,7 @@ internal sealed class PgSetService(PgServer server, PgKeyspaces keyspaces, PgSch
                 {
                     var rows = await Server
                         .ExecuteAsync(
-                            [
-                                new PgStatement(
-                                    List,
-                                    PgArgument.Of(id),
-                                    PgArgument.Of(index),
-                                    PgArgument.Of(depth)
-                                ),
-                            ],
+                            [new PgStatement(List, id, index, depth)],
                             async (results, readToken) =>
                                 await results
                                     .ReadAsync(reader => reader.GetString(0), readToken)
@@ -392,18 +368,8 @@ internal sealed class PgSetService(PgServer server, PgKeyspaces keyspaces, PgSch
                     await Server
                         .ExecuteAsync(
                             [
-                                new PgStatement(
-                                    ClearSet,
-                                    PgArgument.Of(id),
-                                    PgArgument.Of(index),
-                                    PgArgument.Of(depth)
-                                ),
-                                new PgStatement(
-                                    ClearMembers,
-                                    PgArgument.Of(id),
-                                    PgArgument.Of(index),
-                                    PgArgument.Of(depth)
-                                ),
+                                new PgStatement(ClearSet, id, index, depth),
+                                new PgStatement(ClearMembers, id, index, depth),
                             ],
                             (_, _) => ValueTask.FromResult(true),
                             token

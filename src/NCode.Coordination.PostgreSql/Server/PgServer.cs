@@ -183,12 +183,11 @@ internal sealed class PgServer(PgSource source, PgSettings settings)
     {
         ArgumentNullException.ThrowIfNull(settings);
 
-        return new PgStatement(
-            TimeoutsSql,
-            PgArgument.Of(ToMilliseconds(settings.StatementTimeout)),
-            PgArgument.Of(ToMilliseconds(settings.LockTimeout)),
-            PgArgument.Of(ToMilliseconds(settings.IdleInTransactionTimeout))
-        );
+        var statementTimeout = ToMilliseconds(settings.StatementTimeout);
+        var lockTimeout = ToMilliseconds(settings.LockTimeout);
+        var idleTimeout = ToMilliseconds(settings.IdleInTransactionTimeout);
+
+        return new PgStatement(TimeoutsSql, statementTimeout, lockTimeout, idleTimeout);
     }
 
     private static string ToMilliseconds(TimeSpan duration)

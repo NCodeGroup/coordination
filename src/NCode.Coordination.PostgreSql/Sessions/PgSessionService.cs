@@ -79,14 +79,7 @@ internal sealed class PgSessionService(PgRecordTable table, IPgTokens tokens) : 
                 async (id, runToken) =>
                     await Table
                         .Server.ExecuteAsync(
-                            [
-                                new PgStatement(
-                                    InsertSql,
-                                    PgArgument.Of(id),
-                                    PgArgument.Of(token),
-                                    PgArgument.Of(microseconds)
-                                ),
-                            ],
+                            [new PgStatement(InsertSql, id, token, microseconds)],
                             static (_, _) => ValueTask.FromResult(true),
                             runToken
                         )
@@ -115,13 +108,7 @@ internal sealed class PgSessionService(PgRecordTable table, IPgTokens tokens) : 
                 {
                     var renewed = await Table
                         .Server.ExecuteAsync(
-                            [
-                                new PgStatement(
-                                    RenewSql,
-                                    PgArgument.Of(id),
-                                    PgArgument.Of(session.Value)
-                                ),
-                            ],
+                            [new PgStatement(RenewSql, id, session.Value)],
                             async (results, readToken) =>
                                 await results
                                     .ReadAsync(reader => reader.GetInt64(0), readToken)
@@ -223,13 +210,7 @@ internal sealed class PgSessionService(PgRecordTable table, IPgTokens tokens) : 
                 {
                     var ended = await Table
                         .Server.ExecuteAsync(
-                            [
-                                new PgStatement(
-                                    EndedSql,
-                                    PgArgument.Of(id),
-                                    PgArgument.Of(session.Value)
-                                ),
-                            ],
+                            [new PgStatement(EndedSql, id, session.Value)],
                             async (results, readToken) =>
                                 await results
                                     .ReadAsync(reader => reader.GetBoolean(0), readToken)

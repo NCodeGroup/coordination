@@ -90,16 +90,7 @@ internal sealed class PgClaimService(PgServer server, PgKeyspaces keyspaces, PgS
                 {
                     var rows = await Server
                         .ExecuteAsync(
-                            [
-                                new PgStatement(
-                                    Claim,
-                                    PgArgument.Of(id),
-                                    PgArgument.Of(index),
-                                    PgArgument.Of(depth),
-                                    PgArgument.Of(text),
-                                    PgArgument.Of(microseconds)
-                                ),
-                            ],
+                            [new PgStatement(Claim, id, index, depth, text, microseconds)],
                             async (results, readToken) =>
                                 await results
                                     .ReadAsync(reader => reader.GetInt32(0), readToken)

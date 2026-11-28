@@ -142,31 +142,17 @@ internal sealed class PgGrants(PgRecordTable table)
 
         var index = PgKeys.Index(resource);
         var depth = (short)resource.PartitionDepth;
+        var indexArgument = PgArgument.Typed(index, NpgsqlDbType.Bytea);
+        var sessionArgument = PgArgument.Typed(session, NpgsqlDbType.Text);
 
         var (revisions, clocks, rows, lasts, deadlines) = await transaction
             .FirstAsync(
                 [
                     Table.LockKeyspace(keyspaceId),
                     Table.Clock(),
-                    new PgStatement(
-                        SelectGrantsSql,
-                        PgArgument.Of(keyspaceId),
-                        PgArgument.Of(kind),
-                        PgArgument.Typed(index, NpgsqlDbType.Bytea),
-                        PgArgument.Of(depth)
-                    ),
-                    new PgStatement(
-                        SelectLastSql,
-                        PgArgument.Of(keyspaceId),
-                        PgArgument.Of(kind),
-                        PgArgument.Typed(index, NpgsqlDbType.Bytea),
-                        PgArgument.Of(depth)
-                    ),
-                    new PgStatement(
-                        SelectSessionSql,
-                        PgArgument.Of(keyspaceId),
-                        PgArgument.Typed(session, NpgsqlDbType.Text)
-                    ),
+                    new PgStatement(SelectGrantsSql, keyspaceId, kind, indexArgument, depth),
+                    new PgStatement(SelectLastSql, keyspaceId, kind, indexArgument, depth),
+                    new PgStatement(SelectSessionSql, keyspaceId, sessionArgument),
                 ],
                 async (results, token) =>
                 {
@@ -242,20 +228,27 @@ internal sealed class PgGrants(PgRecordTable table)
         ArgumentNullException.ThrowIfNull(resource);
         ArgumentNullException.ThrowIfNull(owner);
 
+        var indexArgument = PgArgument.Typed(PgKeys.Index(resource), NpgsqlDbType.Bytea);
+        var depth = (short)resource.PartitionDepth;
+        var keyText = PgKeys.KeyText(resource);
+        var sessionArgument = PgArgument.Typed(session, NpgsqlDbType.Text);
+        var deadlineArgument = PgArgument.Typed(deadline, NpgsqlDbType.TimestampTz);
+        var valueArgument = PgArgument.Typed(value, NpgsqlDbType.Bytea);
+
         return new PgStatement(
             UpsertGrantSql,
-            PgArgument.Of(keyspaceId),
-            PgArgument.Of(kind),
-            PgArgument.Typed(PgKeys.Index(resource), NpgsqlDbType.Bytea),
-            PgArgument.Of((short)resource.PartitionDepth),
-            PgArgument.Of(PgKeys.KeyText(resource)),
-            PgArgument.Of(slot),
-            PgArgument.Of(capacity),
-            PgArgument.Of(fencing),
-            PgArgument.Of(owner),
-            PgArgument.Typed(session, NpgsqlDbType.Text),
-            PgArgument.Typed(deadline, NpgsqlDbType.TimestampTz),
-            PgArgument.Typed(value, NpgsqlDbType.Bytea)
+            keyspaceId,
+            kind,
+            indexArgument,
+            depth,
+            keyText,
+            slot,
+            capacity,
+            fencing,
+            owner,
+            sessionArgument,
+            deadlineArgument,
+            valueArgument
         );
     }
 
@@ -272,14 +265,18 @@ internal sealed class PgGrants(PgRecordTable table)
     {
         ArgumentNullException.ThrowIfNull(resource);
 
+        var indexArgument = PgArgument.Typed(PgKeys.Index(resource), NpgsqlDbType.Bytea);
+        var depth = (short)resource.PartitionDepth;
+        var keyText = PgKeys.KeyText(resource);
+
         return new PgStatement(
             UpsertFencingSql,
-            PgArgument.Of(keyspaceId),
-            PgArgument.Of(kind),
-            PgArgument.Typed(PgKeys.Index(resource), NpgsqlDbType.Bytea),
-            PgArgument.Of((short)resource.PartitionDepth),
-            PgArgument.Of(PgKeys.KeyText(resource)),
-            PgArgument.Of(last)
+            keyspaceId,
+            kind,
+            indexArgument,
+            depth,
+            keyText,
+            last
         );
     }
 
@@ -305,15 +302,19 @@ internal sealed class PgGrants(PgRecordTable table)
     {
         ArgumentNullException.ThrowIfNull(resource);
 
+        var indexArgument = PgArgument.Typed(PgKeys.Index(resource), NpgsqlDbType.Bytea);
+        var depth = (short)resource.PartitionDepth;
+        var deadlineArgument = PgArgument.Typed(deadline, NpgsqlDbType.TimestampTz);
+
         return new PgStatement(
             RenewGrantSql,
-            PgArgument.Of(keyspaceId),
-            PgArgument.Of(kind),
-            PgArgument.Typed(PgKeys.Index(resource), NpgsqlDbType.Bytea),
-            PgArgument.Of((short)resource.PartitionDepth),
-            PgArgument.Of(slot),
-            PgArgument.Typed(deadline, NpgsqlDbType.TimestampTz),
-            PgArgument.Of(fencing)
+            keyspaceId,
+            kind,
+            indexArgument,
+            depth,
+            slot,
+            deadlineArgument,
+            fencing
         );
     }
 
@@ -337,14 +338,17 @@ internal sealed class PgGrants(PgRecordTable table)
     {
         ArgumentNullException.ThrowIfNull(resource);
 
+        var indexArgument = PgArgument.Typed(PgKeys.Index(resource), NpgsqlDbType.Bytea);
+        var depth = (short)resource.PartitionDepth;
+
         return new PgStatement(
             DeleteGrantSql,
-            PgArgument.Of(keyspaceId),
-            PgArgument.Of(kind),
-            PgArgument.Typed(PgKeys.Index(resource), NpgsqlDbType.Bytea),
-            PgArgument.Of((short)resource.PartitionDepth),
-            PgArgument.Of(slot),
-            PgArgument.Of(fencing)
+            keyspaceId,
+            kind,
+            indexArgument,
+            depth,
+            slot,
+            fencing
         );
     }
 
@@ -392,7 +396,7 @@ internal sealed class PgGrants(PgRecordTable table)
                     await transaction
                         .FirstAsync(
                             [
-                                new PgStatement(LockShareSql, PgArgument.Of(keyspaceId)),
+                                new PgStatement(LockShareSql, keyspaceId),
                                 SelectNowStatement(keyspaceId, kind, index, depth),
                             ],
                             async (results, readToken) =>
@@ -421,19 +425,12 @@ internal sealed class PgGrants(PgRecordTable table)
     /// <param name="index">The resource's index value.</param>
     /// <param name="depth">The resource's partition depth.</param>
     /// <returns>The statement.</returns>
-    private PgStatement SelectNowStatement(
-        long keyspaceId,
-        short kind,
-        byte[] index,
-        short depth
-    ) =>
-        new(
-            SelectNowSql,
-            PgArgument.Of(keyspaceId),
-            PgArgument.Of(kind),
-            PgArgument.Typed(index, NpgsqlDbType.Bytea),
-            PgArgument.Of(depth)
-        );
+    private PgStatement SelectNowStatement(long keyspaceId, short kind, byte[] index, short depth)
+    {
+        var indexArgument = PgArgument.Typed(index, NpgsqlDbType.Bytea);
+
+        return new PgStatement(SelectNowSql, keyspaceId, kind, indexArgument, depth);
+    }
 
     /// <summary>
     /// Reads the result of the statement that lists a resource's grant rows with the server's instant.

@@ -106,13 +106,8 @@ internal sealed class PgChangeLog(PgServer server, PgSchemaName schema)
                     var (header, entries) = await transaction
                         .FirstAsync(
                             [
-                                new PgStatement(Header, PgArgument.Of(keyspaceId)),
-                                new PgStatement(
-                                    Entries,
-                                    PgArgument.Of(keyspaceId),
-                                    PgArgument.Of(after),
-                                    PgArgument.Of((long)limit)
-                                ),
+                                new PgStatement(Header, keyspaceId),
+                                new PgStatement(Entries, keyspaceId, after, (long)limit),
                             ],
                             async (results, readToken) =>
                             {
@@ -250,16 +245,18 @@ internal sealed class PgChangeLog(PgServer server, PgSchemaName schema)
 
         while (true)
         {
+            var lastIndexArgument = PgArgument.Typed(lastIndex, NpgsqlDbType.Bytea);
+            var lastDepthArgument = PgArgument.Typed(lastDepth, NpgsqlDbType.Smallint);
             var page = await transaction
                 .NextAsync(
                     [
                         new PgStatement(
                             EndedKeys,
-                            PgArgument.Of(keyspaceId),
-                            PgArgument.Of(session),
-                            PgArgument.Of(revision),
-                            PgArgument.Typed(lastIndex, NpgsqlDbType.Bytea),
-                            PgArgument.Typed(lastDepth, NpgsqlDbType.Smallint)
+                            keyspaceId,
+                            session,
+                            revision,
+                            lastIndexArgument,
+                            lastDepthArgument
                         ),
                     ],
                     async (results, readToken) =>

@@ -454,6 +454,11 @@ internal sealed class PgRecordService(PgRecordTable table) : IRecordService
 
         var limit = page.Limit;
         var prefixEnd = PgKeys.PrefixEnd(prefixIndex);
+        var prefixIndexArgument = PgArgument.Typed(prefixIndex, NpgsqlDbType.Bytea);
+        var prefixEndArgument = PgArgument.Typed(prefixEnd, NpgsqlDbType.Bytea);
+        var startIndexArgument = PgArgument.Typed(startIndex, NpgsqlDbType.Bytea);
+        var startDepthArgument = PgArgument.Typed(startDepth, NpgsqlDbType.Smallint);
+        var limitArgument = PgArgument.Typed(limit + 1, NpgsqlDbType.Integer);
 
         return await Table
             .Keyspaces.RunAsync<RecordPage>(
@@ -463,12 +468,12 @@ internal sealed class PgRecordService(PgRecordTable table) : IRecordService
                     PgStatement Statement() =>
                         new(
                             ListSql,
-                            PgArgument.Of(id),
-                            PgArgument.Typed(prefixIndex, NpgsqlDbType.Bytea),
-                            PgArgument.Typed(prefixEnd, NpgsqlDbType.Bytea),
-                            PgArgument.Typed(startIndex, NpgsqlDbType.Bytea),
-                            PgArgument.Typed(startDepth, NpgsqlDbType.Smallint),
-                            PgArgument.Typed(limit + 1, NpgsqlDbType.Integer)
+                            id,
+                            prefixIndexArgument,
+                            prefixEndArgument,
+                            startIndexArgument,
+                            startDepthArgument,
+                            limitArgument
                         );
 
                     var first = await Table
@@ -498,10 +503,7 @@ internal sealed class PgRecordService(PgRecordTable table) : IRecordService
                                 async (transaction, transactionToken) =>
                                     await transaction
                                         .FirstAsync(
-                                            [
-                                                new PgStatement(LockShareSql, PgArgument.Of(id)),
-                                                Statement(),
-                                            ],
+                                            [new PgStatement(LockShareSql, id), Statement()],
                                             async (results, readToken) =>
                                             {
                                                 await results

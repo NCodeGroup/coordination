@@ -73,10 +73,7 @@ internal sealed class PgKeyspaces(PgServer server, PgSchemaName schema)
             var candidate = DrawId();
             var ids = await server
                 .ExecuteAsync(
-                    [
-                        new PgStatement(Insert, PgArgument.Of(candidate), PgArgument.Of(name)),
-                        new PgStatement(Select, PgArgument.Of(name)),
-                    ],
+                    [new PgStatement(Insert, candidate, name), new PgStatement(Select, name)],
                     async (results, token) =>
                         await results
                             .ReadAsync(reader => reader.GetInt64(0), token)

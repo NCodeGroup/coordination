@@ -157,7 +157,7 @@ internal static partial class PgMigrations
                             [
                                 new PgStatement(
                                     "SELECT to_regclass($1) IS NOT NULL",
-                                    PgArgument.Of(schema.Quoted + ".schema_version")
+                                    schema.Quoted + ".schema_version"
                                 ),
                             ],
                             async (results, t) =>
@@ -212,11 +212,11 @@ internal static partial class PgMigrations
                     var (schemaExists, tableExists) = await transaction
                         .FirstAsync(
                             [
-                                new PgStatement(LockSql, PgArgument.Of(LockPrefix + schema.Name)),
+                                new PgStatement(LockSql, LockPrefix + schema.Name),
                                 new PgStatement(
                                     ExistsSql,
-                                    PgArgument.Of(schema.Quoted),
-                                    PgArgument.Of(schema.Quoted + ".schema_version")
+                                    schema.Quoted,
+                                    schema.Quoted + ".schema_version"
                                 ),
                             ],
                             async (results, t) =>
