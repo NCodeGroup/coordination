@@ -60,7 +60,10 @@ internal sealed class PgSweeper(PgSweeps sweeps, TimeSpan interval, TimeProvider
         {
             await Loop.ConfigureAwait(false);
         }
-        catch (OperationCanceledException) { }
+        catch (OperationCanceledException)
+        {
+            // The sweeper is stopped, and the loop ended with its cancellation.
+        }
 
         Cancellation.Dispose();
     }
@@ -89,6 +92,9 @@ internal sealed class PgSweeper(PgSweeps sweeps, TimeSpan interval, TimeProvider
                 await Sweeps.SweepAsync(cancellationToken).ConfigureAwait(false);
             }
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // The sweeper is stopped.
+        }
     }
 }

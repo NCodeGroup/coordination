@@ -278,16 +278,28 @@ internal sealed class PgSweeps(PgServer server, PgSettings settings, PgRecordTab
         {
             await SweepRecordsAsync(cancellationToken).ConfigureAwait(false);
         }
-        catch (CoordinationException) { }
-        catch (PgKeyspaceMissingException) { }
+        catch (CoordinationException)
+        {
+            // The next sweep reads the rows again, and one failing pass must not stop the others.
+        }
+        catch (PgKeyspaceMissingException)
+        {
+            // The next sweep reads the rows again, and one failing pass must not stop the others.
+        }
 
         cancellationToken.ThrowIfCancellationRequested();
         try
         {
             await SweepSessionsAsync(cancellationToken).ConfigureAwait(false);
         }
-        catch (CoordinationException) { }
-        catch (PgKeyspaceMissingException) { }
+        catch (CoordinationException)
+        {
+            // The next sweep reads the rows again, and one failing pass must not stop the others.
+        }
+        catch (PgKeyspaceMissingException)
+        {
+            // The next sweep reads the rows again, and one failing pass must not stop the others.
+        }
 
         foreach (var sql in PassesAfterSessions)
         {
@@ -319,8 +331,14 @@ internal sealed class PgSweeps(PgServer server, PgSettings settings, PgRecordTab
                 )
                 .ConfigureAwait(false);
         }
-        catch (CoordinationException) { }
-        catch (PgKeyspaceMissingException) { }
+        catch (CoordinationException)
+        {
+            // The next sweep runs the pass again, and one failing pass must not stop the others.
+        }
+        catch (PgKeyspaceMissingException)
+        {
+            // The next sweep runs the pass again, and one failing pass must not stop the others.
+        }
     }
 
     /// <summary>
@@ -351,8 +369,14 @@ internal sealed class PgSweeps(PgServer server, PgSettings settings, PgRecordTab
             {
                 await SweepKeyspaceAsync(keyspaceId, cancellationToken).ConfigureAwait(false);
             }
-            catch (CoordinationException) { }
-            catch (PgKeyspaceMissingException) { }
+            catch (CoordinationException)
+            {
+                // The next sweep reads the rows again, and one failing keyspace must not stop the others.
+            }
+            catch (PgKeyspaceMissingException)
+            {
+                // The next sweep reads the rows again, and one failing keyspace must not stop the others.
+            }
         }
     }
 
@@ -469,8 +493,14 @@ internal sealed class PgSweeps(PgServer server, PgSettings settings, PgRecordTab
                 await SweepSessionKeyspaceAsync(keyspaceId, cancellationToken)
                     .ConfigureAwait(false);
             }
-            catch (CoordinationException) { }
-            catch (PgKeyspaceMissingException) { }
+            catch (CoordinationException)
+            {
+                // The next sweep reads the rows again, and one failing keyspace must not stop the others.
+            }
+            catch (PgKeyspaceMissingException)
+            {
+                // The next sweep reads the rows again, and one failing keyspace must not stop the others.
+            }
         }
     }
 

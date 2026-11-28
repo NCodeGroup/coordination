@@ -35,7 +35,7 @@ internal sealed class PostgreSqlProvider : ICoordinationProvider, IAsyncDisposab
     /// profile names. A transaction and a counter's batch run as one database transaction over the rows of every
     /// partition, so each is atomic across partitions. A sequence has no expiry. A record watch and a notification
     /// read a log that the server numbers and bounds, so each delivers at most once with gap detection: a gap that the
-    /// log fills is never seen, and one that it can't is a resync (ADR-1034 rule 9).
+    /// log fills is never seen, and one that it can't is a resync.
     /// </summary>
     /// <param name="profile">The profile whose durability the provider declares.</param>
     /// <returns>The primitives: records, transactions, occurrences, sets, counters, sequences, sessions, membership, leases, semaphores, elections, claims, record watches and notifications.</returns>
@@ -119,6 +119,7 @@ internal sealed class PostgreSqlProvider : ICoordinationProvider, IAsyncDisposab
                 profile.Durability,
                 Guarantees.ServerClock
             ),
+            // A record watch and a notification read a log that the server numbers and bounds (ADR-1034 rule 9).
             PrimitiveSupport.Supported(
                 Primitives.RecordWatch,
                 Guarantees.LinearizableUntilFailover,

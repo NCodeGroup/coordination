@@ -336,7 +336,7 @@ internal sealed class PgLogHub : IAsyncDisposable, IDisposable
                 await PumpAllAsync(stop).ConfigureAwait(false);
             }
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (stop.IsCancellationRequested)
         {
             // The hub is disposed.
         }
