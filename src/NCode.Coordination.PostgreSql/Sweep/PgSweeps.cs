@@ -1,8 +1,10 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using System.Collections.Immutable;
 using NCode.Coordination.PostgreSql.Records;
 using NCode.Coordination.PostgreSql.Server;
+using Npgsql;
 
 namespace NCode.Coordination.PostgreSql.Sweep;
 
@@ -16,7 +18,9 @@ namespace NCode.Coordination.PostgreSql.Sweep;
 /// <exception cref="ArgumentNullException">The server, the settings or the table are null.</exception>
 internal sealed class PgSweeps(PgServer server, PgSettings settings, PgRecordTable table)
 {
-    /// <summary>The statement that deletes expired occurrences.</summary>
+    /// <summary>
+    /// The statement that deletes expired occurrences.
+    /// </summary>
     private const string OccurrencesSql = """
         DELETE FROM {schema}.occurrences
         WHERE ctid = ANY (ARRAY(
@@ -26,7 +30,9 @@ internal sealed class PgSweeps(PgServer server, PgSettings settings, PgRecordTab
           FOR UPDATE SKIP LOCKED))
         """;
 
-    /// <summary>The statement that deletes expired counters.</summary>
+    /// <summary>
+    /// The statement that deletes expired counters.
+    /// </summary>
     private const string CountersSql = """
         DELETE FROM {schema}.counters
         WHERE ctid = ANY (ARRAY(
@@ -36,7 +42,9 @@ internal sealed class PgSweeps(PgServer server, PgSettings settings, PgRecordTab
           FOR UPDATE SKIP LOCKED))
         """;
 
-    /// <summary>The statement that deletes expired set members.</summary>
+    /// <summary>
+    /// The statement that deletes expired set members.
+    /// </summary>
     private const string SetMembersSql = """
         DELETE FROM {schema}.set_members
         WHERE ctid = ANY (ARRAY(
@@ -46,7 +54,9 @@ internal sealed class PgSweeps(PgServer server, PgSettings settings, PgRecordTab
           FOR UPDATE SKIP LOCKED))
         """;
 
-    /// <summary>The statement that deletes the rows of sets that hold no member.</summary>
+    /// <summary>
+    /// The statement that deletes the rows of sets that hold no member.
+    /// </summary>
     private const string SetsSql = """
         DELETE FROM {schema}.sets
         WHERE ctid = ANY (ARRAY(
@@ -58,22 +68,30 @@ internal sealed class PgSweeps(PgServer server, PgSettings settings, PgRecordTab
           FOR UPDATE SKIP LOCKED))
         """;
 
-    /// <summary>The statement that lists the keyspaces that hold an expired record.</summary>
+    /// <summary>
+    /// The statement that lists the keyspaces that hold an expired record.
+    /// </summary>
     private const string ExpiredKeyspacesSql = """
         SELECT DISTINCT keyspace_id FROM {schema}.records
         WHERE deadline <= clock_timestamp()
         LIMIT 100
         """;
 
-    /// <summary>The statement that locks a keyspace's row, unless another transaction holds it, and reads its revision.</summary>
+    /// <summary>
+    /// The statement that locks a keyspace's row, unless another transaction holds it, and reads its revision.
+    /// </summary>
     private const string LockKeyspaceSql = """
         SELECT revision FROM {schema}.keyspaces WHERE id = $1 FOR NO KEY UPDATE SKIP LOCKED
         """;
 
-    /// <summary>The statement that reads the server's instant.</summary>
+    /// <summary>
+    /// The statement that reads the server's instant.
+    /// </summary>
     private const string ClockSql = "SELECT clock_timestamp()";
 
-    /// <summary>The statement that reads a keyspace's expired records.</summary>
+    /// <summary>
+    /// The statement that reads a keyspace's expired records.
+    /// </summary>
     private const string ExpiredRecordsSql = """
         SELECT idx, depth, key, value, revision, deadline, session_id
         FROM {schema}.records
@@ -82,14 +100,18 @@ internal sealed class PgSweeps(PgServer server, PgSettings settings, PgRecordTab
         LIMIT $2
         """;
 
-    /// <summary>The statement that lists the keyspaces that hold an expired session.</summary>
+    /// <summary>
+    /// The statement that lists the keyspaces that hold an expired session.
+    /// </summary>
     private const string ExpiredSessionKeyspacesSql = """
         SELECT DISTINCT keyspace_id FROM {schema}.sessions
         WHERE deadline <= clock_timestamp()
         LIMIT 100
         """;
 
-    /// <summary>The statement that reads a keyspace's expired sessions.</summary>
+    /// <summary>
+    /// The statement that reads a keyspace's expired sessions.
+    /// </summary>
     private const string ExpiredSessionsSql = """
         SELECT id FROM {schema}.sessions
         WHERE keyspace_id = $1 AND deadline <= clock_timestamp()
@@ -97,7 +119,9 @@ internal sealed class PgSweeps(PgServer server, PgSettings settings, PgRecordTab
         LIMIT $2
         """;
 
-    /// <summary>The statement that deletes the records bound to a session that ended and left the log.</summary>
+    /// <summary>
+    /// The statement that deletes the records bound to a session that ended and left the log.
+    /// </summary>
     private const string BoundRecordsSql = """
         DELETE FROM {schema}.records
         WHERE ctid = ANY (ARRAY(
@@ -113,7 +137,9 @@ internal sealed class PgSweeps(PgServer server, PgSettings settings, PgRecordTab
           FOR UPDATE SKIP LOCKED))
         """;
 
-    /// <summary>The statement that deletes the members bound to a session that ended and left the log.</summary>
+    /// <summary>
+    /// The statement that deletes the members bound to a session that ended and left the log.
+    /// </summary>
     private const string BoundMembersSql = """
         DELETE FROM {schema}.members
         WHERE ctid = ANY (ARRAY(
@@ -129,7 +155,9 @@ internal sealed class PgSweeps(PgServer server, PgSettings settings, PgRecordTab
           FOR UPDATE SKIP LOCKED))
         """;
 
-    /// <summary>The statement that deletes the grants bound to a session that ended and left the log.</summary>
+    /// <summary>
+    /// The statement that deletes the grants bound to a session that ended and left the log.
+    /// </summary>
     private const string BoundGrantsSql = """
         DELETE FROM {schema}.grants
         WHERE ctid = ANY (ARRAY(
@@ -145,7 +173,9 @@ internal sealed class PgSweeps(PgServer server, PgSettings settings, PgRecordTab
           FOR UPDATE SKIP LOCKED))
         """;
 
-    /// <summary>The statement that deletes grants past their deadline.</summary>
+    /// <summary>
+    /// The statement that deletes grants past their deadline.
+    /// </summary>
     private const string GrantsSql = """
         DELETE FROM {schema}.grants
         WHERE ctid = ANY (ARRAY(
@@ -155,7 +185,9 @@ internal sealed class PgSweeps(PgServer server, PgSettings settings, PgRecordTab
           FOR UPDATE SKIP LOCKED))
         """;
 
-    /// <summary>The statement that deletes claims past their deadline.</summary>
+    /// <summary>
+    /// The statement that deletes claims past their deadline.
+    /// </summary>
     private const string ClaimsSql = """
         DELETE FROM {schema}.claims
         WHERE ctid = ANY (ARRAY(
@@ -165,7 +197,9 @@ internal sealed class PgSweeps(PgServer server, PgSettings settings, PgRecordTab
           FOR UPDATE SKIP LOCKED))
         """;
 
-    /// <summary>The statement that deletes the entries of the change logs that passed their retention.</summary>
+    /// <summary>
+    /// The statement that deletes the entries of the change logs that passed their retention.
+    /// </summary>
     private const string LogRetentionSql = """
         WITH removed AS (
           DELETE FROM {schema}.changes
@@ -182,7 +216,9 @@ internal sealed class PgSweeps(PgServer server, PgSettings settings, PgRecordTab
         WHERE k.id = m.keyspace_id
         """;
 
-    /// <summary>The statement that deletes the messages of the topics' logs that passed their retention.</summary>
+    /// <summary>
+    /// The statement that deletes the messages of the topics' logs that passed their retention.
+    /// </summary>
     private const string MessagesSql = """
         WITH removed AS (
           DELETE FROM {schema}.messages
@@ -198,6 +234,164 @@ internal sealed class PgSweeps(PgServer server, PgSettings settings, PgRecordTab
         FROM (SELECT keyspace_id, idx, depth, max(sequence) AS sequence FROM removed GROUP BY keyspace_id, idx, depth) m
         WHERE t.keyspace_id = m.keyspace_id AND t.idx = m.idx AND t.depth = m.depth
         """;
+
+    /// <summary>
+    /// Runs one step of a sweep and ignores its failure.
+    /// </summary>
+    /// <param name="step">The step to run.</param>
+    /// <param name="cancellationToken">The token that cancels the sweep.</param>
+    /// <returns>A task that completes after the step ran or failed.</returns>
+    /// <exception cref="OperationCanceledException">The token was cancelled.</exception>
+    private static async ValueTask IgnoreFailureAsync(
+        Func<CancellationToken, ValueTask> step,
+        CancellationToken cancellationToken
+    )
+    {
+        try
+        {
+            await step(cancellationToken).ConfigureAwait(false);
+        }
+        catch (CoordinationException)
+        {
+            // The next sweep reads the rows again, and one failing step must not stop the others.
+        }
+        catch (PgKeyspaceMissingException)
+        {
+            // The next sweep reads the rows again, and one failing step must not stop the others.
+        }
+    }
+
+    /// <summary>
+    /// Reads the first column of the reader's current row as a 64-bit integer.
+    /// </summary>
+    /// <param name="reader">The reader, on a row.</param>
+    /// <returns>The integer.</returns>
+    private static long ReadFirstInt64(NpgsqlDataReader reader)
+    {
+        return reader.GetInt64(0);
+    }
+
+    /// <summary>
+    /// Reads the first column of the reader's current row as a time stamp.
+    /// </summary>
+    /// <param name="reader">The reader, on a row.</param>
+    /// <returns>The time stamp.</returns>
+    private static DateTime ReadFirstDateTime(NpgsqlDataReader reader)
+    {
+        return reader.GetDateTime(0);
+    }
+
+    /// <summary>
+    /// Reads the first column of the reader's current row as text.
+    /// </summary>
+    /// <param name="reader">The reader, on a row.</param>
+    /// <returns>The text.</returns>
+    private static string ReadFirstText(NpgsqlDataReader reader)
+    {
+        return reader.GetString(0);
+    }
+
+    /// <summary>
+    /// Reads a time stamp column that can be null as an instant on the server's clock.
+    /// </summary>
+    /// <param name="reader">The reader, on a row.</param>
+    /// <param name="ordinal">The column's ordinal.</param>
+    /// <returns>The instant, as UTC, or null when the column is null.</returns>
+    private static DateTime? ReadNullableUtc(NpgsqlDataReader reader, int ordinal)
+    {
+        if (reader.IsDBNull(ordinal))
+        {
+            return null;
+        }
+
+        var value = reader.GetDateTime(ordinal);
+        return DateTime.SpecifyKind(value, DateTimeKind.Utc);
+    }
+
+    /// <summary>
+    /// Reads an expired record from the reader's current row of seven columns: the index value, the depth, the key's
+    /// text, the value, the revision, the deadline and the session's id.
+    /// </summary>
+    /// <param name="reader">The reader, on a row.</param>
+    /// <returns>The row.</returns>
+    private static PgRecordRow ReadExpiredRecord(NpgsqlDataReader reader)
+    {
+        var index = reader.GetFieldValue<byte[]>(0);
+        var depth = reader.GetInt16(1);
+        var key = reader.GetString(2);
+        var value = reader.GetFieldValue<byte[]>(3);
+        var revision = reader.GetInt64(4);
+        var deadline = ReadNullableUtc(reader, 5);
+        var session = reader.IsDBNull(6) ? null : reader.GetString(6);
+
+        return new PgRecordRow(index, depth, key, value, revision, deadline, session);
+    }
+
+    /// <summary>
+    /// Reads the ids of the keyspaces that a listing statement returned.
+    /// </summary>
+    /// <param name="results">The results of the batch.</param>
+    /// <param name="cancellationToken">The token that cancels the read.</param>
+    /// <returns>The keyspaces' ids.</returns>
+    private static ValueTask<ImmutableArray<long>> ReadKeyspaceIdsAsync(
+        PgResults results,
+        CancellationToken cancellationToken
+    )
+    {
+        return results.ReadAsync(ReadFirstInt64, cancellationToken);
+    }
+
+    /// <summary>
+    /// Reads the results of the batch that locks a keyspace and reads its expired records: the revision, the
+    /// server's instant and the records.
+    /// </summary>
+    /// <param name="results">The results of the batch.</param>
+    /// <param name="cancellationToken">The token that cancels the read.</param>
+    /// <returns>The revision rows, the clock rows and the expired records.</returns>
+    private static async ValueTask<(
+        ImmutableArray<long> Revisions,
+        ImmutableArray<DateTime> Clocks,
+        ImmutableArray<PgRecordRow> Rows
+    )> ReadExpiredRecordsAsync(PgResults results, CancellationToken cancellationToken)
+    {
+        var revisions = await results
+            .ReadAsync(ReadFirstInt64, cancellationToken)
+            .ConfigureAwait(false);
+        var clocks = await results
+            .ReadAsync(ReadFirstDateTime, cancellationToken)
+            .ConfigureAwait(false);
+        var rows = await results
+            .ReadAsync(ReadExpiredRecord, cancellationToken)
+            .ConfigureAwait(false);
+
+        return (revisions, clocks, rows);
+    }
+
+    /// <summary>
+    /// Reads the results of the batch that locks a keyspace and reads its expired sessions: the revision, the
+    /// server's instant and the sessions' ids.
+    /// </summary>
+    /// <param name="results">The results of the batch.</param>
+    /// <param name="cancellationToken">The token that cancels the read.</param>
+    /// <returns>The revision rows, the clock rows and the expired sessions' ids.</returns>
+    private static async ValueTask<(
+        ImmutableArray<long> Revisions,
+        ImmutableArray<DateTime> Clocks,
+        ImmutableArray<string> Sessions
+    )> ReadExpiredSessionsAsync(PgResults results, CancellationToken cancellationToken)
+    {
+        var revisions = await results
+            .ReadAsync(ReadFirstInt64, cancellationToken)
+            .ConfigureAwait(false);
+        var clocks = await results
+            .ReadAsync(ReadFirstDateTime, cancellationToken)
+            .ConfigureAwait(false);
+        var sessions = await results
+            .ReadAsync(ReadFirstText, cancellationToken)
+            .ConfigureAwait(false);
+
+        return (revisions, clocks, sessions);
+    }
 
     /// <summary>
     /// Gets the seam to the server.
@@ -238,26 +432,40 @@ internal sealed class PgSweeps(PgServer server, PgSettings settings, PgRecordTab
         settings.Schema.Apply(ClaimsSql),
     ];
 
-    /// <summary>Gets the statement that lists the keyspaces that hold an expired session.</summary>
+    /// <summary>
+    /// Gets the statement that lists the keyspaces that hold an expired session.
+    /// </summary>
     private string ExpiredSessionKeyspaces { get; } =
         settings.Schema.Apply(ExpiredSessionKeyspacesSql);
 
-    /// <summary>Gets the statement that reads a keyspace's expired sessions.</summary>
+    /// <summary>
+    /// Gets the statement that reads a keyspace's expired sessions.
+    /// </summary>
     private string ExpiredSessions { get; } = settings.Schema.Apply(ExpiredSessionsSql);
 
-    /// <summary>Gets the statement that lists the keyspaces that hold an expired record.</summary>
+    /// <summary>
+    /// Gets the statement that lists the keyspaces that hold an expired record.
+    /// </summary>
     private string ExpiredKeyspaces { get; } = settings.Schema.Apply(ExpiredKeyspacesSql);
 
-    /// <summary>Gets the statement that locks a keyspace's row, unless another transaction holds it.</summary>
+    /// <summary>
+    /// Gets the statement that locks a keyspace's row, unless another transaction holds it.
+    /// </summary>
     private string LockKeyspace { get; } = settings.Schema.Apply(LockKeyspaceSql);
 
-    /// <summary>Gets the statement that reads a keyspace's expired records.</summary>
+    /// <summary>
+    /// Gets the statement that reads a keyspace's expired records.
+    /// </summary>
     private string ExpiredRecords { get; } = settings.Schema.Apply(ExpiredRecordsSql);
 
-    /// <summary>Gets the statement that deletes the change log entries that passed their retention.</summary>
+    /// <summary>
+    /// Gets the statement that deletes the change log entries that passed their retention.
+    /// </summary>
     private string LogRetention { get; } = settings.Schema.Apply(LogRetentionSql);
 
-    /// <summary>Gets the statement that deletes the messages that passed their retention.</summary>
+    /// <summary>
+    /// Gets the statement that deletes the messages that passed their retention.
+    /// </summary>
     private string Messages { get; } = settings.Schema.Apply(MessagesSql);
 
     /// <summary>
@@ -274,32 +482,10 @@ internal sealed class PgSweeps(PgServer server, PgSettings settings, PgRecordTab
         }
 
         cancellationToken.ThrowIfCancellationRequested();
-        try
-        {
-            await SweepRecordsAsync(cancellationToken).ConfigureAwait(false);
-        }
-        catch (CoordinationException)
-        {
-            // The next sweep reads the rows again, and one failing pass must not stop the others.
-        }
-        catch (PgKeyspaceMissingException)
-        {
-            // The next sweep reads the rows again, and one failing pass must not stop the others.
-        }
+        await IgnoreFailureAsync(SweepRecordsAsync, cancellationToken).ConfigureAwait(false);
 
         cancellationToken.ThrowIfCancellationRequested();
-        try
-        {
-            await SweepSessionsAsync(cancellationToken).ConfigureAwait(false);
-        }
-        catch (CoordinationException)
-        {
-            // The next sweep reads the rows again, and one failing pass must not stop the others.
-        }
-        catch (PgKeyspaceMissingException)
-        {
-            // The next sweep reads the rows again, and one failing pass must not stop the others.
-        }
+        await IgnoreFailureAsync(SweepSessionsAsync, cancellationToken).ConfigureAwait(false);
 
         foreach (var sql in PassesAfterSessions)
         {
@@ -321,12 +507,13 @@ internal sealed class PgSweeps(PgServer server, PgSettings settings, PgRecordTab
     {
         cancellationToken.ThrowIfCancellationRequested();
 
+        var statement = new PgStatement(sql, Settings.SweepBatchSize);
         try
         {
             await Server
                 .ExecuteAsync(
-                    [new PgStatement(sql, Settings.SweepBatchSize)],
-                    (_, _) => ValueTask.FromResult(true),
+                    [statement],
+                    static (_, _) => ValueTask.FromResult(true),
                     cancellationToken
                 )
                 .ConfigureAwait(false);
@@ -350,34 +537,37 @@ internal sealed class PgSweeps(PgServer server, PgSettings settings, PgRecordTab
     /// <exception cref="CoordinationException">The server could not be reached or failed.</exception>
     private async ValueTask SweepRecordsAsync(CancellationToken cancellationToken)
     {
-        var keyspaceIds = await Server
-            .ExecuteAsync(
-                [new PgStatement(ExpiredKeyspaces)],
-                async (results, token) =>
-                    await results
-                        .ReadAsync(reader => reader.GetInt64(0), token)
-                        .ConfigureAwait(false),
-                cancellationToken
-            )
+        var keyspaceIds = await ListKeyspacesAsync(ExpiredKeyspaces, cancellationToken)
             .ConfigureAwait(false);
 
         foreach (var keyspaceId in keyspaceIds)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            try
-            {
-                await SweepKeyspaceAsync(keyspaceId, cancellationToken).ConfigureAwait(false);
-            }
-            catch (CoordinationException)
-            {
-                // The next sweep reads the rows again, and one failing keyspace must not stop the others.
-            }
-            catch (PgKeyspaceMissingException)
-            {
-                // The next sweep reads the rows again, and one failing keyspace must not stop the others.
-            }
+            await IgnoreFailureAsync(
+                    token => SweepKeyspaceAsync(keyspaceId, token),
+                    cancellationToken
+                )
+                .ConfigureAwait(false);
         }
+    }
+
+    /// <summary>
+    /// Lists the keyspaces that a listing statement names.
+    /// </summary>
+    /// <param name="sql">The listing statement, which takes no argument.</param>
+    /// <param name="cancellationToken">The token that cancels the sweep.</param>
+    /// <returns>The keyspaces' ids.</returns>
+    /// <exception cref="CoordinationException">The server could not be reached or failed.</exception>
+    private async ValueTask<ImmutableArray<long>> ListKeyspacesAsync(
+        string sql,
+        CancellationToken cancellationToken
+    )
+    {
+        var statement = new PgStatement(sql);
+        return await Server
+            .ExecuteAsync([statement], ReadKeyspaceIdsAsync, cancellationToken)
+            .ConfigureAwait(false);
     }
 
     /// <summary>
@@ -392,76 +582,69 @@ internal sealed class PgSweeps(PgServer server, PgSettings settings, PgRecordTab
         await Server
             .TransactAsync(
                 PgIsolation.ReadCommitted,
-                async (transaction, token) =>
-                {
-                    var (revisions, clocks, rows) = await transaction
-                        .FirstAsync(
-                            [
-                                new PgStatement(LockKeyspace, keyspaceId),
-                                new PgStatement(ClockSql),
-                                new PgStatement(
-                                    ExpiredRecords,
-                                    keyspaceId,
-                                    Settings.SweepBatchSize
-                                ),
-                            ],
-                            async (results, readToken) =>
-                            {
-                                var revisionRows = await results
-                                    .ReadAsync(reader => reader.GetInt64(0), readToken)
-                                    .ConfigureAwait(false);
-                                var clockRows = await results
-                                    .ReadAsync(reader => reader.GetDateTime(0), readToken)
-                                    .ConfigureAwait(false);
-                                var recordRows = await results
-                                    .ReadAsync(
-                                        reader => new PgRecordRow(
-                                            reader.GetFieldValue<byte[]>(0),
-                                            reader.GetInt16(1),
-                                            reader.GetString(2),
-                                            reader.GetFieldValue<byte[]>(3),
-                                            reader.GetInt64(4),
-                                            reader.IsDBNull(5)
-                                                ? null
-                                                : DateTime.SpecifyKind(
-                                                    reader.GetDateTime(5),
-                                                    DateTimeKind.Utc
-                                                ),
-                                            reader.IsDBNull(6) ? null : reader.GetString(6)
-                                        ),
-                                        readToken
-                                    )
-                                    .ConfigureAwait(false);
-
-                                return (revisionRows, clockRows, recordRows);
-                            },
-                            token
-                        )
-                        .ConfigureAwait(false);
-
-                    if (revisions.Length == 0 || rows.Length == 0)
-                    {
-                        await transaction.RollbackAsync(token).ConfigureAwait(false);
-                        return false;
-                    }
-
-                    var change = new PgKeyspaceChange(
-                        Settings.Schema,
-                        keyspaceId,
-                        revisions[0],
-                        DateTime.SpecifyKind(clocks[0], DateTimeKind.Utc),
-                        Settings.LogRetention
-                    );
-                    change.Expire(rows);
-
-                    await Table
-                        .CommitAsync(transaction, change, keyspaceId, token)
-                        .ConfigureAwait(false);
-                    return true;
-                },
+                (transaction, token) => ExpireRecordsAsync(transaction, keyspaceId, token),
                 cancellationToken
             )
             .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Locks a keyspace's row, reads its expired records and commits their deletion as one change, or rolls back when
+    /// the row is held or no record is expired.
+    /// </summary>
+    /// <param name="transaction">The transaction, which has not begun.</param>
+    /// <param name="keyspaceId">The keyspace's id.</param>
+    /// <param name="cancellationToken">The token that cancels the sweep.</param>
+    /// <returns><see langword="true"/> when records were deleted; otherwise, <see langword="false"/>.</returns>
+    private async ValueTask<bool> ExpireRecordsAsync(
+        PgTransaction transaction,
+        long keyspaceId,
+        CancellationToken cancellationToken
+    )
+    {
+        var lockStatement = new PgStatement(LockKeyspace, keyspaceId);
+        var clockStatement = new PgStatement(ClockSql);
+        var recordsStatement = new PgStatement(ExpiredRecords, keyspaceId, Settings.SweepBatchSize);
+        var (revisions, clocks, rows) = await transaction
+            .FirstAsync(
+                [lockStatement, clockStatement, recordsStatement],
+                ReadExpiredRecordsAsync,
+                cancellationToken
+            )
+            .ConfigureAwait(false);
+
+        if (revisions.Length == 0 || rows.Length == 0)
+        {
+            await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+            return false;
+        }
+
+        var change = CreateChange(keyspaceId, revisions[0], clocks[0]);
+        change.Expire(rows);
+
+        await Table
+            .CommitAsync(transaction, change, keyspaceId, cancellationToken)
+            .ConfigureAwait(false);
+        return true;
+    }
+
+    /// <summary>
+    /// Creates the change that holds a sweep's deletions in a keyspace.
+    /// </summary>
+    /// <param name="keyspaceId">The keyspace's id.</param>
+    /// <param name="revision">The keyspace's revision.</param>
+    /// <param name="clock">The server's instant.</param>
+    /// <returns>The change, which logs for the configured retention.</returns>
+    private PgKeyspaceChange CreateChange(long keyspaceId, long revision, DateTime clock)
+    {
+        var now = DateTime.SpecifyKind(clock, DateTimeKind.Utc);
+        return new PgKeyspaceChange(
+            Settings.Schema,
+            keyspaceId,
+            revision,
+            now,
+            Settings.LogRetention
+        );
     }
 
     /// <summary>
@@ -473,34 +656,18 @@ internal sealed class PgSweeps(PgServer server, PgSettings settings, PgRecordTab
     /// <exception cref="CoordinationException">The server could not be reached or failed.</exception>
     private async ValueTask SweepSessionsAsync(CancellationToken cancellationToken)
     {
-        var keyspaceIds = await Server
-            .ExecuteAsync(
-                [new PgStatement(ExpiredSessionKeyspaces)],
-                async (results, token) =>
-                    await results
-                        .ReadAsync(reader => reader.GetInt64(0), token)
-                        .ConfigureAwait(false),
-                cancellationToken
-            )
+        var keyspaceIds = await ListKeyspacesAsync(ExpiredSessionKeyspaces, cancellationToken)
             .ConfigureAwait(false);
 
         foreach (var keyspaceId in keyspaceIds)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            try
-            {
-                await SweepSessionKeyspaceAsync(keyspaceId, cancellationToken)
-                    .ConfigureAwait(false);
-            }
-            catch (CoordinationException)
-            {
-                // The next sweep reads the rows again, and one failing keyspace must not stop the others.
-            }
-            catch (PgKeyspaceMissingException)
-            {
-                // The next sweep reads the rows again, and one failing keyspace must not stop the others.
-            }
+            await IgnoreFailureAsync(
+                    token => SweepSessionKeyspaceAsync(keyspaceId, token),
+                    cancellationToken
+                )
+                .ConfigureAwait(false);
         }
     }
 
@@ -519,62 +686,56 @@ internal sealed class PgSweeps(PgServer server, PgSettings settings, PgRecordTab
         await Server
             .TransactAsync(
                 PgIsolation.ReadCommitted,
-                async (transaction, token) =>
-                {
-                    var (revisions, clocks, sessions) = await transaction
-                        .FirstAsync(
-                            [
-                                new PgStatement(LockKeyspace, keyspaceId),
-                                new PgStatement(ClockSql),
-                                new PgStatement(
-                                    ExpiredSessions,
-                                    keyspaceId,
-                                    Settings.SweepBatchSize
-                                ),
-                            ],
-                            async (results, readToken) =>
-                            {
-                                var revisionRows = await results
-                                    .ReadAsync(reader => reader.GetInt64(0), readToken)
-                                    .ConfigureAwait(false);
-                                var clockRows = await results
-                                    .ReadAsync(reader => reader.GetDateTime(0), readToken)
-                                    .ConfigureAwait(false);
-                                var sessionRows = await results
-                                    .ReadAsync(reader => reader.GetString(0), readToken)
-                                    .ConfigureAwait(false);
-
-                                return (revisionRows, clockRows, sessionRows);
-                            },
-                            token
-                        )
-                        .ConfigureAwait(false);
-
-                    if (revisions.Length == 0 || sessions.Length == 0)
-                    {
-                        await transaction.RollbackAsync(token).ConfigureAwait(false);
-                        return false;
-                    }
-
-                    var change = new PgKeyspaceChange(
-                        Settings.Schema,
-                        keyspaceId,
-                        revisions[0],
-                        DateTime.SpecifyKind(clocks[0], DateTimeKind.Utc),
-                        Settings.LogRetention
-                    );
-                    foreach (var session in sessions)
-                    {
-                        change.EndSession(session);
-                    }
-
-                    await Table
-                        .CommitAsync(transaction, change, keyspaceId, token)
-                        .ConfigureAwait(false);
-                    return true;
-                },
+                (transaction, token) => EndSessionsAsync(transaction, keyspaceId, token),
                 cancellationToken
             )
             .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Locks a keyspace's row, reads its expired sessions and commits their end as one change for each, or rolls back
+    /// when the row is held or no session is expired.
+    /// </summary>
+    /// <param name="transaction">The transaction, which has not begun.</param>
+    /// <param name="keyspaceId">The keyspace's id.</param>
+    /// <param name="cancellationToken">The token that cancels the sweep.</param>
+    /// <returns><see langword="true"/> when sessions were ended; otherwise, <see langword="false"/>.</returns>
+    private async ValueTask<bool> EndSessionsAsync(
+        PgTransaction transaction,
+        long keyspaceId,
+        CancellationToken cancellationToken
+    )
+    {
+        var lockStatement = new PgStatement(LockKeyspace, keyspaceId);
+        var clockStatement = new PgStatement(ClockSql);
+        var sessionsStatement = new PgStatement(
+            ExpiredSessions,
+            keyspaceId,
+            Settings.SweepBatchSize
+        );
+        var (revisions, clocks, sessions) = await transaction
+            .FirstAsync(
+                [lockStatement, clockStatement, sessionsStatement],
+                ReadExpiredSessionsAsync,
+                cancellationToken
+            )
+            .ConfigureAwait(false);
+
+        if (revisions.Length == 0 || sessions.Length == 0)
+        {
+            await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+            return false;
+        }
+
+        var change = CreateChange(keyspaceId, revisions[0], clocks[0]);
+        foreach (var session in sessions)
+        {
+            change.EndSession(session);
+        }
+
+        await Table
+            .CommitAsync(transaction, change, keyspaceId, cancellationToken)
+            .ConfigureAwait(false);
+        return true;
     }
 }

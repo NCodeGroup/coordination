@@ -112,6 +112,11 @@ internal sealed class PgSweeper(PgSweeps sweeps, TimeSpan interval, TimeProvider
         Cancellation.Cancel();
     }
 
+    /// <summary>
+    /// Waits the interval and runs the passes, until the token is cancelled.
+    /// </summary>
+    /// <param name="cancellationToken">The token that ends the loop, which is the sweeper's own.</param>
+    /// <returns>A task that completes when the loop ends; its own cancellation ends it quietly.</returns>
     private async Task RunAsync(CancellationToken cancellationToken)
     {
         try
