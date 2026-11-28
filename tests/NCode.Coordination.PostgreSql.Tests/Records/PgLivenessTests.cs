@@ -17,8 +17,11 @@ public sealed class PgLivenessTests
     [InlineData(1, "s-1", 0, "SessionExpired")]
     [InlineData(1, "s-1", 1, "Live")]
     [InlineData(1, null, null, "Live")]
+    [InlineData(null, "s-1", null, "SessionEnded")]
+    [InlineData(null, "s-1", 1, "Live")]
+    [InlineData(null, null, null, "Live")]
     public void StateOf_Deadlines_ReturnsTheState(
-        int deadlineSeconds,
+        int? deadlineSeconds,
         string? session,
         int? sessionDeadlineSeconds,
         string expected
@@ -28,7 +31,7 @@ public sealed class PgLivenessTests
             ? Now.AddSeconds(seconds)
             : null;
 
-        var deadline = Now.AddSeconds(deadlineSeconds);
+        DateTime? deadline = deadlineSeconds is { } ownSeconds ? Now.AddSeconds(ownSeconds) : null;
 
         var expectedState = Enum.Parse<PgRecordState>(expected);
 

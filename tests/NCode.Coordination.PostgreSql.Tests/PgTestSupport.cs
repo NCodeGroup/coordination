@@ -227,8 +227,11 @@ internal static class PgTestSupport
                 delivered = true;
         }
 
-        Assert.True(resynced);
-        Assert.True(delivered);
+        Assert.True(resynced, $"The subscription did not resync within {Attempts} rounds.");
+        Assert.True(
+            delivered,
+            $"The subscription resynced but delivered nothing later within {Attempts} rounds."
+        );
     }
 
     /// <summary>
@@ -268,7 +271,10 @@ internal static class PgTestSupport
                 delivered = true;
         }
 
-        Assert.True(resynced);
-        Assert.True(delivered);
+        Assert.True(resynced, $"The watch did not resync within {Attempts} rounds.");
+        Assert.True(
+            delivered,
+            $"The watch resynced but delivered nothing later within {Attempts} rounds."
+        );
     }
 }

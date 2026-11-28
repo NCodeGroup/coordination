@@ -187,7 +187,7 @@ public sealed class PgGrantsServerTests(PgServers servers)
     }
 
     [PgServerFact]
-    public async Task TryAcquireAsync_Granted_TakesNoRevision()
+    public async Task TryAcquireAsync_AfterRelease_TakesNoRevision()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         await WithServicesAsync(
@@ -203,24 +203,8 @@ public sealed class PgGrantsServerTests(PgServers servers)
                     cancellationToken
                 );
                 var grant = GrantOf(first);
+                await context.Leases.ReleaseAsync(grant, null, cancellationToken);
                 var before = await context.RevisionAsync(cancellationToken);
-
-                var renewed = await context.Leases.RenewAsync(
-                    grant,
-                    OneMinute,
-                    null,
-                    cancellationToken
-                );
-                var afterRenew = await context.RevisionAsync(cancellationToken);
-
-                Assert.True(renewed);
-                Assert.Equal(before, afterRenew);
-
-                var released = await context.Leases.ReleaseAsync(grant, null, cancellationToken);
-                var afterRelease = await context.RevisionAsync(cancellationToken);
-
-                Assert.True(released);
-                Assert.Equal(before, afterRelease);
 
                 var second = await context.Leases.TryAcquireAsync(
                     resource,
@@ -228,10 +212,10 @@ public sealed class PgGrantsServerTests(PgServers servers)
                     null,
                     cancellationToken
                 );
-                var afterSecond = await context.RevisionAsync(cancellationToken);
+                var after = await context.RevisionAsync(cancellationToken);
 
                 Assert.True(second.IsAcquired);
-                Assert.Equal(before, afterSecond);
+                Assert.Equal(before, after);
             },
             cancellationToken
         );
@@ -284,6 +268,77 @@ public sealed class PgGrantsServerTests(PgServers servers)
                 );
                 var secondToken = GrantOf(second).FencingToken.Value;
                 Assert.True(secondToken > firstToken);
+            },
+            cancellationToken
+        );
+    }
+
+    #endregion
+
+    #region RenewAsync Tests
+
+    [PgServerFact]
+    public async Task RenewAsync_HeldGrant_TakesNoRevision()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await WithServicesAsync(
+            async context =>
+            {
+                var resource = context.KeyOf("no-revision-renew");
+                var terms = LeaseTerms.ForTimeToLive(OneMinute);
+
+                var first = await context.Leases.TryAcquireAsync(
+                    resource,
+                    terms,
+                    null,
+                    cancellationToken
+                );
+                var grant = GrantOf(first);
+                var before = await context.RevisionAsync(cancellationToken);
+
+                var renewed = await context.Leases.RenewAsync(
+                    grant,
+                    OneMinute,
+                    null,
+                    cancellationToken
+                );
+                var after = await context.RevisionAsync(cancellationToken);
+
+                Assert.True(renewed);
+                Assert.Equal(before, after);
+            },
+            cancellationToken
+        );
+    }
+
+    #endregion
+
+    #region ReleaseAsync Tests
+
+    [PgServerFact]
+    public async Task ReleaseAsync_HeldGrant_TakesNoRevision()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await WithServicesAsync(
+            async context =>
+            {
+                var resource = context.KeyOf("no-revision-release");
+                var terms = LeaseTerms.ForTimeToLive(OneMinute);
+
+                var first = await context.Leases.TryAcquireAsync(
+                    resource,
+                    terms,
+                    null,
+                    cancellationToken
+                );
+                var grant = GrantOf(first);
+                var before = await context.RevisionAsync(cancellationToken);
+
+                var released = await context.Leases.ReleaseAsync(grant, null, cancellationToken);
+                var after = await context.RevisionAsync(cancellationToken);
+
+                Assert.True(released);
+                Assert.Equal(before, after);
             },
             cancellationToken
         );

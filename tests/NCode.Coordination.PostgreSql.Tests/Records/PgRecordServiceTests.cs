@@ -172,6 +172,27 @@ public sealed class PgRecordServiceTests
         );
 
         Assert.Equal("page", exception.ParamName);
+        Assert.StartsWith(PgRecordService.ForeignTokenMessage, exception.Message);
+    }
+
+    [Fact]
+    public async Task ListAsync_TokenOfThePrefix_ReachesTheServer()
+    {
+        await using var offline = new PgOfflineServer();
+        var service = CreateService(offline);
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var keyspace = new Keyspace("prod");
+        var prefix = keyspace.CreateKey("a");
+        var child = keyspace.CreateKey("a", "x");
+        var childIndex = PgKeys.Index(child);
+        var token = PgKeys.PageToken(childIndex, 2);
+        var page = new RecordPageRequest(10) { ContinuationToken = token };
+
+        var exception = await Assert.ThrowsAsync<CoordinationException>(async () =>
+            await service.ListAsync(prefix, page, null, cancellationToken)
+        );
+
+        Assert.Equal(CoordinationErrorCodes.Unavailable, exception.Code);
     }
 
     [Fact]

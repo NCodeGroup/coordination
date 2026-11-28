@@ -34,6 +34,12 @@ internal sealed class PgRecordService(PgRecordTable table) : IRecordService
         """;
 
     /// <summary>
+    /// The message that refuses a continuation token that another prefix's listing issued.
+    /// </summary>
+    internal const string ForeignTokenMessage =
+        "The continuation token was not issued by the PostgreSQL provider for this prefix.";
+
+    /// <summary>
     /// Gets the id of the session that a lifetime binds a record to, when the session lives in the record's keyspace.
     /// </summary>
     /// <param name="key">The record's key.</param>
@@ -227,10 +233,7 @@ internal sealed class PgRecordService(PgRecordTable table) : IRecordService
             return (tokenIndex, (short)tokenDepth);
         }
 
-        throw new ArgumentException(
-            "The continuation token was not issued by the PostgreSQL provider for this prefix.",
-            nameof(page)
-        );
+        throw new ArgumentException(ForeignTokenMessage, nameof(page));
     }
 
     /// <summary>
