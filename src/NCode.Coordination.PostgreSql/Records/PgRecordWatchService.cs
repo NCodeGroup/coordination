@@ -20,8 +20,93 @@ namespace NCode.Coordination.PostgreSql.Records;
 internal sealed class PgRecordWatchService(PgKeyspaces keyspaces, PgChangeLog log, PgLogHub hub)
     : IRecordWatchService
 {
-    /// <summary>The kind that a change item holds for a record that was written.</summary>
+    /// <summary>
+    /// The kind that a change item holds for a record that was written.
+    /// </summary>
     private const short WrittenKind = 1;
+
+    /// <summary>
+    /// Turns one event of a log into the changes it holds that a watch covers.
+    /// </summary>
+    /// <param name="item">The event: a resync, or an entry.</param>
+    /// <param name="keyspace">The keyspace that the watch covers.</param>
+    /// <param name="matches">Tells whether the watch covers a change item.</param>
+    /// <returns>
+    /// A resync for a resync event; for an entry, a change for each covered item then for each covered key of an
+    /// ended session.
+    /// </returns>
+    private static IEnumerable<RecordChange> ChangesOf(
+        PgLogEvent<PgChange> item,
+        Keyspace keyspace,
+        Func<PgChangeItem, bool> matches
+    )
+    {
+        if (item.IsResync)
+        {
+            var resyncRevision = new Revision(item.Current);
+            yield return RecordChange.Resync(resyncRevision);
+            yield break;
+        }
+
+        if (item.Entry is not { } entry)
+        {
+            yield break;
+        }
+
+        var revision = new Revision(entry.Number);
+
+        foreach (var changed in entry.Items)
+        {
+            if (matches(changed))
+            {
+                yield return ToChange(keyspace, changed, revision);
+            }
+        }
+
+        foreach (var ended in entry.EndedKeys)
+        {
+            if (matches(ended))
+            {
+                yield return ToDeletion(keyspace, ended, revision);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Turns an item of an entry into the change it logged.
+    /// </summary>
+    /// <param name="keyspace">The keyspace that the watch covers.</param>
+    /// <param name="changed">The item.</param>
+    /// <param name="revision">The entry's revision.</param>
+    /// <returns>A write when the item holds a record written; otherwise, a deletion.</returns>
+    private static RecordChange ToChange(Keyspace keyspace, PgChangeItem changed, Revision revision)
+    {
+        if (changed.Kind != WrittenKind)
+        {
+            return ToDeletion(keyspace, changed, revision);
+        }
+
+        var key = PgRecordTable.DecodeKey(keyspace, changed.Key, changed.Depth);
+        var record = new StoredRecord(key, changed.Value ?? [], revision);
+        return RecordChange.Written(record);
+    }
+
+    /// <summary>
+    /// Turns an item into the deletion of its key.
+    /// </summary>
+    /// <param name="keyspace">The keyspace that the watch covers.</param>
+    /// <param name="deleted">The item.</param>
+    /// <param name="revision">The entry's revision.</param>
+    /// <returns>The deletion.</returns>
+    private static RecordChange ToDeletion(
+        Keyspace keyspace,
+        PgChangeItem deleted,
+        Revision revision
+    )
+    {
+        var key = PgRecordTable.DecodeKey(keyspace, deleted.Key, deleted.Depth);
+        return RecordChange.Deleted(key, revision);
+    }
 
     /// <summary>
     /// Gets the resolver of keyspace ids.
@@ -105,11 +190,7 @@ internal sealed class PgRecordWatchService(PgKeyspaces keyspaces, PgChangeLog lo
         var logId = new PgLogId(keyspaceId, null);
         var subscriber = await Hub.SubscribeAsync(
                 logId,
-                () =>
-                    new PgLogFanout<PgChange>(
-                        (cursor, limit, readToken) =>
-                            Log.ReadAsync(keyspaceId, cursor, limit, readToken)
-                    ),
+                () => CreateFanout(keyspaceId),
                 after?.Value,
                 cancellationToken
             )
@@ -121,41 +202,10 @@ internal sealed class PgRecordWatchService(PgKeyspaces keyspaces, PgChangeLog lo
                 var item in subscriber.Reader.ReadAllAsync(cancellationToken).ConfigureAwait(false)
             )
             {
-                if (item.IsResync)
+                var changes = ChangesOf(item, keyspace, matches);
+                foreach (var change in changes)
                 {
-                    yield return RecordChange.Resync(new Revision(item.Current));
-                    continue;
-                }
-
-                if (item.Entry is not { } entry)
-                {
-                    continue;
-                }
-
-                var revision = new Revision(entry.Number);
-
-                foreach (var changed in entry.Items)
-                {
-                    if (!matches(changed))
-                    {
-                        continue;
-                    }
-
-                    var key = PgRecordTable.DecodeKey(keyspace, changed.Key, changed.Depth);
-                    yield return changed.Kind == WrittenKind
-                        ? RecordChange.Written(new StoredRecord(key, changed.Value ?? [], revision))
-                        : RecordChange.Deleted(key, revision);
-                }
-
-                foreach (var ended in entry.EndedKeys)
-                {
-                    if (!matches(ended))
-                    {
-                        continue;
-                    }
-
-                    var key = PgRecordTable.DecodeKey(keyspace, ended.Key, ended.Depth);
-                    yield return RecordChange.Deleted(key, revision);
+                    yield return change;
                 }
             }
         }
@@ -163,5 +213,17 @@ internal sealed class PgRecordWatchService(PgKeyspaces keyspaces, PgChangeLog lo
         {
             await Hub.UnsubscribeAsync(logId, subscriber).ConfigureAwait(false);
         }
+    }
+
+    /// <summary>
+    /// Creates the fanout that reads a keyspace's change log.
+    /// </summary>
+    /// <param name="keyspaceId">The keyspace's id.</param>
+    /// <returns>A fanout that reads the keyspace's change log.</returns>
+    private PgLogFanout<PgChange> CreateFanout(long keyspaceId)
+    {
+        return new PgLogFanout<PgChange>(
+            (cursor, limit, readToken) => Log.ReadAsync(keyspaceId, cursor, limit, readToken)
+        );
     }
 }

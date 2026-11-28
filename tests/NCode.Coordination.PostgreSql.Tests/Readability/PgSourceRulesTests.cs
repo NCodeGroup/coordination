@@ -16,8 +16,7 @@ public sealed class PgSourceRulesTests
             "Sequences",
             "Sets",
             "Claims",
-            "Records/PgRecordService.cs",
-            "Records/PgRecordTable.cs",
+            "Records",
         ];
 
     private static string BuildMethodSpanning(int lines)

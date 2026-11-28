@@ -11,8 +11,12 @@ namespace NCode.Coordination.PostgreSql.Records;
 /// <param name="Row">The record's row, or null when the row holds no record.</param>
 internal sealed record PgListItem(long KeyspaceRevision, DateTime Now, PgRecordRow? Row)
 {
-    /// <summary>Tells whether the record holds at the instant that it was read.</summary>
-    /// <returns>The state that <see cref="PgLiveness.StateOf"/> decides for the row; <see cref="PgRecordState.Live"/>
-    /// when there is none.</returns>
+    /// <summary>
+    /// Tells whether the record holds at the instant that it was read.
+    /// </summary>
+    /// <returns>
+    /// The state that <see cref="PgLiveness.StateOf"/> decides for the row; <see cref="PgRecordState.Live"/> when
+    /// there is none.
+    /// </returns>
     public PgRecordState StateAt() => Row?.StateAt(Now) ?? PgRecordState.Live;
 }

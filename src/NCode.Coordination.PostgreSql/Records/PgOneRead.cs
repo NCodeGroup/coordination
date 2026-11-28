@@ -21,7 +21,9 @@ internal sealed record PgOneRead(
     DateTime? SessionDeadline
 )
 {
-    /// <summary>Tells whether the record holds at the instant that it was read.</summary>
+    /// <summary>
+    /// Tells whether the record holds at the instant that it was read.
+    /// </summary>
     /// <returns>The state that <see cref="PgLiveness.StateOf"/> decides.</returns>
     public PgRecordState StateAt() => PgLiveness.StateOf(Deadline, Session, SessionDeadline, Now);
 }

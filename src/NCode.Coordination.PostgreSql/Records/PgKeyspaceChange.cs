@@ -27,13 +27,19 @@ internal sealed class PgKeyspaceChange(
     TimeSpan retention
 )
 {
-    /// <summary>The kind that a change item holds for a record that was written.</summary>
+    /// <summary>
+    /// The kind that a change item holds for a record that was written.
+    /// </summary>
     private const short WrittenKind = 1;
 
-    /// <summary>The kind that a change item holds for a record that was deleted.</summary>
+    /// <summary>
+    /// The kind that a change item holds for a record that was deleted.
+    /// </summary>
     private const short DeletedKind = 2;
 
-    /// <summary>The template of the statement that writes a record, replacing the row that holds its key.</summary>
+    /// <summary>
+    /// The template of the statement that writes a record, replacing the row that holds its key.
+    /// </summary>
     private const string UpsertRecord = """
         INSERT INTO {schema}.records (keyspace_id, idx, depth, key, value, revision, deadline, session_id)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -42,23 +48,31 @@ internal sealed class PgKeyspaceChange(
             deadline = EXCLUDED.deadline, session_id = EXCLUDED.session_id
         """;
 
-    /// <summary>The template of the statement that deletes a record.</summary>
+    /// <summary>
+    /// The template of the statement that deletes a record.
+    /// </summary>
     private const string DeleteRecord = """
         DELETE FROM {schema}.records WHERE keyspace_id = $1 AND idx = $2 AND depth = $3
         """;
 
-    /// <summary>The template of the statement that deletes a session's row.</summary>
+    /// <summary>
+    /// The template of the statement that deletes a session's row.
+    /// </summary>
     private const string DeleteSession = """
         DELETE FROM {schema}.sessions WHERE keyspace_id = $1 AND id = $2
         """;
 
-    /// <summary>The template of the statement that logs one entry of the change log.</summary>
+    /// <summary>
+    /// The template of the statement that logs one entry of the change log.
+    /// </summary>
     private const string InsertChange = """
         INSERT INTO {schema}.changes (keyspace_id, revision, deadline, ended_session, group_idx, group_depth)
         VALUES ($1, $2, $3, $4, $5, $6)
         """;
 
-    /// <summary>The template of the statement that logs the items of one entry.</summary>
+    /// <summary>
+    /// The template of the statement that logs the items of one entry.
+    /// </summary>
     private const string InsertItems = """
         INSERT INTO {schema}.change_items
             (keyspace_id, revision, ordinal, kind, idx, depth, key, value, deadline, session_id, replaced_session)
@@ -67,44 +81,86 @@ internal sealed class PgKeyspaceChange(
             $8::bytea[], $9::timestamptz[], $10::text[], $11::text[]) AS i
         """;
 
-    /// <summary>The template of the statement that stores the keyspace's last revision.</summary>
+    /// <summary>
+    /// The template of the statement that stores the keyspace's last revision.
+    /// </summary>
     private const string UpdateRevision = """
         UPDATE {schema}.keyspaces SET revision = $2 WHERE id = $1
         """;
 
-    /// <summary>The template of the statement that notifies the keyspace's channel.</summary>
+    /// <summary>
+    /// The template of the statement that notifies the keyspace's channel.
+    /// </summary>
     private const string Notify = """
         SELECT pg_notify($1, $2)
         """;
 
-    /// <summary>Gets the statement that writes a record.</summary>
+    /// <summary>
+    /// Builds an array argument that holds one element of each write.
+    /// </summary>
+    /// <typeparam name="T">The type of an element.</typeparam>
+    /// <param name="writes">The writes, in order.</param>
+    /// <param name="select">Selects the element of a write.</param>
+    /// <param name="elementType">The PostgreSQL type of an element.</param>
+    /// <returns>The argument, typed as an array of <paramref name="elementType"/>.</returns>
+    private static PgArgument ArrayOf<T>(
+        IReadOnlyList<PgRecordWrite> writes,
+        Func<PgRecordWrite, T> select,
+        NpgsqlDbType elementType
+    )
+    {
+        var elements = writes.Select(select).ToArray();
+        return PgArgument.Typed(elements, NpgsqlDbType.Array | elementType);
+    }
+
+    /// <summary>
+    /// Gets the statement that writes a record.
+    /// </summary>
     private string UpsertRecordSql { get; } = schema.Apply(UpsertRecord);
 
-    /// <summary>Gets the statement that deletes a record.</summary>
+    /// <summary>
+    /// Gets the statement that deletes a record.
+    /// </summary>
     private string DeleteRecordSql { get; } = schema.Apply(DeleteRecord);
 
-    /// <summary>Gets the statement that deletes a session's row.</summary>
+    /// <summary>
+    /// Gets the statement that deletes a session's row.
+    /// </summary>
     private string DeleteSessionSql { get; } = schema.Apply(DeleteSession);
 
-    /// <summary>Gets the statement that logs one entry.</summary>
+    /// <summary>
+    /// Gets the statement that logs one entry.
+    /// </summary>
     private string InsertChangeSql { get; } = schema.Apply(InsertChange);
 
-    /// <summary>Gets the statement that logs the items of one entry.</summary>
+    /// <summary>
+    /// Gets the statement that logs the items of one entry.
+    /// </summary>
     private string InsertItemsSql { get; } = schema.Apply(InsertItems);
 
-    /// <summary>Gets the statement that stores the keyspace's last revision.</summary>
+    /// <summary>
+    /// Gets the statement that stores the keyspace's last revision.
+    /// </summary>
     private string UpdateRevisionSql { get; } = schema.Apply(UpdateRevision);
 
-    /// <summary>Gets the statement that notifies the keyspace's channel.</summary>
+    /// <summary>
+    /// Gets the statement that notifies the keyspace's channel.
+    /// </summary>
     private string NotifySql { get; } = schema.Apply(Notify);
 
-    /// <summary>Gets the entries the transaction has taken, in order.</summary>
+    /// <summary>
+    /// Gets the entries the transaction has taken, in order.
+    /// </summary>
     private List<PgChangeEntry> Entries { get; } = [];
 
-    /// <summary>Gets the sessions that this change has ended.</summary>
+    /// <summary>
+    /// Gets the sessions that this change has ended.
+    /// </summary>
     private HashSet<string> EndedSessions { get; } = new(StringComparer.Ordinal);
 
-    /// <summary>Gets the writes that take no revision, and the deletions of ended sessions, in order.</summary>
+    /// <summary>
+    /// Gets the writes that take no revision, and the deletions of ended sessions, in order.
+    /// </summary>
     private List<PgStatement> Extras { get; } = [];
 
     /// <summary>
@@ -152,7 +208,8 @@ internal sealed class PgKeyspaceChange(
     public long Begin()
     {
         Revision++;
-        Entries.Add(new PgChangeEntry(Revision));
+        var entry = new PgChangeEntry(Revision);
+        Entries.Add(entry);
         return Revision;
     }
 
@@ -174,7 +231,8 @@ internal sealed class PgKeyspaceChange(
 
         Begin();
         Entries[^1].EndedSession = session;
-        Extras.Add(new PgStatement(DeleteSessionSql, keyspaceId, session));
+        var deleteSession = new PgStatement(DeleteSessionSql, keyspaceId, session);
+        Extras.Add(deleteSession);
         return true;
     }
 
@@ -224,18 +282,21 @@ internal sealed class PgKeyspaceChange(
         ArgumentNullException.ThrowIfNull(key);
 
         var entry = Current();
-        entry.Writes.Add(
-            new PgRecordWrite(
-                WrittenKind,
-                PgKeys.Index(key),
-                (short)key.PartitionDepth,
-                PgKeys.KeyText(key),
-                value.ToArray(),
-                deadline,
-                session,
-                replacedSession
-            )
+        var index = PgKeys.Index(key);
+        var depth = (short)key.PartitionDepth;
+        var keyText = PgKeys.KeyText(key);
+        var valueCopy = value.ToArray();
+        var write = new PgRecordWrite(
+            WrittenKind,
+            index,
+            depth,
+            keyText,
+            valueCopy,
+            deadline,
+            session,
+            replacedSession
         );
+        entry.Writes.Add(write);
     }
 
     /// <summary>
@@ -249,9 +310,17 @@ internal sealed class PgKeyspaceChange(
         ArgumentNullException.ThrowIfNull(row);
 
         var entry = Current();
-        entry.Writes.Add(
-            new PgRecordWrite(DeletedKind, row.Index, row.Depth, row.Key, null, null, null, null)
+        var write = new PgRecordWrite(
+            DeletedKind,
+            row.Index,
+            row.Depth,
+            row.Key,
+            null,
+            null,
+            null,
+            null
         );
+        entry.Writes.Add(write);
     }
 
     /// <summary>
@@ -283,62 +352,96 @@ internal sealed class PgKeyspaceChange(
 
         foreach (var entry in Entries)
         {
-            foreach (var write in entry.Writes)
-            {
-                var index = PgArgument.Typed(write.Index, NpgsqlDbType.Bytea);
-                if (write.Kind == WrittenKind)
-                {
-                    var value = PgArgument.Typed(write.Value, NpgsqlDbType.Bytea);
-                    var deadline = PgArgument.Typed(write.Deadline, NpgsqlDbType.TimestampTz);
-                    var session = PgArgument.Typed(write.Session, NpgsqlDbType.Text);
-                    statements.Add(
-                        new PgStatement(
-                            UpsertRecordSql,
-                            keyspaceId,
-                            index,
-                            write.Depth,
-                            write.Key,
-                            value,
-                            entry.Revision,
-                            deadline,
-                            session
-                        )
-                    );
-                }
-                else
-                {
-                    statements.Add(
-                        new PgStatement(DeleteRecordSql, keyspaceId, index, write.Depth)
-                    );
-                }
-            }
-
-            var endedSession = PgArgument.Typed(entry.EndedSession, NpgsqlDbType.Text);
-            var groupIndex = PgArgument.Typed(entry.GroupIndex, NpgsqlDbType.Bytea);
-            var groupDepth = PgArgument.Typed(entry.GroupDepth, NpgsqlDbType.Smallint);
-            statements.Add(
-                new PgStatement(
-                    InsertChangeSql,
-                    keyspaceId,
-                    entry.Revision,
-                    logDeadlineArgument,
-                    endedSession,
-                    groupIndex,
-                    groupDepth
-                )
-            );
-
-            if (entry.Writes.Count > 0)
-            {
-                statements.Add(ItemsStatement(entry));
-            }
+            AddEntryStatements(statements, entry, logDeadlineArgument);
         }
 
         var payload = PgChannels.ChangePayload(Revision);
-        statements.Add(new PgStatement(UpdateRevisionSql, keyspaceId, Revision));
-        statements.Add(new PgStatement(NotifySql, channel, payload));
+        var updateRevision = new PgStatement(UpdateRevisionSql, keyspaceId, Revision);
+        var notify = new PgStatement(NotifySql, channel, payload);
+        statements.Add(updateRevision);
+        statements.Add(notify);
 
         return statements.ToImmutable();
+    }
+
+    /// <summary>
+    /// Appends the statements of one entry: its record writes, its row in the change log and its items.
+    /// </summary>
+    /// <param name="statements">The statements so far.</param>
+    /// <param name="entry">The entry.</param>
+    /// <param name="logDeadline">The argument that holds the deadline of the entry's row in the change log.</param>
+    private void AddEntryStatements(
+        ImmutableArray<PgStatement>.Builder statements,
+        PgChangeEntry entry,
+        PgArgument logDeadline
+    )
+    {
+        foreach (var write in entry.Writes)
+        {
+            var writeStatement = WriteStatement(entry, write);
+            statements.Add(writeStatement);
+        }
+
+        var changeStatement = ChangeStatement(entry, logDeadline);
+        statements.Add(changeStatement);
+
+        if (entry.Writes.Count > 0)
+        {
+            var itemsStatement = ItemsStatement(entry);
+            statements.Add(itemsStatement);
+        }
+    }
+
+    /// <summary>
+    /// Builds the statement that makes one record write of an entry.
+    /// </summary>
+    /// <param name="entry">The entry.</param>
+    /// <param name="write">The write.</param>
+    /// <returns>The statement that writes the record, or the one that deletes it.</returns>
+    private PgStatement WriteStatement(PgChangeEntry entry, PgRecordWrite write)
+    {
+        var index = PgArgument.Typed(write.Index, NpgsqlDbType.Bytea);
+        if (write.Kind != WrittenKind)
+        {
+            return new PgStatement(DeleteRecordSql, keyspaceId, index, write.Depth);
+        }
+
+        var value = PgArgument.Typed(write.Value, NpgsqlDbType.Bytea);
+        var deadline = PgArgument.Typed(write.Deadline, NpgsqlDbType.TimestampTz);
+        var session = PgArgument.Typed(write.Session, NpgsqlDbType.Text);
+        return new PgStatement(
+            UpsertRecordSql,
+            keyspaceId,
+            index,
+            write.Depth,
+            write.Key,
+            value,
+            entry.Revision,
+            deadline,
+            session
+        );
+    }
+
+    /// <summary>
+    /// Builds the statement that logs an entry in the change log.
+    /// </summary>
+    /// <param name="entry">The entry.</param>
+    /// <param name="logDeadline">The argument that holds the deadline of the entry's row.</param>
+    /// <returns>The statement.</returns>
+    private PgStatement ChangeStatement(PgChangeEntry entry, PgArgument logDeadline)
+    {
+        var endedSession = PgArgument.Typed(entry.EndedSession, NpgsqlDbType.Text);
+        var groupIndex = PgArgument.Typed(entry.GroupIndex, NpgsqlDbType.Bytea);
+        var groupDepth = PgArgument.Typed(entry.GroupDepth, NpgsqlDbType.Smallint);
+        return new PgStatement(
+            InsertChangeSql,
+            keyspaceId,
+            entry.Revision,
+            logDeadline,
+            endedSession,
+            groupIndex,
+            groupDepth
+        );
     }
 
     /// <summary>
@@ -350,42 +453,17 @@ internal sealed class PgKeyspaceChange(
     {
         var writes = entry.Writes;
 
-        var ordinals = PgArgument.Typed(
-            Enumerable.Range(0, writes.Count).Select(ordinal => (short)ordinal).ToArray(),
-            NpgsqlDbType.Array | NpgsqlDbType.Smallint
-        );
-        var kinds = PgArgument.Typed(
-            writes.Select(write => write.Kind).ToArray(),
-            NpgsqlDbType.Array | NpgsqlDbType.Smallint
-        );
-        var indexes = PgArgument.Typed(
-            writes.Select(write => write.Index).ToArray(),
-            NpgsqlDbType.Array | NpgsqlDbType.Bytea
-        );
-        var depths = PgArgument.Typed(
-            writes.Select(write => write.Depth).ToArray(),
-            NpgsqlDbType.Array | NpgsqlDbType.Smallint
-        );
-        var keys = PgArgument.Typed(
-            writes.Select(write => write.Key).ToArray(),
-            NpgsqlDbType.Array | NpgsqlDbType.Text
-        );
-        var values = PgArgument.Typed(
-            writes.Select(write => write.Value).ToArray(),
-            NpgsqlDbType.Array | NpgsqlDbType.Bytea
-        );
-        var deadlines = PgArgument.Typed(
-            writes.Select(write => write.Deadline).ToArray(),
-            NpgsqlDbType.Array | NpgsqlDbType.TimestampTz
-        );
-        var sessions = PgArgument.Typed(
-            writes.Select(write => write.Session).ToArray(),
-            NpgsqlDbType.Array | NpgsqlDbType.Text
-        );
-        var replacedSessions = PgArgument.Typed(
-            writes.Select(write => write.ReplacedSession).ToArray(),
-            NpgsqlDbType.Array | NpgsqlDbType.Text
-        );
+        var ordinalValues = Enumerable.Range(0, writes.Count).Select(ordinal => (short)ordinal);
+        var ordinalArray = ordinalValues.ToArray();
+        var ordinals = PgArgument.Typed(ordinalArray, NpgsqlDbType.Array | NpgsqlDbType.Smallint);
+        var kinds = ArrayOf(writes, write => write.Kind, NpgsqlDbType.Smallint);
+        var indexes = ArrayOf(writes, write => write.Index, NpgsqlDbType.Bytea);
+        var depths = ArrayOf(writes, write => write.Depth, NpgsqlDbType.Smallint);
+        var keys = ArrayOf(writes, write => write.Key, NpgsqlDbType.Text);
+        var values = ArrayOf(writes, write => write.Value, NpgsqlDbType.Bytea);
+        var deadlines = ArrayOf(writes, write => write.Deadline, NpgsqlDbType.TimestampTz);
+        var sessions = ArrayOf(writes, write => write.Session, NpgsqlDbType.Text);
+        var replacedSessions = ArrayOf(writes, write => write.ReplacedSession, NpgsqlDbType.Text);
 
         return new PgStatement(
             InsertItemsSql,
