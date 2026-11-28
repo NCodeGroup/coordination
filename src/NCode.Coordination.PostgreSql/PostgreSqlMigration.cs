@@ -16,6 +16,7 @@ public sealed record PostgreSqlMigration
     /// <param name="name">The name of the migration.</param>
     /// <param name="compatibleFrom">The oldest version of the provider's code that may run on the migrated schema.</param>
     /// <param name="script">The SQL script, one statement per line-ending semicolon.</param>
+    /// <exception cref="ArgumentNullException">The name or the script is null.</exception>
     internal PostgreSqlMigration(int version, string name, int compatibleFrom, string script)
     {
         ArgumentNullException.ThrowIfNull(name);

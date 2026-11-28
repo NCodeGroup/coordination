@@ -141,6 +141,7 @@ internal static partial class PgMigrations
     /// <param name="schema">The schema to migrate.</param>
     /// <param name="cancellationToken">The token that cancels the call.</param>
     /// <returns>A task that completes when the schema is at the latest version.</returns>
+    /// <exception cref="ArgumentNullException">The server or the schema is null.</exception>
     /// <exception cref="CoordinationException">The server could not be reached or failed.</exception>
     public static async ValueTask ApplyAsync(
         PgServer server,
@@ -164,6 +165,7 @@ internal static partial class PgMigrations
     /// <param name="schema">The schema to read.</param>
     /// <param name="cancellationToken">The token that cancels the call.</param>
     /// <returns>The version and its compatibility, or <c>(0, 0)</c> when the schema has no version table.</returns>
+    /// <exception cref="ArgumentNullException">The server or the schema is null.</exception>
     /// <exception cref="CoordinationException">The server could not be reached or failed.</exception>
     public static async ValueTask<(int Version, int CompatibleFrom)> ReadVersionAsync(
         PgServer server,

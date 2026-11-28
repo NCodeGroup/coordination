@@ -223,6 +223,7 @@ internal sealed class PgListener(
     /// <param name="channel">The channel's name, which <see cref="PgChannels.IsChannel"/> accepts.</param>
     /// <param name="cancellationToken">The token that cancels the wait for the server.</param>
     /// <returns>A task that completes once the server listens to the channel.</returns>
+    /// <exception cref="ArgumentNullException">The name is null.</exception>
     /// <exception cref="ArgumentException">The name is not a channel of the provider.</exception>
     /// <exception cref="CoordinationException">The listening connection failed before the server listened.</exception>
     /// <exception cref="ObjectDisposedException">The listener is disposed.</exception>
@@ -266,6 +267,7 @@ internal sealed class PgListener(
     /// Releases one reference to a channel, and stops listening to it when none is left.
     /// </summary>
     /// <param name="channel">The channel's name.</param>
+    /// <exception cref="ArgumentNullException">The name is null.</exception>
     public void Unlisten(string channel)
     {
         ArgumentNullException.ThrowIfNull(channel);

@@ -34,6 +34,7 @@ internal static partial class PgChannels
     /// <param name="schema">The schema that holds the keyspace.</param>
     /// <param name="keyspaceId">The keyspace's id.</param>
     /// <returns>The channel's name.</returns>
+    /// <exception cref="ArgumentNullException">The schema is null.</exception>
     public static string ForKeyspace(PgSchemaName schema, long keyspaceId)
     {
         ArgumentNullException.ThrowIfNull(schema);
@@ -54,6 +55,7 @@ internal static partial class PgChannels
     /// </summary>
     /// <param name="topicToken">The continuation-token encoding of the topic's key.</param>
     /// <returns>The announcement: <c>t:</c>, the token and <c>:</c>.</returns>
+    /// <exception cref="ArgumentNullException">The token is null.</exception>
     public static string TopicAnnouncement(string topicToken)
     {
         ArgumentNullException.ThrowIfNull(topicToken);
@@ -81,6 +83,7 @@ internal static partial class PgChannels
     /// <param name="payload">The payload of a notification.</param>
     /// <param name="wake">When this method returns true, what the payload says.</param>
     /// <returns>True when the payload is well formed; otherwise, false.</returns>
+    /// <exception cref="ArgumentNullException">The payload is null.</exception>
     public static bool TryParseWake(string payload, out PgWake wake)
     {
         ArgumentNullException.ThrowIfNull(payload);
@@ -127,6 +130,7 @@ internal static partial class PgChannels
     /// </summary>
     /// <param name="channel">The name to check.</param>
     /// <returns>True when the name is <c>ncode.</c>, eight hex digits, <c>.</c> and sixteen hex digits; otherwise, false.</returns>
+    /// <exception cref="ArgumentNullException">The name is null.</exception>
     public static bool IsChannel(string channel)
     {
         ArgumentNullException.ThrowIfNull(channel);

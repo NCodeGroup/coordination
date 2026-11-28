@@ -125,6 +125,7 @@ internal sealed class PgServer(PgSource source, PgSettings settings)
     /// <param name="read">Reads the results of the statements.</param>
     /// <param name="cancellationToken">The token that cancels the call.</param>
     /// <returns>What <paramref name="read"/> returned.</returns>
+    /// <exception cref="ArgumentNullException">The statements or the read is null.</exception>
     /// <exception cref="CoordinationException">The server could not be reached or failed.</exception>
     /// <exception cref="PgKeyspaceMissingException">A statement found its keyspace's row missing.</exception>
     public async ValueTask<T> ExecuteAsync<T>(
@@ -167,6 +168,7 @@ internal sealed class PgServer(PgSource source, PgSettings settings)
     /// <param name="body">Runs the transaction's batches, and completes it.</param>
     /// <param name="cancellationToken">The token that cancels the call.</param>
     /// <returns>What <paramref name="body"/> returned.</returns>
+    /// <exception cref="ArgumentNullException">The body is null.</exception>
     /// <exception cref="CoordinationException">The server could not be reached or failed.</exception>
     /// <exception cref="PgKeyspaceMissingException">A statement found its keyspace's row missing.</exception>
     public async ValueTask<T> TransactAsync<T>(

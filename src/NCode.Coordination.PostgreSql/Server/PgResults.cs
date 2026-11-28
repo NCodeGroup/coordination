@@ -43,6 +43,7 @@ internal sealed class PgResults(NpgsqlDataReader reader)
     /// <param name="map">Maps the reader's current row.</param>
     /// <param name="cancellationToken">The token that cancels the read.</param>
     /// <returns>The mapped rows, in the order the server sent them.</returns>
+    /// <exception cref="ArgumentNullException">The map is null.</exception>
     /// <exception cref="InvalidOperationException">The batch has no further result.</exception>
     public async ValueTask<ImmutableArray<T>> ReadAsync<T>(
         Func<NpgsqlDataReader, T> map,

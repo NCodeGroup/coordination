@@ -74,6 +74,7 @@ internal sealed class PgTransaction(
     /// <param name="read">Reads the results of the statements.</param>
     /// <param name="cancellationToken">The token that cancels the call.</param>
     /// <returns>What <paramref name="read"/> returned.</returns>
+    /// <exception cref="ArgumentNullException">The statements or the read is null.</exception>
     public async ValueTask<T> FirstAsync<T>(
         IReadOnlyList<PgStatement> statements,
         Func<PgResults, CancellationToken, ValueTask<T>> read,
@@ -114,6 +115,7 @@ internal sealed class PgTransaction(
     /// <param name="read">Reads the results of the statements.</param>
     /// <param name="cancellationToken">The token that cancels the call.</param>
     /// <returns>What <paramref name="read"/> returned.</returns>
+    /// <exception cref="ArgumentNullException">The statements or the read is null.</exception>
     public ValueTask<T> NextAsync<T>(
         IReadOnlyList<PgStatement> statements,
         Func<PgResults, CancellationToken, ValueTask<T>> read,
@@ -132,6 +134,7 @@ internal sealed class PgTransaction(
     /// <param name="statements">The writes.</param>
     /// <param name="cancellationToken">The token that cancels the call.</param>
     /// <returns>A task that completes when the transaction committed.</returns>
+    /// <exception cref="ArgumentNullException">The statements are null.</exception>
     public async ValueTask CommitAsync(
         IReadOnlyList<PgStatement> statements,
         CancellationToken cancellationToken
@@ -149,6 +152,7 @@ internal sealed class PgTransaction(
     /// <param name="read">Reads the results of the writes.</param>
     /// <param name="cancellationToken">The token that cancels the call.</param>
     /// <returns>What <paramref name="read"/> returned.</returns>
+    /// <exception cref="ArgumentNullException">The statements or the read is null.</exception>
     public async ValueTask<T> CommitAsync<T>(
         IReadOnlyList<PgStatement> statements,
         Func<PgResults, CancellationToken, ValueTask<T>> read,

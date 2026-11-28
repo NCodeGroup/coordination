@@ -179,6 +179,7 @@ internal sealed class PgLogFanout<TEntry>(
     /// </summary>
     /// <param name="subscriber">The subscriber to remove.</param>
     /// <returns>True when the subscriber was the last one; otherwise, false.</returns>
+    /// <exception cref="ArgumentNullException">The subscriber is null.</exception>
     public bool Remove(PgLogSubscriber<TEntry> subscriber)
     {
         ArgumentNullException.ThrowIfNull(subscriber);
