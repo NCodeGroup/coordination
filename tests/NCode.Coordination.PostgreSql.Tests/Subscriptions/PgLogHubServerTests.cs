@@ -126,5 +126,18 @@ public sealed class PgLogHubServerTests(PgServers servers)
         Assert.Same(failure, record.Exception);
     }
 
+    [PgServerFact]
+    public async Task CheckAsync_PumpFindsTheKeyspaceMissing_LogsPumpFailedOnce()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        var failure = new PgKeyspaceMissingException(PgKeyspaceMissingException.RowMissingMessage);
+
+        var records = await DeliverAfterFailedReadAsync(failure, cancellationToken);
+
+        var record = Assert.Single(records, x => x.Id.Id == EventIds.PumpFailed);
+        Assert.Equal(LogLevel.Warning, record.Level);
+        Assert.Same(failure, record.Exception);
+    }
+
     #endregion
 }
