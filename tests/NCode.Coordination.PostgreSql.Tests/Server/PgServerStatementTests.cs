@@ -1,6 +1,7 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using System.Diagnostics;
 using System.Globalization;
 using System.Transactions;
 using NCode.Coordination.PostgreSql.Tests.Servers;
@@ -51,6 +52,39 @@ public sealed class PgServerStatementTests(PgServers servers)
 
         await using var command = new NpgsqlCommand(sql, connection);
         return await command.ExecuteScalarAsync(cancellationToken);
+    }
+
+    private static async Task WaitForSleepingBackendAsync(
+        string adminConnectionString,
+        string applicationName,
+        CancellationToken cancellationToken
+    )
+    {
+        await using var connection = new NpgsqlConnection(adminConnectionString);
+        await connection.OpenAsync(cancellationToken);
+
+        var deadline = Stopwatch.StartNew();
+        while (deadline.Elapsed < TimeSpan.FromSeconds(15))
+        {
+            await using var command = new NpgsqlCommand(
+                "SELECT count(*) FROM pg_stat_activity WHERE application_name = $1 "
+                    + "AND state = 'active' AND query LIKE '%pg_sleep(5)%'",
+                connection
+            );
+            command.Parameters.Add(new NpgsqlParameter { Value = applicationName });
+            var count = Convert.ToInt64(
+                await command.ExecuteScalarAsync(cancellationToken),
+                CultureInfo.InvariantCulture
+            );
+            if (count > 0)
+            {
+                return;
+            }
+
+            await Task.Delay(TimeSpan.FromMilliseconds(50), cancellationToken);
+        }
+
+        Assert.Fail("No backend of the application ran pg_sleep(5) within 15 seconds.");
     }
 
     private static PgServer NewServer(PgSource source, PgSettings? settings = null) =>
@@ -155,7 +189,11 @@ public sealed class PgServerStatementTests(PgServers servers)
         var terminate = Task.Run(
             async () =>
             {
-                await Task.Delay(TimeSpan.FromMilliseconds(300), cancellationToken);
+                await WaitForSleepingBackendAsync(
+                    servers.Admin19,
+                    applicationName,
+                    cancellationToken
+                );
 
                 await using var connection = new NpgsqlConnection(servers.Admin19);
                 await connection.OpenAsync(cancellationToken);

@@ -1,6 +1,7 @@
 // Copyright © NCode Group
 // SPDX-License-Identifier: Apache-2.0
 
+using System.Diagnostics;
 using System.Globalization;
 using NCode.Coordination.PostgreSql.Tests.Servers;
 using Npgsql;
@@ -71,6 +72,69 @@ public sealed class PgServerTransactionTests(PgServers servers)
         command.Parameters.Add(new NpgsqlParameter { Value = applicationName });
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
+
+    private static async Task WaitForBackendsAsync(
+        string adminConnectionString,
+        string applicationName,
+        string filter,
+        Func<long, bool> isDone,
+        string failure,
+        CancellationToken cancellationToken
+    )
+    {
+        await using var connection = new NpgsqlConnection(adminConnectionString);
+        await connection.OpenAsync(cancellationToken);
+
+        var deadline = Stopwatch.StartNew();
+        while (deadline.Elapsed < TimeSpan.FromSeconds(15))
+        {
+            await using var command = new NpgsqlCommand(
+                "SELECT count(*) FROM pg_stat_activity WHERE application_name = $1" + filter,
+                connection
+            );
+            command.Parameters.Add(new NpgsqlParameter { Value = applicationName });
+            var count = Convert.ToInt64(
+                await command.ExecuteScalarAsync(cancellationToken),
+                CultureInfo.InvariantCulture
+            );
+            if (isDone(count))
+            {
+                return;
+            }
+
+            await Task.Delay(TimeSpan.FromMilliseconds(50), cancellationToken);
+        }
+
+        Assert.Fail(failure);
+    }
+
+    private static Task WaitForNoBackendAsync(
+        string adminConnectionString,
+        string applicationName,
+        CancellationToken cancellationToken
+    ) =>
+        WaitForBackendsAsync(
+            adminConnectionString,
+            applicationName,
+            string.Empty,
+            count => count == 0,
+            "A backend of the application was still running 15 seconds after it was ended.",
+            cancellationToken
+        );
+
+    private static Task WaitForSleepingBackendAsync(
+        string adminConnectionString,
+        string applicationName,
+        CancellationToken cancellationToken
+    ) =>
+        WaitForBackendsAsync(
+            adminConnectionString,
+            applicationName,
+            " AND state = 'active' AND query LIKE '%pg_sleep(5)%'",
+            count => count > 0,
+            "No backend of the application ran pg_sleep(5) within 15 seconds.",
+            cancellationToken
+        );
 
     private static string WithApplicationName(string connectionString, string applicationName) =>
         new NpgsqlConnectionStringBuilder(connectionString)
@@ -236,7 +300,7 @@ public sealed class PgServerTransactionTests(PgServers servers)
     }
 
     [PgServerFact]
-    public async Task TransactAsync_TerminatedBeforeCommit_ThrowsNotApplied()
+    public async Task TransactAsync_TerminatedBeforeCommit_ThrowsUnavailableAndAppliesNothing()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         await WithTableAsync(
@@ -252,7 +316,7 @@ public sealed class PgServerTransactionTests(PgServers servers)
                     AfterFirstBatch = async token =>
                     {
                         await TerminateAsync(servers.Admin19, applicationName, token);
-                        await Task.Delay(TimeSpan.FromMilliseconds(200), token);
+                        await WaitForNoBackendAsync(servers.Admin19, applicationName, token);
                     },
                 };
 
@@ -274,6 +338,7 @@ public sealed class PgServerTransactionTests(PgServers servers)
                 );
 
                 Assert.Equal(CoordinationErrorCodes.Unavailable, exception.Code);
+                Assert.True(exception.OutcomeUnknown);
                 Assert.Equal(0L, await CountAsync(servers.Admin19, schema, cancellationToken));
             },
             cancellationToken
@@ -303,7 +368,11 @@ public sealed class PgServerTransactionTests(PgServers servers)
                 var terminate = Task.Run(
                     async () =>
                     {
-                        await Task.Delay(TimeSpan.FromMilliseconds(300), cancellationToken);
+                        await WaitForSleepingBackendAsync(
+                            servers.Admin19,
+                            applicationName,
+                            cancellationToken
+                        );
                         await TerminateAsync(servers.Admin19, applicationName, cancellationToken);
                     },
                     cancellationToken
