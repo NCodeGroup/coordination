@@ -99,7 +99,8 @@ measured on the server's clock.
   differs from the one before the reconnect, or a log whose number is behind a subscriber's. Every `CheckInterval`, 5
   seconds by default, each log is also read without a wake-up, so a lost `pg_notify` costs at most that long.
 - **The sweep**: every `SweepInterval`, once the probe has passed, the provider deletes the expired rows, in
-  statements of at most `SweepBatchSize` rows that skip rows another transaction holds, and ends the expired sessions.
+  statements of at most `SweepBatchSize` rows, each repeated while it deletes a full batch, that skip rows another
+  transaction holds, and ends the expired sessions.
   It also deletes the entries of change logs and topic logs older than `LogRetention`, 5 minutes by default, at least a
   second and at most a day, and a watch or subscription that needs a deleted entry resyncs.
 

@@ -138,7 +138,7 @@ public sealed class PgSweepsTests(PgServers servers)
     #region SweepAsync Tests
 
     [PgServerFact]
-    public async Task SweepAsync_FiveExpiredOccurrences_RemovesTwoPerPass()
+    public async Task SweepAsync_FiveExpiredOccurrences_RemovesThemAllInBatchesOfTwo()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
         await WithSweepsAsync(
@@ -148,13 +148,9 @@ public sealed class PgSweepsTests(PgServers servers)
                 await context.ExpireAsync("occurrences", cancellationToken);
 
                 await context.Sweeps.SweepAsync(cancellationToken);
-                var afterFirst = await context.CountAsync("occurrences", cancellationToken);
-                Assert.Equal(3, afterFirst);
 
-                await context.Sweeps.SweepAsync(cancellationToken);
-                await context.Sweeps.SweepAsync(cancellationToken);
-                var afterAll = await context.CountAsync("occurrences", cancellationToken);
-                Assert.Equal(0, afterAll);
+                var remaining = await context.CountAsync("occurrences", cancellationToken);
+                Assert.Equal(0, remaining);
             },
             cancellationToken
         );
@@ -275,6 +271,44 @@ public sealed class PgSweepsTests(PgServers servers)
     }
 
     [PgServerFact]
+    public async Task SweepAsync_FiveExpiredRecords_LogsThemInEntriesOfTwo()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await WithSweepsAsync(
+            async context =>
+            {
+                for (var number = 0; number < 5; number++)
+                {
+                    var result = await context.Records.CreateAsync(
+                        context.KeyOf(number),
+                        new byte[] { 1 },
+                        RecordLifetime.ForTimeToLive(new TimeToLive(Live)),
+                        null,
+                        cancellationToken
+                    );
+                    Assert.True(result.IsWritten);
+                }
+
+                await context.ExpireAsync("records", cancellationToken);
+
+                await context.Sweeps.SweepAsync(cancellationToken);
+
+                var records = await context.CountAsync("records", cancellationToken);
+                var deletions = await context.CountAsync(
+                    "change_items WHERE kind = 2",
+                    cancellationToken
+                );
+                var changes = await context.CountAsync("changes", cancellationToken);
+
+                Assert.Equal(0, records);
+                Assert.Equal(5, deletions);
+                Assert.Equal(8, changes);
+            },
+            cancellationToken
+        );
+    }
+
+    [PgServerFact]
     public async Task SweepAsync_EntriesPastRetention_RaisesLogRemoved()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
@@ -337,25 +371,11 @@ public sealed class PgSweepsTests(PgServers servers)
 
                 await context.Sweeps.SweepAsync(cancellationToken);
 
-                var afterFirst = await context.CountAsync("messages", cancellationToken);
-                var removedFirst = await context.ScalarAsync(
-                    "removed",
-                    "topics",
-                    cancellationToken
-                );
-                Assert.Equal(1, afterFirst);
-                Assert.Equal(2, removedFirst);
+                var messages = await context.CountAsync("messages", cancellationToken);
+                var removed = await context.ScalarAsync("removed", "topics", cancellationToken);
 
-                await context.Sweeps.SweepAsync(cancellationToken);
-
-                var afterSecond = await context.CountAsync("messages", cancellationToken);
-                var removedSecond = await context.ScalarAsync(
-                    "removed",
-                    "topics",
-                    cancellationToken
-                );
-                Assert.Equal(0, afterSecond);
-                Assert.Equal(3, removedSecond);
+                Assert.Equal(0, messages);
+                Assert.Equal(3, removed);
             },
             cancellationToken
         );

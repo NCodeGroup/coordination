@@ -22,50 +22,62 @@ internal sealed class PgSweeps(PgServer server, PgSettings settings, PgRecordTab
     /// The statement that deletes expired occurrences.
     /// </summary>
     private const string OccurrencesSql = """
-        DELETE FROM {schema}.occurrences
-        WHERE ctid = ANY (ARRAY(
-          SELECT ctid FROM {schema}.occurrences
-          WHERE deadline <= clock_timestamp()
-          LIMIT $1
-          FOR UPDATE SKIP LOCKED))
+        WITH deleted AS (
+          DELETE FROM {schema}.occurrences
+          WHERE ctid = ANY (ARRAY(
+            SELECT ctid FROM {schema}.occurrences
+            WHERE deadline <= clock_timestamp()
+            LIMIT $1
+            FOR UPDATE SKIP LOCKED))
+          RETURNING 1)
+        SELECT count(*) FROM deleted
         """;
 
     /// <summary>
     /// The statement that deletes expired counters.
     /// </summary>
     private const string CountersSql = """
-        DELETE FROM {schema}.counters
-        WHERE ctid = ANY (ARRAY(
-          SELECT ctid FROM {schema}.counters
-          WHERE deadline <= clock_timestamp()
-          LIMIT $1
-          FOR UPDATE SKIP LOCKED))
+        WITH deleted AS (
+          DELETE FROM {schema}.counters
+          WHERE ctid = ANY (ARRAY(
+            SELECT ctid FROM {schema}.counters
+            WHERE deadline <= clock_timestamp()
+            LIMIT $1
+            FOR UPDATE SKIP LOCKED))
+          RETURNING 1)
+        SELECT count(*) FROM deleted
         """;
 
     /// <summary>
     /// The statement that deletes expired set members.
     /// </summary>
     private const string SetMembersSql = """
-        DELETE FROM {schema}.set_members
-        WHERE ctid = ANY (ARRAY(
-          SELECT ctid FROM {schema}.set_members
-          WHERE deadline <= clock_timestamp()
-          LIMIT $1
-          FOR UPDATE SKIP LOCKED))
+        WITH deleted AS (
+          DELETE FROM {schema}.set_members
+          WHERE ctid = ANY (ARRAY(
+            SELECT ctid FROM {schema}.set_members
+            WHERE deadline <= clock_timestamp()
+            LIMIT $1
+            FOR UPDATE SKIP LOCKED))
+          RETURNING 1)
+        SELECT count(*) FROM deleted
         """;
 
     /// <summary>
     /// The statement that deletes the rows of sets that hold no member.
     /// </summary>
     private const string SetsSql = """
-        DELETE FROM {schema}.sets
-        WHERE ctid = ANY (ARRAY(
-          SELECT h.ctid FROM {schema}.sets h
-          WHERE NOT EXISTS (
-            SELECT 1 FROM {schema}.set_members m
-            WHERE m.keyspace_id = h.keyspace_id AND m.idx = h.idx AND m.depth = h.depth)
-          LIMIT $1
-          FOR UPDATE SKIP LOCKED))
+        WITH deleted AS (
+          DELETE FROM {schema}.sets
+          WHERE ctid = ANY (ARRAY(
+            SELECT h.ctid FROM {schema}.sets h
+            WHERE NOT EXISTS (
+              SELECT 1 FROM {schema}.set_members m
+              WHERE m.keyspace_id = h.keyspace_id AND m.idx = h.idx AND m.depth = h.depth)
+            LIMIT $1
+            FOR UPDATE SKIP LOCKED))
+          RETURNING 1)
+        SELECT count(*) FROM deleted
         """;
 
     /// <summary>
@@ -123,78 +135,93 @@ internal sealed class PgSweeps(PgServer server, PgSettings settings, PgRecordTab
     /// The statement that deletes the records bound to a session that ended and left the log.
     /// </summary>
     private const string BoundRecordsSql = """
-        DELETE FROM {schema}.records
-        WHERE ctid = ANY (ARRAY(
-          SELECT b.ctid FROM {schema}.records b
-          WHERE b.session_id IS NOT NULL
-            AND NOT EXISTS (
-              SELECT 1 FROM {schema}.sessions s
-              WHERE s.keyspace_id = b.keyspace_id AND s.id = b.session_id)
-            AND NOT EXISTS (
-              SELECT 1 FROM {schema}.changes c
-              WHERE c.keyspace_id = b.keyspace_id AND c.ended_session = b.session_id)
-          LIMIT $1
-          FOR UPDATE SKIP LOCKED))
+        WITH deleted AS (
+          DELETE FROM {schema}.records
+          WHERE ctid = ANY (ARRAY(
+            SELECT b.ctid FROM {schema}.records b
+            WHERE b.session_id IS NOT NULL
+              AND NOT EXISTS (
+                SELECT 1 FROM {schema}.sessions s
+                WHERE s.keyspace_id = b.keyspace_id AND s.id = b.session_id)
+              AND NOT EXISTS (
+                SELECT 1 FROM {schema}.changes c
+                WHERE c.keyspace_id = b.keyspace_id AND c.ended_session = b.session_id)
+            LIMIT $1
+            FOR UPDATE SKIP LOCKED))
+          RETURNING 1)
+        SELECT count(*) FROM deleted
         """;
 
     /// <summary>
     /// The statement that deletes the members bound to a session that ended and left the log.
     /// </summary>
     private const string BoundMembersSql = """
-        DELETE FROM {schema}.members
-        WHERE ctid = ANY (ARRAY(
-          SELECT b.ctid FROM {schema}.members b
-          WHERE b.session_id IS NOT NULL
-            AND NOT EXISTS (
-              SELECT 1 FROM {schema}.sessions s
-              WHERE s.keyspace_id = b.keyspace_id AND s.id = b.session_id)
-            AND NOT EXISTS (
-              SELECT 1 FROM {schema}.changes c
-              WHERE c.keyspace_id = b.keyspace_id AND c.ended_session = b.session_id)
-          LIMIT $1
-          FOR UPDATE SKIP LOCKED))
+        WITH deleted AS (
+          DELETE FROM {schema}.members
+          WHERE ctid = ANY (ARRAY(
+            SELECT b.ctid FROM {schema}.members b
+            WHERE b.session_id IS NOT NULL
+              AND NOT EXISTS (
+                SELECT 1 FROM {schema}.sessions s
+                WHERE s.keyspace_id = b.keyspace_id AND s.id = b.session_id)
+              AND NOT EXISTS (
+                SELECT 1 FROM {schema}.changes c
+                WHERE c.keyspace_id = b.keyspace_id AND c.ended_session = b.session_id)
+            LIMIT $1
+            FOR UPDATE SKIP LOCKED))
+          RETURNING 1)
+        SELECT count(*) FROM deleted
         """;
 
     /// <summary>
     /// The statement that deletes the grants bound to a session that ended and left the log.
     /// </summary>
     private const string BoundGrantsSql = """
-        DELETE FROM {schema}.grants
-        WHERE ctid = ANY (ARRAY(
-          SELECT b.ctid FROM {schema}.grants b
-          WHERE b.session_id IS NOT NULL
-            AND NOT EXISTS (
-              SELECT 1 FROM {schema}.sessions s
-              WHERE s.keyspace_id = b.keyspace_id AND s.id = b.session_id)
-            AND NOT EXISTS (
-              SELECT 1 FROM {schema}.changes c
-              WHERE c.keyspace_id = b.keyspace_id AND c.ended_session = b.session_id)
-          LIMIT $1
-          FOR UPDATE SKIP LOCKED))
+        WITH deleted AS (
+          DELETE FROM {schema}.grants
+          WHERE ctid = ANY (ARRAY(
+            SELECT b.ctid FROM {schema}.grants b
+            WHERE b.session_id IS NOT NULL
+              AND NOT EXISTS (
+                SELECT 1 FROM {schema}.sessions s
+                WHERE s.keyspace_id = b.keyspace_id AND s.id = b.session_id)
+              AND NOT EXISTS (
+                SELECT 1 FROM {schema}.changes c
+                WHERE c.keyspace_id = b.keyspace_id AND c.ended_session = b.session_id)
+            LIMIT $1
+            FOR UPDATE SKIP LOCKED))
+          RETURNING 1)
+        SELECT count(*) FROM deleted
         """;
 
     /// <summary>
     /// The statement that deletes grants past their deadline.
     /// </summary>
     private const string GrantsSql = """
-        DELETE FROM {schema}.grants
-        WHERE ctid = ANY (ARRAY(
-          SELECT ctid FROM {schema}.grants
-          WHERE deadline <= clock_timestamp()
-          LIMIT $1
-          FOR UPDATE SKIP LOCKED))
+        WITH deleted AS (
+          DELETE FROM {schema}.grants
+          WHERE ctid = ANY (ARRAY(
+            SELECT ctid FROM {schema}.grants
+            WHERE deadline <= clock_timestamp()
+            LIMIT $1
+            FOR UPDATE SKIP LOCKED))
+          RETURNING 1)
+        SELECT count(*) FROM deleted
         """;
 
     /// <summary>
     /// The statement that deletes claims past their deadline.
     /// </summary>
     private const string ClaimsSql = """
-        DELETE FROM {schema}.claims
-        WHERE ctid = ANY (ARRAY(
-          SELECT ctid FROM {schema}.claims
-          WHERE deadline <= clock_timestamp()
-          LIMIT $1
-          FOR UPDATE SKIP LOCKED))
+        WITH deleted AS (
+          DELETE FROM {schema}.claims
+          WHERE ctid = ANY (ARRAY(
+            SELECT ctid FROM {schema}.claims
+            WHERE deadline <= clock_timestamp()
+            LIMIT $1
+            FOR UPDATE SKIP LOCKED))
+          RETURNING 1)
+        SELECT count(*) FROM deleted
         """;
 
     /// <summary>
@@ -209,11 +236,13 @@ internal sealed class PgSweeps(PgServer server, PgSettings settings, PgRecordTab
             ORDER BY keyspace_id, revision
             LIMIT $1
             FOR UPDATE SKIP LOCKED))
-          RETURNING keyspace_id, revision)
-        UPDATE {schema}.keyspaces k
-        SET log_removed = greatest(k.log_removed, m.revision)
-        FROM (SELECT keyspace_id, max(revision) AS revision FROM removed GROUP BY keyspace_id) m
-        WHERE k.id = m.keyspace_id
+          RETURNING keyspace_id, revision),
+        raised AS (
+          UPDATE {schema}.keyspaces k
+          SET log_removed = greatest(k.log_removed, m.revision)
+          FROM (SELECT keyspace_id, max(revision) AS revision FROM removed GROUP BY keyspace_id) m
+          WHERE k.id = m.keyspace_id)
+        SELECT count(*) FROM removed
         """;
 
     /// <summary>
@@ -228,11 +257,13 @@ internal sealed class PgSweeps(PgServer server, PgSettings settings, PgRecordTab
             ORDER BY keyspace_id, idx, depth, sequence
             LIMIT $1
             FOR UPDATE SKIP LOCKED))
-          RETURNING keyspace_id, idx, depth, sequence)
-        UPDATE {schema}.topics t
-        SET removed = greatest(t.removed, m.sequence)
-        FROM (SELECT keyspace_id, idx, depth, max(sequence) AS sequence FROM removed GROUP BY keyspace_id, idx, depth) m
-        WHERE t.keyspace_id = m.keyspace_id AND t.idx = m.idx AND t.depth = m.depth
+          RETURNING keyspace_id, idx, depth, sequence),
+        raised AS (
+          UPDATE {schema}.topics t
+          SET removed = greatest(t.removed, m.sequence)
+          FROM (SELECT keyspace_id, idx, depth, max(sequence) AS sequence FROM removed GROUP BY keyspace_id, idx, depth) m
+          WHERE t.keyspace_id = m.keyspace_id AND t.idx = m.idx AND t.depth = m.depth)
+        SELECT count(*) FROM removed
         """;
 
     /// <summary>
@@ -339,6 +370,24 @@ internal sealed class PgSweeps(PgServer server, PgSettings settings, PgRecordTab
     )
     {
         return results.ReadAsync(ReadFirstInt64, cancellationToken);
+    }
+
+    /// <summary>
+    /// Reads the count that a pass's statement returns: how many rows it deleted.
+    /// </summary>
+    /// <param name="results">The results of the batch.</param>
+    /// <param name="cancellationToken">The token that cancels the read.</param>
+    /// <returns>The number of rows the statement deleted.</returns>
+    private static async ValueTask<long> ReadDeletedAsync(
+        PgResults results,
+        CancellationToken cancellationToken
+    )
+    {
+        var counts = await results
+            .ReadAsync(ReadFirstInt64, cancellationToken)
+            .ConfigureAwait(false);
+
+        return counts[0];
     }
 
     /// <summary>
@@ -469,7 +518,8 @@ internal sealed class PgSweeps(PgServer server, PgSettings settings, PgRecordTab
     private string Messages { get; } = settings.Schema.Apply(MessagesSql);
 
     /// <summary>
-    /// Runs each pass once, in order. A pass that fails doesn't stop the passes after it.
+    /// Runs each pass, in order, each repeated while it deletes a full batch. A pass that fails doesn't stop the passes
+    /// after it.
     /// </summary>
     /// <param name="cancellationToken">The token that cancels the sweep.</param>
     /// <returns>A task that completes after every pass ran.</returns>
@@ -497,26 +547,25 @@ internal sealed class PgSweeps(PgServer server, PgSettings settings, PgRecordTab
     }
 
     /// <summary>
-    /// Runs one pass that is a single statement, and ignores its failure.
+    /// Runs one pass that is a single statement, again while it deletes a full batch, and ignores its failure.
     /// </summary>
-    /// <param name="sql">The statement, whose only argument is the batch size.</param>
+    /// <param name="sql">The statement, whose only argument is the batch size and which returns the count of rows it deleted.</param>
     /// <param name="cancellationToken">The token that cancels the sweep.</param>
     /// <returns>A task that completes after the pass ran.</returns>
     /// <exception cref="OperationCanceledException">The token was cancelled.</exception>
     private async ValueTask RunPassAsync(string sql, CancellationToken cancellationToken)
     {
-        cancellationToken.ThrowIfCancellationRequested();
-
         var statement = new PgStatement(sql, Settings.SweepBatchSize);
         try
         {
-            await Server
-                .ExecuteAsync(
-                    [statement],
-                    static (_, _) => ValueTask.FromResult(true),
-                    cancellationToken
-                )
-                .ConfigureAwait(false);
+            long deleted;
+            do
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                deleted = await Server
+                    .ExecuteAsync([statement], ReadDeletedAsync, cancellationToken)
+                    .ConfigureAwait(false);
+            } while (deleted == Settings.SweepBatchSize);
         }
         catch (CoordinationException)
         {
@@ -529,8 +578,28 @@ internal sealed class PgSweeps(PgServer server, PgSettings settings, PgRecordTab
     }
 
     /// <summary>
-    /// Deletes expired records, a batch for each keyspace that holds some, and logs each batch as one entry. A keyspace
-    /// whose row another transaction holds is skipped, and so is one whose records no longer are expired.
+    /// Runs a batch of a keyspace's sweep again while it expired or ended a full batch.
+    /// </summary>
+    /// <param name="sweepBatch">Sweeps one batch and returns how many rows it expired or ended.</param>
+    /// <param name="cancellationToken">The token that cancels the sweep.</param>
+    /// <returns>A task that completes after a batch was not full.</returns>
+    /// <exception cref="OperationCanceledException">The token was cancelled.</exception>
+    private async ValueTask RepeatWhileFullAsync(
+        Func<CancellationToken, ValueTask<int>> sweepBatch,
+        CancellationToken cancellationToken
+    )
+    {
+        int swept;
+        do
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            swept = await sweepBatch(cancellationToken).ConfigureAwait(false);
+        } while (swept == Settings.SweepBatchSize);
+    }
+
+    /// <summary>
+    /// Deletes expired records, batches for each keyspace that holds some, and logs each batch as one entry. A
+    /// keyspace whose row another transaction holds is skipped, and so is one whose records no longer are expired.
     /// </summary>
     /// <param name="cancellationToken">The token that cancels the sweep.</param>
     /// <returns>A task that completes after every keyspace was visited.</returns>
@@ -545,11 +614,26 @@ internal sealed class PgSweeps(PgServer server, PgSettings settings, PgRecordTab
             cancellationToken.ThrowIfCancellationRequested();
 
             await IgnoreFailureAsync(
-                    token => SweepKeyspaceAsync(keyspaceId, token),
+                    token => SweepKeyspaceFullyAsync(keyspaceId, token),
                     cancellationToken
                 )
                 .ConfigureAwait(false);
         }
+    }
+
+    /// <summary>
+    /// Deletes one keyspace's expired records in batches, until a batch is not full.
+    /// </summary>
+    /// <param name="keyspaceId">The keyspace's id.</param>
+    /// <param name="cancellationToken">The token that cancels the sweep.</param>
+    /// <returns>A task that completes after the last batch was committed, or skipped.</returns>
+    /// <exception cref="CoordinationException">The server could not be reached or failed.</exception>
+    private ValueTask SweepKeyspaceFullyAsync(long keyspaceId, CancellationToken cancellationToken)
+    {
+        return RepeatWhileFullAsync(
+            token => SweepKeyspaceAsync(keyspaceId, token),
+            cancellationToken
+        );
     }
 
     /// <summary>
@@ -575,17 +659,15 @@ internal sealed class PgSweeps(PgServer server, PgSettings settings, PgRecordTab
     /// </summary>
     /// <param name="keyspaceId">The keyspace's id.</param>
     /// <param name="cancellationToken">The token that cancels the sweep.</param>
-    /// <returns>A task that completes after the batch was committed, or skipped.</returns>
+    /// <returns>The number of records the batch expired; 0 when it was skipped.</returns>
     /// <exception cref="CoordinationException">The server could not be reached or failed.</exception>
-    private async ValueTask SweepKeyspaceAsync(long keyspaceId, CancellationToken cancellationToken)
+    private ValueTask<int> SweepKeyspaceAsync(long keyspaceId, CancellationToken cancellationToken)
     {
-        await Server
-            .TransactAsync(
-                PgIsolation.ReadCommitted,
-                (transaction, token) => ExpireRecordsAsync(transaction, keyspaceId, token),
-                cancellationToken
-            )
-            .ConfigureAwait(false);
+        return Server.TransactAsync(
+            PgIsolation.ReadCommitted,
+            (transaction, token) => ExpireRecordsAsync(transaction, keyspaceId, token),
+            cancellationToken
+        );
     }
 
     /// <summary>
@@ -595,8 +677,8 @@ internal sealed class PgSweeps(PgServer server, PgSettings settings, PgRecordTab
     /// <param name="transaction">The transaction, which has not begun.</param>
     /// <param name="keyspaceId">The keyspace's id.</param>
     /// <param name="cancellationToken">The token that cancels the sweep.</param>
-    /// <returns><see langword="true"/> when records were deleted; otherwise, <see langword="false"/>.</returns>
-    private async ValueTask<bool> ExpireRecordsAsync(
+    /// <returns>The number of records the batch expired; 0 when it was skipped.</returns>
+    private async ValueTask<int> ExpireRecordsAsync(
         PgTransaction transaction,
         long keyspaceId,
         CancellationToken cancellationToken
@@ -616,7 +698,7 @@ internal sealed class PgSweeps(PgServer server, PgSettings settings, PgRecordTab
         if (revisions.Length == 0 || rows.Length == 0)
         {
             await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
-            return false;
+            return 0;
         }
 
         var change = CreateChange(keyspaceId, revisions[0], clocks[0]);
@@ -625,7 +707,7 @@ internal sealed class PgSweeps(PgServer server, PgSettings settings, PgRecordTab
         await Table
             .CommitAsync(transaction, change, keyspaceId, cancellationToken)
             .ConfigureAwait(false);
-        return true;
+        return rows.Length;
     }
 
     /// <summary>
@@ -648,7 +730,7 @@ internal sealed class PgSweeps(PgServer server, PgSettings settings, PgRecordTab
     }
 
     /// <summary>
-    /// Ends expired sessions, a batch for each keyspace that holds some, as one change for each session. A keyspace
+    /// Ends expired sessions, batches for each keyspace that holds some, as one change for each session. A keyspace
     /// whose row another transaction holds is skipped, and so is one whose sessions no longer are expired.
     /// </summary>
     /// <param name="cancellationToken">The token that cancels the sweep.</param>
@@ -664,7 +746,7 @@ internal sealed class PgSweeps(PgServer server, PgSettings settings, PgRecordTab
             cancellationToken.ThrowIfCancellationRequested();
 
             await IgnoreFailureAsync(
-                    token => SweepSessionKeyspaceAsync(keyspaceId, token),
+                    token => SweepSessionKeyspaceFullyAsync(keyspaceId, token),
                     cancellationToken
                 )
                 .ConfigureAwait(false);
@@ -672,24 +754,40 @@ internal sealed class PgSweeps(PgServer server, PgSettings settings, PgRecordTab
     }
 
     /// <summary>
-    /// Ends a batch of one keyspace's expired sessions in a transaction that holds the keyspace's row.
+    /// Ends one keyspace's expired sessions in batches, until a batch is not full.
     /// </summary>
     /// <param name="keyspaceId">The keyspace's id.</param>
     /// <param name="cancellationToken">The token that cancels the sweep.</param>
-    /// <returns>A task that completes after the batch was committed, or skipped.</returns>
+    /// <returns>A task that completes after the last batch was committed, or skipped.</returns>
     /// <exception cref="CoordinationException">The server could not be reached or failed.</exception>
-    private async ValueTask SweepSessionKeyspaceAsync(
+    private ValueTask SweepSessionKeyspaceFullyAsync(
         long keyspaceId,
         CancellationToken cancellationToken
     )
     {
-        await Server
-            .TransactAsync(
-                PgIsolation.ReadCommitted,
-                (transaction, token) => EndSessionsAsync(transaction, keyspaceId, token),
-                cancellationToken
-            )
-            .ConfigureAwait(false);
+        return RepeatWhileFullAsync(
+            token => SweepSessionKeyspaceAsync(keyspaceId, token),
+            cancellationToken
+        );
+    }
+
+    /// <summary>
+    /// Ends a batch of one keyspace's expired sessions in a transaction that holds the keyspace's row.
+    /// </summary>
+    /// <param name="keyspaceId">The keyspace's id.</param>
+    /// <param name="cancellationToken">The token that cancels the sweep.</param>
+    /// <returns>The number of sessions the batch ended; 0 when it was skipped.</returns>
+    /// <exception cref="CoordinationException">The server could not be reached or failed.</exception>
+    private ValueTask<int> SweepSessionKeyspaceAsync(
+        long keyspaceId,
+        CancellationToken cancellationToken
+    )
+    {
+        return Server.TransactAsync(
+            PgIsolation.ReadCommitted,
+            (transaction, token) => EndSessionsAsync(transaction, keyspaceId, token),
+            cancellationToken
+        );
     }
 
     /// <summary>
@@ -699,8 +797,8 @@ internal sealed class PgSweeps(PgServer server, PgSettings settings, PgRecordTab
     /// <param name="transaction">The transaction, which has not begun.</param>
     /// <param name="keyspaceId">The keyspace's id.</param>
     /// <param name="cancellationToken">The token that cancels the sweep.</param>
-    /// <returns><see langword="true"/> when sessions were ended; otherwise, <see langword="false"/>.</returns>
-    private async ValueTask<bool> EndSessionsAsync(
+    /// <returns>The number of sessions the batch ended; 0 when it was skipped.</returns>
+    private async ValueTask<int> EndSessionsAsync(
         PgTransaction transaction,
         long keyspaceId,
         CancellationToken cancellationToken
@@ -724,7 +822,7 @@ internal sealed class PgSweeps(PgServer server, PgSettings settings, PgRecordTab
         if (revisions.Length == 0 || sessions.Length == 0)
         {
             await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
-            return false;
+            return 0;
         }
 
         var change = CreateChange(keyspaceId, revisions[0], clocks[0]);
@@ -736,6 +834,6 @@ internal sealed class PgSweeps(PgServer server, PgSettings settings, PgRecordTab
         await Table
             .CommitAsync(transaction, change, keyspaceId, cancellationToken)
             .ConfigureAwait(false);
-        return true;
+        return sessions.Length;
     }
 }
