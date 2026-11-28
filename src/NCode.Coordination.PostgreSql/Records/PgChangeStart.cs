@@ -23,7 +23,7 @@ internal sealed record PgChangeStart(
     /// </summary>
     public void EndExpiredSessions()
     {
-        var expired = new SortedSet<string>(StringComparer.Ordinal);
+        SortedSet<string>? expired = null;
 
         foreach (var row in Rows.Values)
         {
@@ -33,6 +33,7 @@ internal sealed record PgChangeStart(
                 && deadline <= Change.Now
             )
             {
+                expired ??= new SortedSet<string>(StringComparer.Ordinal);
                 expired.Add(session);
             }
         }
@@ -41,8 +42,14 @@ internal sealed record PgChangeStart(
         {
             if (deadline <= Change.Now)
             {
+                expired ??= new SortedSet<string>(StringComparer.Ordinal);
                 expired.Add(session);
             }
+        }
+
+        if (expired is null)
+        {
+            return;
         }
 
         foreach (var session in expired)

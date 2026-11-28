@@ -239,18 +239,18 @@ internal sealed class PgKeyspaceChange(PgSettings settings, PgChangeOrigin origi
 
     /// <summary>
     /// Ends a session: takes the next revision for an entry that names the session as ended, and deletes the
-    /// session's row and queues it in the ended sessions. A session ends once in a change.
+    /// session's row and queues it in the ended sessions. A session ends once in a change: when this change has ended
+    /// it already, the call returns at once and does nothing.
     /// </summary>
     /// <param name="session">The session's id.</param>
-    /// <returns>True when the session was ended; false when this change has ended it already.</returns>
     /// <exception cref="ArgumentNullException">The session is null.</exception>
-    public bool EndSession(string session)
+    public void EndSession(string session)
     {
         ArgumentNullException.ThrowIfNull(session);
 
         if (!EndedSessions.Add(session))
         {
-            return false;
+            return;
         }
 
         var revision = Begin();
@@ -259,7 +259,6 @@ internal sealed class PgKeyspaceChange(PgSettings settings, PgChangeOrigin origi
         Extras.Add(deleteSession);
         var queueSession = new PgStatement(InsertEndedSessionSql, KeyspaceId, session, revision);
         Extras.Add(queueSession);
-        return true;
     }
 
     /// <summary>

@@ -57,19 +57,26 @@ internal sealed record PgGrantStart(
     public void EndExpiredSessions(string? session)
     {
         var now = Change.Now;
-        var expired = new SortedSet<string>(StringComparer.Ordinal);
+        SortedSet<string>? expired = null;
 
         foreach (var row in Rows)
         {
             if (row.Session is { } bound && row.SessionDeadline is { } deadline && deadline <= now)
             {
+                expired ??= new SortedSet<string>(StringComparer.Ordinal);
                 expired.Add(bound);
             }
         }
 
         if (session is not null && SessionDeadline is { } own && own <= now)
         {
+            expired ??= new SortedSet<string>(StringComparer.Ordinal);
             expired.Add(session);
+        }
+
+        if (expired is null)
+        {
+            return;
         }
 
         foreach (var ended in expired)

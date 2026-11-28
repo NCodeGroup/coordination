@@ -27,19 +27,26 @@ internal sealed record PgMembershipStart(
     public void EndExpiredSessions()
     {
         var now = Change.Now;
-        var expired = new SortedSet<string>(StringComparer.Ordinal);
+        SortedSet<string>? expired = null;
 
         foreach (var row in Rows)
         {
             if (row.Deadline is { } deadline && deadline <= now)
             {
+                expired ??= new SortedSet<string>(StringComparer.Ordinal);
                 expired.Add(row.Session);
             }
         }
 
         if (SessionDeadline is { } own && own <= now)
         {
+            expired ??= new SortedSet<string>(StringComparer.Ordinal);
             expired.Add(Session);
+        }
+
+        if (expired is null)
+        {
+            return;
         }
 
         foreach (var session in expired)

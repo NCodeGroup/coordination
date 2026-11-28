@@ -164,11 +164,9 @@ public sealed class PgKeyspaceChangeTests
     {
         var change = CreateChange(5);
 
-        var first = change.EndSession("s-1");
-        var second = change.EndSession("s-1");
+        change.EndSession("s-1");
+        change.EndSession("s-1");
 
-        Assert.True(first);
-        Assert.False(second);
         Assert.Equal(6, change.Revision);
 
         var statements = change.Statements("channel");
