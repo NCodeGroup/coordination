@@ -153,7 +153,7 @@ internal sealed class PgSessionService(PgRecordTable table, IPgTokens tokens) : 
         var microseconds = PgCall.ToMicroseconds(timeToLive);
 
         await Table
-            .Keyspaces.RunAsync(
+            .RunInKeyspaceAsync(
                 keyspace,
                 (id, token) => InsertInKeyspaceAsync(id, sessionToken, microseconds, token),
                 cancellationToken
@@ -175,7 +175,7 @@ internal sealed class PgSessionService(PgRecordTable table, IPgTokens tokens) : 
         PgCall.Check(options, cancellationToken);
 
         return await Table
-            .Keyspaces.RunAsync<KeepAliveResult>(
+            .RunInKeyspaceAsync<KeepAliveResult>(
                 session.Keyspace,
                 (id, token) => RenewInKeyspaceAsync(id, session, token),
                 cancellationToken
@@ -194,7 +194,7 @@ internal sealed class PgSessionService(PgRecordTable table, IPgTokens tokens) : 
         PgCall.Check(options, cancellationToken);
 
         await Table
-            .Keyspaces.RunAsync(
+            .RunInKeyspaceAsync(
                 session.Keyspace,
                 (id, token) => CloseInKeyspaceAsync(id, session, token),
                 cancellationToken
@@ -234,7 +234,7 @@ internal sealed class PgSessionService(PgRecordTable table, IPgTokens tokens) : 
         var statement = new PgStatement(InsertSql, id, sessionToken, microseconds);
 
         await Table
-            .Server.ExecuteAsync(
+            .ExecuteAsync(
                 [statement],
                 static (_, _) => ValueTask.FromResult(true),
                 cancellationToken
@@ -258,7 +258,7 @@ internal sealed class PgSessionService(PgRecordTable table, IPgTokens tokens) : 
         var statement = new PgStatement(RenewSql, id, session.Value);
 
         var renewed = await Table
-            .Server.ExecuteAsync([statement], ReadRenewedAsync, cancellationToken)
+            .ExecuteAsync([statement], ReadRenewedAsync, cancellationToken)
             .ConfigureAwait(false);
 
         return ToKeepAliveResult(renewed);
@@ -277,7 +277,7 @@ internal sealed class PgSessionService(PgRecordTable table, IPgTokens tokens) : 
     )
     {
         await Table
-            .Server.TransactAsync(
+            .TransactAsync(
                 PgIsolation.ReadCommitted,
                 (transaction, token) => CloseInTransactionAsync(transaction, id, session, token),
                 cancellationToken
@@ -328,7 +328,7 @@ internal sealed class PgSessionService(PgRecordTable table, IPgTokens tokens) : 
     )
     {
         return await Table
-            .Keyspaces.RunAsync<bool>(
+            .RunInKeyspaceAsync<bool>(
                 session.Keyspace,
                 (id, token) => ReadEndedInKeyspaceAsync(id, session, token),
                 cancellationToken
@@ -352,7 +352,7 @@ internal sealed class PgSessionService(PgRecordTable table, IPgTokens tokens) : 
         var statement = new PgStatement(EndedSql, id, session.Value);
 
         var ended = await Table
-            .Server.ExecuteAsync([statement], ReadEndedAsync, cancellationToken)
+            .ExecuteAsync([statement], ReadEndedAsync, cancellationToken)
             .ConfigureAwait(false);
 
         return ended.Length > 0 && ended[0];

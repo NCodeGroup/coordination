@@ -450,7 +450,7 @@ internal sealed class PgMembershipService(PgRecordTable table, PgChangeLog chang
         var request = JoinRequestOf(address, member);
 
         return await Table
-            .Keyspaces.RunAsync<MembershipJoinStatus>(
+            .RunInKeyspaceAsync<MembershipJoinStatus>(
                 group.Keyspace,
                 (id, token) => JoinInKeyspaceAsync(id, request, token),
                 cancellationToken
@@ -474,7 +474,7 @@ internal sealed class PgMembershipService(PgRecordTable table, PgChangeLog chang
         var request = new PgLeaveRequest(address, session);
 
         await Table
-            .Keyspaces.RunAsync<bool>(
+            .RunInKeyspaceAsync<bool>(
                 group.Keyspace,
                 (id, token) => LeaveInKeyspaceAsync(id, request, token),
                 cancellationToken
@@ -566,7 +566,7 @@ internal sealed class PgMembershipService(PgRecordTable table, PgChangeLog chang
     )> SubscribeToChangesAsync(Keyspace keyspace, CancellationToken cancellationToken)
     {
         var keyspaceId = await Table
-            .Keyspaces.ResolveAsync(keyspace, cancellationToken)
+            .ResolveAsync(keyspace, cancellationToken)
             .ConfigureAwait(false);
 
         var logId = new PgLogId(keyspaceId, null);
@@ -609,7 +609,7 @@ internal sealed class PgMembershipService(PgRecordTable table, PgChangeLog chang
         var address = AddressOf(group);
 
         return await Table
-            .Keyspaces.RunAsync<MembershipView>(
+            .RunInKeyspaceAsync<MembershipView>(
                 group.Keyspace,
                 (id, token) => ReadViewInKeyspaceAsync(id, address, token),
                 cancellationToken
@@ -635,7 +635,7 @@ internal sealed class PgMembershipService(PgRecordTable table, PgChangeLog chang
         var statement = SelectMembersStatement(id, address);
 
         var first = await Table
-            .Server.ExecuteAsync([statement], ReadMembersAsync, cancellationToken)
+            .ExecuteAsync([statement], ReadMembersAsync, cancellationToken)
             .ConfigureAwait(false);
 
         if (first.Length == 0)
@@ -685,7 +685,7 @@ internal sealed class PgMembershipService(PgRecordTable table, PgChangeLog chang
     )
     {
         return await Table
-            .Server.TransactAsync(
+            .TransactAsync(
                 PgIsolation.ReadCommitted,
                 (transaction, token) => JoinInTransactionAsync(transaction, id, request, token),
                 cancellationToken
@@ -788,7 +788,7 @@ internal sealed class PgMembershipService(PgRecordTable table, PgChangeLog chang
     )
     {
         return await Table
-            .Server.TransactAsync(
+            .TransactAsync(
                 PgIsolation.ReadCommitted,
                 (transaction, token) => LeaveInTransactionAsync(transaction, id, request, token),
                 cancellationToken

@@ -355,7 +355,7 @@ internal sealed class PgGrants(PgRecordTable table)
         CancellationToken cancellationToken
     )
     {
-        return Table.Keyspaces.RunAsync(keyspace, operation, cancellationToken);
+        return Table.RunInKeyspaceAsync(keyspace, operation, cancellationToken);
     }
 
     /// <summary>
@@ -376,7 +376,7 @@ internal sealed class PgGrants(PgRecordTable table)
         CancellationToken cancellationToken
     )
     {
-        return Table.Keyspaces.RunAsync(keyspace, operation, cancellationToken);
+        return Table.RunInKeyspaceAsync(keyspace, operation, cancellationToken);
     }
 
     /// <summary>
@@ -395,7 +395,7 @@ internal sealed class PgGrants(PgRecordTable table)
         CancellationToken cancellationToken
     )
     {
-        return Table.Server.TransactAsync(isolation, body, cancellationToken);
+        return Table.TransactAsync(isolation, body, cancellationToken);
     }
 
     /// <summary>
@@ -574,8 +574,7 @@ internal sealed class PgGrants(PgRecordTable table)
         CancellationToken cancellationToken
     )
     {
-        return await Table
-            .Keyspaces.RunAsync<bool>(
+        return await RunInKeyspaceAsync<bool>(
                 held.Resource.Keyspace,
                 (id, token) => ChangeHeldInKeyspaceAsync(id, held, write, token),
                 cancellationToken
@@ -598,8 +597,7 @@ internal sealed class PgGrants(PgRecordTable table)
         CancellationToken cancellationToken
     )
     {
-        return await Table
-            .Server.TransactAsync(
+        return await TransactAsync(
                 PgIsolation.ReadCommitted,
                 (transaction, token) =>
                     ChangeHeldInTransactionAsync(transaction, keyspaceId, held, write, token),
@@ -788,7 +786,7 @@ internal sealed class PgGrants(PgRecordTable table)
         var statement = SelectNowStatement(keyspaceId, kind, index, depth);
 
         var first = await Table
-            .Server.ExecuteAsync([statement], ReadRowsAsync, cancellationToken)
+            .ExecuteAsync([statement], ReadRowsAsync, cancellationToken)
             .ConfigureAwait(false);
 
         if (!first.Rows.Any(row => IsExpired(row, first.Now)))

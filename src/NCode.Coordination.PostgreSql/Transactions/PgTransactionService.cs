@@ -254,7 +254,7 @@ internal sealed class PgTransactionService(PgRecordTable table) : ITransactionSe
         var request = new PgTransactionRequest(transaction, keys, sessions);
 
         return await Table
-            .Keyspaces.RunAsync<TransactionResult>(
+            .RunInKeyspaceAsync<TransactionResult>(
                 transaction.Keyspace,
                 (id, token) => ExecuteInKeyspaceAsync(id, request, token),
                 cancellationToken
@@ -276,7 +276,7 @@ internal sealed class PgTransactionService(PgRecordTable table) : ITransactionSe
     )
     {
         return await Table
-            .Server.TransactAsync(
+            .TransactAsync(
                 PgIsolation.ReadCommitted,
                 (pgTransaction, token) =>
                     ExecuteInTransactionAsync(pgTransaction, id, request, token),

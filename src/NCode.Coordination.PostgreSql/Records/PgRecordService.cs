@@ -411,7 +411,7 @@ internal sealed class PgRecordService(PgRecordTable table) : IRecordService
         var request = new PgPutRequest(key, copy, lifetime, session);
 
         return await Table
-            .Keyspaces.RunAsync<RecordWriteResult>(
+            .RunInKeyspaceAsync<RecordWriteResult>(
                 key.Keyspace,
                 (id, token) => CreateInKeyspaceAsync(id, request, token),
                 cancellationToken
@@ -433,7 +433,7 @@ internal sealed class PgRecordService(PgRecordTable table) : IRecordService
     )
     {
         return await Table
-            .Server.TransactAsync(
+            .TransactAsync(
                 PgIsolation.ReadCommitted,
                 (transaction, token) => CreateInTransactionAsync(transaction, id, request, token),
                 cancellationToken
@@ -512,7 +512,7 @@ internal sealed class PgRecordService(PgRecordTable table) : IRecordService
         var request = new PgPutRequest(key, copy, lifetime, session);
 
         return await Table
-            .Keyspaces.RunAsync<RecordWriteResult>(
+            .RunInKeyspaceAsync<RecordWriteResult>(
                 key.Keyspace,
                 (id, token) => CompareAndSwapInKeyspaceAsync(id, request, expectedRevision, token),
                 cancellationToken
@@ -536,7 +536,7 @@ internal sealed class PgRecordService(PgRecordTable table) : IRecordService
     )
     {
         return await Table
-            .Server.TransactAsync(
+            .TransactAsync(
                 PgIsolation.ReadCommitted,
                 (transaction, token) =>
                     CompareAndSwapInTransactionAsync(
@@ -604,7 +604,7 @@ internal sealed class PgRecordService(PgRecordTable table) : IRecordService
         var expectedRevision = expected.Value;
 
         return await Table
-            .Keyspaces.RunAsync<RecordDeleteStatus>(
+            .RunInKeyspaceAsync<RecordDeleteStatus>(
                 key.Keyspace,
                 (id, token) => CompareAndDeleteInKeyspaceAsync(id, key, expectedRevision, token),
                 cancellationToken
@@ -628,7 +628,7 @@ internal sealed class PgRecordService(PgRecordTable table) : IRecordService
     )
     {
         return await Table
-            .Server.TransactAsync(
+            .TransactAsync(
                 PgIsolation.ReadCommitted,
                 (transaction, token) =>
                     CompareAndDeleteInTransactionAsync(
@@ -687,7 +687,7 @@ internal sealed class PgRecordService(PgRecordTable table) : IRecordService
         PgCall.Check(options, cancellationToken);
 
         return await Table
-            .Keyspaces.RunAsync<StoredRecord?>(
+            .RunInKeyspaceAsync<StoredRecord?>(
                 key.Keyspace,
                 (id, token) => TakeInKeyspaceAsync(id, key, token),
                 cancellationToken
@@ -709,7 +709,7 @@ internal sealed class PgRecordService(PgRecordTable table) : IRecordService
     )
     {
         return await Table
-            .Server.TransactAsync(
+            .TransactAsync(
                 PgIsolation.ReadCommitted,
                 (transaction, token) => TakeInTransactionAsync(transaction, id, key, token),
                 cancellationToken
@@ -775,7 +775,7 @@ internal sealed class PgRecordService(PgRecordTable table) : IRecordService
         );
 
         return await Table
-            .Keyspaces.RunAsync<RecordPage>(
+            .RunInKeyspaceAsync<RecordPage>(
                 prefix.Keyspace,
                 (id, token) => ListInKeyspaceAsync(id, request, token),
                 cancellationToken
@@ -800,7 +800,7 @@ internal sealed class PgRecordService(PgRecordTable table) : IRecordService
     {
         var statement = ListStatement(id, request);
         var first = await Table
-            .Server.ExecuteAsync([statement], ReadListAsync, cancellationToken)
+            .ExecuteAsync([statement], ReadListAsync, cancellationToken)
             .ConfigureAwait(false);
 
         if (first.Length == 0)

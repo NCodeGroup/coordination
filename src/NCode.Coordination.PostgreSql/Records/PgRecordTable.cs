@@ -307,19 +307,19 @@ internal sealed class PgRecordTable(PgServer server, PgKeyspaces keyspaces, PgSe
     }
 
     /// <summary>
+    /// Gets the settings of the provider.
+    /// </summary>
+    public PgSettings Settings { get; } = settings;
+
+    /// <summary>
     /// Gets the seam to the server.
     /// </summary>
-    public PgServer Server { get; } = server;
+    private PgServer Server { get; } = server;
 
     /// <summary>
     /// Gets the keyspaces' ids.
     /// </summary>
-    public PgKeyspaces Keyspaces { get; } = keyspaces;
-
-    /// <summary>
-    /// Gets the settings of the provider.
-    /// </summary>
-    public PgSettings Settings { get; } = settings;
+    private PgKeyspaces Keyspaces { get; } = keyspaces;
 
     /// <summary>
     /// Gets the statement that locks the keyspace's row and reads its revision.
@@ -374,6 +374,99 @@ internal sealed class PgRecordTable(PgServer server, PgKeyspaces keyspaces, PgSe
     /// <returns>The change.</returns>
     public PgKeyspaceChange NewChange(long keyspaceId, long revision, DateTime now) =>
         new(Settings.Schema, keyspaceId, revision, now, Settings.LogRetention);
+
+    /// <summary>
+    /// Runs an operation with a keyspace's id; when the operation finds the keyspace's row missing, resolves the id
+    /// again and runs it once more.
+    /// </summary>
+    /// <typeparam name="T">The type that <paramref name="operation"/> returns.</typeparam>
+    /// <param name="keyspace">The keyspace.</param>
+    /// <param name="operation">The operation, which takes the keyspace's id.</param>
+    /// <param name="cancellationToken">The token that cancels the call.</param>
+    /// <returns>What <paramref name="operation"/> returned.</returns>
+    /// <exception cref="ArgumentNullException">The keyspace or the operation is null.</exception>
+    /// <exception cref="CoordinationException">
+    /// The server failed, or the row was missing on both runs, which did not apply.
+    /// </exception>
+    public ValueTask<T> RunInKeyspaceAsync<T>(
+        Keyspace keyspace,
+        Func<long, CancellationToken, ValueTask<T>> operation,
+        CancellationToken cancellationToken
+    )
+    {
+        return Keyspaces.RunAsync(keyspace, operation, cancellationToken);
+    }
+
+    /// <summary>
+    /// Runs an operation with a keyspace's id; when the operation finds the keyspace's row missing, resolves the id
+    /// again and runs it once more.
+    /// </summary>
+    /// <param name="keyspace">The keyspace.</param>
+    /// <param name="operation">The operation, which takes the keyspace's id.</param>
+    /// <param name="cancellationToken">The token that cancels the call.</param>
+    /// <returns>A task that completes when the operation has.</returns>
+    /// <exception cref="ArgumentNullException">The keyspace or the operation is null.</exception>
+    /// <exception cref="CoordinationException">
+    /// The server failed, or the row was missing on both runs, which did not apply.
+    /// </exception>
+    public ValueTask RunInKeyspaceAsync(
+        Keyspace keyspace,
+        Func<long, CancellationToken, ValueTask> operation,
+        CancellationToken cancellationToken
+    )
+    {
+        return Keyspaces.RunAsync(keyspace, operation, cancellationToken);
+    }
+
+    /// <summary>
+    /// Resolves a keyspace's id.
+    /// </summary>
+    /// <param name="keyspace">The keyspace.</param>
+    /// <param name="cancellationToken">The token that cancels the call.</param>
+    /// <returns>The keyspace's id.</returns>
+    /// <exception cref="ArgumentNullException">The keyspace is null.</exception>
+    /// <exception cref="CoordinationException">The server could not be reached or failed.</exception>
+    public ValueTask<long> ResolveAsync(Keyspace keyspace, CancellationToken cancellationToken)
+    {
+        return Keyspaces.ResolveAsync(keyspace, cancellationToken);
+    }
+
+    /// <summary>
+    /// Runs a short transaction on one connection.
+    /// </summary>
+    /// <typeparam name="T">The type that <paramref name="body"/> returns.</typeparam>
+    /// <param name="isolation">The transaction's isolation.</param>
+    /// <param name="body">Runs the transaction's batches, and completes it.</param>
+    /// <param name="cancellationToken">The token that cancels the call.</param>
+    /// <returns>What <paramref name="body"/> returned.</returns>
+    /// <exception cref="CoordinationException">The server could not be reached or failed.</exception>
+    /// <exception cref="PgKeyspaceMissingException">A statement found its keyspace's row missing.</exception>
+    public ValueTask<T> TransactAsync<T>(
+        PgIsolation isolation,
+        Func<PgTransaction, CancellationToken, ValueTask<T>> body,
+        CancellationToken cancellationToken
+    )
+    {
+        return Server.TransactAsync(isolation, body, cancellationToken);
+    }
+
+    /// <summary>
+    /// Runs statements as one batch, which the server runs as one implicit transaction, and reads their results.
+    /// </summary>
+    /// <typeparam name="T">The type that <paramref name="read"/> returns.</typeparam>
+    /// <param name="statements">The statements.</param>
+    /// <param name="read">Reads the results.</param>
+    /// <param name="cancellationToken">The token that cancels the call.</param>
+    /// <returns>What <paramref name="read"/> returned.</returns>
+    /// <exception cref="CoordinationException">The server could not be reached or failed.</exception>
+    public ValueTask<T> ExecuteAsync<T>(
+        IReadOnlyList<PgStatement> statements,
+        Func<PgResults, CancellationToken, ValueTask<T>> read,
+        CancellationToken cancellationToken
+    )
+    {
+        return Server.ExecuteAsync(statements, read, cancellationToken);
+    }
 
     /// <summary>
     /// Reads after the writers of a keyspace's row: in a transaction whose first batch waits for them, which reads
