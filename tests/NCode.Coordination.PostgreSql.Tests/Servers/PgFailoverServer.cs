@@ -193,9 +193,24 @@ internal sealed class PgFailoverServer(IContainer container, int primaryPort, in
     /// <param name="sql">The text of the command.</param>
     /// <param name="cancellationToken">The token that cancels the command.</param>
     /// <returns>The first column of the first row that the command returns, or <see langword="null"/>.</returns>
+    private static ValueTask<object?> ScalarAsync(
+        string connectionString,
+        string sql,
+        CancellationToken cancellationToken
+    ) => ScalarAsync(connectionString, sql, [], cancellationToken);
+
+    /// <summary>
+    /// Runs one command with positional arguments on a server through a connection of its own.
+    /// </summary>
+    /// <param name="connectionString">The connection string of the server.</param>
+    /// <param name="sql">The text of the command, which names its arguments <c>$1</c>, <c>$2</c> and so on.</param>
+    /// <param name="arguments">The values of the command's positional arguments.</param>
+    /// <param name="cancellationToken">The token that cancels the command.</param>
+    /// <returns>The first column of the first row that the command returns, or <see langword="null"/>.</returns>
     private static async ValueTask<object?> ScalarAsync(
         string connectionString,
         string sql,
+        IReadOnlyList<object> arguments,
         CancellationToken cancellationToken
     )
     {
@@ -204,6 +219,11 @@ internal sealed class PgFailoverServer(IContainer container, int primaryPort, in
         await connection.OpenAsync(cancellationToken);
 
         await using var command = new NpgsqlCommand(sql, connection);
+        foreach (var argument in arguments)
+        {
+            command.Parameters.Add(new NpgsqlParameter { Value = argument });
+        }
+
         return await command.ExecuteScalarAsync(cancellationToken);
     }
 
@@ -257,7 +277,8 @@ internal sealed class PgFailoverServer(IContainer container, int primaryPort, in
             {
                 var caughtUp = await ScalarAsync(
                     StandbyAdmin,
-                    $"SELECT pg_wal_lsn_diff(pg_last_wal_replay_lsn(), '{lsn}'::pg_lsn) >= 0",
+                    "SELECT pg_wal_lsn_diff(pg_last_wal_replay_lsn(), $1::pg_lsn) >= 0",
+                    [lsn],
                     token
                 );
                 return caughtUp is true;
