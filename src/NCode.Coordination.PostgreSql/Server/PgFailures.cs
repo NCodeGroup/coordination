@@ -34,6 +34,28 @@ internal static class PgFailures
     }
 
     /// <summary>
+    /// Returns whether an exception says the server ended the connection or the connection failed, which leaves the
+    /// idle connections of the pool to the same server dead.
+    /// </summary>
+    /// <param name="exception">The exception.</param>
+    /// <returns>
+    /// True for a <see cref="PostgresException"/> whose severity is <c>FATAL</c> or <c>PANIC</c>, and for any other
+    /// <see cref="NpgsqlException"/>; false otherwise, <see cref="OperationCanceledException"/> included.
+    /// </returns>
+    /// <exception cref="ArgumentNullException">The exception is null.</exception>
+    public static bool IsConnectionLost(Exception exception)
+    {
+        ArgumentNullException.ThrowIfNull(exception);
+
+        return exception switch
+        {
+            PostgresException postgres => postgres.InvariantSeverity is "FATAL" or "PANIC",
+            NpgsqlException => true,
+            _ => false,
+        };
+    }
+
+    /// <summary>
     /// Returns whether an exception says a statement found its keyspace's row missing.
     /// </summary>
     /// <param name="exception">The exception.</param>

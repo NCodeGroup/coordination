@@ -199,6 +199,11 @@ internal sealed class PgListener(
             }
             catch (Exception e) when (!stop.IsCancellationRequested)
             {
+                if (PgFailures.IsConnectionLost(e))
+                {
+                    Source.ClearPool();
+                }
+
                 if (!_connectedOnce)
                 {
                     FailWaiters(Unavailable(e));

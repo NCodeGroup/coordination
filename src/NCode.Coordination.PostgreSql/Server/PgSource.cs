@@ -88,6 +88,16 @@ internal sealed class PgSource : IAsyncDisposable, IDisposable
         return await _primary.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// Closes the idle connections of the pool, which a server that ended its connections left dead, and closes the
+    /// busy ones as they return. A host's shared data source is cleared too, because its idle connections to that
+    /// server are as dead.
+    /// </summary>
+    public void ClearPool()
+    {
+        _root.Clear();
+    }
+
     /// <inheritdoc />
     public async ValueTask DisposeAsync()
     {

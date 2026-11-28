@@ -109,4 +109,36 @@ public sealed class PgFailuresTests
     }
 
     #endregion
+
+    #region IsConnectionLost Tests
+
+    public static TheoryData<Exception> LostConnectionFailures =>
+        [
+            CreateServerError("57P01", "FATAL"),
+            CreateServerError("XX000", "PANIC"),
+            new NpgsqlException("down"),
+        ];
+
+    public static TheoryData<Exception> StatementFailures =>
+        [
+            CreateServerError("57014", "ERROR"),
+            CreateServerError("23505", "ERROR"),
+            new OperationCanceledException(),
+        ];
+
+    [Theory]
+    [MemberData(nameof(LostConnectionFailures))]
+    public void IsConnectionLost_ServerEndedOrIoFailure_ReturnsTrue(Exception exception)
+    {
+        Assert.True(PgFailures.IsConnectionLost(exception));
+    }
+
+    [Theory]
+    [MemberData(nameof(StatementFailures))]
+    public void IsConnectionLost_StatementError_ReturnsFalse(Exception exception)
+    {
+        Assert.False(PgFailures.IsConnectionLost(exception));
+    }
+
+    #endregion
 }

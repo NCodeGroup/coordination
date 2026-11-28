@@ -161,8 +161,13 @@ internal sealed class PgServer(PgSource source, PgSettings settings)
         };
     }
 
-    private static CoordinationException Fail(Exception exception, bool committingStepSent)
+    private CoordinationException Fail(Exception exception, bool committingStepSent)
     {
+        if (PgFailures.IsConnectionLost(exception))
+        {
+            source.ClearPool();
+        }
+
         if (PgFailures.IsKeyspaceMissing(exception))
         {
             throw new PgKeyspaceMissingException(
