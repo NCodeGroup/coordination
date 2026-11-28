@@ -285,9 +285,10 @@ internal sealed class PgNotificationService(
 
         var topicToken = PgKeys.PageToken(index, depth);
         var logId = new PgLogId(keyspaceId, topicToken);
+        var address = new PgTopicAddress(keyspaceId, index, depth);
         var subscriber = await Hub.SubscribeAsync(
                 logId,
-                () => CreateFanout(keyspaceId, index, depth),
+                () => CreateFanout(address),
                 null,
                 cancellationToken
             )
@@ -299,15 +300,12 @@ internal sealed class PgNotificationService(
     /// <summary>
     /// Creates the fanout that reads a topic's message log.
     /// </summary>
-    /// <param name="keyspaceId">The id of the topic's keyspace.</param>
-    /// <param name="index">The topic's index value.</param>
-    /// <param name="depth">The topic's partition depth.</param>
+    /// <param name="topic">The address of the topic's log.</param>
     /// <returns>A fanout that reads the topic's message log.</returns>
-    private PgLogFanout<PgMessage> CreateFanout(long keyspaceId, byte[] index, short depth)
+    private PgLogFanout<PgMessage> CreateFanout(PgTopicAddress topic)
     {
         return new PgLogFanout<PgMessage>(
-            (after, limit, readToken) =>
-                ReadLogAsync(keyspaceId, index, depth, after, limit, readToken)
+            (after, limit, readToken) => ReadLogAsync(topic, after, limit, readToken)
         );
     }
 
@@ -354,24 +352,27 @@ internal sealed class PgNotificationService(
     /// <summary>
     /// Reads a topic's message log after a sequence, in one statement.
     /// </summary>
-    /// <param name="keyspaceId">The id of the topic's keyspace.</param>
-    /// <param name="index">The topic's index value.</param>
-    /// <param name="depth">The topic's partition depth.</param>
+    /// <param name="topic">The address of the topic's log.</param>
     /// <param name="after">The sequence to read after.</param>
     /// <param name="limit">The most messages to return.</param>
     /// <param name="cancellationToken">The token that cancels the read.</param>
     /// <returns>The highest removed sequence, the current sequence and the messages after the given one.</returns>
     /// <exception cref="CoordinationException">The server could not be reached or failed.</exception>
     private async ValueTask<PgLogRead<PgMessage>> ReadLogAsync(
-        long keyspaceId,
-        byte[] index,
-        short depth,
+        PgTopicAddress topic,
         long after,
         int limit,
         CancellationToken cancellationToken
     )
     {
-        var statement = new PgStatement(ReadLog, keyspaceId, index, depth, after, (long)limit);
+        var statement = new PgStatement(
+            ReadLog,
+            topic.KeyspaceId,
+            topic.Index,
+            topic.Depth,
+            after,
+            (long)limit
+        );
 
         var rows = await Server
             .ExecuteAsync([statement], ReadLogRowsAsync, cancellationToken)

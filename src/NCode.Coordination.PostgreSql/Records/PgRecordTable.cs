@@ -368,12 +368,9 @@ internal sealed class PgRecordTable(PgServer server, PgKeyspaces keyspaces, PgSe
     /// <summary>
     /// Builds the change of a keyspace that a transaction of a service with tables of its own makes.
     /// </summary>
-    /// <param name="keyspaceId">The keyspace's id.</param>
-    /// <param name="revision">The keyspace's revision that the transaction read.</param>
-    /// <param name="now">The instant the transaction read on the server's clock.</param>
+    /// <param name="origin">The keyspace, the revision and the instant that the transaction read.</param>
     /// <returns>The change.</returns>
-    public PgKeyspaceChange NewChange(long keyspaceId, long revision, DateTime now) =>
-        new(Settings.Schema, keyspaceId, revision, now, Settings.LogRetention);
+    public PgKeyspaceChange NewChange(PgChangeOrigin origin) => new(Settings, origin);
 
     /// <summary>
     /// Runs an operation with a keyspace's id; when the operation finds the keyspace's row missing, resolves the id
@@ -651,7 +648,8 @@ internal sealed class PgRecordTable(PgServer server, PgKeyspaces keyspaces, PgSe
         }
 
         var now = DateTime.SpecifyKind(read.Clocks[0], DateTimeKind.Utc);
-        var change = NewChange(keyspaceId, read.Revisions[0], now);
+        var origin = new PgChangeOrigin(keyspaceId, read.Revisions[0], now);
+        var change = NewChange(origin);
         var found = FindRows(distinct, indexes, depths, read.Rows);
         var deadlines = read.Sessions.ToImmutableDictionary(
             session => session.Id,

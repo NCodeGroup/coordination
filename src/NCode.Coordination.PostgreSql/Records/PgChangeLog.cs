@@ -20,11 +20,6 @@ namespace NCode.Coordination.PostgreSql.Records;
 internal sealed class PgChangeLog(PgServer server, PgSchemaName schema)
 {
     /// <summary>
-    /// The kind that a change item holds for a record that was deleted.
-    /// </summary>
-    private const short DeletedKind = 2;
-
-    /// <summary>
     /// The most keys that one page of an ended session's keys holds.
     /// </summary>
     private const int EndedPageSize = 1_000;
@@ -228,7 +223,7 @@ internal sealed class PgChangeLog(PgServer server, PgSchemaName schema)
         var index = reader.GetFieldValue<byte[]>(0);
         var depth = reader.GetInt16(1);
         var key = reader.GetString(2);
-        return new PgChangeItem(DeletedKind, index, depth, key, null);
+        return new PgChangeItem(PgChangeKinds.Deleted, index, depth, key, null);
     }
 
     /// <summary>

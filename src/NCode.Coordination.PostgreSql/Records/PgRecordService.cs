@@ -124,7 +124,11 @@ internal sealed class PgRecordService(PgRecordTable table) : IRecordService
     {
         var revision = change.Begin();
         var deadline = DeadlineOf(change, request.Lifetime);
-        change.Put(request.Key, request.Value, deadline, request.Session, replacedSession);
+        var put = new PgRecordPut(request.Key, request.Value, deadline, request.Session)
+        {
+            ReplacedSession = replacedSession,
+        };
+        change.Put(put);
 
         var written = new Revision(revision);
         return RecordWriteResult.Written(written);

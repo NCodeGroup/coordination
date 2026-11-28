@@ -3,7 +3,6 @@
 
 using System.Collections.Immutable;
 using NCode.Coordination.PostgreSql.Keys;
-using NCode.Coordination.PostgreSql.Schema;
 using NCode.Coordination.PostgreSql.Server;
 using NpgsqlTypes;
 
@@ -14,29 +13,10 @@ namespace NCode.Coordination.PostgreSql.Records;
 /// revisions, writes each record, logs each entry in the change log, stores the last revision in the keyspace's row
 /// and notifies the keyspace's channel once.
 /// </summary>
-/// <param name="schema">The schema that holds the tables.</param>
-/// <param name="keyspaceId">The keyspace's id.</param>
-/// <param name="revision">The keyspace's revision that the transaction read, which the first entry follows.</param>
-/// <param name="now">The instant the transaction read on the server's clock.</param>
-/// <param name="retention">How long a log entry is kept.</param>
-internal sealed class PgKeyspaceChange(
-    PgSchemaName schema,
-    long keyspaceId,
-    long revision,
-    DateTime now,
-    TimeSpan retention
-)
+/// <param name="settings">The settings that name the schema that holds the tables and how long a log entry is kept.</param>
+/// <param name="origin">The keyspace, the revision its first entry follows and the instant the transaction read.</param>
+internal sealed class PgKeyspaceChange(PgSettings settings, PgChangeOrigin origin)
 {
-    /// <summary>
-    /// The kind that a change item holds for a record that was written.
-    /// </summary>
-    private const short WrittenKind = 1;
-
-    /// <summary>
-    /// The kind that a change item holds for a record that was deleted.
-    /// </summary>
-    private const short DeletedKind = 2;
-
     /// <summary>
     /// The template of the statement that writes a record, replacing the row that holds its key.
     /// </summary>
@@ -114,39 +94,49 @@ internal sealed class PgKeyspaceChange(
     }
 
     /// <summary>
+    /// Gets the keyspace's id.
+    /// </summary>
+    private long KeyspaceId { get; } = origin.KeyspaceId;
+
+    /// <summary>
+    /// Gets how long a log entry is kept.
+    /// </summary>
+    private TimeSpan Retention { get; } = settings.LogRetention;
+
+    /// <summary>
     /// Gets the statement that writes a record.
     /// </summary>
-    private string UpsertRecordSql { get; } = schema.Apply(UpsertRecord);
+    private string UpsertRecordSql { get; } = settings.Schema.Apply(UpsertRecord);
 
     /// <summary>
     /// Gets the statement that deletes a record.
     /// </summary>
-    private string DeleteRecordSql { get; } = schema.Apply(DeleteRecord);
+    private string DeleteRecordSql { get; } = settings.Schema.Apply(DeleteRecord);
 
     /// <summary>
     /// Gets the statement that deletes a session's row.
     /// </summary>
-    private string DeleteSessionSql { get; } = schema.Apply(DeleteSession);
+    private string DeleteSessionSql { get; } = settings.Schema.Apply(DeleteSession);
 
     /// <summary>
     /// Gets the statement that logs one entry.
     /// </summary>
-    private string InsertChangeSql { get; } = schema.Apply(InsertChange);
+    private string InsertChangeSql { get; } = settings.Schema.Apply(InsertChange);
 
     /// <summary>
     /// Gets the statement that logs the items of one entry.
     /// </summary>
-    private string InsertItemsSql { get; } = schema.Apply(InsertItems);
+    private string InsertItemsSql { get; } = settings.Schema.Apply(InsertItems);
 
     /// <summary>
     /// Gets the statement that stores the keyspace's last revision.
     /// </summary>
-    private string UpdateRevisionSql { get; } = schema.Apply(UpdateRevision);
+    private string UpdateRevisionSql { get; } = settings.Schema.Apply(UpdateRevision);
 
     /// <summary>
     /// Gets the statement that notifies the keyspace's channel.
     /// </summary>
-    private string NotifySql { get; } = schema.Apply(Notify);
+    private string NotifySql { get; } = settings.Schema.Apply(Notify);
 
     /// <summary>
     /// Gets the entries the transaction has taken, in order.
@@ -166,7 +156,7 @@ internal sealed class PgKeyspaceChange(
     /// <summary>
     /// Gets the keyspace's revision so far: the revision read, then the last one taken.
     /// </summary>
-    public long Revision { get; private set; } = revision;
+    public long Revision { get; private set; } = origin.Revision;
 
     /// <summary>
     /// Gets a value that tells whether the transaction has taken no revision and made no write, so it has nothing to
@@ -177,7 +167,7 @@ internal sealed class PgKeyspaceChange(
     /// <summary>
     /// Gets the instant the transaction read on the server's clock.
     /// </summary>
-    public DateTime Now { get; } = now;
+    public DateTime Now { get; } = origin.Now;
 
     /// <summary>
     /// Deletes rows that expired and logs one entry that names each of them as deleted, taking one revision. Takes
@@ -231,7 +221,7 @@ internal sealed class PgKeyspaceChange(
 
         Begin();
         Entries[^1].EndedSession = session;
-        var deleteSession = new PgStatement(DeleteSessionSql, keyspaceId, session);
+        var deleteSession = new PgStatement(DeleteSessionSql, KeyspaceId, session);
         Extras.Add(deleteSession);
         return true;
     }
@@ -264,37 +254,27 @@ internal sealed class PgKeyspaceChange(
     /// <summary>
     /// Writes a record in the current entry and logs it as written.
     /// </summary>
-    /// <param name="key">The record's key.</param>
-    /// <param name="value">The record's value.</param>
-    /// <param name="deadline">The instant the record expires, or null when it doesn't.</param>
-    /// <param name="session">The id of the session the record is bound to, or null when it is bound to none.</param>
-    /// <param name="replacedSession">The id of the ended session whose row the write replaced, or null.</param>
-    /// <exception cref="ArgumentNullException">The key is null.</exception>
+    /// <param name="put">The record to write.</param>
+    /// <exception cref="ArgumentNullException">The put is null.</exception>
     /// <exception cref="InvalidOperationException"><see cref="Begin"/> was not called.</exception>
-    public void Put(
-        CoordinationKey key,
-        ReadOnlyMemory<byte> value,
-        DateTime? deadline,
-        string? session,
-        string? replacedSession
-    )
+    public void Put(PgRecordPut put)
     {
-        ArgumentNullException.ThrowIfNull(key);
+        ArgumentNullException.ThrowIfNull(put);
 
         var entry = Current();
-        var index = PgKeys.Index(key);
-        var depth = (short)key.PartitionDepth;
-        var keyText = PgKeys.KeyText(key);
-        var valueCopy = value.ToArray();
+        var index = PgKeys.Index(put.Key);
+        var depth = (short)put.Key.PartitionDepth;
+        var keyText = PgKeys.KeyText(put.Key);
+        var valueCopy = put.Value.ToArray();
         var write = new PgRecordWrite(
-            WrittenKind,
+            PgChangeKinds.Written,
             index,
             depth,
             keyText,
             valueCopy,
-            deadline,
-            session,
-            replacedSession
+            put.Deadline,
+            put.Session,
+            put.ReplacedSession
         );
         entry.Writes.Add(write);
     }
@@ -311,7 +291,7 @@ internal sealed class PgKeyspaceChange(
 
         var entry = Current();
         var write = new PgRecordWrite(
-            DeletedKind,
+            PgChangeKinds.Deleted,
             row.Index,
             row.Depth,
             row.Key,
@@ -347,7 +327,7 @@ internal sealed class PgKeyspaceChange(
             return statements.ToImmutable();
         }
 
-        var logDeadline = Now + retention;
+        var logDeadline = Now + Retention;
         var logDeadlineArgument = PgArgument.Typed(logDeadline, NpgsqlDbType.TimestampTz);
 
         foreach (var entry in Entries)
@@ -356,7 +336,7 @@ internal sealed class PgKeyspaceChange(
         }
 
         var payload = PgChannels.ChangePayload(Revision);
-        var updateRevision = new PgStatement(UpdateRevisionSql, keyspaceId, Revision);
+        var updateRevision = new PgStatement(UpdateRevisionSql, KeyspaceId, Revision);
         var notify = new PgStatement(NotifySql, channel, payload);
         statements.Add(updateRevision);
         statements.Add(notify);
@@ -401,9 +381,9 @@ internal sealed class PgKeyspaceChange(
     private PgStatement WriteStatement(PgChangeEntry entry, PgRecordWrite write)
     {
         var index = PgArgument.Typed(write.Index, NpgsqlDbType.Bytea);
-        if (write.Kind != WrittenKind)
+        if (write.Kind != PgChangeKinds.Written)
         {
-            return new PgStatement(DeleteRecordSql, keyspaceId, index, write.Depth);
+            return new PgStatement(DeleteRecordSql, KeyspaceId, index, write.Depth);
         }
 
         var value = PgArgument.Typed(write.Value, NpgsqlDbType.Bytea);
@@ -411,7 +391,7 @@ internal sealed class PgKeyspaceChange(
         var session = PgArgument.Typed(write.Session, NpgsqlDbType.Text);
         return new PgStatement(
             UpsertRecordSql,
-            keyspaceId,
+            KeyspaceId,
             index,
             write.Depth,
             write.Key,
@@ -435,7 +415,7 @@ internal sealed class PgKeyspaceChange(
         var groupDepth = PgArgument.Typed(entry.GroupDepth, NpgsqlDbType.Smallint);
         return new PgStatement(
             InsertChangeSql,
-            keyspaceId,
+            KeyspaceId,
             entry.Revision,
             logDeadline,
             endedSession,
@@ -467,7 +447,7 @@ internal sealed class PgKeyspaceChange(
 
         return new PgStatement(
             InsertItemsSql,
-            keyspaceId,
+            KeyspaceId,
             entry.Revision,
             ordinals,
             kinds,

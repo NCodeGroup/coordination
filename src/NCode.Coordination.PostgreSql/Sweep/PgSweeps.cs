@@ -720,13 +720,8 @@ internal sealed class PgSweeps(PgServer server, PgSettings settings, PgRecordTab
     private PgKeyspaceChange CreateChange(long keyspaceId, long revision, DateTime clock)
     {
         var now = DateTime.SpecifyKind(clock, DateTimeKind.Utc);
-        return new PgKeyspaceChange(
-            Settings.Schema,
-            keyspaceId,
-            revision,
-            now,
-            Settings.LogRetention
-        );
+        var origin = new PgChangeOrigin(keyspaceId, revision, now);
+        return new PgKeyspaceChange(Settings, origin);
     }
 
     /// <summary>

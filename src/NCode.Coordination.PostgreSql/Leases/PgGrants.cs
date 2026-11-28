@@ -479,7 +479,8 @@ internal sealed class PgGrants(PgRecordTable table)
         }
 
         var now = DateTime.SpecifyKind(read.Clocks[0], DateTimeKind.Utc);
-        var change = Table.NewChange(keyspaceId, read.Revisions[0], now);
+        var origin = new PgChangeOrigin(keyspaceId, read.Revisions[0], now);
+        var change = Table.NewChange(origin);
         var last = read.Lasts.Length == 0 ? 0 : read.Lasts[0];
         DateTime? sessionDeadline = read.Deadlines.Length == 0 ? null : read.Deadlines[0];
 

@@ -890,7 +890,8 @@ internal sealed class PgMembershipService(PgRecordTable table, PgChangeLog chang
         }
 
         var now = DateTime.SpecifyKind(read.Clocks[0], DateTimeKind.Utc);
-        var change = Table.NewChange(keyspaceId, read.Revisions[0], now);
+        var origin = new PgChangeOrigin(keyspaceId, read.Revisions[0], now);
+        var change = Table.NewChange(origin);
         DateTime? sessionDeadline = read.Deadlines.Length == 0 ? null : read.Deadlines[0];
 
         return new PgMembershipStart(change, session, read.Rows, sessionDeadline);

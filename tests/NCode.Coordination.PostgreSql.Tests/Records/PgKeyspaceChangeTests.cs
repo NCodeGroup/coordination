@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 using NCode.Coordination.PostgreSql.Keys;
-using NCode.Coordination.PostgreSql.Schema;
 using NCode.Coordination.PostgreSql.Server;
 
 namespace NCode.Coordination.PostgreSql.Records.Tests;
@@ -13,8 +12,14 @@ public sealed class PgKeyspaceChangeTests
 
     private static readonly DateTime Now = new(2026, 11, 27, 12, 0, 0, DateTimeKind.Utc);
 
-    private static PgKeyspaceChange CreateChange(long revision = 5) =>
-        new(PgSchemaName.Default, KeyspaceId, revision, Now, TimeSpan.FromMinutes(5));
+    private static PgKeyspaceChange CreateChange(long revision = 5)
+    {
+        var origin = new PgChangeOrigin(KeyspaceId, revision, Now);
+        return new PgKeyspaceChange(PgSettings.Default, origin);
+    }
+
+    private static PgRecordPut CreatePut(CoordinationKey key, DateTime? deadline) =>
+        new(key, new byte[] { 9 }, deadline, null);
 
     private static CoordinationKey CreateKey(string name) =>
         new(new Keyspace("prod", "records"), name);
@@ -78,9 +83,11 @@ public sealed class PgKeyspaceChangeTests
     [Fact]
     public void Statements_OneWrite_UpdatesTheRevisionAndNotifiesOnce()
     {
+        var key = CreateKey("a");
+        var put = CreatePut(key, Now.AddMinutes(1));
         var change = CreateChange(5);
         var revision = change.Begin();
-        change.Put(CreateKey("a"), new byte[] { 9 }, Now.AddMinutes(1), null, null);
+        change.Put(put);
 
         var statements = change.Statements("channel");
 
@@ -103,11 +110,12 @@ public sealed class PgKeyspaceChangeTests
     [Fact]
     public void Statements_ExpiryThenWrite_LogsTwoEntries()
     {
-        var change = CreateChange(5);
         var key = CreateKey("a");
+        var put = CreatePut(key, null);
+        var change = CreateChange(5);
         change.Expire([CreateRow(key)]);
         var revision = change.Begin();
-        change.Put(key, new byte[] { 9 }, null, null, null);
+        change.Put(put);
 
         var statements = change.Statements("channel");
 
@@ -126,11 +134,11 @@ public sealed class PgKeyspaceChangeTests
     [Fact]
     public void Put_BeforeBegin_Throws()
     {
+        var key = CreateKey("a");
+        var put = CreatePut(key, null);
         var change = CreateChange();
 
-        Assert.Throws<InvalidOperationException>(() =>
-            change.Put(CreateKey("a"), new byte[] { 9 }, null, null, null)
-        );
+        Assert.Throws<InvalidOperationException>(() => change.Put(put));
     }
 
     #endregion

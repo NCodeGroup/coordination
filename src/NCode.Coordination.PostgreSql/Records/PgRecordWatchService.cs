@@ -21,11 +21,6 @@ internal sealed class PgRecordWatchService(PgKeyspaces keyspaces, PgChangeLog lo
     : IRecordWatchService
 {
     /// <summary>
-    /// The kind that a change item holds for a record that was written.
-    /// </summary>
-    private const short WrittenKind = 1;
-
-    /// <summary>
     /// Turns one event of a log into the changes it holds that a watch covers.
     /// </summary>
     /// <param name="item">The event: a resync, or an entry.</param>
@@ -81,7 +76,7 @@ internal sealed class PgRecordWatchService(PgKeyspaces keyspaces, PgChangeLog lo
     /// <returns>A write when the item holds a record written; otherwise, a deletion.</returns>
     private static RecordChange ToChange(Keyspace keyspace, PgChangeItem changed, Revision revision)
     {
-        if (changed.Kind != WrittenKind)
+        if (changed.Kind != PgChangeKinds.Written)
         {
             return ToDeletion(keyspace, changed, revision);
         }
