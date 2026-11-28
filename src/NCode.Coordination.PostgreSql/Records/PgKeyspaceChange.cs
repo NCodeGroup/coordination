@@ -298,9 +298,8 @@ internal sealed class PgKeyspaceChange(PgSettings settings, PgChangeOrigin origi
         ArgumentNullException.ThrowIfNull(put);
 
         var entry = Current();
-        var index = PgKeys.Index(put.Key);
+        var (index, keyText) = PgKeys.IndexAndText(put.Key);
         var depth = (short)put.Key.PartitionDepth;
-        var keyText = PgKeys.KeyText(put.Key);
         var write = new PgRecordWrite(
             PgChangeKinds.Written,
             index,

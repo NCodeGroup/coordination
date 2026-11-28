@@ -125,9 +125,8 @@ internal sealed class PgClaimService(PgServer server, PgKeyspaces keyspaces, PgS
         CancellationToken cancellationToken
     )
     {
-        var index = PgKeys.Index(key);
+        var (index, text) = PgKeys.IndexAndText(key);
         var depth = (short)key.PartitionDepth;
-        var text = PgKeys.KeyText(key);
 
         var statement = new PgStatement(Claim, id, index, depth, text, microseconds);
         var rows = await Server

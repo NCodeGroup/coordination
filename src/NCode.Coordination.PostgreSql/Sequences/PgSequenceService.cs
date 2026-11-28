@@ -135,9 +135,8 @@ internal sealed class PgSequenceService(PgServer server, PgKeyspaces keyspaces, 
         CancellationToken cancellationToken
     )
     {
-        var index = PgKeys.Index(key);
+        var (index, text) = PgKeys.IndexAndText(key);
         var depth = (short)key.PartitionDepth;
-        var text = PgKeys.KeyText(key);
 
         var statement = new PgStatement(Add, id, index, depth, text, amount);
         var rows = await Server

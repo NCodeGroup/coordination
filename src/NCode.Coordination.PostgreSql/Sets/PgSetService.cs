@@ -412,9 +412,8 @@ internal sealed class PgSetService(PgServer server, PgKeyspaces keyspaces, PgSch
         CancellationToken cancellationToken
     )
     {
-        var index = PgKeys.Index(key);
+        var (index, text) = PgKeys.IndexAndText(key);
         var depth = (short)key.PartitionDepth;
-        var text = PgKeys.KeyText(key);
         var encoded = PgKeys.EncodeSegment(member);
         const long maxMembers = CoordinationLimits.MaxSetMembers;
 

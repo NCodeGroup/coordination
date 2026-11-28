@@ -32,6 +32,11 @@ internal static class PgKeys
     private const char SegmentSeparator = '/';
 
     /// <summary>
+    /// The uppercase hex digits that an escaped byte is written with.
+    /// </summary>
+    private const string HexDigits = "0123456789ABCDEF";
+
+    /// <summary>
     /// Gets the UTF-8 encoding that throws on bytes that are not well-formed UTF-8, which
     /// <see cref="TryUnescape"/> uses.
     /// </summary>
@@ -52,7 +57,7 @@ internal static class PgKeys
 
         return segment switch
         {
-            { Kind: KeySegmentKind.Text, Text: { } text } => "t" + Escape(text),
+            { Kind: KeySegmentKind.Text, Text: { } text } => EncodeText(text),
             { Kind: KeySegmentKind.Number, Number: { } number } => "n"
                 + number.ToString(CultureInfo.InvariantCulture),
             { Kind: KeySegmentKind.Uuid, Uuid: { } uuid } => "u"
@@ -195,6 +200,40 @@ internal static class PgKeys
         }
 
         return index;
+    }
+
+    /// <summary>
+    /// Returns the index value and the text of a key from one encoding of each segment: the same values that
+    /// <see cref="Index"/> and <see cref="KeyText"/> return.
+    /// </summary>
+    /// <param name="key">The key.</param>
+    /// <returns>The key's index value and its text.</returns>
+    /// <exception cref="ArgumentNullException">The key is null.</exception>
+    public static (byte[] Index, string Text) IndexAndText(CoordinationKey key)
+    {
+        ArgumentNullException.ThrowIfNull(key);
+
+        var index = new byte[key.Segments.Length * SHA256.HashSizeInBytes];
+        var builder = new StringBuilder();
+
+        for (var position = 0; position < key.Segments.Length; position++)
+        {
+            var encoded = EncodeSegment(key.Segments[position]);
+            var destination = index.AsSpan(
+                position * SHA256.HashSizeInBytes,
+                SHA256.HashSizeInBytes
+            );
+            HashSegment(encoded, destination);
+
+            if (position > 0)
+            {
+                builder.Append(SegmentSeparator);
+            }
+
+            builder.Append(encoded);
+        }
+
+        return (index, builder.ToString());
     }
 
     /// <summary>
@@ -569,12 +608,12 @@ internal static class PgKeys
     }
 
     /// <summary>
-    /// Reverses <see cref="Escape"/>: reads each unreserved character as its own byte and each '%' and two uppercase
+    /// Reverses <see cref="EncodeText"/>: reads each unreserved character as its own byte and each '%' and two uppercase
     /// hex digits as one byte, then decodes the bytes as strict UTF-8.
     /// </summary>
     /// <param name="escaped">The escaped text.</param>
     /// <param name="text">The text, when the escaped text is well formed.</param>
-    /// <returns>False when the text is not one that <see cref="Escape"/> writes, or its bytes are not UTF-8.</returns>
+    /// <returns>False when the text is not one that <see cref="EncodeText"/> writes, or its bytes are not UTF-8.</returns>
     private static bool TryUnescape(
         ReadOnlySpan<char> escaped,
         [NotNullWhen(true)] out string? text
@@ -605,7 +644,7 @@ internal static class PgKeys
     /// <param name="escaped">The escaped text.</param>
     /// <param name="buffer">The buffer that receives the bytes.</param>
     /// <param name="text">The text, when the escaped text is well formed.</param>
-    /// <returns>False when the text is not one that <see cref="Escape"/> writes, or its bytes are not UTF-8.</returns>
+    /// <returns>False when the text is not one that <see cref="EncodeText"/> writes, or its bytes are not UTF-8.</returns>
     private static bool TryUnescapeInto(
         ReadOnlySpan<char> escaped,
         Span<byte> buffer,
@@ -692,12 +731,13 @@ internal static class PgKeys
         };
 
     /// <summary>
-    /// Escapes text so it holds none of the characters a key text uses as a separator: it keeps the ASCII letters,
-    /// digits, '-', '.', '_' and '~', and writes every other UTF-8 byte as '%' and two uppercase hex digits.
+    /// Encodes a text segment as "t" and its text escaped so it holds none of the characters a key text uses as a
+    /// separator: it keeps the ASCII letters, digits, '-', '.', '_' and '~', and writes every other UTF-8 byte as '%'
+    /// and two uppercase hex digits.
     /// </summary>
     /// <param name="text">The text.</param>
-    /// <returns>The escaped text.</returns>
-    private static string Escape(string text)
+    /// <returns>The encoded segment.</returns>
+    private static string EncodeText(string text)
     {
         var byteCount = Encoding.UTF8.GetByteCount(text);
 
@@ -705,7 +745,7 @@ internal static class PgKeys
         {
             Span<byte> buffer = stackalloc byte[MaxStackBytes];
             var written = Encoding.UTF8.GetBytes(text, buffer);
-            return EscapeBytes(buffer[..written]);
+            return EncodeTextBytes(buffer[..written]);
         }
 
         var rented = ArrayPool<byte>.Shared.Rent(byteCount);
@@ -714,7 +754,7 @@ internal static class PgKeys
         {
             var writtenToRented = Encoding.UTF8.GetBytes(text, rented);
             var bytes = rented.AsSpan(0, writtenToRented);
-            return EscapeBytes(bytes);
+            return EncodeTextBytes(bytes);
         }
         finally
         {
@@ -723,13 +763,43 @@ internal static class PgKeys
     }
 
     /// <summary>
-    /// Writes UTF-8 bytes as escaped text.
+    /// Makes the encoded text segment of UTF-8 bytes in one string.
     /// </summary>
     /// <param name="bytes">The UTF-8 bytes of a text.</param>
-    /// <returns>The escaped text.</returns>
-    private static string EscapeBytes(ReadOnlySpan<byte> bytes)
+    /// <returns>The encoded segment.</returns>
+    private static string EncodeTextBytes(ReadOnlySpan<byte> bytes)
     {
-        var builder = new StringBuilder(bytes.Length);
+        var length = EncodedTextLength(bytes);
+        return string.Create(length, bytes, WriteEncodedText);
+    }
+
+    /// <summary>
+    /// Counts the characters of an encoded text segment.
+    /// </summary>
+    /// <param name="bytes">The UTF-8 bytes of a text.</param>
+    /// <returns>1 for the "t", 1 for each unreserved byte and 3 for each other byte.</returns>
+    private static int EncodedTextLength(ReadOnlySpan<byte> bytes)
+    {
+        var length = 1;
+
+        foreach (var value in bytes)
+        {
+            length += IsUnreserved((char)value) ? 1 : 3;
+        }
+
+        return length;
+    }
+
+    /// <summary>
+    /// Writes an encoded text segment: "t", then each unreserved byte as its character and every other byte as '%'
+    /// and two uppercase hex digits.
+    /// </summary>
+    /// <param name="destination">Receives the characters, whose length <see cref="EncodedTextLength"/> counted.</param>
+    /// <param name="bytes">The UTF-8 bytes of a text.</param>
+    private static void WriteEncodedText(Span<char> destination, ReadOnlySpan<byte> bytes)
+    {
+        destination[0] = 't';
+        var position = 1;
 
         foreach (var value in bytes)
         {
@@ -737,16 +807,16 @@ internal static class PgKeys
 
             if (IsUnreserved(character))
             {
-                builder.Append(character);
+                destination[position] = character;
+                position++;
+                continue;
             }
-            else
-            {
-                var hex = value.ToString("X2", CultureInfo.InvariantCulture);
-                builder.Append('%').Append(hex);
-            }
-        }
 
-        return builder.ToString();
+            destination[position] = '%';
+            destination[position + 1] = HexDigits[value >> 4];
+            destination[position + 2] = HexDigits[value & 0xF];
+            position += 3;
+        }
     }
 
     /// <summary>

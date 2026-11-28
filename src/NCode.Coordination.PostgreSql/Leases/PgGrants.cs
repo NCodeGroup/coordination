@@ -656,10 +656,9 @@ internal sealed class PgGrants(PgRecordTable table)
     private PgStatement Upsert(long keyspaceId, PgNewGrant grant, long fencing)
     {
         var resource = grant.Resource;
-        var index = PgKeys.Index(resource);
+        var (index, keyText) = PgKeys.IndexAndText(resource);
         var indexArgument = PgArgument.Typed(index, NpgsqlDbType.Bytea);
         var depth = (short)resource.PartitionDepth;
-        var keyText = PgKeys.KeyText(resource);
         var sessionArgument = PgArgument.Typed(grant.Session, NpgsqlDbType.Text);
         var deadlineArgument = PgArgument.Typed(grant.Deadline, NpgsqlDbType.TimestampTz);
         var valueArgument = PgArgument.Typed(grant.Value, NpgsqlDbType.Bytea);
@@ -691,10 +690,9 @@ internal sealed class PgGrants(PgRecordTable table)
     private PgStatement Fence(long keyspaceId, PgNewGrant grant, long fencing)
     {
         var resource = grant.Resource;
-        var index = PgKeys.Index(resource);
+        var (index, keyText) = PgKeys.IndexAndText(resource);
         var indexArgument = PgArgument.Typed(index, NpgsqlDbType.Bytea);
         var depth = (short)resource.PartitionDepth;
-        var keyText = PgKeys.KeyText(resource);
 
         return new PgStatement(
             UpsertFencingSql,

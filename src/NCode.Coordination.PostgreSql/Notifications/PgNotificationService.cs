@@ -200,9 +200,8 @@ internal sealed class PgNotificationService(
 
         PgCall.Check(options, cancellationToken);
 
-        var index = PgKeys.Index(topic);
+        var (index, text) = PgKeys.IndexAndText(topic);
         var depth = (short)topic.PartitionDepth;
-        var text = PgKeys.KeyText(topic);
         var body = payload.ToArray();
         var retention = PgCall.ToMicroseconds(Settings.LogRetention);
         var announcement = "t:" + PgKeys.PageToken(index, depth) + ":";

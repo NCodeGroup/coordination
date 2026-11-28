@@ -204,6 +204,26 @@ public sealed class PgKeysTests
 
     #endregion
 
+    #region IndexAndText Tests
+
+    [Fact]
+    public void IndexAndText_Key_MatchesIndexAndKeyText()
+    {
+        var keyspace = new Keyspace("prod");
+        var guid = Guid.NewGuid();
+        var uuid = KeySegment.FromGuid(guid);
+        var key = keyspace.CreateKey("a b/\u00fc", 42, uuid);
+        var expectedIndex = PgKeys.Index(key);
+        var expectedText = PgKeys.KeyText(key);
+
+        var (index, text) = PgKeys.IndexAndText(key);
+
+        Assert.Equal(expectedIndex, index);
+        Assert.Equal(expectedText, text);
+    }
+
+    #endregion
+
     #region PageToken Tests
 
     [Fact]

@@ -110,9 +110,8 @@ internal sealed class PgOccurrenceService(
         CancellationToken cancellationToken
     )
     {
-        var index = PgKeys.Index(key);
+        var (index, text) = PgKeys.IndexAndText(key);
         var depth = (short)key.PartitionDepth;
-        var text = PgKeys.KeyText(key);
 
         var statement = new PgStatement(Record, id, index, depth, text, microseconds);
         var rows = await Server

@@ -213,9 +213,8 @@ internal sealed class PgCounterService(PgServer server, PgKeyspaces keyspaces, P
     /// <returns>The entry, which holds the key's index value, depth and text.</returns>
     private static PgCounterEntry CreateEntry(CoordinationKey key)
     {
-        var index = PgKeys.Index(key);
+        var (index, text) = PgKeys.IndexAndText(key);
         var depth = (short)key.PartitionDepth;
-        var text = PgKeys.KeyText(key);
 
         return new PgCounterEntry(key, index, depth, text);
     }
@@ -508,9 +507,8 @@ internal sealed class PgCounterService(PgServer server, PgKeyspaces keyspaces, P
         CancellationToken cancellationToken
     )
     {
-        var index = PgKeys.Index(key);
+        var (index, text) = PgKeys.IndexAndText(key);
         var depth = (short)key.PartitionDepth;
-        var text = PgKeys.KeyText(key);
 
         var statement = new PgStatement(Increment, id, index, depth, text, amount, microseconds);
         var rows = await Server
