@@ -736,7 +736,7 @@ internal sealed class PgRecordTable(PgServer server, PgKeyspaces keyspaces, PgSe
     }
 
     /// <summary>
-    /// Commits a change in its transaction, or rolls the transaction back when the change took no revision.
+    /// Commits a change in its transaction, or rolls the transaction back when the change took no revision and made no write.
     /// </summary>
     /// <param name="transaction">The transaction that <see cref="BeginAsync"/> began.</param>
     /// <param name="change">The change.</param>

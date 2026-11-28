@@ -367,6 +367,95 @@ public sealed class PgRecordServiceServerTests(PgServers servers)
     #region ListAsync Tests
 
     [PgServerFact]
+    public async Task ListAsync_RecordExpiresWhileASwapIsPaused_WaitsForTheSwap()
+    {
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await WithRecordsAsync(
+            async context =>
+            {
+                var prefixSegment = KeySegment.FromString("listed");
+                var swappedSegment = KeySegment.FromString("swapped");
+                var key = context.Keyspace.CreateKey(prefixSegment, swappedSegment);
+                var prefix = context.Keyspace.CreateKey(prefixSegment);
+                var oneMinuteLifetime = RecordLifetime.ForTimeToLive(OneMinute);
+                byte[] createdValue = [1];
+                byte[] swappedValue = [2];
+                var created = await context.Records.CreateAsync(
+                    key,
+                    createdValue,
+                    oneMinuteLifetime,
+                    null,
+                    cancellationToken
+                );
+                Assert.True(created.IsWritten);
+
+                var reached = new TaskCompletionSource(
+                    TaskCreationOptions.RunContinuationsAsynchronously
+                );
+                var gate = new TaskCompletionSource(
+                    TaskCreationOptions.RunContinuationsAsynchronously
+                );
+                context.PausedServer.AfterFirstBatch = async token =>
+                {
+                    reached.TrySetResult();
+                    await gate.Task.WaitAsync(token);
+                };
+
+                try
+                {
+                    var swap = context
+                        .PausedRecords.CompareAndSwapAsync(
+                            key,
+                            created.Revision,
+                            swappedValue,
+                            RecordLifetime.Persistent,
+                            null,
+                            cancellationToken
+                        )
+                        .AsTask();
+
+                    await reached.Task.WaitAsync(TenSeconds, cancellationToken);
+
+                    await PgServers.ExpireRowsAsync(
+                        context.AdminConnectionString,
+                        context.SchemaName,
+                        "records",
+                        cancellationToken
+                    );
+
+                    var request = new RecordPageRequest(10);
+                    var list = context
+                        .Records.ListAsync(prefix, request, null, cancellationToken)
+                        .AsTask();
+
+                    await PgActivity.WaitForLockWaitAsync(
+                        context.AdminConnectionString,
+                        context.SchemaName,
+                        cancellationToken
+                    );
+                    Assert.False(list.IsCompleted);
+
+                    gate.TrySetResult();
+
+                    var swapped = await swap.WaitAsync(TenSeconds, cancellationToken);
+                    Assert.True(swapped.IsWritten);
+
+                    var page = await list.WaitAsync(TenSeconds, cancellationToken);
+                    var record = Assert.Single(page.Records);
+                    var recordValue = record.Value.ToArray();
+                    Assert.Equal(new byte[] { 2 }, recordValue);
+                    Assert.Equal(swapped.Revision.Value, record.Revision.Value);
+                }
+                finally
+                {
+                    gate.TrySetResult();
+                }
+            },
+            cancellationToken
+        );
+    }
+
+    [PgServerFact]
     public async Task ListAsync_LongestKeys_PagesThroughEveryRecord()
     {
         var cancellationToken = TestContext.Current.CancellationToken;
