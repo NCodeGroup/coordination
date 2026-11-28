@@ -22,6 +22,11 @@ internal static class PgKeys
     private const int MaxStackBytes = 256;
 
     /// <summary>
+    /// The bytes of a continuation token that hold the row's depth, before its index value.
+    /// </summary>
+    private const int DepthBytes = 1;
+
+    /// <summary>
     /// The character that separates the encoded segments of a key's text.
     /// </summary>
     private const char SegmentSeparator = '/';
@@ -90,7 +95,7 @@ internal static class PgKeys
         foreach (var segment in keyspace.Segments)
         {
             var encoded = EncodeSegment(segment);
-            builder.Append('/').Append(encoded);
+            builder.Append(SegmentSeparator).Append(encoded);
         }
 
         return builder.ToString();
@@ -112,7 +117,7 @@ internal static class PgKeys
         {
             if (index > 0)
             {
-                builder.Append('/');
+                builder.Append(SegmentSeparator);
             }
 
             var encoded = EncodeSegment(key.Segments[index]);
@@ -234,10 +239,41 @@ internal static class PgKeys
     {
         ArgumentNullException.ThrowIfNull(index);
 
-        var bytes = new byte[index.Length + 1];
-        bytes[0] = (byte)depth;
-        index.CopyTo(bytes, 1);
-        return Base64Url.EncodeToString(bytes);
+        var length = index.Length + DepthBytes;
+
+        if (length <= MaxStackBytes)
+        {
+            Span<byte> buffer = stackalloc byte[MaxStackBytes];
+            var slice = buffer[..length];
+            return EncodeToken(index, depth, slice);
+        }
+
+        var rented = ArrayPool<byte>.Shared.Rent(length);
+
+        try
+        {
+            var span = rented.AsSpan(0, length);
+            return EncodeToken(index, depth, span);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(rented);
+        }
+    }
+
+    /// <summary>
+    /// Writes a token's depth and index value into a buffer and encodes them as Base64Url text.
+    /// </summary>
+    /// <param name="index">The row's index value.</param>
+    /// <param name="depth">The row's depth.</param>
+    /// <param name="buffer">The buffer, which is exactly <see cref="DepthBytes"/> longer than the index.</param>
+    /// <returns>The token.</returns>
+    private static string EncodeToken(byte[] index, int depth, Span<byte> buffer)
+    {
+        buffer[0] = (byte)depth;
+        var source = index.AsSpan();
+        source.CopyTo(buffer[DepthBytes..]);
+        return Base64Url.EncodeToString(buffer);
     }
 
     /// <summary>
@@ -274,14 +310,14 @@ internal static class PgKeys
             return false;
         }
 
-        var segments = (bytes.Length - 1) / SHA256.HashSizeInBytes;
+        var segments = (bytes.Length - DepthBytes) / SHA256.HashSizeInBytes;
 
         if (segments > CoordinationKey.MaxSegments || bytes[0] > segments)
         {
             return false;
         }
 
-        var candidate = bytes.AsSpan(1).ToArray();
+        var candidate = bytes.AsSpan(DepthBytes).ToArray();
 
         if (!candidate.AsSpan().StartsWith(prefix))
         {
@@ -315,8 +351,8 @@ internal static class PgKeys
         }
 
         if (
-            decoded.Length < 1 + SHA256.HashSizeInBytes
-            || (decoded.Length - 1) % SHA256.HashSizeInBytes != 0
+            decoded.Length < DepthBytes + SHA256.HashSizeInBytes
+            || (decoded.Length - DepthBytes) % SHA256.HashSizeInBytes != 0
         )
         {
             return false;
