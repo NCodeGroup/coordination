@@ -23,6 +23,7 @@ public sealed class PgSourceRulesTests
             "Leases",
             "Membership",
             "Notifications",
+            "Subscriptions",
         ];
 
     private static string BuildMethodSpanning(int lines)

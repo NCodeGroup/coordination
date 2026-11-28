@@ -18,20 +18,28 @@ internal sealed class PgLogSubscriber<TEntry>(long cursor, bool resyncFirst)
     /// </summary>
     public const int Capacity = 1_024;
 
+    /// <summary>
+    /// Creates the bounded queue of a subscriber.
+    /// </summary>
+    /// <returns>The queue, with one reader and one writer.</returns>
+    private static Channel<PgLogEvent<TEntry>> CreateQueue()
+    {
+        var options = new BoundedChannelOptions(Capacity)
+        {
+            SingleReader = true,
+            SingleWriter = true,
+            FullMode = BoundedChannelFullMode.Wait,
+        };
+
+        return Channel.CreateBounded<PgLogEvent<TEntry>>(options);
+    }
+
     private volatile bool _needsResync = resyncFirst;
 
     /// <summary>
     /// Gets the bounded queue of what the subscriber was handed.
     /// </summary>
-    private Channel<PgLogEvent<TEntry>> Queue { get; } =
-        Channel.CreateBounded<PgLogEvent<TEntry>>(
-            new BoundedChannelOptions(Capacity)
-            {
-                SingleReader = true,
-                SingleWriter = true,
-                FullMode = BoundedChannelFullMode.Wait,
-            }
-        );
+    private Channel<PgLogEvent<TEntry>> Queue { get; } = CreateQueue();
 
     /// <summary>
     /// Gets or sets the number of the last entry or resync the subscriber has been handed.

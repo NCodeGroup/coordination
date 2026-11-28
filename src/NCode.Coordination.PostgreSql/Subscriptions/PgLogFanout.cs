@@ -24,6 +24,80 @@ internal sealed class PgLogFanout<TEntry>(
     public const int PageSize = 256;
 
     /// <summary>
+    /// Gets the lowest cursor among the subscribers that don't need a resync.
+    /// </summary>
+    /// <param name="subscribers">The subscribers.</param>
+    /// <returns>The lowest cursor, or <see cref="long.MaxValue"/> when every subscriber needs a resync.</returns>
+    private static long Lowest(PgLogSubscriber<TEntry>[] subscribers)
+    {
+        var lowest = long.MaxValue;
+        foreach (var subscriber in subscribers)
+        {
+            if (!subscriber.NeedsResync && subscriber.Cursor < lowest)
+            {
+                lowest = subscriber.Cursor;
+            }
+        }
+
+        return lowest;
+    }
+
+    /// <summary>
+    /// Hands a subscriber what a read holds: a resync when it needs one or the log no longer holds what it needs,
+    /// otherwise each entry above its cursor in order, resyncing at the first that isn't the cursor plus one.
+    /// </summary>
+    /// <param name="subscriber">The subscriber.</param>
+    /// <param name="page">What the read holds.</param>
+    private static void Deliver(PgLogSubscriber<TEntry> subscriber, PgLogRead<TEntry> page)
+    {
+        if (
+            subscriber.NeedsResync
+            || page.Current < subscriber.Cursor
+            || subscriber.Cursor < page.Removed
+        )
+        {
+            Resync(subscriber, page.Current);
+            return;
+        }
+
+        foreach (var entry in page.Entries)
+        {
+            var number = entry.Number;
+            if (number <= subscriber.Cursor)
+            {
+                continue;
+            }
+
+            if (number != subscriber.Cursor + 1)
+            {
+                Resync(subscriber, page.Current);
+                return;
+            }
+
+            var entryEvent = PgLogEvent<TEntry>.ForEntry(entry, number);
+            if (!subscriber.TryWrite(entryEvent))
+            {
+                return;
+            }
+
+            subscriber.Cursor = number;
+        }
+    }
+
+    /// <summary>
+    /// Moves a subscriber to the log's current number and hands it a resync; when its queue is full, it stays marked as
+    /// needing one.
+    /// </summary>
+    /// <param name="subscriber">The subscriber.</param>
+    /// <param name="current">The log's current number.</param>
+    private static void Resync(PgLogSubscriber<TEntry> subscriber, long current)
+    {
+        var resyncEvent = PgLogEvent<TEntry>.ForResync(current);
+        subscriber.Cursor = current;
+        subscriber.NeedsResync = !subscriber.TryWrite(resyncEvent);
+    }
+
+    /// <summary>
     /// Gets the lock that guards the subscribers.
     /// </summary>
     private Lock Gate { get; } = new();
@@ -150,77 +224,5 @@ internal sealed class PgLogFanout<TEntry>(
         {
             return [.. Subscribers];
         }
-    }
-
-    /// <summary>
-    /// Gets the lowest cursor among the subscribers that don't need a resync.
-    /// </summary>
-    /// <param name="subscribers">The subscribers.</param>
-    /// <returns>The lowest cursor, or <see cref="long.MaxValue"/> when every subscriber needs a resync.</returns>
-    private static long Lowest(PgLogSubscriber<TEntry>[] subscribers)
-    {
-        var lowest = long.MaxValue;
-        foreach (var subscriber in subscribers)
-        {
-            if (!subscriber.NeedsResync && subscriber.Cursor < lowest)
-            {
-                lowest = subscriber.Cursor;
-            }
-        }
-
-        return lowest;
-    }
-
-    /// <summary>
-    /// Hands a subscriber what a read holds: a resync when it needs one or the log no longer holds what it needs,
-    /// otherwise each entry above its cursor in order, resyncing at the first that isn't the cursor plus one.
-    /// </summary>
-    /// <param name="subscriber">The subscriber.</param>
-    /// <param name="page">What the read holds.</param>
-    private static void Deliver(PgLogSubscriber<TEntry> subscriber, PgLogRead<TEntry> page)
-    {
-        if (
-            subscriber.NeedsResync
-            || page.Current < subscriber.Cursor
-            || subscriber.Cursor < page.Removed
-        )
-        {
-            Resync(subscriber, page.Current);
-            return;
-        }
-
-        foreach (var entry in page.Entries)
-        {
-            var number = entry.Number;
-            if (number <= subscriber.Cursor)
-            {
-                continue;
-            }
-
-            if (number != subscriber.Cursor + 1)
-            {
-                Resync(subscriber, page.Current);
-                return;
-            }
-
-            if (!subscriber.TryWrite(PgLogEvent<TEntry>.ForEntry(entry, number)))
-            {
-                return;
-            }
-
-            subscriber.Cursor = number;
-        }
-    }
-
-    /// <summary>
-    /// Moves a subscriber to the log's current number and hands it a resync; when its queue is full, it stays marked as
-    /// needing one.
-    /// </summary>
-    /// <param name="subscriber">The subscriber.</param>
-    /// <param name="current">The log's current number.</param>
-    private static void Resync(PgLogSubscriber<TEntry> subscriber, long current)
-    {
-        subscriber.Cursor = current;
-        subscriber.NeedsResync = !subscriber.TryWrite(PgLogEvent<TEntry>.ForResync(current));
     }
 }

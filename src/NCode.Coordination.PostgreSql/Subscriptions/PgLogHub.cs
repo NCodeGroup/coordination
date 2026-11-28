@@ -14,6 +14,65 @@ namespace NCode.Coordination.PostgreSql.Subscriptions;
 internal sealed class PgLogHub : IAsyncDisposable, IDisposable
 {
     /// <summary>
+    /// Finds the log that a notification wakes.
+    /// </summary>
+    /// <param name="channels">The ids of the keyspaces that are listened to, by their channels' names.</param>
+    /// <param name="channel">The channel of the notification.</param>
+    /// <param name="payload">The payload of the notification.</param>
+    /// <param name="id">When this method returns true, the log.</param>
+    /// <returns>True when the channel is listened to and the payload is well formed; otherwise, false.</returns>
+    /// <exception cref="ArgumentNullException">An argument is null.</exception>
+    internal static bool TryRoute(
+        IReadOnlyDictionary<string, long> channels,
+        string channel,
+        string payload,
+        out PgLogId id
+    )
+    {
+        ArgumentNullException.ThrowIfNull(channels);
+        ArgumentNullException.ThrowIfNull(channel);
+        ArgumentNullException.ThrowIfNull(payload);
+
+        id = default;
+
+        if (!channels.TryGetValue(channel, out var keyspaceId))
+        {
+            return false;
+        }
+
+        if (!PgChannels.TryParseWake(payload, out var wake))
+        {
+            return false;
+        }
+
+        id = new PgLogId(keyspaceId, wake.TopicToken);
+        return true;
+    }
+
+    /// <summary>
+    /// Pumps a fanout and swallows any failure of the pump, so that one failed read never ends the periodic checks.
+    /// </summary>
+    /// <param name="pump">The fanout.</param>
+    /// <param name="stop">The token that cancels the pump.</param>
+    /// <returns>A task that completes when the pump has.</returns>
+    private static async Task PumpQuietlyAsync(IPgLogPump pump, CancellationToken stop)
+    {
+        try
+        {
+            await pump.PumpAsync(stop).ConfigureAwait(false);
+        }
+        catch (Exception) when (!stop.IsCancellationRequested)
+        {
+            // A failed read leaves every subscriber's cursor where it was, and the next check reads again; the package
+            // has no logger to report it to.
+        }
+        catch (OperationCanceledException) when (stop.IsCancellationRequested)
+        {
+            // The hub is disposed.
+        }
+    }
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="PgLogHub"/> class.
     /// </summary>
     /// <param name="source">The source of the listening connection.</param>
@@ -113,38 +172,8 @@ internal sealed class PgLogHub : IAsyncDisposable, IDisposable
         ObjectDisposedException.ThrowIf(IsDisposed, this);
         cancellationToken.ThrowIfCancellationRequested();
 
-        PgLogFanout<TEntry> fanout;
-        PgLogSubscriber<TEntry> subscriber;
-
-        await Sync.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            var channel = PgChannels.ForKeyspace(Settings.Schema, id.KeyspaceId);
-            if (!Channels.ContainsKey(channel))
-            {
-                await Listener.ListenAsync(channel, cancellationToken).ConfigureAwait(false);
-                Channels[channel] = id.KeyspaceId;
-            }
-
-            if (Fanouts.TryGetValue(id, out var existing))
-            {
-                fanout = (PgLogFanout<TEntry>)existing;
-            }
-            else
-            {
-                fanout = create();
-                Fanouts[id] = fanout;
-            }
-
-            subscriber =
-                after is { } cursor && !Listener.HasSeenAnotherServer
-                    ? fanout.Add(cursor, resyncFirst: false)
-                    : fanout.Add(0, resyncFirst: true);
-        }
-        finally
-        {
-            Sync.Release();
-        }
+        var (fanout, subscriber) = await RegisterAsync(id, create, after, cancellationToken)
+            .ConfigureAwait(false);
 
         StartChecks();
 
@@ -159,6 +188,98 @@ internal sealed class PgLogHub : IAsyncDisposable, IDisposable
         }
 
         return subscriber;
+    }
+
+    /// <summary>
+    /// Listens on the log's keyspace channel when nothing does yet, finds or creates the log's fanout and adds a
+    /// subscriber to it.
+    /// </summary>
+    /// <typeparam name="TEntry">The type of the log's entries.</typeparam>
+    /// <param name="id">The log.</param>
+    /// <param name="create">Creates the log's fanout when no subscriber has yet.</param>
+    /// <param name="after">The number after which the subscriber wants the log's entries, or null.</param>
+    /// <param name="cancellationToken">The token that cancels the call.</param>
+    /// <returns>The log's fanout and the new subscriber.</returns>
+    private async ValueTask<(
+        PgLogFanout<TEntry> Fanout,
+        PgLogSubscriber<TEntry> Subscriber
+    )> RegisterAsync<TEntry>(
+        PgLogId id,
+        Func<PgLogFanout<TEntry>> create,
+        long? after,
+        CancellationToken cancellationToken
+    )
+        where TEntry : IPgLogEntry
+    {
+        await Sync.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await ListenOnceAsync(id, cancellationToken).ConfigureAwait(false);
+            var fanout = GetOrAddFanout(id, create);
+            var subscriber = AddSubscriber(fanout, after);
+            return (fanout, subscriber);
+        }
+        finally
+        {
+            Sync.Release();
+        }
+    }
+
+    /// <summary>
+    /// Listens on a log's keyspace channel, unless the hub already does.
+    /// </summary>
+    /// <param name="id">The log.</param>
+    /// <param name="cancellationToken">The token that cancels the call.</param>
+    /// <returns>A task that completes when the channel is listened to.</returns>
+    private async ValueTask ListenOnceAsync(PgLogId id, CancellationToken cancellationToken)
+    {
+        var channel = PgChannels.ForKeyspace(Settings.Schema, id.KeyspaceId);
+        if (Channels.ContainsKey(channel))
+        {
+            return;
+        }
+
+        await Listener.ListenAsync(channel, cancellationToken).ConfigureAwait(false);
+        Channels[channel] = id.KeyspaceId;
+    }
+
+    /// <summary>
+    /// Finds a log's fanout, or creates and registers it when no subscriber has yet.
+    /// </summary>
+    /// <typeparam name="TEntry">The type of the log's entries.</typeparam>
+    /// <param name="id">The log.</param>
+    /// <param name="create">Creates the log's fanout.</param>
+    /// <returns>The log's fanout.</returns>
+    private PgLogFanout<TEntry> GetOrAddFanout<TEntry>(PgLogId id, Func<PgLogFanout<TEntry>> create)
+        where TEntry : IPgLogEntry
+    {
+        if (Fanouts.TryGetValue(id, out var existing))
+        {
+            return (PgLogFanout<TEntry>)existing;
+        }
+
+        var fanout = create();
+        Fanouts[id] = fanout;
+        return fanout;
+    }
+
+    /// <summary>
+    /// Adds a subscriber that starts after a number, or with a resync when it has no number or the listener has seen
+    /// another server.
+    /// </summary>
+    /// <typeparam name="TEntry">The type of the log's entries.</typeparam>
+    /// <param name="fanout">The log's fanout.</param>
+    /// <param name="after">The number after which the subscriber wants the log's entries, or null.</param>
+    /// <returns>The subscriber.</returns>
+    private PgLogSubscriber<TEntry> AddSubscriber<TEntry>(PgLogFanout<TEntry> fanout, long? after)
+        where TEntry : IPgLogEntry
+    {
+        if (after is { } cursor && !Listener.HasSeenAnotherServer)
+        {
+            return fanout.Add(cursor, resyncFirst: false);
+        }
+
+        return fanout.Add(0, resyncFirst: true);
     }
 
     /// <summary>
@@ -205,42 +326,6 @@ internal sealed class PgLogHub : IAsyncDisposable, IDisposable
         {
             Sync.Release();
         }
-    }
-
-    /// <summary>
-    /// Finds the log that a notification wakes.
-    /// </summary>
-    /// <param name="channels">The ids of the keyspaces that are listened to, by their channels' names.</param>
-    /// <param name="channel">The channel of the notification.</param>
-    /// <param name="payload">The payload of the notification.</param>
-    /// <param name="id">When this method returns true, the log.</param>
-    /// <returns>True when the channel is listened to and the payload is well formed; otherwise, false.</returns>
-    /// <exception cref="ArgumentNullException">An argument is null.</exception>
-    internal static bool TryRoute(
-        IReadOnlyDictionary<string, long> channels,
-        string channel,
-        string payload,
-        out PgLogId id
-    )
-    {
-        ArgumentNullException.ThrowIfNull(channels);
-        ArgumentNullException.ThrowIfNull(channel);
-        ArgumentNullException.ThrowIfNull(payload);
-
-        id = default;
-
-        if (!channels.TryGetValue(channel, out var keyspaceId))
-        {
-            return false;
-        }
-
-        if (!PgChannels.TryParseWake(payload, out var wake))
-        {
-            return false;
-        }
-
-        id = new PgLogId(keyspaceId, wake.TopicToken);
-        return true;
     }
 
     /// <inheritdoc />
@@ -352,33 +437,11 @@ internal sealed class PgLogHub : IAsyncDisposable, IDisposable
         var pumps = new List<Task>();
         foreach (var pump in Fanouts.Values)
         {
-            pumps.Add(PumpQuietlyAsync(pump, stop));
+            var pumping = PumpQuietlyAsync(pump, stop);
+            pumps.Add(pumping);
         }
 
         return Task.WhenAll(pumps);
-    }
-
-    /// <summary>
-    /// Pumps a fanout and swallows any failure of the pump, so that one failed read never ends the periodic checks.
-    /// </summary>
-    /// <param name="pump">The fanout.</param>
-    /// <param name="stop">The token that cancels the pump.</param>
-    /// <returns>A task that completes when the pump has.</returns>
-    private static async Task PumpQuietlyAsync(IPgLogPump pump, CancellationToken stop)
-    {
-        try
-        {
-            await pump.PumpAsync(stop).ConfigureAwait(false);
-        }
-        catch (Exception) when (!stop.IsCancellationRequested)
-        {
-            // A failed read leaves every subscriber's cursor where it was, and the next check reads again; the package
-            // has no logger to report it to.
-        }
-        catch (OperationCanceledException) when (stop.IsCancellationRequested)
-        {
-            // The hub is disposed.
-        }
     }
 
     /// <summary>
