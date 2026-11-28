@@ -120,6 +120,10 @@ in every operation's transaction, so they bind that operation and not the connec
 least a millisecond and less than an hour. A call that exceeds one fails as `unavailable`, and says whether it may have
 taken effect.
 
+The provider takes its host's `TimeProvider` for the time between its sweeps, its log checks, its polls and its
+listening connection's reconnects, and the system clock when the host registered none. Every deadline of a stored row
+stays on the server's clock.
+
 ## Logging
 
 The provider logs through the `ILogger` its host's `ILoggerFactory` makes, with a category per class, and uses no
