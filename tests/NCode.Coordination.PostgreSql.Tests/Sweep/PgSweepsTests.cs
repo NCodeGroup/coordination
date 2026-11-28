@@ -18,8 +18,6 @@ namespace NCode.Coordination.PostgreSql.Sweep.Tests;
 
 public sealed class PgSweepsTests(PgServers servers)
 {
-    private static readonly TimeSpan Expired = TimeSpan.FromTicks(10);
-
     private static readonly TimeSpan Live = TimeSpan.FromMinutes(1);
 
     private sealed record Context(
@@ -37,6 +35,11 @@ public sealed class PgSweepsTests(PgServers servers)
 
         public CoordinationKey KeyOf(int number) =>
             Keyspace.CreateKey("k" + number.ToString(CultureInfo.InvariantCulture));
+
+        public Task ExpireAsync(string table, CancellationToken cancellationToken) =>
+            PgServers
+                .ExpireRowsAsync(AdminConnectionString, Schema, table, cancellationToken)
+                .AsTask();
 
         public Task<long> CountAsync(string table, CancellationToken cancellationToken) =>
             ScalarAsync("count(*)", table, cancellationToken);
@@ -82,18 +85,12 @@ public sealed class PgSweepsTests(PgServers servers)
         string adminConnectionString,
         string connectionString,
         Func<Context, Task> test,
-        CancellationToken cancellationToken,
-        TimeSpan? logRetention = null
+        CancellationToken cancellationToken
     )
     {
         var schemaName = "sweep_" + Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
         var schema = PgSchemaName.Create(schemaName);
-        var settings = PgSettings.Default with
-        {
-            Schema = schema,
-            SweepBatchSize = 2,
-            LogRetention = logRetention ?? PgSettings.Default.LogRetention,
-        };
+        var settings = PgSettings.Default with { Schema = schema, SweepBatchSize = 2 };
 
         try
         {
@@ -135,18 +132,8 @@ public sealed class PgSweepsTests(PgServers servers)
         }
     }
 
-    private Task WithSweepsAsync(
-        Func<Context, Task> test,
-        CancellationToken cancellationToken,
-        TimeSpan? logRetention = null
-    ) =>
-        WithSweepsAsync(
-            servers.Admin19,
-            servers.PostgreSql19,
-            test,
-            cancellationToken,
-            logRetention
-        );
+    private Task WithSweepsAsync(Func<Context, Task> test, CancellationToken cancellationToken) =>
+        WithSweepsAsync(servers.Admin19, servers.PostgreSql19, test, cancellationToken);
 
     #region SweepAsync Tests
 
@@ -157,8 +144,8 @@ public sealed class PgSweepsTests(PgServers servers)
         await WithSweepsAsync(
             async context =>
             {
-                await context.RecordAsync(5, Expired, cancellationToken);
-                await Task.Delay(TimeSpan.FromMilliseconds(50), cancellationToken);
+                await context.RecordAsync(5, Live, cancellationToken);
+                await context.ExpireAsync("occurrences", cancellationToken);
 
                 await context.Sweeps.SweepAsync(cancellationToken);
                 var afterFirst = await context.CountAsync("occurrences", cancellationToken);
@@ -180,8 +167,8 @@ public sealed class PgSweepsTests(PgServers servers)
         await WithSweepsAsync(
             async context =>
             {
-                await context.RecordAsync(3, Expired, cancellationToken);
-                await Task.Delay(TimeSpan.FromMilliseconds(50), cancellationToken);
+                await context.RecordAsync(3, Live, cancellationToken);
+                await context.ExpireAsync("occurrences", cancellationToken);
 
                 await using var holder = new NpgsqlConnection(context.AdminConnectionString);
                 await holder.OpenAsync(cancellationToken);
@@ -255,13 +242,13 @@ public sealed class PgSweepsTests(PgServers servers)
                 var result = await context.Records.CreateAsync(
                     context.KeyOf(0),
                     new byte[] { 1 },
-                    RecordLifetime.ForTimeToLive(new TimeToLive(Expired)),
+                    RecordLifetime.ForTimeToLive(new TimeToLive(Live)),
                     null,
                     cancellationToken
                 );
                 Assert.True(result.IsWritten);
                 var before = await context.CountAsync("records", cancellationToken);
-                await Task.Delay(TimeSpan.FromMilliseconds(50), cancellationToken);
+                await context.ExpireAsync("records", cancellationToken);
 
                 await context.Sweeps.SweepAsync(cancellationToken);
 
@@ -307,7 +294,7 @@ public sealed class PgSweepsTests(PgServers servers)
 
                 var before = await context.CountAsync("changes", cancellationToken);
                 Assert.Equal(2, before);
-                await Task.Delay(TimeSpan.FromMilliseconds(1200), cancellationToken);
+                await context.ExpireAsync("changes", cancellationToken);
 
                 await context.Sweeps.SweepAsync(cancellationToken);
 
@@ -323,8 +310,7 @@ public sealed class PgSweepsTests(PgServers servers)
                 Assert.Equal(0, items);
                 Assert.Equal(3, logRemoved);
             },
-            cancellationToken,
-            TimeSpan.FromSeconds(1)
+            cancellationToken
         );
     }
 
@@ -347,7 +333,7 @@ public sealed class PgSweepsTests(PgServers servers)
 
                 var before = await context.CountAsync("messages", cancellationToken);
                 Assert.Equal(3, before);
-                await Task.Delay(TimeSpan.FromMilliseconds(1200), cancellationToken);
+                await context.ExpireAsync("messages", cancellationToken);
 
                 await context.Sweeps.SweepAsync(cancellationToken);
 
@@ -371,8 +357,7 @@ public sealed class PgSweepsTests(PgServers servers)
                 Assert.Equal(0, afterSecond);
                 Assert.Equal(3, removedSecond);
             },
-            cancellationToken,
-            TimeSpan.FromSeconds(1)
+            cancellationToken
         );
     }
 
@@ -385,11 +370,11 @@ public sealed class PgSweepsTests(PgServers servers)
             {
                 await context.Sessions.OpenAsync(
                     context.Keyspace,
-                    new TimeToLive(Expired),
+                    new TimeToLive(Live),
                     null,
                     cancellationToken
                 );
-                await Task.Delay(TimeSpan.FromMilliseconds(50), cancellationToken);
+                await context.ExpireAsync("sessions", cancellationToken);
                 var before = await context.CountAsync("sessions", cancellationToken);
                 Assert.Equal(1, before);
 
@@ -425,7 +410,7 @@ public sealed class PgSweepsTests(PgServers servers)
             {
                 var grant = await context.Sessions.OpenAsync(
                     context.Keyspace,
-                    new TimeToLive(TimeSpan.FromMilliseconds(300)),
+                    new TimeToLive(Live),
                     null,
                     cancellationToken
                 );
@@ -437,7 +422,7 @@ public sealed class PgSweepsTests(PgServers servers)
                     cancellationToken
                 );
                 Assert.True(result.IsWritten);
-                await Task.Delay(TimeSpan.FromMilliseconds(500), cancellationToken);
+                await context.ExpireAsync("sessions", cancellationToken);
 
                 await context.Sweeps.SweepAsync(cancellationToken);
                 await context.Sweeps.SweepAsync(cancellationToken);
@@ -461,7 +446,7 @@ public sealed class PgSweepsTests(PgServers servers)
             {
                 var grant = await context.Sessions.OpenAsync(
                     context.Keyspace,
-                    new TimeToLive(TimeSpan.FromMilliseconds(300)),
+                    new TimeToLive(Live),
                     null,
                     cancellationToken
                 );
@@ -473,13 +458,13 @@ public sealed class PgSweepsTests(PgServers servers)
                     cancellationToken
                 );
                 Assert.True(result.IsWritten);
-                await Task.Delay(TimeSpan.FromMilliseconds(500), cancellationToken);
+                await context.ExpireAsync("sessions", cancellationToken);
 
                 await context.Sweeps.SweepAsync(cancellationToken);
                 var kept = await context.CountAsync("records", cancellationToken);
                 Assert.Equal(1, kept);
 
-                await Task.Delay(TimeSpan.FromMilliseconds(1200), cancellationToken);
+                await context.ExpireAsync("changes", cancellationToken);
                 await context.Sweeps.SweepAsync(cancellationToken);
                 await context.Sweeps.SweepAsync(cancellationToken);
 
@@ -489,8 +474,7 @@ public sealed class PgSweepsTests(PgServers servers)
                 Assert.Equal(0, changes);
                 Assert.Equal(0, records);
             },
-            cancellationToken,
-            TimeSpan.FromSeconds(1)
+            cancellationToken
         );
     }
 
@@ -504,11 +488,11 @@ public sealed class PgSweepsTests(PgServers servers)
                 await context.Sets.AddAsync(
                     context.KeyOf(0),
                     KeySegment.FromString("member"),
-                    new TimeToLive(Expired),
+                    new TimeToLive(Live),
                     null,
                     cancellationToken
                 );
-                await Task.Delay(TimeSpan.FromMilliseconds(50), cancellationToken);
+                await context.ExpireAsync("set_members", cancellationToken);
 
                 await context.Sweeps.SweepAsync(cancellationToken);
                 await context.Sweeps.SweepAsync(cancellationToken);
