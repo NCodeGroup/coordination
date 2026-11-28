@@ -414,9 +414,9 @@ internal sealed class PgMembershipService(PgRecordTable table, PgChangeLog chang
                     Address: { } address,
                     Names: { } names,
                     Values: { } values,
-                    Deadline: { } deadline,
+                    Deadline: not null,
                 }
-            || deadline <= row.Now
+            || row.IsExpired()
         )
         {
             return null;

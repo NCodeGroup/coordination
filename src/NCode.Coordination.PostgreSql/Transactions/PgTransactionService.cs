@@ -123,8 +123,9 @@ internal sealed class PgTransactionService(PgRecordTable table) : ITransactionSe
     /// <returns>The sessions' ids.</returns>
     private static string[] SessionsOf(RecordTransaction transaction)
     {
-        var seen = new HashSet<string>(StringComparer.Ordinal);
-        var sessions = new List<string>();
+        var writeCount = transaction.OnSuccess.Length + transaction.OnFailure.Length;
+        var seen = new HashSet<string>(writeCount, StringComparer.Ordinal);
+        var sessions = new List<string>(writeCount);
 
         AddSessions(transaction.OnSuccess, transaction.Keyspace, seen, sessions);
         AddSessions(transaction.OnFailure, transaction.Keyspace, seen, sessions);

@@ -233,7 +233,7 @@ internal sealed class PgChangeLog(PgServer server, PgSchemaName schema)
     /// <returns>One cursor for each entry that ended a session, in the entries' order.</returns>
     private static ImmutableArray<PgEndedKeysCursor> EndedCursors(IReadOnlyList<PgChange> changes)
     {
-        var cursors = ImmutableArray.CreateBuilder<PgEndedKeysCursor>();
+        var cursors = ImmutableArray.CreateBuilder<PgEndedKeysCursor>(changes.Count);
         foreach (var change in changes)
         {
             if (change.EndedSession is not { } session)
@@ -535,7 +535,7 @@ internal sealed class PgChangeLog(PgServer server, PgSchemaName schema)
         CancellationToken cancellationToken
     )
     {
-        var keys = ImmutableArray.CreateBuilder<PgChangeItem>();
+        var keys = ImmutableArray.CreateBuilder<PgChangeItem>(EndedPageSize);
 
         while (true)
         {
