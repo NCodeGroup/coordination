@@ -110,8 +110,7 @@ public sealed class PgKeyspaceChangeTests
         Assert.Contains("UPDATE \"coordination\".keyspaces", statements[3].Sql);
         Assert.Equal(KeyspaceId, statements[3].Arguments[0].Value);
         Assert.Equal(revision, statements[3].Arguments[1].Value);
-        var notifyCount = statements.Count(s => s.Sql.Contains("pg_notify"));
-        Assert.Equal(1, notifyCount);
+        Assert.Single(statements, s => s.Sql.Contains("pg_notify"));
         Assert.Equal("channel", statements[4].Arguments[0].Value);
         Assert.Equal("c:6", statements[4].Arguments[1].Value);
     }

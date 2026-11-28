@@ -184,7 +184,7 @@ public sealed class PostgreSqlProviderFailoverTests
         var keyspace = PgTestSupport.CreateKeyspace(KeyspaceName);
         var value = "v"u8.ToArray();
 
-        var before = new List<CoordinationKey>();
+        var before = new List<CoordinationKey>(Records);
         for (var index = 0; index < Records; index++)
         {
             var key = keyspace.CreateKey(BeforeName, index);
@@ -202,7 +202,7 @@ public sealed class PostgreSqlProviderFailoverTests
         await server.WaitForStandbyAsync(cancellationToken);
         await server.CutReplicationAsync(cancellationToken);
 
-        var lost = new List<CoordinationKey>();
+        var lost = new List<CoordinationKey>(Records);
         for (var index = 0; index < Records; index++)
         {
             var key = keyspace.CreateKey(LostName, index);
@@ -259,7 +259,7 @@ public sealed class PostgreSqlProviderFailoverTests
         var keyspace = PgTestSupport.CreateKeyspace(KeyspaceName);
         var value = "v"u8.ToArray();
 
-        var before = new List<CoordinationKey>();
+        var before = new List<CoordinationKey>(Records);
         for (var index = 0; index < Records; index++)
         {
             var key = keyspace.CreateKey(BeforeName, index);
