@@ -36,7 +36,7 @@ internal sealed record PgGrantRow(
         session is not null && string.Equals(Session, session, StringComparison.Ordinal);
 
     /// <summary>
-    /// Tells whether the grant still holds at an instant.
+    /// Gets the state of the grant at an instant.
     /// </summary>
     /// <param name="now">The instant, on the server's clock.</param>
     /// <returns>The state that <see cref="PgLiveness.StateOf"/> decides.</returns>

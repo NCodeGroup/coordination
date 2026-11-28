@@ -26,7 +26,7 @@ internal sealed record PgRecordRow(
 )
 {
     /// <summary>
-    /// Tells whether the record still holds at an instant.
+    /// Gets the state of the record at an instant.
     /// </summary>
     /// <param name="now">The instant, on the server's clock.</param>
     /// <returns>The state that <see cref="PgLiveness.StateOf"/> decides.</returns>

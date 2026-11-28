@@ -309,8 +309,9 @@ internal sealed class PgListener(
     /// <inheritdoc />
     public void Dispose()
     {
-        // The loop ends by itself once it sees the cancellation, and disposes its connection; a token source that no
-        // wait handle was read from holds nothing to free, so it is left for the loop, which may still be using it.
+        // The loop ends by itself once it sees the cancellation, and disposes its connection. The token source
+        // stays undisposed: the loop may still read its token, and a source that no wait handle was read from holds
+        // nothing to free.
         _ = Stop();
     }
 
@@ -495,7 +496,8 @@ internal sealed class PgListener(
     }
 
     /// <summary>
-    /// Runs the queued requests in order and completes their waiters; a request that fails stays queued.
+    /// Runs the queued requests in order and completes their waiters; a request that fails stays at the head of the
+    /// queue until the loop's failure handler fails its waiter and drops it.
     /// </summary>
     /// <param name="connection">The open connection.</param>
     /// <param name="stop">The token that ends the loop.</param>

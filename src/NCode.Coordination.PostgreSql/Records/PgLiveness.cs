@@ -9,7 +9,7 @@ namespace NCode.Coordination.PostgreSql.Records;
 internal static class PgLiveness
 {
     /// <summary>
-    /// Tells whether a record still holds at an instant.
+    /// Gets the state of a record or a grant at an instant.
     /// </summary>
     /// <param name="deadline">The instant the record expires, or null when it doesn't.</param>
     /// <param name="session">The id of the session the record is bound to, or null when it is bound to none.</param>
