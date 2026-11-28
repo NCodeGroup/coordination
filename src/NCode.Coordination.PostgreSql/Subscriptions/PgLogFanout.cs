@@ -110,6 +110,12 @@ internal sealed class PgLogFanout<TEntry>(
     // Never disposed: a SemaphoreSlim whose AvailableWaitHandle is never read holds nothing to free, and a pump may
     // still be releasing it when the log's last subscriber leaves.
     /// <summary>
+    /// Gets or sets a value that says whether a wake-up is waiting for a pump to begin its read, guarded by
+    /// <see cref="Gate" />.
+    /// </summary>
+    private bool WakePending { get; set; }
+
+    /// <summary>
     /// Gets the gate that serializes the pumps.
     /// </summary>
     private SemaphoreSlim Pumping { get; } = new(1, 1);
@@ -166,6 +172,32 @@ internal sealed class PgLogFanout<TEntry>(
     }
 
     /// <inheritdoc />
+    public bool TryMarkWake()
+    {
+        lock (Gate)
+        {
+            if (WakePending)
+            {
+                return false;
+            }
+
+            WakePending = true;
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// Clears the wake-up that a pump is about to cover by reading the log.
+    /// </summary>
+    private void ClearWake()
+    {
+        lock (Gate)
+        {
+            WakePending = false;
+        }
+    }
+
+    /// <inheritdoc />
     public void ResyncAll()
     {
         foreach (var subscriber in Snapshot())
@@ -189,6 +221,7 @@ internal sealed class PgLogFanout<TEntry>(
                 }
 
                 var lowest = Lowest(subscribers);
+                ClearWake();
                 var page = await Read(lowest, PageSize, cancellationToken).ConfigureAwait(false);
                 foreach (var subscriber in subscribers)
                 {

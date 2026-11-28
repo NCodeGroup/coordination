@@ -459,6 +459,11 @@ internal sealed class PgLogHub : IAsyncDisposable, IDisposable
             return;
         }
 
+        if (!pump.TryMarkWake())
+        {
+            return;
+        }
+
         var stop = Cancellation.Token;
         _ = Task.Run(() => PumpQuietlyAsync(pump, stop), CancellationToken.None);
     }

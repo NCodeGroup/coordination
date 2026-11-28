@@ -201,6 +201,32 @@ public sealed class PgLogFanoutTests
 
     #endregion
 
+    #region TryMarkWake Tests
+
+    [Fact]
+    public void TryMarkWake_Twice_ReturnsTrueThenFalse()
+    {
+        var fanout = new PgLogFanout<TestEntry>(new FakeLog(0, 0).ReadAsync);
+
+        Assert.True(fanout.TryMarkWake());
+        Assert.False(fanout.TryMarkWake());
+    }
+
+    [Fact]
+    public async Task TryMarkWake_AfterAPumpBeganItsRead_ReturnsTrueAgain()
+    {
+        var fanout = new PgLogFanout<TestEntry>(new FakeLog(0, 0).ReadAsync);
+        fanout.Add(0, resyncFirst: false);
+
+        Assert.True(fanout.TryMarkWake());
+
+        await fanout.PumpAsync(CancellationToken.None);
+
+        Assert.True(fanout.TryMarkWake());
+    }
+
+    #endregion
+
     #region Remove Tests
 
     [Fact]

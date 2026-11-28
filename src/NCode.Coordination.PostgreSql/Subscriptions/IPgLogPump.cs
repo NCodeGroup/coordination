@@ -21,6 +21,15 @@ internal interface IPgLogPump
     ValueTask PumpAsync(CancellationToken cancellationToken);
 
     /// <summary>
+    /// Marks that a wake-up arrived.
+    /// </summary>
+    /// <returns>
+    /// True when no wake-up was waiting for a pump, so the caller starts one; false when a pump that hasn't begun its
+    /// read will cover this wake-up.
+    /// </returns>
+    bool TryMarkWake();
+
+    /// <summary>
     /// Marks every subscriber as needing a resync, which the next pump delivers.
     /// </summary>
     void ResyncAll();
