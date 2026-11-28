@@ -83,7 +83,7 @@ internal sealed class PgMembershipService(PgRecordTable table, PgChangeLog chang
     /// </summary>
     /// <param name="group">The group's key.</param>
     /// <returns>The group's key with the values that its rows are found by.</returns>
-    private static PgGroupAddress AddressOf(CoordinationKey group)
+    internal static PgGroupAddress AddressOf(CoordinationKey group)
     {
         var index = PgKeys.Index(group);
         var depth = (short)group.PartitionDepth;
@@ -276,7 +276,7 @@ internal sealed class PgMembershipService(PgRecordTable table, PgChangeLog chang
     /// <param name="entry">The entry, or null.</param>
     /// <param name="address">The group's key and the values that its rows are found by.</param>
     /// <returns><see langword="true"/> when the group's view may have changed.</returns>
-    private static bool Concerns(PgChange? entry, PgGroupAddress address)
+    internal static bool Concerns(PgChange? entry, PgGroupAddress address)
     {
         if (entry is null)
         {
